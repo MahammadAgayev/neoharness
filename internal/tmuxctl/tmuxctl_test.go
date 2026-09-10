@@ -18,7 +18,11 @@ func fakeTmux(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
 	calls := filepath.Join(dir, "calls.txt")
-	script := "#!/bin/sh\necho \"$@\" >> " + calls + "\n" + body + "\n"
+	// $STARTED lets a script model session creation: new-session touches it and
+	// has-session tests for it, so StartDetached's post-check sees a session
+	// that actually came into being.
+	script := "#!/bin/sh\nSTARTED=" + filepath.Join(dir, "started") +
+		"\necho \"$@\" >> " + calls + "\n" + body + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "tmux"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -102,10 +106,11 @@ func TestStartDetachedBuildsTheRightCommand(t *testing.T) {
 	// distinguishes the two subcommands.
 	calls := fakeTmux(t, `
 case "$1" in
-  has-session) exit 1 ;;
+  has-session) test -f `+"$STARTED"+` ;;
+  new-session) touch `+"$STARTED"+`; exit 0 ;;
   *) exit 0 ;;
 esac`)
-	err := StartDetached("demo", "/some/tree", []string{"harness", "run", "demo"})
+	err := StartDetached("demo", "/some/tree", []string{"harness", "run", "demo"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +124,7 @@ esac`)
 
 func TestStartDetachedRefusesADuplicate(t *testing.T) {
 	fakeTmux(t, `exit 0`) // has-session succeeds: a session already exists
-	err := StartDetached("demo", "/tree", []string{"harness", "run", "demo"})
+	err := StartDetached("demo", "/tree", []string{"harness", "run", "demo"}, nil)
 	if err == nil {
 		t.Fatal("expected a refusal to start a second session for one run")
 	}
@@ -134,7 +139,7 @@ case "$1" in
   has-session) exit 1 ;;
   *) echo "some tmux problem" >&2; exit 1 ;;
 esac`)
-	err := StartDetached("demo", "/tree", []string{"harness", "run", "demo"})
+	err := StartDetached("demo", "/tree", []string{"harness", "run", "demo"}, nil)
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -148,10 +153,11 @@ esac`)
 func TestStartDetachedOmitsCwdWhenEmpty(t *testing.T) {
 	calls := fakeTmux(t, `
 case "$1" in
-  has-session) exit 1 ;;
+  has-session) test -f `+"$STARTED"+` ;;
+  new-session) touch `+"$STARTED"+`; exit 0 ;;
   *) exit 0 ;;
 esac`)
-	if err := StartDetached("demo", "", []string{"harness", "run", "demo"}); err != nil {
+	if err := StartDetached("demo", "", []string{"harness", "run", "demo"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(readCalls(t, calls), "-c ") {
@@ -262,7 +268,7 @@ func TestAvailable(t *testing.T) {
 
 func TestStartDetachedWithoutTmux(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	err := StartDetached("demo", "/tree", []string{"harness", "run", "demo"})
+	err := StartDetached("demo", "/tree", []string{"harness", "run", "demo"}, nil)
 	if err == nil {
 		t.Fatal("expected an error without tmux")
 	}
@@ -270,5 +276,61 @@ func TestStartDetachedWithoutTmux(t *testing.T) {
 	// an exec error.
 	if !strings.Contains(err.Error(), "not installed") {
 		t.Errorf("error should explain what tmux is for, got: %v", err)
+	}
+}
+
+// TestStartDetachedCarriesEnvironment pins a bug that made every detached run
+// die instantly and silently.
+//
+// A tmux session inherits the server's environment, not the caller's. The
+// server may have been started hours earlier from an unrelated shell, so
+// HARNESS_HOME — and the agent's API key, and any PATH entry it needs — simply
+// were not there. The run exited on its first line and new-session still
+// reported success.
+func TestStartDetachedCarriesEnvironment(t *testing.T) {
+	calls := fakeTmux(t, `
+case "$1" in
+  has-session) test -f `+"$STARTED"+` ;;
+  new-session) touch `+"$STARTED"+`; exit 0 ;;
+  *) exit 0 ;;
+esac`)
+	env := []string{"HARNESS_HOME=/tmp/h", "PATH=/usr/bin"}
+	if err := StartDetached("demo", "/tree", []string{"harness", "run", "demo"}, env); err != nil {
+		t.Fatal(err)
+	}
+	got := readCalls(t, calls)
+	for _, want := range []string{"-e HARNESS_HOME=/tmp/h", "-e PATH=/usr/bin"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("environment not passed to tmux (%q missing):\n%s", want, got)
+		}
+	}
+	// The command must still come last, after the -e flags, or tmux reads the
+	// binary name as another option.
+	if !strings.Contains(got, "-e PATH=/usr/bin harness run demo") {
+		t.Errorf("the command must follow the -e flags:\n%s", got)
+	}
+}
+
+// TestStartDetachedDetectsAnImmediateExit pins the second half of the same
+// bug: new-session returning 0 only means tmux forked something. Reporting
+// "started" for a run that already died sends you to attach to a session that
+// is not there.
+func TestStartDetachedDetectsAnImmediateExit(t *testing.T) {
+	// new-session succeeds, but the session never exists afterwards.
+	fakeTmux(t, `
+case "$1" in
+  has-session) exit 1 ;;
+  *) exit 0 ;;
+esac`)
+	err := StartDetached("demo", "/tree", []string{"harness", "run", "demo"}, nil)
+	if err == nil {
+		t.Fatal("a session that exited immediately must not be reported as started")
+	}
+	if !strings.Contains(err.Error(), "exited immediately") {
+		t.Errorf("error should say the session died, got: %v", err)
+	}
+	// And it should say how to find out why.
+	if !strings.Contains(err.Error(), "harness run demo") {
+		t.Errorf("error should show the command to run by hand, got: %v", err)
 	}
 }

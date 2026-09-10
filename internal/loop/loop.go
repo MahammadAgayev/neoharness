@@ -211,6 +211,13 @@ func Run(ctx context.Context, cfg Config) (run.Status, string, error) {
 			Timeout:    cfg.WorkerTimeout,
 			OnEvent:    cfg.Observer.activity,
 		})
+		// Cancellation is checked before the outcome is judged: killing the
+		// agent makes it exit non-zero, and calling that "the agent process
+		// failed" reports a fault where the user simply pressed ctrl-c.
+		if ctx.Err() != nil {
+			status, ending = run.StatusStopped, "cancelled"
+			break
+		}
 		if err != nil {
 			_ = d.AppendLog("The agent could not be run: %v", err)
 			status, ending = run.StatusFailed, "the agent could not be run: "+err.Error()
@@ -221,6 +228,7 @@ func Run(ctx context.Context, cfg Config) (run.Status, string, error) {
 			status, ending = run.StatusFailed, "the agent process failed"
 			break
 		}
+
 		// A stop that arrived during a long iteration should not be spent on a
 		// review the user is no longer waiting for.
 		if d.StopRequested() {
@@ -246,6 +254,16 @@ func Run(ctx context.Context, cfg Config) (run.Status, string, error) {
 			Timeout:      cfg.ReviewTimeout,
 			OnEvent:      cfg.Observer.activity,
 		})
+
+		// A cancelled review is not a failed review. The user stopped the run;
+		// nothing was measured and nothing was learned, so recording ERROR
+		// would spend a third of the error budget and tell the next iteration
+		// its reviewer is broken. Leave the iteration unrecorded and let the
+		// stop check at the top of the loop end the run.
+		if ctx.Err() != nil {
+			status, ending = run.StatusStopped, "cancelled"
+			break
+		}
 
 		var verdict run.Verdict
 		var findings string

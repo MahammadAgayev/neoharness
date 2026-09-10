@@ -79,7 +79,10 @@ func LiveRuns() map[string]bool {
 // This is the line that makes a run outlive its terminal. The session is
 // created detached, so the caller is never attached to it and closing the
 // caller's terminal has no effect on the run.
-func StartDetached(runName, dir string, command []string) error {
+//
+// env carries "KEY=value" pairs into the session; see the comment on the -e
+// flags below for why omitting it breaks runs in a way that is hard to see.
+func StartDetached(runName, dir string, command []string, env []string) error {
 	if !Available() {
 		return fmt.Errorf("tmux is not installed — it is how runs detach from your terminal")
 	}
@@ -90,12 +93,28 @@ func StartDetached(runName, dir string, command []string) error {
 	if dir != "" {
 		args = append(args, "-c", dir)
 	}
+	// A new tmux session inherits the *server's* environment, not the caller's.
+	// Anything set in the shell that started the run — HARNESS_HOME above all,
+	// but also the API keys and PATH entries an agent needs — is simply absent
+	// inside the session. A run started that way dies instantly, and because
+	// new-session itself succeeds, it dies silently.
+	for _, kv := range env {
+		args = append(args, "-e", kv)
+	}
 	// The command is passed as separate arguments rather than a joined string,
 	// so a path with a space in it cannot turn into two arguments.
 	args = append(args, command...)
 	out, err := exec.Command("tmux", args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("starting tmux session: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	// new-session returning 0 only means tmux forked something. A command that
+	// exits immediately — a missing binary, a lost variable — leaves no session
+	// behind, and reporting "started" for a run that is already dead is worse
+	// than failing outright.
+	if !HasSession(runName) {
+		return fmt.Errorf("session %s exited immediately — run `%s` by hand to see why",
+			SessionName(runName), strings.Join(command, " "))
 	}
 	return nil
 }

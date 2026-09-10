@@ -572,3 +572,89 @@ func TestLastLine(t *testing.T) {
 		t.Errorf("lastLine = %q, want a placeholder", got)
 	}
 }
+
+// TestCancelDuringReviewIsNotAnError reproduces a real interruption: the user
+// stopped a run while its reviewer was mid-flight.
+//
+// Nothing was measured, so recording ERROR is wrong twice over — it spends a
+// third of the error budget, and the next iteration is told its reviewer is
+// broken when the work was actually complete. This is the same bug the earlier
+// pi harness had.
+func TestCancelDuringReviewIsNotAnError(t *testing.T) {
+	d := newRun(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	a := &fakeAgent{
+		worker: []turn{ok("did the work")},
+		reviewer: []turn{{
+			// The kill makes the reviewer exit non-zero with no text, exactly
+			// as a killed subprocess does.
+			result: agent.Result{ExitCode: 1, Stderr: "signal: killed"},
+			before: cancel,
+		}},
+	}
+	status, ending, err := Run(ctx, cfg(d, a))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != run.StatusStopped {
+		t.Errorf("status = %q, want stopped — a cancelled review is not a failure", status)
+	}
+	if ending != "cancelled" {
+		t.Errorf("ending = %q, want cancelled", ending)
+	}
+	st, _ := d.ReadState()
+	if st.Verdict == run.VerdictError {
+		t.Error("a cancelled review must not be recorded as a reviewer error")
+	}
+	if len(st.History) != 0 {
+		t.Errorf("an unmeasured iteration must not enter the history: %+v", st.History)
+	}
+}
+
+// TestCancelDuringWorkIsNotAFailure is the same point for the worker: killing
+// it makes it exit non-zero, and that must not be reported as "the agent
+// process failed".
+func TestCancelDuringWorkIsNotAFailure(t *testing.T) {
+	d := newRun(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	a := &fakeAgent{
+		worker: []turn{{
+			result: agent.Result{ExitCode: 1, Stderr: "signal: killed"},
+			before: cancel,
+		}},
+	}
+	status, ending, err := Run(ctx, cfg(d, a))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != run.StatusStopped {
+		t.Errorf("status = %q, want stopped", status)
+	}
+	if strings.Contains(ending, "failed") {
+		t.Errorf("ending = %q — a cancelled worker is not a fault", ending)
+	}
+}
+
+// TestCancelledRunStillUnwinds: whatever else happens, an interrupted run must
+// leave a truthful record. A stale pid or a "running" status is what makes a
+// dashboard lie about a machine that went to sleep.
+func TestCancelledRunStillUnwinds(t *testing.T) {
+	d := newRun(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	a := &fakeAgent{
+		worker: []turn{{result: agent.Result{Text: "x", Duration: time.Second}, before: cancel}},
+	}
+	if _, _, err := Run(ctx, cfg(d, a)); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := d.ReadState()
+	if st.PID != 0 {
+		t.Errorf("pid = %d, want cleared", st.PID)
+	}
+	if st.Status == run.StatusRunning {
+		t.Error("a cancelled run must not be left recorded as running")
+	}
+	if st.Ending == "" {
+		t.Error("state should say why the run ended")
+	}
+}
