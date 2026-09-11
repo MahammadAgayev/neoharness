@@ -195,14 +195,15 @@ func Run(ctx context.Context, cfg Config) (run.Status, string, error) {
 		cfg.Observer.phase(PhaseWorking, iteration)
 		worker, err := cfg.Agent.Run(ctx, agent.Request{
 			Prompt: prompts.Worker(prompts.WorkerInput{
-				Name:      d.Name,
-				Iteration: iteration,
-				Task:      task,
-				RunDir:    d.Path,
-				NotesFile: d.NotesFile(),
-				LogFile:   d.LogFile(),
-				Verdict:   string(state.Verdict),
-				Findings:  state.Findings,
+				Name:          d.Name,
+				Iteration:     iteration,
+				MaxIterations: cfg.MaxIterations,
+				Task:          task,
+				RunDir:        d.Path,
+				NotesFile:     d.NotesFile(),
+				LogFile:       d.LogFile(),
+				Verdict:       string(state.Verdict),
+				Findings:      state.Findings,
 			}),
 			Cwd:        state.Cwd,
 			SessionID:  fmt.Sprintf("%s-%03d", d.Name, iteration),

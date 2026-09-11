@@ -41,12 +41,13 @@ func TestEvaluatorKeepsItsCriticalInstructions(t *testing.T) {
 
 func workerInput() WorkerInput {
 	return WorkerInput{
-		Name:      "demo",
-		Iteration: 3,
-		Task:      "# Task\n\nMake the build green.\n",
-		RunDir:    "/home/u/.harness/demo",
-		NotesFile: "/home/u/.harness/demo/notes.md",
-		LogFile:   "/home/u/.harness/demo/log.md",
+		Name:          "demo",
+		Iteration:     3,
+		Task:          "# Task\n\nMake the build green.\n",
+		MaxIterations: 40,
+		RunDir:        "/home/u/.harness/demo",
+		NotesFile:     "/home/u/.harness/demo/notes.md",
+		LogFile:       "/home/u/.harness/demo/log.md",
 	}
 }
 
@@ -175,5 +176,42 @@ func TestReviewSaysTheVerdictIsFinal(t *testing.T) {
 	got := Review(ReviewInput{Iteration: 1, Task: "x", Cwd: "/p"})
 	if !strings.Contains(got, "PASS ships the work as finished") {
 		t.Error("the reviewer must be told its verdict alone ends the run")
+	}
+}
+
+// TestWorkerExplainsTheHarnessItself pins the agent's self-awareness.
+//
+// Without this section the agent knows where its files are but not what it is
+// inside. An agent that does not know a reviewer is coming writes notes for
+// nobody, treats findings as an interruption rather than the point, and tries
+// to cram the whole task into one turn because it does not know another
+// iteration exists.
+func TestWorkerExplainsTheHarnessItself(t *testing.T) {
+	got := Worker(workerInput())
+	for _, want := range []string{
+		"run by harness, unattended",   // what is running it
+		"Nobody is watching this turn", // why notes matter
+		"independent reviewer judges",  // what happens next
+		"You do not decide when the run is done",
+		"The next iteration is a stranger with your notes",
+		"The reviewer did not watch you work",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the agent is no longer told %q", want)
+		}
+	}
+	// The context must come before the task, or it is read as an afterthought.
+	if strings.Index(got, "## What this is") > strings.Index(got, "## Task") {
+		t.Error("the harness explanation must precede the task")
+	}
+}
+
+func TestWorkerStatesWhereItIsInTheRun(t *testing.T) {
+	in := workerInput()
+	in.Iteration, in.MaxIterations = 3, 40
+	// "iteration 3 of at most 40" is the difference between "I have room to do
+	// this properly" and "this is my last turn".
+	if !strings.Contains(Worker(in), "iteration 3 of at most 40") {
+		t.Error("the agent should be told its position in the run")
 	}
 }

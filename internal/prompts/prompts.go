@@ -48,10 +48,14 @@ func LoadEvaluator() Evaluator {
 type WorkerInput struct {
 	Name      string
 	Iteration int // the one about to run, 1-based
-	Task      string
-	RunDir    string
-	NotesFile string
-	LogFile   string
+	// MaxIterations is the ceiling. Stated in the prompt so the agent can tell
+	// "I have plenty of room to do this properly" from "this is the last turn
+	// before the run gives up".
+	MaxIterations int
+	Task          string
+	RunDir        string
+	NotesFile     string
+	LogFile       string
 	// Verdict and Findings describe the previous iteration, if there was one.
 	Verdict  string
 	Findings string
@@ -76,6 +80,32 @@ func Worker(in WorkerInput) string {
 
 	p("[HARNESS · iteration %d of run %q]", in.Iteration, in.Name)
 	p("")
+	// What the harness is, stated before the task.
+	//
+	// Without this the agent knows where its files are but not what it is
+	// inside: that a reviewer will judge the work, that a PASS is what ends
+	// the run, and that there will be a next iteration with no memory of this
+	// one. An agent that does not know it is in a loop writes notes for
+	// nobody, treats the reviewer's findings as an interruption, and tries to
+	// finish everything in one turn.
+	p("## What this is")
+	p("")
+	p("You are being run by harness, unattended. Nobody is watching this turn.")
+	p("")
+	p("The loop is: you work → an independent reviewer judges the result →")
+	p("either it passes and the run ends, or you get another iteration with the")
+	p("reviewer's findings. You are in iteration %d of at most %d.", in.Iteration, in.MaxIterations)
+	p("")
+	p("Three things follow from that, and they are the whole reason this works:")
+	p("")
+	p("- **You do not decide when the run is done.** The reviewer does. Do one")
+	p("  solid increment and stop; do not rush the whole task into this turn.")
+	p("- **The next iteration is a stranger with your notes.** It gets a fresh")
+	p("  session and remembers nothing. log.md is the only thing you can hand it.")
+	p("- **The reviewer did not watch you work.** It reads the diff and runs the")
+	p("  build itself. Anything you did not actually verify, it will find.")
+	p("")
+
 	p("## Task")
 	p("")
 	p("%s", strings.TrimSpace(in.Task))
