@@ -87,7 +87,7 @@ EOF`)
 
 func TestLiveRunsWithNoServer(t *testing.T) {
 	// No tmux server is a legitimate answer — no runs — not an error the
-	// dashboard should have to render.
+	// caller should have to render.
 	fakeTmux(t, `echo "no server running" >&2; exit 1`)
 	if got := LiveRuns(); len(got) != 0 {
 		t.Errorf("expected no live runs, got %v", got)

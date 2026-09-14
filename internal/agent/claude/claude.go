@@ -1,7 +1,7 @@
 // Package claude adapts the Claude Code CLI to the agent.Agent interface.
 //
 // It exists to prove the agent boundary is real: the loop, the prompts, the
-// state, and both TUIs are unchanged by its presence, and swapping it in is a
+// state, and the display are unchanged by its presence, and swapping it in is a
 // field in state.json.
 //
 // The stream shape differs from pi's in ways that matter. Claude nests tool
@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -58,7 +59,10 @@ var toolNames = map[string]string{
 	"bash":  "Bash",
 	"grep":  "Grep",
 	"find":  "Glob",
-	"ls":    "Read",
+	// Claude has no directory-listing tool of its own; Glob covers it, and
+	// mapping to Read instead would silently drop the capability, since Read
+	// takes a file path.
+	"ls": "Glob",
 }
 
 func mapTools(tools []string) []string {
@@ -75,6 +79,43 @@ func mapTools(tools []string) []string {
 		}
 	}
 	return out
+}
+
+// mutatingTools are the ones that can change the tree. A request that did not
+// ask for them has to deny them by name; see the call site.
+var mutatingTools = []string{"Write", "Edit", "NotebookEdit"}
+
+func denied(allowed []string) []string {
+	var out []string
+	for _, t := range mutatingTools {
+		if !slices.Contains(allowed, t) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// mapModel translates a model name into one Claude accepts.
+//
+// The same problem as the tool vocabulary, and a worse failure. The evaluator
+// is configured with a pi model name, and Claude answers an unknown one with a
+// 404 carried in a result record that exits zero — a reviewer that measured
+// nothing, three times in a row, ending the run. Passing the family alias
+// through is what the CLI documents, so an unmapped name still reaches it and
+// a genuinely wrong one still fails loudly.
+var modelNames = map[string]string{
+	"claude-sonnet-5-thinking": "sonnet",
+	"claude-sonnet-5":          "sonnet",
+	"claude-opus-4-thinking":   "opus",
+	"claude-opus-4":            "opus",
+	"claude-haiku-4":           "haiku",
+}
+
+func mapModel(model string) string {
+	if name, ok := modelNames[model]; ok {
+		return name
+	}
+	return model
 }
 
 // Run executes one turn.
@@ -167,9 +208,14 @@ func (a *Agent) args(req agent.Request) []string {
 	args := append([]string{}, a.Command...)
 	// --verbose is required for stream-json to emit anything per-event; without
 	// it the stream carries only the final result.
-	args = append(args, "-p", req.Prompt, "--output-format", "stream-json", "--verbose")
+	args = append(args, "--output-format", "stream-json", "--verbose")
+	// Nobody is watching, so nobody can answer a permission prompt. Without
+	// this the process sits waiting on a tool it was explicitly allowed to use
+	// and is eventually killed by the timeout, which reads as a hung agent
+	// rather than the configuration mistake it is.
+	args = append(args, "--permission-mode", "bypassPermissions")
 	if req.Model != "" {
-		args = append(args, "--model", req.Model)
+		args = append(args, "--model", mapModel(req.Model))
 	}
 	if req.SystemPrompt != "" {
 		// Claude keeps its own system prompt and appends to it, which is the
@@ -179,8 +225,27 @@ func (a *Agent) args(req agent.Request) []string {
 	}
 	if tools := mapTools(req.Tools); len(tools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(tools, ","))
+		// --allowedTools only auto-approves; it does not refuse what is left
+		// out, and bypassPermissions removes the prompt that would otherwise
+		// have stopped it. Together those turn the reviewer's read-only tool
+		// list into a suggestion, and a reviewer that can edit the code it is
+		// judging is not a reviewer. Verified against the CLI: with only
+		// Read,Bash allowed, a Write still landed until these were denied.
+		if blocked := denied(tools); len(blocked) > 0 {
+			args = append(args, "--disallowedTools", strings.Join(blocked, ","))
+		}
 	}
-	return args
+	// req.SessionID and req.SessionDir are deliberately not passed. They are
+	// pi's model: the caller names a session and the CLI files the transcript
+	// under it. Claude owns its own session store, refuses a --session-id that
+	// already exists, and each `-p` invocation is a fresh session anyway —
+	// which is what the loop wants, since it starts every iteration cold.
+	// Deriving an id from the run name made a second run of the same name
+	// collide with the first and die on iteration one.
+	// -p last and immediately before the prompt: Claude reads the prompt as
+	// -p's value, and a prompt beginning with a dash would otherwise be taken
+	// for a flag.
+	return append(args, "-p", req.Prompt)
 }
 
 // accumulator folds Claude's stream into a Result.

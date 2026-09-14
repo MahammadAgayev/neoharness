@@ -67,7 +67,7 @@ func newRun(t *testing.T) run.Dir {
 	t.Helper()
 	t.Setenv("HARNESS_HOME", t.TempDir())
 	d := run.Open("demo")
-	if err := d.Create(t.TempDir(), "fake", "Make the build green."); err != nil {
+	if err := d.Create(t.TempDir(), "fake", "", "Make the build green."); err != nil {
 		t.Fatal(err)
 	}
 	return d
@@ -343,7 +343,7 @@ func TestUnrunnableTaskIsRefused(t *testing.T) {
 	t.Setenv("HARNESS_HOME", t.TempDir())
 	d := run.Open("demo")
 	// An untouched template: not blank, but not a task either.
-	if err := d.Create(t.TempDir(), "fake", ""); err != nil {
+	if err := d.Create(t.TempDir(), "fake", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	a := &fakeAgent{worker: []turn{ok("should never run")}}
@@ -637,7 +637,7 @@ func TestCancelDuringWorkIsNotAFailure(t *testing.T) {
 
 // TestCancelledRunStillUnwinds: whatever else happens, an interrupted run must
 // leave a truthful record. A stale pid or a "running" status is what makes a
-// dashboard lie about a machine that went to sleep.
+// listing lie about a machine that went to sleep.
 func TestCancelledRunStillUnwinds(t *testing.T) {
 	d := newRun(t)
 	ctx, cancel := context.WithCancel(context.Background())

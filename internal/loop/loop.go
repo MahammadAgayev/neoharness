@@ -1,7 +1,7 @@
 // Package loop drives a run: prompt an agent, have an independent reviewer
 // judge the result, repeat until it passes or the run gives up.
 //
-// Nothing here imports an adapter, tmux, or a TUI. The loop takes an
+// Nothing here imports an adapter, tmux, or anything that prints. The loop takes an
 // agent.Agent and a set of callbacks, which is what lets all of its behaviour
 // be tested against a scripted fake in milliseconds. That split is the most
 // valuable structural property in this codebase and there is a test asserting
@@ -56,19 +56,18 @@ type Phase string
 const (
 	PhaseWorking   Phase = "working"
 	PhaseReviewing Phase = "reviewing"
-	PhaseDone      Phase = "done"
 )
 
 // Observer receives everything worth showing a human. Every method may be nil.
 //
-// The loop reports rather than renders. A TUI implements this; so does a plain
-// line printer; so does a test.
+// The loop reports rather than renders. The command's line printer implements
+// this; so does a test.
 type Observer struct {
 	// Phase changed.
 	OnPhase func(p Phase, iteration int)
 	// Activity is one thing the agent did — a tool call. High frequency and
-	// low value individually: intended to be shown as a single replaced line,
-	// never accumulated.
+	// low value individually: worth one short line each at most, and worth
+	// dropping entirely when the caller wants a quiet log.
 	OnActivity func(e agent.Event)
 	// Verdict is a completed review.
 	OnVerdict func(iteration int, v run.Verdict, findings string)
@@ -138,7 +137,7 @@ func (c *Config) withDefaults() {
 // It returns an error only for conditions that stop a run before it starts — an
 // unreadable task, a missing state file. A run that started and then failed
 // ends with a status and an explanation, both recorded in state.json, because
-// that is what the dashboard has to display afterwards.
+// that is what has to be readable afterwards.
 func Run(ctx context.Context, cfg Config) (run.Status, string, error) {
 	cfg.withDefaults()
 	d := cfg.Dir

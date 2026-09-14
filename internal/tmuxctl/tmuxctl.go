@@ -56,7 +56,7 @@ func HasSession(runName string) bool {
 
 // LiveRuns returns the set of run names with a live session, in one call.
 //
-// The dashboard needs this for every run on every poll; one list-sessions is
+// A listing needs this for every run at once; one list-sessions is
 // cheaper and more consistent than N has-session calls, which could otherwise
 // disagree with each other mid-refresh.
 func LiveRuns() map[string]bool {

@@ -51,6 +51,9 @@ func TestLoopDependsOnNothingConcrete(t *testing.T) {
 		module + "/internal/agent/pi",
 		module + "/internal/agent/claude",
 		module + "/internal/tmuxctl",
+		// No package here now — the display is plain lines printed by the
+		// command. Listed so that reintroducing a UI cannot quietly put it
+		// behind the loop again.
 		module + "/internal/tui",
 	}
 	for _, imp := range imports(t, root, "internal/loop") {
@@ -80,7 +83,7 @@ func TestAgentInterfaceKnowsNoAdapters(t *testing.T) {
 // on. A cycle here is a refactor, not a fix, so it is worth catching early.
 func TestLeafPackagesStayLeaves(t *testing.T) {
 	root := repoRoot(t)
-	for _, pkg := range []string{"internal/run", "internal/notes", "internal/tmuxctl"} {
+	for _, pkg := range []string{"internal/run", "internal/tmuxctl"} {
 		for _, imp := range imports(t, root, pkg) {
 			if strings.HasPrefix(imp, module+"/internal/") {
 				t.Errorf("%s should be a leaf but imports %s", pkg, imp)

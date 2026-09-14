@@ -2,8 +2,8 @@
 // it is read and written safely while something else is watching.
 //
 // Runs live in ~/.harness/<name>/ rather than beside the tree they operate on.
-// A global dashboard is the whole point of this design, and it should be able
-// to list one directory instead of scanning the filesystem for run folders or
+// Listing every run is the whole point of this design, and it should be able
+// to read one directory instead of scanning the filesystem for run folders or
 // keeping an index that can go stale. The tree under work is recorded in
 // state.json as Cwd, so nothing is lost except the ability to have two runs of
 // the same name in two checkouts.
@@ -77,7 +77,12 @@ type State struct {
 	// longer lives there.
 	Cwd string `json:"cwd"`
 	// Agent names the adapter driving it ("pi", "claude").
-	Agent     string      `json:"agent"`
+	Agent string `json:"agent"`
+	// Command overrides how that adapter is invoked — "authwrap agent run claude"
+	// rather than a bare binary. Per-run because two runs on one machine can
+	// legitimately need different wrappers; the matching environment variable
+	// still wins, so a CLI that moved can be fixed in one place.
+	Command   string      `json:"command,omitempty"`
 	Status    Status      `json:"status"`
 	PID       int         `json:"pid"`
 	Iteration int         `json:"iteration"`
@@ -86,8 +91,8 @@ type State struct {
 	History   []Iteration `json:"history"`
 	CreatedAt time.Time   `json:"createdAt"`
 	UpdatedAt time.Time   `json:"updatedAt"`
-	// Ending is a sentence explaining why the run stopped, shown in the
-	// dashboard once it is no longer live.
+	// Ending is a sentence explaining why the run stopped, printed when it
+	// finishes and kept for reading back afterwards.
 	Ending string `json:"ending,omitempty"`
 }
 
@@ -145,7 +150,7 @@ func (d Dir) Exists() bool {
 // Create lays out a new run folder. It fails if one is already there rather
 // than merging, because the failure it is guarding against is a second run
 // silently inheriting the first one's history.
-func (d Dir) Create(cwd, agentName, goal string) error {
+func (d Dir) Create(cwd, agentName, command, goal string) error {
 	if d.Exists() {
 		return fmt.Errorf("run %q already exists at %s", d.Name, d.Path)
 	}
@@ -171,6 +176,7 @@ func (d Dir) Create(cwd, agentName, goal string) error {
 		Name:      d.Name,
 		Cwd:       cwd,
 		Agent:     agentName,
+		Command:   command,
 		Status:    StatusIdle,
 		Verdict:   VerdictUnknown,
 		History:   []Iteration{},
@@ -197,8 +203,8 @@ func (d Dir) ReadState() (*State, error) {
 
 // WriteState persists state.json atomically.
 //
-// Atomicity is load-bearing here, not a nicety. The dashboard polls this file
-// every few seconds from another process; a plain truncate-and-write leaves a
+// Atomicity is load-bearing here, not a nicety. `harness list` reads this file
+// from another process while a run is writing it; a truncate-and-write leaves a
 // window in which it reads a half-written file and reports the run as damaged.
 // Writing a temp file and renaming makes the swap atomic on POSIX, so a reader
 // always sees one whole version or the other.
@@ -290,7 +296,7 @@ func (d Dir) RequestStop() error {
 // List returns every run, newest first.
 //
 // A run whose state.json is missing or damaged is skipped rather than failing
-// the listing: one broken folder must not blind the dashboard to the others.
+// the listing: one broken folder must not hide the others.
 func List() ([]*State, error) {
 	entries, err := os.ReadDir(Root())
 	if err != nil {

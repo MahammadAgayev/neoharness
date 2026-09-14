@@ -29,7 +29,7 @@ func TestRootHonoursEnv(t *testing.T) {
 func TestCreateLaysOutFolder(t *testing.T) {
 	harnessHome(t)
 	d := Open("demo")
-	if err := d.Create("/some/tree", "pi", ""); err != nil {
+	if err := d.Create("/some/tree", "pi", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, p := range []string{d.TaskFile(), d.StateFile(), d.LogFile(), d.NotesFile()} {
@@ -48,12 +48,12 @@ func TestCreateLaysOutFolder(t *testing.T) {
 func TestCreateRefusesToClobber(t *testing.T) {
 	harnessHome(t)
 	d := Open("demo")
-	if err := d.Create("/tree", "pi", ""); err != nil {
+	if err := d.Create("/tree", "pi", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	// The failure being guarded against is a second run silently inheriting the
 	// first one's history, so a re-create must be an error, not a merge.
-	if err := d.Create("/tree", "pi", ""); err == nil {
+	if err := d.Create("/tree", "pi", "", ""); err == nil {
 		t.Fatal("expected an error creating over an existing run")
 	}
 }
@@ -61,7 +61,7 @@ func TestCreateRefusesToClobber(t *testing.T) {
 func TestCreateWritesUnfilledGoalByDefault(t *testing.T) {
 	harnessHome(t)
 	d := Open("demo")
-	if err := d.Create("/tree", "pi", ""); err != nil {
+	if err := d.Create("/tree", "pi", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	task, err := d.Task()
@@ -81,7 +81,7 @@ func TestCreateWritesUnfilledGoalByDefault(t *testing.T) {
 func TestCreateWithGoalIsRunnable(t *testing.T) {
 	harnessHome(t)
 	d := Open("demo")
-	if err := d.Create("/tree", "pi", "Make the build green."); err != nil {
+	if err := d.Create("/tree", "pi", "", "Make the build green."); err != nil {
 		t.Fatal(err)
 	}
 	task, err := d.Task()
@@ -119,7 +119,7 @@ func TestRunnable(t *testing.T) {
 func TestStateRoundTrip(t *testing.T) {
 	harnessHome(t)
 	d := Open("demo")
-	if err := d.Create("/tree", "pi", "goal"); err != nil {
+	if err := d.Create("/tree", "pi", "", "goal"); err != nil {
 		t.Fatal(err)
 	}
 	want := &State{
@@ -163,7 +163,7 @@ func TestStateRoundTrip(t *testing.T) {
 func TestReadStateReportsDamage(t *testing.T) {
 	harnessHome(t)
 	d := Open("demo")
-	if err := d.Create("/tree", "pi", "goal"); err != nil {
+	if err := d.Create("/tree", "pi", "", "goal"); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(d.StateFile(), []byte("{not json"), 0o644); err != nil {
@@ -183,14 +183,14 @@ func TestReadStateReportsDamage(t *testing.T) {
 func TestWriteStateIsAtomicUnderConcurrentReads(t *testing.T) {
 	harnessHome(t)
 	d := Open("demo")
-	if err := d.Create("/tree", "pi", "goal"); err != nil {
+	if err := d.Create("/tree", "pi", "", "goal"); err != nil {
 		t.Fatal(err)
 	}
 	s, err := d.ReadState()
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The dashboard polls state.json from another process while the run writes
+	// `harness list` reads state.json from another process while the run writes
 	// it. A non-atomic write leaves a window where the reader sees a truncated
 	// file; this reproduces that race and asserts it never happens.
 	var wg sync.WaitGroup
@@ -240,7 +240,7 @@ func TestWriteStateIsAtomicUnderConcurrentReads(t *testing.T) {
 func TestWriteStateLeavesNoTempFiles(t *testing.T) {
 	harnessHome(t)
 	d := Open("demo")
-	if err := d.Create("/tree", "pi", "goal"); err != nil {
+	if err := d.Create("/tree", "pi", "", "goal"); err != nil {
 		t.Fatal(err)
 	}
 	s, _ := d.ReadState()
@@ -263,7 +263,7 @@ func TestWriteStateLeavesNoTempFiles(t *testing.T) {
 func TestStopRequestedConsumesTheRequest(t *testing.T) {
 	harnessHome(t)
 	d := Open("demo")
-	if err := d.Create("/tree", "pi", "goal"); err != nil {
+	if err := d.Create("/tree", "pi", "", "goal"); err != nil {
 		t.Fatal(err)
 	}
 	if d.StopRequested() {
@@ -298,7 +298,7 @@ func TestReviewFileIsZeroPadded(t *testing.T) {
 func TestWriteReview(t *testing.T) {
 	harnessHome(t)
 	d := Open("demo")
-	if err := d.Create("/tree", "pi", "goal"); err != nil {
+	if err := d.Create("/tree", "pi", "", "goal"); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.WriteReview(1, "12s, 4 tool calls", "Looks good.\n\nPASS"); err != nil {
@@ -319,7 +319,7 @@ func TestWriteReview(t *testing.T) {
 func TestAppendLog(t *testing.T) {
 	harnessHome(t)
 	d := Open("demo")
-	if err := d.Create("/tree", "pi", "goal"); err != nil {
+	if err := d.Create("/tree", "pi", "", "goal"); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AppendLog("Iteration %d: %s", 1, "PASS"); err != nil {
@@ -345,17 +345,17 @@ func TestListSkipsDamagedAndSortsNewestFirst(t *testing.T) {
 	home := harnessHome(t)
 
 	older := Open("older")
-	if err := older.Create("/tree", "pi", "goal"); err != nil {
+	if err := older.Create("/tree", "pi", "", "goal"); err != nil {
 		t.Fatal(err)
 	}
 	// WriteState stamps UpdatedAt from the clock, so make the gap unambiguous.
 	time.Sleep(10 * time.Millisecond)
 	newer := Open("newer")
-	if err := newer.Create("/tree", "pi", "goal"); err != nil {
+	if err := newer.Create("/tree", "pi", "", "goal"); err != nil {
 		t.Fatal(err)
 	}
 
-	// One broken folder must not blind the dashboard to the others.
+	// One broken folder must not hide the others.
 	broken := filepath.Join(home, "broken")
 	if err := os.MkdirAll(broken, 0o755); err != nil {
 		t.Fatal(err)
@@ -397,7 +397,7 @@ func TestExists(t *testing.T) {
 	if d.Exists() {
 		t.Fatal("a run that was never created must not exist")
 	}
-	if err := d.Create("/tree", "pi", "goal"); err != nil {
+	if err := d.Create("/tree", "pi", "", "goal"); err != nil {
 		t.Fatal(err)
 	}
 	if !d.Exists() {

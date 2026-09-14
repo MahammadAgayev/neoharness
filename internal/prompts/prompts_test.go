@@ -71,15 +71,34 @@ func TestWorkerPushesTheNotesChannelHard(t *testing.T) {
 	// An earlier design mentioned the note channel in passing and agents
 	// ignored it almost entirely, which left working runs indistinguishable
 	// from hung ones. The blunt framing is the fix and must not be softened.
+	//
+	// The reason changed when the TUI went away — tool calls are now printed,
+	// so notes are the record of reasoning rather than the only sign of life —
+	// but the instruction still has to be unmissable.
 	got := Worker(workerInput())
 	for _, want := range []string{
-		"only thing the user sees",
-		"not watching your tool calls",
+		"explain this run to whoever reads it later",
+		"that reasoning is gone",
 		"Write intent, not activity",
 		"Silence for ten minutes is",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the notes instruction lost %q — agents will stop reporting", want)
+		}
+	}
+}
+
+// TestWorkerDoesNotClaimNobodySeesToolCalls guards against the old wording
+// coming back. The harness prints every tool call now; telling the agent
+// otherwise is a lie it will reason from.
+func TestWorkerDoesNotClaimNobodySeesToolCalls(t *testing.T) {
+	got := Worker(workerInput())
+	for _, stale := range []string{
+		"only thing the user sees",
+		"not watching your tool calls",
+	} {
+		if strings.Contains(got, stale) {
+			t.Errorf("the prompt still claims %q, but tool calls are printed", stale)
 		}
 	}
 }
