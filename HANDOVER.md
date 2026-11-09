@@ -1,10 +1,8 @@
 # neoharness — handover
 
-Date: 2026-11-09 (evening). State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 114 test functions, 116 with subtests).
-Work up to commit `4b5e448` is committed. The third session's work (section
-11.3: artifacts, layout, frame buffer, auto mode) is **not committed yet**.
-Ask the user before you commit.
+Date: 2026-11-09 (night). State: all code works and all tests pass (`go
+vet ./...`, `go test -race ./...`: 133 tests). Everything is committed
+(section 11.3 up to item 17). Ask the user before you commit.
 
 ## 1. What neoharness is
 
@@ -198,28 +196,51 @@ only recorded.
   `y`, `/`, `]m`/`[m` (headings) work.
 - **Editing** (`editor.go`): `:e` or `i a I A o O` in a document shows its
   markdown source in the same window, at the source line of the block under
-  the cursor (`Line.Src`, set by `mdRenderer.block`). Lines soft-wrap without
-  losing a rune (`wrapRunes`), so a row maps back to a source offset
-  (`Line.Off`); the window keeps its own row and column, and every edit reads
-  the window's position first (`fromWindow`) and sets it after (`toWindow`).
-  Normal: motions, `x dd D p P u <C-r>`, `<CR>` moves down. Insert: the
-  prompt's Iris `›` in the margin of the cursor row. The status line shows
-  `[+]` while unsaved. `:w` saves (`EditArtifact`, base version checked;
-  `:w!` saves over a newer one), `:wq`/`:x` save and show the document,
-  `<Esc>`/`q`/`:q` show the document unless changes would be lost, `:q!`
-  drops them, `:e!` takes the newest version. Closing the popup keeps the
-  edit in the buffer; `:qa` refuses while an edit is unsaved. A write by the
-  agent during an edit shows a Gold notice.
+  the cursor (`Line.Src`, set by `mdRenderer.block`). A meta line on top
+  (`◇ plan · editing v4`, `metaRows`) keeps the text where the document had
+  it and says which version the edit is on; the cursor never stops on it.
+  Lines soft-wrap without losing a rune (`wrapRunes`), so a row maps back to
+  a source place (`Line.Off`, `posAt`); the window keeps its own row and
+  column, and every edit reads the window's place first (`fromWindow`) and
+  sets it after (`toWindow`). The margin is not text: `0`, `h`, `w`, `b`
+  never put the cursor in it.
+  - Core: `remove(a, b)` and `insertText` over `pos`; everything else is
+    built on them. One register (`reg`, `lines`) for x, d, c, y and p; y also
+    goes to the clipboard. Undo snapshots the source before each change (an
+    Insert session is one change); undo back to the saved text clears `[+]`.
+  - Normal: motions (`w b e` use Vim's word classes everywhere now), `x s r
+    J dd cc D C p P u <C-r> .`, operators `d c y` with `w e b $ 0 ^ iw aw`
+    (`span`; `cw` stops at the word end as in Vim), Visual `d x c y`, `<CR>`
+    moves down. `.` replays the keys of the last change (`App.rec`,
+    `lastChange`): recording starts when Normal is idle and keeps a sequence
+    when it ends idle with the source changed. On the rendered document,
+    change keys show "i or :e edits the markdown".
+  - Insert: the prompt's Iris `›` in the margin of the cursor row. The status
+    line shows `[+]` while unsaved.
+  - `:w` saves (`EditArtifact` with the base version and text). If the agent
+    wrote since, the hub merges by lines (`merge3`: changes to different
+    lines both stay, even next to each other) and the editor loads the
+    result ("merged and saved"; `u` gives back the edit alone); changes to
+    the same lines are refused: `:w!` saves over, `:e!` takes theirs. A write
+    by the agent during an edit shows a Gold "… · :w merges it".
+  - `:wq`/`:x` save and show the document; `<Esc>`/`q`/`:q` show it unless
+    changes would be lost; `:q!` drops them. Closing the popup keeps the edit
+    in the buffer; `:qa` refuses while one is unsaved.
 - **What the agent hears**: `Hub.EditArtifact` saves the person's version
-  (`UserEdit`, "edited by you" in the meta line) and keeps, on the writer
-  thread, the text it last saw (`Thread.Edits`). The next turn's prompt,
-  whoever sends the message, starts with one note per artifact: a unified
-  diff with 1 line of context, each hunk headed by its markdown heading
-  (`diff.go`, `prompts.ArtifactEdited`). Saves before that add up to one
-  diff. A diff over 6 KB becomes counts and section names, with a pointer to
-  `read_artifact`. A `write_artifact` while an edit is unseen is refused,
+  (`UserEdit`: "edited by you" in the meta line, "edited by the person" in
+  `workspace_status`) and keeps, on the writer thread, the text it last saw
+  (`Thread.Edits`). The writer's transcript gets an `artifact` event from the
+  user (`◇ Plan · artifact v6 · edited by you`; agents read "the person
+  edited artifact plan"). The next turn's prompt, whoever sends the message,
+  starts with one note per artifact: a unified diff with 1 line of context,
+  each hunk headed by its markdown heading (`diff.go`,
+  `prompts.ArtifactEdited`). Saves before that add up to one diff. A diff
+  over 6 KB becomes counts and section names, with a pointer to
+  `read_artifact`. When the writer calls `read_artifact` first
+  (`ReadArtifactAs`), it gets the note on top of the text and the edit
+  counts as seen. A `write_artifact` while an edit is unseen is refused,
   and the refusal carries the diff, so the person's edit is never silently
-  overwritten. An edit starts no turn; the writer's chat gets a note.
+  overwritten. An edit starts no turn.
 - Rendering (`renderDocument` in `markdown.go`): a meta line (name, writer,
   version, time), text column at most 96 wide, headings by level (Iris, Foam,
   Rose, then Subtle; rules under levels 1 and 2), task boxes without bullets,
@@ -637,7 +658,8 @@ Pitfalls seen in this work:
   (first session).
 - Commit `4b5e448`: second session and the first part of the third (11.2 and
   11.3 items 1–6).
-- **Not committed**: 11.3 items 7–14 (24 files, about +1,200 / −60 lines).
+- Commit `f2b8e90`: 11.3 items 7–16 (artifacts, editing, rail, layout).
+- The next commit: 11.3 item 17 (editing polish after a real run).
 - The approved design plan is at
   `~/.claude/plans/this-was-already-kinda-lively-hanrahan.md`. Changes made
   after it: no pets or emojis, the coordinator names threads, a more minimal
@@ -698,6 +720,11 @@ Not committed:
 16. The person edits artifacts inside neoharness; the writer gets a packed
     diff with its next message (user's choices: edit in neoharness, not
     $EDITOR; with the next message, not at once; the writer only).
+17. Polish after a real run: the source keeps a meta line (no jump), Vim
+    operators, `.`, `r`, Visual changes, one register, a line merge on `:w`
+    when the agent wrote meanwhile, the writer's `read_artifact` counts as
+    seeing the edit, `[+]` clears on undo to the saved text, "no threads
+    yet" in an empty pane.
 
 Things found on the user's machine:
 - An old-style hub from before the hub moved into the TUI was still running

@@ -238,3 +238,20 @@ func TestArtifactsBelongToTheWorkspace(t *testing.T) {
 		t.Fatalf("artifact = %+v, %v", a, err)
 	}
 }
+
+func TestTranscriptTellsThePersonsEditApart(t *testing.T) {
+	got := Transcript([]model.Event{
+		{Kind: model.EventArtifact, Detail: "plan", Text: "Plan", Version: 1},
+		{Kind: model.EventArtifact, From: model.User, Detail: "plan", Text: "Plan", Version: 2},
+	})
+	if !strings.Contains(got, `wrote artifact plan ("Plan"), version 1`) || !strings.Contains(got, "the person edited artifact plan, version 2") {
+		t.Fatalf("transcript = %q", got)
+	}
+}
+
+func TestArtifactListShowsThePersonsEdit(t *testing.T) {
+	got := Artifacts([]model.Artifact{{Name: "plan", Title: "Plan", Thread: "api", Version: 3, UserEdit: true}})
+	if !strings.Contains(got, `- plan: "Plan" by api, version 3, edited by the person`) {
+		t.Fatalf("artifacts = %q", got)
+	}
+}

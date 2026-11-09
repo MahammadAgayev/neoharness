@@ -32,7 +32,7 @@ type Client interface {
 	Threads(workspace string) ([]model.ThreadView, error)
 	Artifacts(workspace string) ([]model.Artifact, error)
 	Artifact(workspace, name string) (model.Artifact, string, error)
-	EditArtifact(workspace, name, text string, base int, force bool) (model.Artifact, error)
+	EditArtifact(workspace, name, text, baseText string, base int, force bool) (model.Artifact, string, error)
 	OpenThread(workspace, name, brief, location string) error
 	Events(workspace, thread string, tail int) ([]model.Event, error)
 	Completions(workspace, thread string) (model.Completions, error)
@@ -121,6 +121,16 @@ type App struct {
 	toasts   []*toast
 	menuShut int // the word whose menu <Esc> closed, or -1
 	ctrlX    bool
+	// replacing is set by r: the next key replaces replaceN runes.
+	replacing bool
+	replaceN  int
+	// rec holds the keys of the change being typed in an artifact's source;
+	// lastChange the last finished one, for `.`.
+	rec        []*tcell.EventKey
+	recRev     int
+	lastChange []*tcell.EventKey
+	replaying  bool
+	noRepeat   bool
 	// confirm runs on y; any other key drops it.
 	confirm  func()
 	comps    map[string]model.Completions
@@ -361,7 +371,7 @@ func (a *App) apply(u model.Update) {
 		if b, ok := a.bufs[artifactName(a.workspace, u.Artifact.Name)]; ok {
 			a.loadArtifact(b)
 			if b.Edit != nil && u.Artifact.Version != b.Edit.Base {
-				a.notify(fmt.Sprintf("%s wrote v%d while you edit · :w! saves over it, :e! takes it", u.Artifact.Thread, u.Artifact.Version), a.th.Gold)
+				a.notify(fmt.Sprintf("%s wrote v%d while you edit · :w merges it", u.Artifact.Thread, u.Artifact.Version), a.th.Gold)
 			}
 		}
 	case model.UpdateDeleted:
@@ -854,6 +864,9 @@ func (a *App) renderThreads() {
 				lines = append(lines, row(n))
 			}
 		}
+	}
+	if len(lines) == 0 {
+		lines = []Line{{Prefix: []Span{{" ", th.Text}}, Spans: []Span{{"no threads yet", th.Muted}}}}
 	}
 	a.threadsBuf.SetLines(lines)
 }

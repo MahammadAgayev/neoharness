@@ -814,34 +814,39 @@ func (h *Hub) WriteArtifact(workspaceName, by, name, text string) (model.Artifac
 	return a, nil
 }
 
-// EditArtifact saves the person's edit of an artifact as a new version. base
-// is the version the edit started from: if the artifact moved on since, the
-// edit is refused unless force. The writer gets the diff with its next
-// message; edits until then add up to one diff.
-func (h *Hub) EditArtifact(workspaceName, name, text string, base int, force bool) (model.Artifact, error) {
+// EditArtifact saves the person's edit of an artifact as a new version and
+// returns the text saved. base and baseText are the version the edit started
+// from: if the artifact moved on since, the edit is merged into it, or
+// refused when both changed the same lines, unless force. The writer gets
+// the diff with its next message; edits until then add up to one diff.
+func (h *Hub) EditArtifact(workspaceName, name, text, baseText string, base int, force bool) (model.Artifact, string, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	ws, err := h.workspace(workspaceName)
 	if err != nil {
-		return model.Artifact{}, err
+		return model.Artifact{}, "", err
 	}
 	a, old, err := workspace.Artifact(workspaceName, name)
 	if errors.Is(err, os.ErrNotExist) {
-		return a, fmt.Errorf("no artifact %q in %s", name, workspaceName)
+		return a, "", fmt.Errorf("no artifact %q in %s", name, workspaceName)
 	} else if err != nil {
-		return a, err
+		return a, "", err
 	}
 	if strings.TrimSpace(text) == "" {
-		return a, errors.New("the artifact is empty")
+		return a, "", errors.New("the artifact is empty")
 	}
 	if len(text) > artifactLimit {
-		return a, fmt.Errorf("the artifact is %d KB; the limit is %d KB", len(text)>>10, artifactLimit>>10)
+		return a, "", fmt.Errorf("the artifact is %d KB; the limit is %d KB", len(text)>>10, artifactLimit>>10)
 	}
 	if a.Version != base && !force {
-		return a, fmt.Errorf("v%d was written while you edited · :w! saves over it", a.Version)
+		merged, ok := merge3(baseText, text, old)
+		if !ok {
+			return a, "", fmt.Errorf("v%d changed the lines you edited · :w! saves over it, :e! takes it", a.Version)
+		}
+		text = merged
 	}
 	if text == old {
-		return a, nil
+		return a, text, nil
 	}
 	th, ok := ws.threads[a.Thread]
 	if ok {
@@ -855,14 +860,14 @@ func (h *Hub) EditArtifact(workspaceName, name, text string, base int, force boo
 	a.Title, a.UpdatedAt, a.UserEdit = title(text, name), time.Now().UTC(), true
 	a.Version++
 	if err := workspace.SaveArtifact(workspaceName, a, text); err != nil {
-		return model.Artifact{}, err
+		return model.Artifact{}, "", err
 	}
 	if ok {
-		h.event(ws, th, model.Event{Kind: model.EventNote, Text: fmt.Sprintf("You edited %s, v%d. %s sees the change with its next message.", name, a.Version, a.Thread)})
+		h.event(ws, th, model.Event{Kind: model.EventArtifact, From: model.User, Detail: name, Text: a.Title, Version: a.Version})
 		h.changed(ws, th)
 	}
 	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: a.Thread, Artifact: &a})
-	return a, nil
+	return a, text, nil
 }
 
 // editNotes tells a thread what the person changed in the artifacts it
@@ -901,6 +906,32 @@ func (h *Hub) ReadArtifact(workspaceName, name string) (model.Artifact, string, 
 		return a, "", fmt.Errorf("no artifact %q in %s", name, workspaceName)
 	}
 	return a, text, err
+}
+
+// ReadArtifactAs is read_artifact for a session. When the session wrote the
+// artifact and the person edited it since, the text comes after the edit's
+// diff, and the edit counts as seen: no note next turn, no refused write.
+func (h *Hub) ReadArtifactAs(workspaceName, by, name string) (string, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, err := h.workspace(workspaceName)
+	if err != nil {
+		return "", err
+	}
+	a, text, err := workspace.Artifact(workspaceName, name)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("no artifact %q in %s", name, workspaceName)
+	} else if err != nil {
+		return "", err
+	}
+	if th, ok := ws.threads[by]; ok && a.Thread == by {
+		if e, unseen := th.t.Edits[name]; unseen {
+			delete(th.t.Edits, name)
+			h.changed(ws, th)
+			return editNote(name, e, text, a.Version) + "\n\n---\n\n" + text, nil
+		}
+	}
+	return text, nil
 }
 
 // Artifacts lists a workspace's artifacts, newest first.

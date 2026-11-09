@@ -156,3 +156,66 @@ func unifiedDiff(old, new string) (diff string, sections []string, added, remove
 	}
 	return strings.TrimRight(b.String(), "\n"), sections, added, removed
 }
+
+// change replaces base lines from..to with lines.
+type change struct {
+	from, to int
+	lines    []string
+}
+
+// changes lists what lineDiff's ops do to the base, in order.
+func changes(ops []op) []change {
+	var out []change
+	i := 0
+	for k := 0; k < len(ops); {
+		if ops[k].kind == ' ' {
+			i++
+			k++
+			continue
+		}
+		c := change{from: i, to: i}
+		for ; k < len(ops) && ops[k].kind != ' '; k++ {
+			if ops[k].kind == '-' {
+				c.to++
+			} else {
+				c.lines = append(c.lines, ops[k].text)
+			}
+		}
+		i = c.to
+		out = append(out, c)
+	}
+	return out
+}
+
+// merge3 joins two edits of base by lines, as a merge tool does. Changes to
+// different lines both stay, even when they touch; changes to the same
+// lines must be the same, or the merge fails.
+func merge3(base, mine, theirs string) (string, bool) {
+	b := strings.Split(base, "\n")
+	cs := append(changes(lineDiff(b, strings.Split(mine, "\n"))), changes(lineDiff(b, strings.Split(theirs, "\n")))...)
+	// By start; at one start an insertion goes before a replacement.
+	slices.SortStableFunc(cs, func(x, y change) int {
+		if x.from != y.from {
+			return x.from - y.from
+		}
+		return (x.to - x.from) - (y.to - y.from)
+	})
+	var out []string
+	i := 0
+	for k, c := range cs {
+		if k > 0 {
+			p := cs[k-1]
+			same := p.from == c.from && p.to == c.to && slices.Equal(p.lines, c.lines)
+			if same {
+				continue
+			}
+			if c.from < p.to || c.from == p.from && p.from == p.to && c.from == c.to {
+				return "", false
+			}
+		}
+		out = append(out, b[i:c.from]...)
+		out = append(out, c.lines...)
+		i = c.to
+	}
+	return strings.Join(append(out, b[i:]...), "\n"), true
+}

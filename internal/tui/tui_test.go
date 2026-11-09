@@ -29,6 +29,8 @@ type fakeClient struct {
 	gone       []string
 	docs       map[string]string
 	arts       []model.Artifact
+	// merged is what an edit from an old version merges to; empty refuses.
+	merged string
 }
 
 func (f *fakeClient) Workspaces() ([]model.WorkspaceView, error) { return f.workspaces, nil }
@@ -55,20 +57,23 @@ func (f *fakeClient) Artifact(p, name string) (model.Artifact, string, error) {
 	}
 	return model.Artifact{}, "", fmt.Errorf("no artifact %q", name)
 }
-func (f *fakeClient) EditArtifact(p, name, text string, base int, force bool) (model.Artifact, error) {
+func (f *fakeClient) EditArtifact(p, name, text, baseText string, base int, force bool) (model.Artifact, string, error) {
 	i := slices.IndexFunc(f.arts, func(a model.Artifact) bool { return a.Name == name })
 	if i < 0 {
-		return model.Artifact{}, fmt.Errorf("no artifact %q", name)
+		return model.Artifact{}, "", fmt.Errorf("no artifact %q", name)
 	}
 	if f.arts[i].Version != base && !force {
-		return f.arts[i], fmt.Errorf("v%d was written while you edited · :w! saves over it", f.arts[i].Version)
+		if f.merged == "" {
+			return f.arts[i], "", fmt.Errorf("v%d changed the lines you edited · :w! saves over it, :e! takes it", f.arts[i].Version)
+		}
+		text = f.merged
 	}
 	if f.docs[name] != text {
 		f.arts[i].Version++
 		f.arts[i].UserEdit = true
 		f.docs[name] = text
 	}
-	return f.arts[i], nil
+	return f.arts[i], text, nil
 }
 func (f *fakeClient) OpenThread(p, name, brief, loc string) error {
 	f.opened = append(f.opened, name+"@"+loc)
@@ -1328,7 +1333,7 @@ func TestArtifactEditNormalCommandsAndUndo(t *testing.T) {
 		t.Fatalf("u = %q", got)
 	}
 	h.press("u", "u", "u")
-	if got := ed.Text(); got != "# D\n\none\ntwo\n" || ed.Dirty == false {
+	if got := ed.Text(); got != "# D\n\none\ntwo\n" || ed.Dirty {
 		t.Fatalf("u back to the start = %q", got)
 	}
 	h.press("<C-r>")
@@ -1376,5 +1381,119 @@ func TestArtifactEditRefusesToSaveOverANewerVersion(t *testing.T) {
 	h.press(":w!", "<CR>")
 	if h.hub.docs["design"] != "# D\n\nmine!\n" || h.hub.arts[0].Version != 3 {
 		t.Fatalf(":w! = %q v%d", h.hub.docs["design"], h.hub.arts[0].Version)
+	}
+}
+
+// srcEdit opens the source of a one-line document on that line.
+func srcEdit(t *testing.T, line string) (*neoharness, *Editor) {
+	h := editDemo(t, "# D\n\n"+line+"\n")
+	h.press(":e", "<CR>", "/"+strings.Fields(line)[0], "<CR>", "0")
+	return h, h.a.cur.Buf.Edit
+}
+
+func TestArtifactEditOperators(t *testing.T) {
+	for _, c := range []struct {
+		line string
+		keys []string
+		want string
+	}{
+		{"alpha beta gamma", []string{"dw"}, "beta gamma"},
+		{"alpha beta gamma", []string{"2dw"}, "gamma"},
+		{"alpha beta gamma", []string{"cw", "one", "<Esc>"}, "one beta gamma"},
+		{"alpha beta gamma", []string{"w", "de"}, "alpha  gamma"},
+		{"alpha beta gamma", []string{"$", "db"}, "alpha beta a"},
+		{"alpha beta gamma", []string{"w", "d$"}, "alpha "},
+		{"alpha beta gamma", []string{"w", "D"}, "alpha "},
+		{"alpha beta gamma", []string{"w", "d0"}, "beta gamma"},
+		{"alpha beta gamma", []string{"w", "l", "diw"}, "alpha  gamma"},
+		{"alpha beta gamma", []string{"w", "l", "daw"}, "alpha gamma"},
+		{"alpha beta gamma", []string{"w", "ciw", "BETA", "<Esc>"}, "alpha BETA gamma"},
+		{"see **bold** here", []string{"w", "w", "ciw", "x", "<Esc>"}, "see **x** here"},
+		{"alpha beta gamma", []string{"w", "C", "end", "<Esc>"}, "alpha end"},
+		{"alpha beta gamma", []string{"s", "A", "<Esc>"}, "Alpha beta gamma"},
+		{"alpha beta gamma", []string{"cc", "new", "<Esc>"}, "new"},
+		{"alpha beta gamma", []string{"3r", "x"}, "xxxha beta gamma"},
+		{"alpha beta gamma", []string{"yiw", "$", "p"}, "alpha beta gammaalpha"},
+		{"alpha beta gamma", []string{"x", "."}, "pha beta gamma"},
+		{"alpha beta gamma", []string{"dw", "."}, "gamma"},
+		{"alpha beta gamma", []string{"cw", "one", "<Esc>", "w", "."}, "one one gamma"},
+		{"alpha beta gamma", []string{"v", "e", "d"}, " beta gamma"},
+		{"alpha beta gamma", []string{"w", "v", "e", "c", "B", "<Esc>"}, "alpha B gamma"},
+	} {
+		h, ed := srcEdit(t, c.line)
+		h.press(c.keys...)
+		if got := string(ed.Src[2]); got != c.want {
+			t.Errorf("%q %v = %q, want %q", c.line, c.keys, got, c.want)
+		}
+	}
+}
+
+func TestArtifactEditLinesAndYank(t *testing.T) {
+	h := editDemo(t, "# D\n\none\ntwo\nthree\n")
+	h.press(":e", "<CR>", "/one", "<CR>")
+	ed := h.a.cur.Buf.Edit
+	h.press("yy", "j", "p")
+	if got := ed.Text(); got != "# D\n\none\ntwo\none\nthree\n" {
+		t.Fatalf("yy j p = %q", got)
+	}
+	h.press("k", "J")
+	if got := ed.Text(); got != "# D\n\none\ntwo one\nthree\n" {
+		t.Fatalf("J = %q", got)
+	}
+	h.press("V", "j", "d")
+	if got := ed.Text(); got != "# D\n\none\n" {
+		t.Fatalf("V j d = %q", got)
+	}
+	h.press("P")
+	if got := ed.Text(); got != "# D\n\none\ntwo one\nthree\n" {
+		t.Fatalf("P after V d = %q", got)
+	}
+	h.press("gg")
+	if h.a.cur.Cur < metaRows {
+		t.Fatal("gg should stop on the first source line, not the meta line")
+	}
+	h.a.draw()
+	h.see("◇ design · editing v1")
+}
+
+func TestRenderedArtifactPointsToEditing(t *testing.T) {
+	h := editDemo(t, "# D\n\nText.\n")
+	h.press("dd")
+	h.see("i or :e edits the markdown")
+	h.a.notice = ""
+	h.press("yiw")
+	if strings.Contains(h.a.notice, "edits the markdown") {
+		t.Error("a yank on the document is not an edit")
+	}
+}
+
+func TestEditedArtifactShowsInTheWritersChat(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	e := model.Event{Kind: model.EventArtifact, From: model.User, Detail: "design", Text: "Design", Version: 2}
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &e})
+	h.a.draw()
+	h.see("◇ Design  · artifact v2 · edited by you")
+}
+
+func TestArtifactEditMergesANewerVersion(t *testing.T) {
+	h := editDemo(t, "# D\n\n## A\none\n")
+	h.press(":e", "<CR>", "/one", "<CR>", "A", "!", "<Esc>")
+	ed := h.a.cur.Buf.Edit
+	h.hub.arts[0].Version = 2
+	h.hub.docs["design"] = "# D\n\n## Aye\none\n"
+	a := h.hub.arts[0]
+	h.a.apply(model.Update{Kind: model.UpdateArtifact, Workspace: "demo", Thread: "auth-refactor", Artifact: &a})
+	h.a.draw()
+	h.see("auth-refactor wrote v2 while you edit · :w merges it")
+	h.hub.merged = "# D\n\n## Aye\none!\n"
+	h.press(":w", "<CR>")
+	if ed.Text() != h.hub.merged || ed.Dirty || ed.Base != 3 {
+		t.Fatalf("after the merge: %q dirty %v base %d", ed.Text(), ed.Dirty, ed.Base)
+	}
+	h.see("merged and saved design v3")
+	h.press("u")
+	if ed.Text() != "# D\n\n## A\none!\n" {
+		t.Fatalf("u after a merge should give back the edit alone: %q", ed.Text())
 	}
 }

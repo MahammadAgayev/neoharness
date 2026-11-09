@@ -948,18 +948,22 @@ func TestPersonEditsReachTheWriterAsOneDiff(t *testing.T) {
 	if _, err := h.WriteArtifact("demo", model.Coordinator, "plan", doc); err != nil {
 		t.Fatal(err)
 	}
-	a, err := h.EditArtifact("demo", "plan", strings.Replace(doc, "two", "TWO", 1), 1, false)
+	a, _, err := h.EditArtifact("demo", "plan", strings.Replace(doc, "two", "TWO", 1), doc, 1, false)
 	if err != nil || a.Version != 2 || !a.UserEdit {
 		t.Fatalf("first edit = %+v, %v", a, err)
 	}
-	if _, err := h.EditArtifact("demo", "plan", doc, 1, false); err == nil {
-		t.Error("an edit from an old version should be refused")
+	if _, _, err := h.EditArtifact("demo", "plan", strings.Replace(doc, "two", "deux", 1), doc, 1, false); err == nil {
+		t.Error("an edit of the same line from an old version should be refused")
 	}
-	if a, err = h.EditArtifact("demo", "plan", strings.Replace(doc, "two", "TWO", 1)+"more\n", 2, false); err != nil || a.Version != 3 {
+	if a, _, err = h.EditArtifact("demo", "plan", doc+"more\n", doc, 1, false); err != nil || a.Version != 3 {
 		t.Fatalf("second edit = %+v, %v", a, err)
 	}
 	if len(f.requests()) != 0 {
 		t.Fatal("an edit should not start a turn")
+	}
+	evs, _ := h.Events("demo", model.Coordinator, 10)
+	if e := evs[len(evs)-1]; e.Kind != model.EventArtifact || e.From != model.User || e.Version != 3 {
+		t.Errorf("the writer's transcript should show the edit, got %+v", e)
 	}
 
 	_ = h.Send("demo", model.User, model.Coordinator, "go on")
@@ -982,7 +986,7 @@ func TestWriteOverAnUnseenEditIsRefused(t *testing.T) {
 	h := newHub(t, &fake{})
 	pinned(t, h, "demo")
 	_, _ = h.WriteArtifact("demo", model.Coordinator, "plan", "# Plan\n\nold\n")
-	_, _ = h.EditArtifact("demo", "plan", "# Plan\n\nmine\n", 1, false)
+	_, _, _ = h.EditArtifact("demo", "plan", "# Plan\n\nmine\n", "# Plan\n\nold\n", 1, false)
 	_, err := h.WriteArtifact("demo", model.Coordinator, "plan", "# Plan\n\nnew\n")
 	if err == nil || !strings.Contains(err.Error(), "+mine") || !strings.Contains(err.Error(), "Nothing was saved") {
 		t.Fatalf("err = %v", err)
@@ -1001,5 +1005,48 @@ func TestLargeEditsAreToldAsCounts(t *testing.T) {
 	note := editNote("plan", workspace.Edit{Version: 1, Text: old}, now, 2)
 	if strings.Contains(note, "```") || !strings.Contains(note, "400 lines added, 10 removed") || !strings.Contains(note, "## Store") {
 		t.Fatalf("note = %q", note)
+	}
+}
+
+func TestWritersReadSeesTheEdit(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	_, _ = h.WriteArtifact("demo", model.Coordinator, "plan", "# Plan\n\nold\n")
+	_, _, _ = h.EditArtifact("demo", "plan", "# Plan\n\nmine\n", "# Plan\n\nold\n", 1, false)
+	if text, _ := h.ReadArtifactAs("demo", "nobody", "plan"); text != "# Plan\n\nmine\n" {
+		t.Fatalf("another reader should get the text alone: %q", text)
+	}
+	text, err := h.ReadArtifactAs("demo", model.Coordinator, "plan")
+	if err != nil || !strings.HasPrefix(text, "The person edited the artifact plan (v1 → v2)") || !strings.HasSuffix(text, "---\n\n# Plan\n\nmine\n") {
+		t.Fatalf("the writer's read = %q, %v", text, err)
+	}
+	if a, err := h.WriteArtifact("demo", model.Coordinator, "plan", "# Plan\n\nmine, and more\n"); err != nil || a.Version != 3 {
+		t.Fatalf("a write after the read should go through: %+v, %v", a, err)
+	}
+	_ = h.Send("demo", model.User, model.Coordinator, "go on")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if reqs := f.requests(); len(reqs) != 1 || reqs[0].Prompt != "go on" {
+		t.Fatalf("the edit was already seen; prompt = %q", reqs[0].Prompt)
+	}
+}
+
+func TestMerge3(t *testing.T) {
+	base := "# P\n\n## A\none\n\n## B\ntwo\n"
+	for _, c := range []struct {
+		mine, theirs, want string
+		ok                 bool
+	}{
+		{"# P\n\n## A\nONE\n\n## B\ntwo\n", "# P\n\n## A\none\n\n## B\nTWO\n", "# P\n\n## A\nONE\n\n## B\nTWO\n", true},
+		{"# P\n\n## A\nONE\n\n## B\ntwo\n", "# P\n\n## Aye\none\n\n## B\ntwo\n", "# P\n\n## Aye\nONE\n\n## B\ntwo\n", true},
+		{"# P\n\n## A\nONE\n\n## B\ntwo\n", "# P\n\n## A\nUno\n\n## B\ntwo\n", "", false},
+		{"# P\n\n## A\nONE\n\n## B\ntwo\n", "# P\n\n## A\nONE\n\n## B\ntwo\n", "# P\n\n## A\nONE\n\n## B\ntwo\n", true},
+		{base + "mine\n", base + "theirs\n", "", false},
+		{"# P\n\n## A\none\nmine\n\n## B\ntwo\n", base + "\n## C\nthree\n", "# P\n\n## A\none\nmine\n\n## B\ntwo\n\n## C\nthree\n", true},
+	} {
+		got, ok := merge3(base, c.mine, c.theirs)
+		if ok != c.ok || got != c.want {
+			t.Errorf("merge3(%q, %q) = %q, %v; want %q, %v", c.mine, c.theirs, got, ok, c.want, c.ok)
+		}
 	}
 }

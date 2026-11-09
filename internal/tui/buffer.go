@@ -272,7 +272,7 @@ func (b *Buffer) AddEvent(e model.Event) {
 		b.push(&block{kind: bShell, id: e.ID, text: e.Detail, live: true})
 	case model.EventArtifact:
 		b.endLive()
-		b.push(&block{kind: bArtifact, art: model.Artifact{Name: e.Detail, Title: e.Text, Version: e.Version}})
+		b.push(&block{kind: bArtifact, art: model.Artifact{Name: e.Detail, Title: e.Text, Version: e.Version, UserEdit: e.From == model.User}})
 	case model.EventClear:
 		b.blocks = nil
 		b.push(&block{kind: bNote, text: e.Text})
@@ -346,6 +346,9 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 		spans := []Span{{bl.art.Title, th.Text}, {"  · artifact", th.Muted}}
 		if bl.art.Version > 1 {
 			spans = append(spans, Span{" v" + strconv.Itoa(bl.art.Version), th.Muted})
+		}
+		if bl.art.UserEdit {
+			spans = append(spans, Span{" · edited by you", th.Muted})
 		}
 		return wrap(spans, w, []Span{{"  ◇ ", th.Foam}}, []Span{{"    ", th.Text}})
 	case bDoc:

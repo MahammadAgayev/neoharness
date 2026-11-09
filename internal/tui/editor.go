@@ -12,15 +12,19 @@ import (
 // the lines soft-wrapped and keeps its own row and column, so motions work
 // as in any buffer. Edits read the window's position first and set it after.
 type Editor struct {
-	Src [][]rune
+	Name string
+	Src  [][]rune
 	// Base is the version the edit started from, or the last one saved.
 	Base      int
 	Line, Off int
 	Dirty     bool
+	// saved is the text as last loaded or saved: undo back to it is clean.
+	saved string
 
 	undo, redo []snapshot
-	// reg is what x, D and dd took, for p and P. lines says dd took it.
-	reg   []string
+	// reg is what the last delete or yank took, for p and P. lines says it
+	// took whole lines.
+	reg   string
 	lines bool
 
 	rev    int
@@ -34,8 +38,17 @@ type snapshot struct {
 	line, off int
 }
 
-func newEditor(text string, base int) *Editor {
-	e := &Editor{Base: base, rev: 1}
+// metaRows are the rows above the source: a blank, the meta line, a blank.
+// The cursor does not stop on them.
+const metaRows = 3
+
+// pos is a place in the source: a line and a rune offset in it.
+type pos struct{ line, off int }
+
+func (p pos) before(q pos) bool { return p.line < q.line || p.line == q.line && p.off < q.off }
+
+func newEditor(name, text string, base int) *Editor {
+	e := &Editor{Name: name, Base: base, rev: 1, saved: text}
 	for _, l := range strings.Split(text, "\n") {
 		e.Src = append(e.Src, []rune(l))
 	}
@@ -49,6 +62,8 @@ func (e *Editor) Text() string {
 	}
 	return strings.Join(parts, "\n")
 }
+
+func (e *Editor) cursor() pos { return pos{e.Line, e.Off} }
 
 // save remembers the source before a change, for u.
 func (e *Editor) save() {
@@ -75,94 +90,103 @@ func (e *Editor) step(from, to *[]snapshot) bool {
 	*to = append(*to, snapshot{e.Src, e.Line, e.Off})
 	e.Src, e.Line, e.Off = s.src, s.line, s.off
 	e.changed()
+	e.Dirty = e.Text() != e.saved
 	return true
 }
 
-func (e *Editor) insert(rs ...rune) {
-	l := e.Src[e.Line]
-	e.Src[e.Line] = slices.Insert(slices.Clone(l), e.Off, rs...)
-	e.Off += len(rs)
-	e.changed()
+// text is the source from a up to b.
+func (e *Editor) text(a, b pos) string {
+	if a.line == b.line {
+		return string(e.Src[a.line][a.off:b.off])
+	}
+	parts := []string{string(e.Src[a.line][a.off:])}
+	for l := a.line + 1; l < b.line; l++ {
+		parts = append(parts, string(e.Src[l]))
+	}
+	return strings.Join(append(parts, string(e.Src[b.line][:b.off])), "\n")
 }
 
-func (e *Editor) newline() {
+// remove takes the source from a up to b out, leaves the cursor at a, and
+// returns what it took.
+func (e *Editor) remove(a, b pos) string {
+	if !a.before(b) {
+		return ""
+	}
+	took := e.text(a, b)
+	joined := append(slices.Clone(e.Src[a.line][:a.off]), e.Src[b.line][b.off:]...)
+	e.Src = slices.Replace(e.Src, a.line, b.line+1, joined)
+	e.Line, e.Off = a.line, a.off
+	e.changed()
+	return took
+}
+
+// insertText writes s at the cursor and leaves the cursor after it.
+func (e *Editor) insertText(s string) {
+	parts := strings.Split(s, "\n")
 	l := e.Src[e.Line]
 	head, tail := slices.Clone(l[:e.Off]), slices.Clone(l[e.Off:])
-	e.Src[e.Line] = head
-	e.Src = slices.Insert(e.Src, e.Line+1, tail)
-	e.Line, e.Off = e.Line+1, 0
+	rows := [][]rune{append(head, []rune(parts[0])...)}
+	for _, p := range parts[1:] {
+		rows = append(rows, []rune(p))
+	}
+	n := len(rows) - 1
+	off := len(rows[n])
+	rows[n] = append(rows[n], tail...)
+	e.Src = slices.Replace(e.Src, e.Line, e.Line+1, rows...)
+	e.Line, e.Off = e.Line+n, off
 	e.changed()
 }
 
 func (e *Editor) backspace() {
 	switch {
 	case e.Off > 0:
-		e.Src[e.Line] = slices.Delete(slices.Clone(e.Src[e.Line]), e.Off-1, e.Off)
-		e.Off--
+		e.remove(pos{e.Line, e.Off - 1}, e.cursor())
 	case e.Line > 0:
-		prev := e.Src[e.Line-1]
-		e.Off = len(prev)
-		e.Src[e.Line-1] = append(slices.Clone(prev), e.Src[e.Line]...)
-		e.Src = slices.Delete(e.Src, e.Line, e.Line+1)
-		e.Line--
-	default:
-		return
+		e.remove(pos{e.Line - 1, len(e.Src[e.Line-1])}, e.cursor())
 	}
-	e.changed()
 }
 
 func (e *Editor) del() {
-	l := e.Src[e.Line]
 	switch {
-	case e.Off < len(l):
-		e.Src[e.Line] = slices.Delete(slices.Clone(l), e.Off, e.Off+1)
+	case e.Off < len(e.Src[e.Line]):
+		e.remove(e.cursor(), pos{e.Line, e.Off + 1})
 	case e.Line < len(e.Src)-1:
-		e.Src[e.Line] = append(slices.Clone(l), e.Src[e.Line+1]...)
-		e.Src = slices.Delete(e.Src, e.Line+1, e.Line+2)
-	default:
-		return
+		e.remove(e.cursor(), pos{e.Line + 1, 0})
 	}
-	e.changed()
 }
 
 // cut removes runes from..to of the cursor line into the register.
 func (e *Editor) cut(from, to int) {
-	if l := e.Src[e.Line]; from < min(to, len(l)) {
-		e.reg, e.lines = []string{string(l[from:min(to, len(l))])}, false
+	to = min(to, len(e.Src[e.Line]))
+	if from < to {
+		e.reg, e.lines = e.remove(pos{e.Line, from}, pos{e.Line, to}), false
 	}
-	e.remove(from, to)
 }
 
-// remove removes runes from..to of the cursor line.
-func (e *Editor) remove(from, to int) {
-	l := e.Src[e.Line]
-	to = min(to, len(l))
-	if from >= to {
-		return
-	}
-	e.Src[e.Line] = slices.Delete(slices.Clone(l), from, to)
-	e.changed()
-}
-
-// cutLines removes n lines from the cursor into the register.
-func (e *Editor) cutLines(n int) {
-	end := min(e.Line+n, len(e.Src))
-	e.reg, e.lines = nil, true
-	for _, l := range e.Src[e.Line:end] {
-		e.reg = append(e.reg, string(l))
-	}
-	e.Src = slices.Delete(e.Src, e.Line, end)
+// cutLines removes lines a..b into the register.
+func (e *Editor) cutLines(a, b int) {
+	b = min(b, len(e.Src)-1)
+	e.yankLines(a, b)
+	e.Src = slices.Delete(e.Src, a, b+1)
 	if len(e.Src) == 0 {
 		e.Src = [][]rune{{}}
 	}
-	e.Line = min(e.Line, len(e.Src)-1)
+	e.Line = min(a, len(e.Src)-1)
 	e.Off = firstNonBlank(e.Src[e.Line])
 	e.changed()
 }
 
+func (e *Editor) yankLines(a, b int) {
+	parts := make([]string, 0, b-a+1)
+	for _, l := range e.Src[a : b+1] {
+		parts = append(parts, string(l))
+	}
+	e.reg, e.lines = strings.Join(parts, "\n"), true
+}
+
 // put pastes the register after the cursor, or before it.
 func (e *Editor) put(after bool) {
-	if len(e.reg) == 0 {
+	if e.reg == "" && !e.lines {
 		return
 	}
 	if e.lines {
@@ -170,11 +194,11 @@ func (e *Editor) put(after bool) {
 		if after {
 			at++
 		}
-		var rs [][]rune
-		for _, l := range e.reg {
-			rs = append(rs, []rune(l))
+		var rows [][]rune
+		for _, l := range strings.Split(e.reg, "\n") {
+			rows = append(rows, []rune(l))
 		}
-		e.Src = slices.Insert(e.Src, at, rs...)
+		e.Src = slices.Insert(e.Src, at, rows...)
 		e.Line, e.Off = at, firstNonBlank(e.Src[at])
 		e.changed()
 		return
@@ -182,8 +206,26 @@ func (e *Editor) put(after bool) {
 	if after && len(e.Src[e.Line]) > 0 {
 		e.Off++
 	}
-	e.insert([]rune(e.reg[0])...)
-	e.Off--
+	e.insertText(e.reg)
+	e.Off = max(e.Off-1, 0)
+}
+
+// join joins the cursor line with the next, as J.
+func (e *Editor) join() {
+	if e.Line >= len(e.Src)-1 {
+		return
+	}
+	l := e.Src[e.Line]
+	next := strings.TrimLeft(string(e.Src[e.Line+1]), " \t")
+	sep := " "
+	if len(l) == 0 || l[len(l)-1] == ' ' || next == "" {
+		sep = ""
+	}
+	at := len(l)
+	e.Src[e.Line] = append(slices.Clone(l), []rune(sep+next)...)
+	e.Src = slices.Delete(e.Src, e.Line+1, e.Line+2)
+	e.Off = at
+	e.changed()
 }
 
 func firstNonBlank(l []rune) int {
@@ -195,15 +237,171 @@ func firstNonBlank(l []rune) int {
 	return 0
 }
 
+// --- words, as Vim counts them: letters and digits, or other signs ---
+
+func runeClass(r rune) int {
+	switch {
+	case unicode.IsSpace(r):
+		return 0
+	case r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r):
+		return 1
+	}
+	return 2
+}
+
+// wordFwd is w: the start of the next word, or the end of the line.
+func wordFwd(rs []rune, i int) int {
+	if i >= len(rs) {
+		return len(rs)
+	}
+	if c := runeClass(rs[i]); c != 0 {
+		for i < len(rs) && runeClass(rs[i]) == c {
+			i++
+		}
+	}
+	for i < len(rs) && runeClass(rs[i]) == 0 {
+		i++
+	}
+	return i
+}
+
+// wordBack is b: the start of this word, or of the one before.
+func wordBack(rs []rune, i int) int {
+	i = min(i, len(rs))
+	if i > 0 {
+		i--
+	}
+	for i > 0 && runeClass(rs[i]) == 0 {
+		i--
+	}
+	if i < len(rs) {
+		c := runeClass(rs[i])
+		for i > 0 && runeClass(rs[i-1]) == c {
+			i--
+		}
+	}
+	return i
+}
+
+// wordEnd is e: the last rune of this word, or of the next.
+func wordEnd(rs []rune, i int) int {
+	if i+1 >= len(rs) {
+		return max(len(rs)-1, 0)
+	}
+	i++
+	for i < len(rs)-1 && runeClass(rs[i]) == 0 {
+		i++
+	}
+	c := runeClass(rs[i])
+	for i+1 < len(rs) && runeClass(rs[i+1]) == c {
+		i++
+	}
+	return i
+}
+
+// innerWord is iw: the run of one class around i.
+func innerWord(rs []rune, i int) (int, int) {
+	if len(rs) == 0 {
+		return 0, 0
+	}
+	i = min(i, len(rs)-1)
+	c := runeClass(rs[i])
+	a, b := i, i+1
+	for a > 0 && runeClass(rs[a-1]) == c {
+		a--
+	}
+	for b < len(rs) && runeClass(rs[b]) == c {
+		b++
+	}
+	return a, b
+}
+
+// aroundWord is aw: the word and the spaces after it, else before it.
+func aroundWord(rs []rune, i int) (int, int) {
+	a, b := innerWord(rs, i)
+	if len(rs) == 0 {
+		return a, b
+	}
+	if runeClass(rs[min(i, len(rs)-1)]) == 0 {
+		if b < len(rs) {
+			c := runeClass(rs[b])
+			for b < len(rs) && runeClass(rs[b]) == c {
+				b++
+			}
+		}
+		return a, b
+	}
+	if end := b; end < len(rs) && runeClass(rs[end]) == 0 {
+		for b < len(rs) && runeClass(rs[b]) == 0 {
+			b++
+		}
+		return a, b
+	}
+	for a > 0 && runeClass(rs[a-1]) == 0 {
+		a--
+	}
+	return a, b
+}
+
+// span is where an operator's motion reaches on the cursor line, from..to
+// with to not included.
+func (e *Editor) span(op byte, motion string, n int) (int, int, bool) {
+	l, i := e.Src[e.Line], e.Off
+	switch motion {
+	case "w":
+		// cw stops at the end of the word, as Vim does.
+		if op == 'c' && i < len(l) && runeClass(l[i]) != 0 {
+			_, end := innerWord(l, i)
+			for range n - 1 {
+				end = wordEnd(l, end-1) + 1
+			}
+			return i, end, true
+		}
+		end := i
+		for range n {
+			end = wordFwd(l, end)
+		}
+		return i, end, true
+	case "e":
+		end := i
+		for range n {
+			end = wordEnd(l, end)
+		}
+		return i, min(end+1, len(l)), true
+	case "b":
+		from := i
+		for range n {
+			from = wordBack(l, from)
+		}
+		return from, i, true
+	case "$":
+		return i, len(l), true
+	case "0":
+		return 0, i, true
+	case "^":
+		f := firstNonBlank(l)
+		return min(f, i), max(f, i), true
+	case "iw":
+		a, b := innerWord(l, i)
+		return a, b, true
+	case "aw":
+		a, b := aroundWord(l, i)
+		return a, b, true
+	}
+	return 0, 0, false
+}
+
 // render shows the source soft-wrapped to w cells, headings in their colors
-// and marked for the outline rail.
+// and marked for the outline rail. A meta line on top keeps the text where
+// the document had it.
 func (e *Editor) render(w int, th *Theme) []Line {
 	if e.cacheW == w && e.cacheR == e.rev {
 		return e.cache
 	}
 	margin := []Span{{"  ", th.Text}}
 	avail := max(w-width(spansText(margin)), 4)
-	var out []Line
+	meta := fmt.Sprintf("◇ %s · editing v%d", e.Name, e.Base)
+	out := []Line{{}, {Prefix: margin, Spans: []Span{{meta, th.Muted}}}, {}}
 	fence := false
 	for i, l := range e.Src {
 		st, head := th.Text, 0
@@ -274,25 +472,32 @@ func runeCells(r rune) int {
 
 // --- the editor in a window ---
 
-// fromWindow moves the editor's cursor to the window's.
-func (a *App) fromWindow(w *Window) {
+// posAt is the source place under a row and column of the window. The meta
+// rows on top count as the start of the source.
+func (a *App) posAt(w *Window, row, col int) pos {
 	e := w.Buf.Edit
 	lines := e.render(a.textWidth(w), a.th)
-	if w.Cur >= len(lines) {
-		return
+	if row >= len(lines) || lines[row].Src == 0 {
+		return pos{}
 	}
-	l := lines[w.Cur]
+	l := lines[row]
 	src := e.Src[l.Src-1]
 	end := len(src)
-	if w.Cur+1 < len(lines) && lines[w.Cur+1].Src == l.Src {
-		end = lines[w.Cur+1].Off
+	if row+1 < len(lines) && lines[row+1].Src == l.Src {
+		end = lines[row+1].Off
 	}
-	off, col := l.Off, w.Col-l.prefixWidth()
+	off, col := l.Off, col-l.prefixWidth()
 	for off < end && col > 0 {
 		col -= runeCells(src[off])
 		off++
 	}
-	e.Line, e.Off = l.Src-1, off
+	return pos{l.Src - 1, off}
+}
+
+// fromWindow moves the editor's cursor to the window's.
+func (a *App) fromWindow(w *Window) {
+	p := a.posAt(w, w.Cur, w.Col)
+	w.Buf.Edit.Line, w.Buf.Edit.Off = p.line, p.off
 }
 
 // toWindow moves the window's cursor to the editor's.
@@ -332,7 +537,7 @@ func (a *App) startEdit(k rune) {
 		for i := min(w.Cur, len(lines)-1); i >= 0 && src == 0; i-- {
 			src = lines[i].Src
 		}
-		b.Edit = newEditor(bl[0].text, bl[0].art.Version)
+		b.Edit = newEditor(b.Artifact, bl[0].text, bl[0].art.Version)
 		b.Edit.Line = max(src-1, 0)
 		b.dirty = true
 		// The rendered column says nothing about the source one.
@@ -343,11 +548,12 @@ func (a *App) startEdit(k rune) {
 		a.fromWindow(w)
 	}
 	e := b.Edit
-	switch k {
-	case 0:
+	if k == 0 {
 		a.toWindow(w)
 		return
-	case 'i':
+	}
+	e.save()
+	switch k {
 	case 'a':
 		e.Off = min(e.Off+1, len(e.Src[e.Line]))
 	case 'I':
@@ -355,7 +561,6 @@ func (a *App) startEdit(k rune) {
 	case 'A':
 		e.Off = len(e.Src[e.Line])
 	case 'o', 'O':
-		e.save()
 		if k == 'o' {
 			e.Line++
 		}
@@ -363,11 +568,13 @@ func (a *App) startEdit(k rune) {
 		e.Off = 0
 		e.changed()
 	}
-	if k != 'o' && k != 'O' {
-		e.save()
-	}
+	a.toInsert(w)
+}
+
+// toInsert starts Insert mode in the source at the editor's cursor.
+func (a *App) toInsert(w *Window) {
 	a.mode = modeInsert
-	a.cur.vmode = 0
+	w.vmode = 0
 	a.toWindow(w)
 }
 
@@ -401,54 +608,191 @@ func (a *App) leaveEdit(force bool) {
 func (a *App) saveEdit(force bool) bool {
 	b := a.cur.Buf
 	e := b.Edit
-	art, err := a.c.EditArtifact(b.Workspace, b.Artifact, e.Text(), e.Base, force)
+	art, text, err := a.c.EditArtifact(b.Workspace, b.Artifact, e.Text(), e.saved, e.Base, force)
 	if err != nil {
 		a.notify(err.Error(), a.th.Love)
 		return false
 	}
 	saved := art.Version != e.Base
-	e.Base, e.Dirty = art.Version, false
+	merged := text != e.Text()
+	if merged {
+		// The newer version's changes come in; u goes back to the edit alone.
+		e.save()
+		e.Src = nil
+		for _, l := range strings.Split(text, "\n") {
+			e.Src = append(e.Src, []rune(l))
+		}
+		e.rev++
+		a.toWindow(a.cur)
+	}
+	e.Base, e.Dirty, e.saved = art.Version, false, text
+	// The meta line shows the new version; no rev, it is not a change.
+	e.cacheW = 0
 	a.loadArtifact(b)
 	if !saved {
 		a.notify("no changes", a.th.Muted)
 		return true
 	}
-	a.notify(fmt.Sprintf("saved %s v%d · %s sees it with your next message", b.Artifact, art.Version, art.Thread), a.th.Subtle)
+	what := "saved"
+	if merged {
+		what = "merged and saved"
+	}
+	a.notify(fmt.Sprintf("%s %s v%d · %s sees it with your next message", what, b.Artifact, art.Version, art.Thread), a.th.Subtle)
 	return true
 }
 
-// editNormal runs a Normal key that changes the source.
+// editNormal runs a Normal key that changes the source: x D dd p P u <C-r>
+// J s S C cc r, and an operator (d c y) with a motion (w e b $ 0 ^ iw aw).
 func (a *App) editNormal(k string, n int) {
 	w := a.cur
 	e := w.Buf.Edit
 	if e == nil {
+		if w.Buf.Kind == KindArtifact && k[0] != 'y' {
+			a.notify("i or :e edits the markdown", a.th.Muted)
+		}
 		return
 	}
 	a.fromWindow(w)
 	n = max(n, 1)
+	insert := false
 	switch k {
 	case "x":
 		e.save()
 		e.cut(e.Off, e.Off+n)
-	case "D":
+	case "s":
+		e.save()
+		e.cut(e.Off, e.Off+n)
+		insert = true
+	case "D", "C":
 		e.save()
 		e.cut(e.Off, len(e.Src[e.Line]))
+		insert = k == "C"
 	case "dd":
 		e.save()
-		e.cutLines(n)
+		e.cutLines(e.Line, e.Line+n-1)
+	case "cc", "S":
+		e.save()
+		last := min(e.Line+n-1, len(e.Src)-1)
+		e.yankLines(e.Line, last)
+		e.remove(pos{e.Line, 0}, pos{last, len(e.Src[last])})
+		insert = true
+	case "yy":
+		last := min(e.Line+n-1, len(e.Src)-1)
+		e.yankLines(e.Line, last)
+		a.clip(e.reg, last-e.Line+1)
 	case "p", "P":
 		e.save()
 		for range n {
 			e.put(k == "p")
 		}
+	case "J":
+		e.save()
+		for range max(n-1, 1) {
+			e.join()
+		}
 	case "u":
+		a.noRepeat = true
 		if !e.step(&e.undo, &e.redo) {
 			a.notify("already at oldest change", a.th.Muted)
 		}
 	case "<C-r>":
+		a.noRepeat = true
 		if !e.step(&e.redo, &e.undo) {
 			a.notify("already at newest change", a.th.Muted)
 		}
+	default:
+		op, motion := k[0], k[1:]
+		from, to, ok := e.span(op, motion, n)
+		if !ok {
+			return
+		}
+		switch op {
+		case 'y':
+			e.reg, e.lines = string(e.Src[e.Line][from:to]), false
+			e.Off = from
+			a.clip(e.reg, 1)
+		case 'd', 'c':
+			e.save()
+			e.cut(from, to)
+			insert = op == 'c'
+		}
+	}
+	if insert {
+		a.toInsert(w)
+		return
+	}
+	if len(e.Src[e.Line]) > 0 {
+		e.Off = min(e.Off, len(e.Src[e.Line])-1)
+	}
+	a.toWindow(w)
+}
+
+// replace is r: the next n runes become c.
+func (a *App) replace(c rune, n int) {
+	e := a.cur.Buf.Edit
+	a.fromWindow(a.cur)
+	l := e.Src[e.Line]
+	if e.Off+max(n, 1) > len(l) {
+		return
+	}
+	e.save()
+	from := e.Off
+	e.remove(pos{e.Line, from}, pos{e.Line, from + max(n, 1)})
+	e.insertText(strings.Repeat(string(c), max(n, 1)))
+	e.Off = from + max(n, 1) - 1
+	a.toWindow(a.cur)
+}
+
+// editVisual runs d, x, c or y on the Visual selection in the source.
+func (a *App) editVisual(k string) {
+	w := a.cur
+	e := w.Buf.Edit
+	p1, p2 := a.posAt(w, w.vLine, w.vCol), a.posAt(w, w.Cur, w.Col)
+	if p2.before(p1) {
+		p1, p2 = p2, p1
+	}
+	linewise := w.vmode == 'V'
+	w.vmode = 0
+	a.mode = modeNormal
+	if linewise {
+		e.Line, e.Off = p1.line, 0
+		switch k {
+		case "y":
+			e.yankLines(p1.line, p2.line)
+			a.clip(e.reg, p2.line-p1.line+1)
+		case "c":
+			e.save()
+			e.yankLines(p1.line, p2.line)
+			e.remove(pos{p1.line, 0}, pos{p2.line, len(e.Src[p2.line])})
+			a.toInsert(w)
+			return
+		default:
+			e.save()
+			e.cutLines(p1.line, p2.line)
+		}
+		a.toWindow(w)
+		return
+	}
+	// The selection takes the rune under its end too.
+	end := pos{p2.line, p2.off + 1}
+	if p2.off >= len(e.Src[p2.line]) {
+		end = pos{p2.line, len(e.Src[p2.line])}
+		if p2.line+1 < len(e.Src) {
+			end = pos{p2.line + 1, 0}
+		}
+	}
+	if k == "y" {
+		e.reg, e.lines = e.text(p1, end), false
+		e.Line, e.Off = p1.line, p1.off
+		a.clip(e.reg, p2.line-p1.line+1)
+		a.toWindow(w)
+		return
+	}
+	e.save()
+	e.reg, e.lines = e.remove(p1, end), false
+	if k == "c" {
+		a.toInsert(w)
+		return
 	}
 	if len(e.Src[e.Line]) > 0 {
 		e.Off = min(e.Off, len(e.Src[e.Line])-1)
@@ -465,7 +809,7 @@ func (a *App) editInsert(k string, r rune, isRune bool) {
 		a.mode = modeNormal
 		e.Off = max(e.Off-1, 0)
 	case "<CR>", "<S-CR>", "<C-j>", "<M-\r>":
-		e.newline()
+		e.insertText("\n")
 	case "<BS>":
 		e.backspace()
 	case "<Del>":
@@ -483,24 +827,22 @@ func (a *App) editInsert(k string, r rune, isRune bool) {
 	case "<End>":
 		e.Off = len(e.Src[e.Line])
 	case "<C-u>":
-		e.remove(0, e.Off)
-		e.Off = 0
+		e.remove(pos{e.Line, 0}, e.cursor())
 	case "<C-w>":
-		i := e.Off
 		l := e.Src[e.Line]
+		i := e.Off
 		for i > 0 && unicode.IsSpace(l[i-1]) {
 			i--
 		}
 		for i > 0 && !unicode.IsSpace(l[i-1]) {
 			i--
 		}
-		e.remove(i, e.Off)
-		e.Off = i
+		e.remove(pos{e.Line, i}, e.cursor())
 	case "<Tab>":
-		e.insert(' ', ' ')
+		e.insertText("  ")
 	default:
 		if isRune {
-			e.insert(r)
+			e.insertText(string(r))
 		}
 	}
 	// A paste comes as one key per rune; the cursor follows once it ends.

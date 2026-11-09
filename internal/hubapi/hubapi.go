@@ -61,8 +61,10 @@ type (
 	}
 	ArtifactEdit struct {
 		Text string `json:"text"`
-		// Base is the version the edit started from.
-		Base int `json:"base"`
+		// Base and BaseText are the version the edit started from, for a
+		// merge when the artifact moved on.
+		Base     int    `json:"base"`
+		BaseText string `json:"baseText"`
 		// Force saves over a newer version.
 		Force bool `json:"force,omitempty"`
 	}
@@ -125,10 +127,10 @@ func (c *Client) Artifact(workspace, name string) (model.Artifact, string, error
 	return out.Artifact, out.Text, err
 }
 
-func (c *Client) EditArtifact(workspace, name, text string, base int, force bool) (model.Artifact, error) {
-	var out model.Artifact
-	err := c.do("PUT", "/workspaces/"+esc(workspace)+"/artifacts/"+esc(name), ArtifactEdit{Text: text, Base: base, Force: force}, &out)
-	return out, err
+func (c *Client) EditArtifact(workspace, name, text, baseText string, base int, force bool) (model.Artifact, string, error) {
+	var out ArtifactText
+	err := c.do("PUT", "/workspaces/"+esc(workspace)+"/artifacts/"+esc(name), ArtifactEdit{Text: text, Base: base, BaseText: baseText, Force: force}, &out)
+	return out.Artifact, out.Text, err
 }
 
 func (c *Client) Threads(workspace string) ([]model.ThreadView, error) {

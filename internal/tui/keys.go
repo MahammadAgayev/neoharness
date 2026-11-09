@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -80,6 +81,32 @@ func (a *App) key(ev *tcell.EventKey) {
 		}
 		return
 	}
+	ed := a.cur.Buf.Edit
+	idle := func() bool { return a.mode == modeNormal && len(a.pending) == 0 && a.count == 0 && !a.replacing }
+	if ed != nil && !a.replaying {
+		if idle() {
+			a.rec, a.recRev = nil, ed.rev
+		}
+		a.rec = append(a.rec, ev)
+	}
+	a.dispatch(k, ev)
+	// A change ends back in Normal; its keys are what `.` types again.
+	if ed != nil && !a.replaying && idle() && a.cur.Buf.Edit == ed {
+		if ed.rev != a.recRev && !a.noRepeat {
+			a.lastChange = slices.Clone(a.rec)
+		}
+		a.noRepeat = false
+	}
+}
+
+func (a *App) dispatch(k string, ev *tcell.EventKey) {
+	if a.replacing {
+		a.replacing = false
+		if ev.Key() == tcell.KeyRune {
+			a.replace(ev.Rune(), a.replaceN)
+		}
+		return
+	}
 	switch a.mode {
 	case modeInsert:
 		a.insertKey(k, ev)
@@ -96,7 +123,7 @@ func (a *App) key(ev *tcell.EventKey) {
 // typed before it (0 when none).
 func (a *App) normalBindings() map[string]func(n int) {
 	w := func() *Window { return a.cur }
-	return map[string]func(int){
+	binds := map[string]func(int){
 		"j":              func(n int) { a.move(w(), max(n, 1)) },
 		"<Down>":         func(n int) { a.move(w(), max(n, 1)) },
 		"k":              func(n int) { a.move(w(), -max(n, 1)) },
@@ -109,15 +136,16 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<PageDown>":     func(int) { a.move(w(), w().textH) },
 		"<C-b>":          func(int) { a.move(w(), -w().textH) },
 		"<PageUp>":       func(int) { a.move(w(), -w().textH) },
-		"h":              func(n int) { w().Col = max(w().Col-max(n, 1), 0) },
-		"<Left>":         func(n int) { w().Col = max(w().Col-max(n, 1), 0) },
+		"h":              func(n int) { w().Col = max(w().Col-max(n, 1), 0); a.clampCol(w()) },
+		"<Left>":         func(n int) { w().Col = max(w().Col-max(n, 1), 0); a.clampCol(w()) },
 		"l":              func(n int) { w().Col += max(n, 1); a.clampCol(w()) },
 		"<Right>":        func(n int) { w().Col += max(n, 1); a.clampCol(w()) },
-		"0":              func(int) { w().Col = 0 },
+		"0":              func(int) { w().Col = 0; a.clampCol(w()) },
 		"^":              func(int) { w().Col = a.line(w()).prefixWidth() },
 		"$":              func(int) { w().Col = 1 << 20; a.clampCol(w()) },
 		"w":              func(n int) { a.word(w(), max(n, 1)) },
 		"b":              func(n int) { a.word(w(), -max(n, 1)) },
+		"e":              func(n int) { a.wordEnd(w(), max(n, 1)) },
 		"zt":             func(int) { w().Top = w().Cur },
 		"zz":             func(int) { center(w()) },
 		"zb":             func(int) { w().Top = max(w().Cur-w().textH+1, 0) },
@@ -131,7 +159,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		":":              func(int) { a.startCmd(':') },
 		"n":              func(int) { a.findNext(1); center(w()) },
 		"N":              func(int) { a.findNext(-1); center(w()) },
-		"yy":             func(int) { a.yankLines(w().Cur, w().Cur) },
+		"yy":             func(n int) { a.yy(n) },
 		"y":              func(int) { a.yankVisual() },
 		"v":              func(int) { a.visual('v') },
 		"V":              func(int) { a.visual('V') },
@@ -148,6 +176,13 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"P":              func(n int) { a.editNormal("P", n) },
 		"u":              func(n int) { a.editNormal("u", n) },
 		"<C-r>":          func(n int) { a.editNormal("<C-r>", n) },
+		"J":              func(n int) { a.editNormal("J", n) },
+		"s":              func(n int) { a.editNormal("s", n) },
+		"S":              func(n int) { a.editNormal("S", n) },
+		"C":              func(n int) { a.editNormal("C", n) },
+		"cc":             func(n int) { a.editNormal("cc", n) },
+		".":              func(int) { a.repeat() },
+		"r":              func(n int) { a.replacing, a.replaceN = a.cur.Buf.Edit != nil, n },
 		"<CR>":           func(int) { a.enter() },
 		"<C-v>":          func(int) { a.splitFromList(true) },
 		"<C-x>":          func(int) { a.splitFromList(false) },
@@ -188,6 +223,35 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<Space>r":       func(int) { a.insert('i') },
 		"<Space>e":       func(int) { a.toggleFold(w()) },
 	}
+	for _, op := range []string{"d", "c", "y"} {
+		for _, m := range []string{"w", "e", "b", "$", "0", "^", "iw", "aw"} {
+			k := op + m
+			binds[k] = func(n int) { a.editNormal(k, n) }
+		}
+	}
+	return binds
+}
+
+// yy yanks the line; in an artifact's source, into the register too.
+func (a *App) yy(n int) {
+	if a.cur.Buf.Edit != nil {
+		a.editNormal("yy", n)
+		return
+	}
+	a.yankLines(a.cur.Cur, a.cur.Cur)
+}
+
+// repeat is `.`: it types the last change in the source again.
+func (a *App) repeat() {
+	if a.cur.Buf.Edit == nil || len(a.lastChange) == 0 {
+		return
+	}
+	a.replaying = true
+	for _, ev := range a.lastChange {
+		a.key(ev)
+	}
+	a.replaying = false
+	a.noRepeat = true
 }
 
 func (a *App) normalKey(k string) {
@@ -197,6 +261,10 @@ func (a *App) normalKey(k string) {
 	}
 	if a.mode == modeVisual && len(a.pending) == 0 && k == "y" {
 		a.yankVisual()
+		return
+	}
+	if a.mode == modeVisual && len(a.pending) == 0 && a.cur.Buf.Edit != nil && (k == "d" || k == "x" || k == "c") {
+		a.editVisual(k)
 		return
 	}
 	a.pending = append(a.pending, k)
@@ -257,6 +325,9 @@ func (a *App) lineCount(w *Window) int {
 func (a *App) moveTo(w *Window, i int) {
 	n := a.lineCount(w)
 	w.Cur = max(min(i, n-1), 0)
+	if w.Buf.Edit != nil {
+		w.Cur = max(w.Cur, metaRows)
+	}
 	w.Follow = w.Cur >= n-1
 	a.clampCol(w)
 }
@@ -279,6 +350,10 @@ func (a *App) clampCol(w *Window) {
 	l := a.line(w)
 	lw := l.prefixWidth() + width(l.Text())
 	w.Col = max(min(w.Col, lw-1), 0)
+	// In an artifact's source the margin is not text.
+	if w.Buf.Edit != nil {
+		w.Col = max(w.Col, l.prefixWidth())
+	}
 }
 
 // word moves by words within the line, Vim's w and b without crossing lines.
@@ -287,25 +362,25 @@ func (a *App) word(w *Window, d int) {
 	cells := []rune(strings.Repeat(" ", l.prefixWidth()) + l.Text())
 	i := min(w.Col, len(cells)-1)
 	for ; d > 0; d-- {
-		for i < len(cells)-1 && !unicode.IsSpace(cells[i]) {
-			i++
-		}
-		for i < len(cells)-1 && unicode.IsSpace(cells[i]) {
-			i++
-		}
+		i = min(wordFwd(cells, i), len(cells)-1)
 	}
 	for ; d < 0; d++ {
-		if i > 0 {
-			i--
-		}
-		for i > 0 && unicode.IsSpace(cells[i]) {
-			i--
-		}
-		for i > 0 && !unicode.IsSpace(cells[i-1]) {
-			i--
-		}
+		i = wordBack(cells, i)
 	}
 	w.Col = max(i, 0)
+	a.clampCol(w)
+}
+
+// wordEnd is Vim's e within the line.
+func (a *App) wordEnd(w *Window, n int) {
+	l := a.line(w)
+	cells := []rune(strings.Repeat(" ", l.prefixWidth()) + l.Text())
+	i := w.Col
+	for range n {
+		i = wordEnd(cells, i)
+	}
+	w.Col = max(i, 0)
+	a.clampCol(w)
 }
 
 // goCoordinator focuses the coordinator of the open workspace, as <leader>pc.
@@ -678,6 +753,10 @@ func (a *App) yankVisual() {
 	if a.mode != modeVisual {
 		return
 	}
+	if w.Buf.Edit != nil {
+		a.editVisual("y")
+		return
+	}
 	l1, c1, l2, c2 := w.vLine, w.vCol, w.Cur, w.Col
 	if l2 < l1 || l2 == l1 && c2 < c1 {
 		l1, c1, l2, c2 = l2, c2, l1, c1
@@ -709,6 +788,10 @@ func (a *App) yankVisual() {
 func (a *App) yank() {
 	if a.mode == modeVisual {
 		a.yankVisual()
+		return
+	}
+	if a.cur.Buf.Edit != nil {
+		a.editNormal("yy", 1)
 		return
 	}
 	a.yankLines(a.cur.Cur, a.cur.Cur)

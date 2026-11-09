@@ -140,7 +140,7 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{Name: "read_artifact", Description: "Read an artifact of this workspace, by name. workspace_status lists them."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in artifactNameIn) (*mcp.CallToolResult, any, error) {
-			_, body, err := h.ReadArtifact(p, in.Name)
+			body, err := h.ReadArtifactAs(p, me, in.Name)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -264,7 +264,11 @@ func Artifacts(as []model.Artifact) string {
 	var b strings.Builder
 	b.WriteString("\nArtifacts:\n")
 	for _, a := range as {
-		fmt.Fprintf(&b, "- %s: %q by %s, version %d\n", a.Name, a.Title, a.Thread, a.Version)
+		fmt.Fprintf(&b, "- %s: %q by %s, version %d", a.Name, a.Title, a.Thread, a.Version)
+		if a.UserEdit {
+			b.WriteString(", edited by the person")
+		}
+		b.WriteByte('\n')
 	}
 	return b.String()
 }
@@ -291,7 +295,11 @@ func Transcript(evs []model.Event) string {
 		case model.EventTurnEnd:
 			fmt.Fprintf(&b, "turn ended, %d tool calls", e.Tools)
 		case model.EventArtifact:
-			fmt.Fprintf(&b, "wrote artifact %s (%q), version %d", e.Detail, e.Text, e.Version)
+			if e.From == model.User {
+				fmt.Fprintf(&b, "the person edited artifact %s, version %d", e.Detail, e.Version)
+			} else {
+				fmt.Fprintf(&b, "wrote artifact %s (%q), version %d", e.Detail, e.Text, e.Version)
+			}
 		case model.EventShell:
 			if e.Text == "" && e.Exit == 0 {
 				fmt.Fprintf(&b, "the person started ! %s", e.Detail)

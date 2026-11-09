@@ -447,7 +447,7 @@ func (a *App) helpBuf() *Buffer {
 	th := a.th
 	sec := func(s string) Line { return Line{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{s, th.Muted}}} }
 	row := func(k, d string) Line {
-		return Line{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{pad(k, 22), th.Iris}, {d, th.Subtle}}}
+		return Line{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{pad(k, 29), th.Iris}, {d, th.Subtle}}}
 	}
 	lines := []Line{
 		{},
@@ -465,7 +465,7 @@ func (a *App) helpBuf() *Buffer {
 		{},
 		sec("move"),
 		row("j k  gg G  <C-d> <C-u>", "lines, ends, half pages"),
-		row("h l  w b  0 $", "within a line"),
+		row("h l  w b e  0 $", "within a line"),
 		row("]m [m", "next / previous message, or heading in an artifact"),
 		row("/ n N", "search"),
 		row("za  <leader>e", "open or close a turn's tool calls"),
@@ -501,14 +501,19 @@ func (a *App) helpBuf() *Buffer {
 		row(":vsplit :split [name]", "split with a buffer"),
 		row(":threads", "threads pane, as <leader>t"),
 		row(":artifacts", "pick an artifact; <CR> on ◇ in a chat opens one beside it"),
-		row(":e  i a o", "edit the artifact's markdown, where you are reading"),
-		row(":w  :wq  :q!", "save it, save and go back, drop the changes"),
-		row(":w!  :e!", "save over a newer version, take the newer version"),
-		row("x dd D p P u <C-r>", "change it in Normal; the writer sees the diff with your next message"),
 		row(":messages", "notice history"),
 		row(":workspaces  :workspace <n>", "workspace list, switch workspace"),
 		row(":q  :qa", "close window, quit"),
 		row(":q!  :qa!", "quit even if threads are running (stops them)"),
+		{},
+		sec("edit an artifact"),
+		row(":e  i a o", "edit its markdown, where you are reading"),
+		row(":w", "save, merged with a newer version; the writer gets the diff"),
+		row(":wq  :q!  <Esc>", "save and go back, drop the changes, go back"),
+		row(":w!  :e!", "save over a newer version, take the newer version"),
+		row("x s r J  dd cc D C", "change in Normal"),
+		row("d c y  w e b $ 0 iw aw", "operators and motions; v V then d c y"),
+		row("p P  u <C-r>  .", "paste, undo, redo, repeat"),
 	}
 	b := newBuffer("neoharness://help", KindHelp)
 	b.SetLines(lines)

@@ -109,11 +109,11 @@ func TestClientServerRoundTrip(t *testing.T) {
 	if _, err := h.WriteArtifact("demo", "api-tests", "plan", "# Plan\n\nold\n"); err != nil {
 		t.Fatal(err)
 	}
-	if a, err := c.EditArtifact("demo", "plan", "# Plan\n\nnew\n", 1, false); err != nil || a.Version != 2 || !a.UserEdit {
-		t.Fatalf("edit = %+v, %v", a, err)
+	if a, text, err := c.EditArtifact("demo", "plan", "# Plan\n\nnew\n", "# Plan\n\nold\n", 1, false); err != nil || a.Version != 2 || !a.UserEdit || text != "# Plan\n\nnew\n" {
+		t.Fatalf("edit = %+v, %q, %v", a, text, err)
 	}
-	if _, err := c.EditArtifact("demo", "plan", "# Plan\n\nagain\n", 1, false); err == nil {
-		t.Fatal("an edit from an old version should be refused")
+	if _, _, err := c.EditArtifact("demo", "plan", "# Plan\n\nagain\n", "# Plan\n\nold\n", 1, false); err == nil {
+		t.Fatal("an edit of the same line from an old version should be refused")
 	}
 	if _, text, _ := c.Artifact("demo", "plan"); text != "# Plan\n\nnew\n" {
 		t.Fatalf("artifact text = %q", text)
