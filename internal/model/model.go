@@ -1,0 +1,189 @@
+// Package model holds the plain types shared by the hub, its HTTP API, and
+// the TUI: what a project, a thread, and a transcript event look like on the
+// wire.
+//
+// It is a leaf with no behaviour beyond parsing and formatting. The TUI depends
+// on it instead of on the hub or the storage package, so the UI cannot reach
+// past the API into state it does not own.
+package model
+
+import (
+	"errors"
+	"fmt"
+	"regexp"
+	"strings"
+	"time"
+)
+
+// State is where a thread is, as the user sees it.
+type State string
+
+const (
+	StateIdle     State = "idle"
+	StateRunning  State = "running"
+	StateWaiting  State = "waiting"
+	StateResolved State = "resolved"
+)
+
+// Role separates the one coordinator per project from its threads. The
+// coordinator gets the tools that open and resolve threads; nothing else does.
+type Role string
+
+const (
+	RoleCoordinator Role = "coordinator"
+	RoleThread      Role = "thread"
+)
+
+// Coordinator is the coordinator's name and MCP address in every project.
+const Coordinator = "coordinator"
+
+// User is the sender name for messages typed in the TUI.
+const User = "user"
+
+var nameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
+
+// ValidName checks a project or thread name. Names are file names, MCP
+// addresses, and buffer names at once, so they are kept to a slug.
+func ValidName(name string) error {
+	if !nameRE.MatchString(name) {
+		return fmt.Errorf("name %q must be lowercase letters, digits and dashes, at most 40 characters", name)
+	}
+	return nil
+}
+
+// Location is where a thread runs: a local directory, or a directory on an
+// ssh host.
+type Location struct {
+	Host string `json:"host,omitempty"`
+	Dir  string `json:"dir"`
+}
+
+// Remote reports whether the location is on another machine.
+func (l Location) Remote() bool { return l.Host != "" }
+
+func (l Location) String() string {
+	if l.Remote() {
+		return l.Host + ":" + l.Dir
+	}
+	return l.Dir
+}
+
+// ParseLocation reads "host:dir" or a local path.
+//
+// A local path never contains a colon before its first slash, so "host:dir"
+// is unambiguous for anything a user would type.
+func ParseLocation(s string) (Location, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return Location{}, errors.New("empty location")
+	}
+	if i := strings.Index(s, ":"); i > 0 && !strings.Contains(s[:i], "/") {
+		host, dir := s[:i], s[i+1:]
+		if dir == "" {
+			dir = "~"
+		}
+		return Location{Host: host, Dir: dir}, nil
+	}
+	return Location{Dir: s}, nil
+}
+
+// EventKind classifies a transcript entry.
+type EventKind string
+
+const (
+	// EventMessage is input to a thread: from the user, the coordinator, or a
+	// peer. From says who.
+	EventMessage EventKind = "message"
+	// EventText is prose the agent wrote.
+	EventText EventKind = "text"
+	// EventTool is one tool call the agent made.
+	EventTool EventKind = "tool"
+	// EventTurnEnd closes a turn; Tools and Tokens describe it.
+	EventTurnEnd EventKind = "turn"
+	// EventError is a failed turn or a lost one.
+	EventError EventKind = "error"
+	// EventPermission is a pending permission request; ID identifies it.
+	EventPermission EventKind = "permission"
+	// EventAnswer is the user's answer to a permission request.
+	EventAnswer EventKind = "answer"
+	// EventAsk is a question the agent asked the user.
+	EventAsk EventKind = "ask"
+	// EventProgress is a progress report.
+	EventProgress EventKind = "progress"
+	// EventNote is something the hub did to the thread: opened, resolved.
+	EventNote EventKind = "note"
+)
+
+// Event is one transcript entry.
+type Event struct {
+	At     time.Time `json:"at"`
+	Kind   EventKind `json:"kind"`
+	From   string    `json:"from,omitempty"`
+	Text   string    `json:"text,omitempty"`
+	Tool   string    `json:"tool,omitempty"`
+	Detail string    `json:"detail,omitempty"`
+	ID     string    `json:"id,omitempty"`
+	Tools  int       `json:"tools,omitempty"`
+	Tokens int       `json:"tokens,omitempty"`
+}
+
+// Permission is a request waiting for the user.
+type Permission struct {
+	ID     string `json:"id"`
+	Tool   string `json:"tool"`
+	Detail string `json:"detail"`
+}
+
+// ThreadView is a thread as the API shows it.
+type ThreadView struct {
+	Project    string      `json:"project"`
+	Name       string      `json:"name"`
+	Role       Role        `json:"role"`
+	Location   Location    `json:"location"`
+	State      State       `json:"state"`
+	Queued     int         `json:"queued"`
+	Progress   string      `json:"progress,omitempty"`
+	Waiting    string      `json:"waiting,omitempty"`
+	Permission *Permission `json:"permission,omitempty"`
+	Since      time.Time   `json:"since"`
+	UpdatedAt  time.Time   `json:"updatedAt"`
+	CreatedAt  time.Time   `json:"createdAt"`
+}
+
+// ProjectView is a project with a summary of its threads.
+type ProjectView struct {
+	Name      string        `json:"name"`
+	Pin       string        `json:"pin,omitempty"`
+	CreatedAt time.Time     `json:"createdAt"`
+	Counts    map[State]int `json:"counts"`
+	// Activity is turns per hour over the last 24 hours, oldest first.
+	Activity []int `json:"activity"`
+}
+
+// UpdateKind classifies a hub update.
+type UpdateKind string
+
+const (
+	UpdateEvent   UpdateKind = "event"
+	UpdateThread  UpdateKind = "thread"
+	UpdateProject UpdateKind = "project"
+)
+
+// Update is one change pushed to subscribers.
+type Update struct {
+	Kind    UpdateKind   `json:"kind"`
+	Project string       `json:"project"`
+	Thread  string       `json:"thread,omitempty"`
+	Event   *Event       `json:"event,omitempty"`
+	View    *ThreadView  `json:"view,omitempty"`
+	Summary *ProjectView `json:"summary,omitempty"`
+}
+
+// Decision is the user's answer to a permission request.
+type Decision string
+
+const (
+	Allow  Decision = "allow"
+	Always Decision = "always"
+	Deny   Decision = "deny"
+)

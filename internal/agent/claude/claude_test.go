@@ -2,12 +2,13 @@ package claude
 
 import (
 	"bufio"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/MahammadAgayev/harness/internal/agent"
+	"github.com/MahammadAgayev/neoharness/internal/agent"
 )
 
 // feed replays a stream of NDJSON lines through the accumulator, the way the
@@ -84,8 +85,8 @@ func TestRealRunFixture(t *testing.T) {
 	}
 }
 
-// TestResultRecordWinsOverTheLastAssistantMessage pins the rule that makes a
-// verdict trustworthy: the CLI's own final answer is authoritative.
+// TestResultRecordWinsOverTheLastAssistantMessage: the CLI's own final answer
+// is authoritative.
 func TestResultRecordWinsOverTheLastAssistantMessage(t *testing.T) {
 	acc, _ := feed(t, []string{
 		`{"type":"assistant","message":{"content":[{"type":"text","text":"Let me check the tests."}]}}`,
@@ -96,18 +97,16 @@ func TestResultRecordWinsOverTheLastAssistantMessage(t *testing.T) {
 	}
 }
 
-// TestTrailingToolCallDoesNotBlankTheVerdict is the expensive one, and the
-// reason prose and tool_use are accumulated separately. A tool-call-only
-// assistant message arriving after the verdict must not empty it: the loop
-// reads empty text as "the reviewer could not be run" and spends a third of
-// its error budget on a review that actually succeeded.
-func TestTrailingToolCallDoesNotBlankTheVerdict(t *testing.T) {
+// TestTrailingToolCallDoesNotBlankTheReply is the reason prose and tool_use
+// are accumulated separately: a tool-call-only assistant message arriving
+// after the reply must not empty it.
+func TestTrailingToolCallDoesNotBlankTheReply(t *testing.T) {
 	acc, _ := feed(t, []string{
 		`{"type":"assistant","message":{"content":[{"type":"text","text":"Checked the diff.\n\nPASS"}]}}`,
 		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/f"}}]}}`,
 	})
 	if !strings.Contains(acc.text, "PASS") {
-		t.Fatalf("verdict was lost, text = %q", acc.text)
+		t.Fatalf("reply was lost, text = %q", acc.text)
 	}
 }
 
@@ -123,14 +122,14 @@ func TestEmptyResultDoesNotOverwrite(t *testing.T) {
 	}
 }
 
-// TestIsErrorIsRecorded covers the case pi's protocol does not have: Claude
-// reports a failed turn in the result record while still exiting zero.
+// TestIsErrorIsRecorded: Claude reports a failed turn in the result record
+// while still exiting zero.
 func TestIsErrorIsRecorded(t *testing.T) {
 	acc, _ := feed(t, []string{
 		`{"type":"result","result":"hit the turn limit","is_error":true}`,
 	})
 	if !acc.isError {
-		t.Error("isError = false, want true — a failed turn must not be parsed for a verdict")
+		t.Error("isError = false, want true — a failed turn must not read as a reply")
 	}
 }
 
@@ -200,8 +199,8 @@ func TestTruncatedLineIsSkipped(t *testing.T) {
 }
 
 func TestUserAndSystemRecordsAreIgnored(t *testing.T) {
-	// Tool results come back as `user` records. One carrying the word PASS must
-	// never become the verdict.
+	// Tool results come back as `user` records, and must never become the
+	// reply.
 	acc, got := feed(t, []string{
 		`{"type":"system","subtype":"init"}`,
 		`{"type":"user","message":{"content":[{"type":"text","text":"PASS"}]}}`,
@@ -216,9 +215,9 @@ func TestUserAndSystemRecordsAreIgnored(t *testing.T) {
 
 // --- command line ---
 
-func TestArgsCarriesPromptLastAndUnattendedFlags(t *testing.T) {
+func TestArgsCarriesPromptLast(t *testing.T) {
 	a := New()
-	got := a.args(agent.Request{Prompt: "-do the thing", Tools: []string{"read", "bash"}})
+	got := a.args(agent.Request{Prompt: "-do the thing"})
 
 	if got[0] != "claude" {
 		t.Errorf("args[0] = %q, want the default binary", got[0])
@@ -232,68 +231,10 @@ func TestArgsCarriesPromptLastAndUnattendedFlags(t *testing.T) {
 	for _, want := range []string{
 		"--output-format stream-json",
 		"--verbose",
-		"--permission-mode bypassPermissions",
-		"--allowedTools Read,Bash",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("args missing %q, got %q", want, joined)
 		}
-	}
-}
-
-// TestReviewerCannotWrite is the security-shaped one.
-//
-// --allowedTools only auto-approves; it does not refuse what is missing, and
-// --permission-mode bypassPermissions removes the prompt that would otherwise
-// have stopped an unlisted tool. Verified against the real CLI: with only
-// Read,Bash allowed, "overwrite this file with the Write tool" still
-// overwrote it. The loop withholds edit/write from the reviewer precisely so
-// it cannot fix what it is judging, so the denial has to be explicit.
-func TestReviewerCannotWrite(t *testing.T) {
-	// The loop's ReviewTools, in Claude's vocabulary.
-	got := strings.Join(New().args(agent.Request{
-		Prompt: "review it",
-		Tools:  []string{"read", "grep", "find", "ls", "bash"},
-	}), " ")
-	if !strings.Contains(got, "--disallowedTools") {
-		t.Fatalf("args = %q, want the mutating tools denied", got)
-	}
-	for _, tool := range mutatingTools {
-		if !strings.Contains(got, tool) {
-			t.Errorf("args = %q, want %s denied", got, tool)
-		}
-	}
-}
-
-// TestWorkerKeepsItsTools is the other half: the worker asks for edit and
-// write, so those two must not be denied to it. NotebookEdit still is — it was
-// never requested, and the loop's vocabulary has no name for it.
-func TestWorkerKeepsItsTools(t *testing.T) {
-	args := New().args(agent.Request{
-		Prompt: "do it",
-		Tools:  []string{"read", "bash", "edit", "write", "grep", "find", "ls"},
-	})
-	var blocked string
-	for i, a := range args {
-		if a == "--disallowedTools" && i+1 < len(args) {
-			blocked = args[i+1]
-		}
-	}
-	// Split rather than substring-matched: "NotebookEdit" contains "Edit".
-	for _, tool := range strings.Split(blocked, ",") {
-		if tool == "Write" || tool == "Edit" {
-			t.Errorf("denied %q, but the worker asked for %s", blocked, tool)
-		}
-	}
-}
-
-func TestDeniedOnlyListsWhatWasNotAllowed(t *testing.T) {
-	got := denied([]string{"Read", "Write"})
-	if len(got) != 2 || got[0] != "Edit" || got[1] != "NotebookEdit" {
-		t.Errorf("denied = %q, want the mutating tools that were not allowed", got)
-	}
-	if len(denied(mutatingTools)) != 0 {
-		t.Error("denied should be empty when every mutating tool was allowed")
 	}
 }
 
@@ -308,7 +249,7 @@ func TestArgsUsesTheConfiguredCommand(t *testing.T) {
 
 func TestArgsOmitsEmptyOptionals(t *testing.T) {
 	got := strings.Join(New().args(agent.Request{Prompt: "hi"}), " ")
-	for _, unwanted := range []string{"--model", "--append-system-prompt", "--allowedTools", "--session-id"} {
+	for _, unwanted := range []string{"--append-system-prompt", "--session-id", "--resume", "--permission-prompt-tool"} {
 		if strings.Contains(got, unwanted) {
 			t.Errorf("args should omit %s when unset, got %q", unwanted, got)
 		}
@@ -316,7 +257,7 @@ func TestArgsOmitsEmptyOptionals(t *testing.T) {
 }
 
 func TestArgsAppendsRatherThanReplacesTheSystemPrompt(t *testing.T) {
-	// The evaluator persona is an overlay on a working coding agent, not a
+	// The role in the project is an overlay on a working coding agent, not a
 	// replacement for one: --system-prompt here would discard Claude's own.
 	got := strings.Join(New().args(agent.Request{Prompt: "hi", SystemPrompt: "be strict"}), " ")
 	if !strings.Contains(got, "--append-system-prompt be strict") {
@@ -329,85 +270,87 @@ func TestArgsAppendsRatherThanReplacesTheSystemPrompt(t *testing.T) {
 
 // --- sessions ---
 
-// TestArgsIgnoresTheSessionFields pins a deliberate difference from the pi
-// adapter, and a bug that killed a run on iteration one.
-//
-// pi's model is that the caller names a session and the CLI files the
-// transcript under it. Claude owns its own session store and refuses a
-// --session-id that already exists, so deriving a stable id from the run name
-// meant the second run of a given name could never start. Each `-p` is a fresh
-// session regardless, which is what the loop wants.
-func TestArgsIgnoresTheSessionFields(t *testing.T) {
+// TestHubTurnsKeepPermissionChecks: a hub thread has a person watching, so
+// it must never skip permission checks. Prompts go to the MCP tool instead.
+func TestHubTurnsKeepPermissionChecks(t *testing.T) {
 	got := strings.Join(New().args(agent.Request{
-		Prompt:     "hi",
-		SessionID:  "demo-003",
-		SessionDir: "/tmp/sessions",
+		Prompt:               "hi",
+		Conversation:         "11111111-1111-4111-8111-111111111111",
+		MCPConfig:            `{"mcpServers":{}}`,
+		PermissionPromptTool: "mcp__neoharness__permission_prompt",
 	}), " ")
-	if strings.Contains(got, "--session-id") || strings.Contains(got, "--session-dir") {
-		t.Errorf("args = %q, want no session flags", got)
+	if strings.Contains(got, "bypassPermissions") {
+		t.Errorf("args = %q, want permission checks kept", got)
 	}
-	if strings.Contains(got, "demo-003") || strings.Contains(got, "/tmp/sessions") {
-		t.Errorf("args = %q, want the session fields unused", got)
-	}
-}
-
-// --- models ---
-
-// TestMapModelTranslatesTheEvaluatorModel guards a bug that cost a whole run.
-// evaluator.md pins "claude-sonnet-5-thinking", which is pi's name for it;
-// Claude answers an unknown model with a 404 in a result record that still
-// exits zero, so the reviewer measured nothing three times and the run ended
-// "the reviewer could not be dispatched".
-func TestMapModelTranslatesTheEvaluatorModel(t *testing.T) {
-	for in, want := range map[string]string{
-		"claude-sonnet-5-thinking": "sonnet",
-		"claude-opus-4":            "opus",
+	for _, want := range []string{
+		"--session-id 11111111-1111-4111-8111-111111111111",
+		"--permission-prompt-tool mcp__neoharness__permission_prompt",
+		`--mcp-config {"mcpServers":{}}`,
 	} {
-		if got := mapModel(in); got != want {
-			t.Errorf("mapModel(%q) = %q, want %q", in, got, want)
+		if !strings.Contains(got, want) {
+			t.Errorf("args missing %q, got %q", want, got)
 		}
 	}
 }
 
-func TestMapModelPassesOtherNamesThrough(t *testing.T) {
-	// A family alias is what the CLI documents, and a genuinely wrong name
-	// should still reach it and fail loudly rather than be rewritten here.
-	for _, name := range []string{"sonnet", "opus", "claude-3-5-haiku-20241022"} {
-		if got := mapModel(name); got != name {
-			t.Errorf("mapModel(%q) = %q, want it unchanged", name, got)
+// TestSessionAlreadyInUseIsResumed: a turn stopped after claude created the
+// session, but before it said anything, leaves the caller thinking the session
+// is new. Claude then refuses the id on every later turn; the adapter must
+// continue the session instead.
+func TestSessionAlreadyInUseIsResumed(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "claude")
+	body := `#!/bin/sh
+case "$*" in
+*--resume*) echo '{"type":"result","result":"resumed","is_error":false}' ;;
+*) echo "Error: Session ID abc is already in use." >&2; exit 1 ;;
+esac
+`
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, err := New(script).Run(context.Background(), agent.Request{Prompt: "hi", Conversation: "abc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ExitCode != 0 || res.Text != "resumed" {
+		t.Fatalf("result = %+v, want the turn continued with --resume", res)
+	}
+}
+
+func TestResumeContinuesTheConversation(t *testing.T) {
+	got := strings.Join(New().args(agent.Request{Prompt: "hi", Conversation: "abc", Resume: true}), " ")
+	if !strings.Contains(got, "--resume abc") || strings.Contains(got, "--session-id") {
+		t.Errorf("args = %q, want --resume and no --session-id", got)
+	}
+}
+
+// --- remote ---
+
+func TestSSHCommandQuotesEverything(t *testing.T) {
+	got := sshCommand("gpu1", "~/my proj", []string{"MCP_TOOL_TIMEOUT=1"}, []string{"claude", "-p", "it's -x"})
+	if strings.Join(got[:5], " ") != "ssh -o BatchMode=yes gpu1 --" {
+		t.Fatalf("prefix = %q", got[:5])
+	}
+	want := `exec "$SHELL" -lc 'cd ~/'\''my proj'\'' && exec env MCP_TOOL_TIMEOUT=1 claude -p '\''it'\''\'\'''\''s -x'\'''`
+	if got[5] != want {
+		t.Errorf("remote =\n %s\nwant\n %s", got[5], want)
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	cases := map[string]string{
+		"plain":   "plain",
+		"":        "''",
+		"a b":     "'a b'",
+		"it's":    `'it'\''s'`,
+		"--x=1,2": "--x=1,2",
+		`{"a":1}`: `'{"a":1}'`,
+		"$HOME":   "'$HOME'",
+	}
+	for in, want := range cases {
+		if got := shellQuote(in); got != want {
+			t.Errorf("shellQuote(%q) = %q, want %q", in, got, want)
 		}
-	}
-}
-
-func TestArgsTranslatesTheModel(t *testing.T) {
-	got := strings.Join(New().args(agent.Request{Prompt: "hi", Model: "claude-sonnet-5-thinking"}), " ")
-	if !strings.Contains(got, "--model sonnet") {
-		t.Errorf("args = %q, want --model sonnet", got)
-	}
-}
-
-// --- tools ---
-
-func TestMapToolsTranslatesTheHarnessVocabulary(t *testing.T) {
-	got := mapTools([]string{"read", "write", "edit", "bash", "grep", "find", "ls"})
-	want := []string{"Read", "Write", "Edit", "Bash", "Grep", "Glob"}
-	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("mapTools = %q, want %q", got, want)
-	}
-}
-
-// TestMapToolsDeduplicates: find and ls both land on Glob, and a repeated
-// name in --allowedTools is noise at best.
-func TestMapToolsDeduplicates(t *testing.T) {
-	if got := mapTools([]string{"find", "ls"}); len(got) != 1 || got[0] != "Glob" {
-		t.Errorf("mapTools = %q, want [Glob] once", got)
-	}
-}
-
-func TestMapToolsPassesUnknownNamesThrough(t *testing.T) {
-	// So a Claude-specific tool can still be requested.
-	if got := mapTools([]string{"WebFetch"}); len(got) != 1 || got[0] != "WebFetch" {
-		t.Errorf("mapTools = %q, want [WebFetch]", got)
 	}
 }
 

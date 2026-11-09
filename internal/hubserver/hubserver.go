@@ -1,0 +1,118 @@
+// Package hubserver serves the hub's local API over a unix socket. It is the
+// server half of hubapi and holds no logic of its own: every route is one hub
+// call.
+package hubserver
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"github.com/MahammadAgayev/neoharness/internal/hub"
+	"github.com/MahammadAgayev/neoharness/internal/hubapi"
+	"github.com/MahammadAgayev/neoharness/internal/model"
+)
+
+// Handler routes the API.
+func Handler(h *hub.Hub) http.Handler {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /projects", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, h.Projects(), nil)
+	})
+	mux.HandleFunc("POST /projects", func(w http.ResponseWriter, r *http.Request) {
+		var in hubapi.NewProject
+		if !decode(w, r, &in) {
+			return
+		}
+		reply(w, nil, h.CreateProject(in.Name, in.Pin))
+	})
+	mux.HandleFunc("GET /projects/{p}/threads", func(w http.ResponseWriter, r *http.Request) {
+		vs, err := h.Threads(r.PathValue("p"))
+		reply(w, vs, err)
+	})
+	mux.HandleFunc("POST /projects/{p}/threads", func(w http.ResponseWriter, r *http.Request) {
+		var in hubapi.NewThread
+		if !decode(w, r, &in) {
+			return
+		}
+		reply(w, nil, h.OpenThread(r.PathValue("p"), model.User, in.Name, in.Brief, in.Location))
+	})
+	mux.HandleFunc("GET /projects/{p}/threads/{t}/events", func(w http.ResponseWriter, r *http.Request) {
+		n, _ := strconv.Atoi(r.URL.Query().Get("tail"))
+		evs, err := h.Events(r.PathValue("p"), r.PathValue("t"), n)
+		if evs == nil {
+			evs = []model.Event{}
+		}
+		reply(w, evs, err)
+	})
+	mux.HandleFunc("POST /projects/{p}/threads/{t}/messages", func(w http.ResponseWriter, r *http.Request) {
+		var in hubapi.Message
+		if !decode(w, r, &in) {
+			return
+		}
+		reply(w, nil, h.Send(r.PathValue("p"), model.User, r.PathValue("t"), in.Text))
+	})
+	mux.HandleFunc("POST /projects/{p}/threads/{t}/resolve", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, nil, h.Resolve(r.PathValue("p"), model.User, r.PathValue("t")))
+	})
+	mux.HandleFunc("POST /projects/{p}/threads/{t}/reopen", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, nil, h.Reopen(r.PathValue("p"), r.PathValue("t")))
+	})
+	mux.HandleFunc("POST /projects/{p}/threads/{t}/answer", func(w http.ResponseWriter, r *http.Request) {
+		var in hubapi.Answer
+		if !decode(w, r, &in) {
+			return
+		}
+		reply(w, nil, h.Answer(r.PathValue("p"), r.PathValue("t"), in.ID, in.Decision, in.Message))
+	})
+	mux.HandleFunc("GET /updates", func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+			return
+		}
+		ch, stop := h.Subscribe()
+		defer stop()
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusOK)
+		flusher.Flush()
+		for {
+			select {
+			case u, ok := <-ch:
+				if !ok {
+					return
+				}
+				data, _ := json.Marshal(u)
+				fmt.Fprintf(w, "data: %s\n\n", data)
+				flusher.Flush()
+			case <-r.Context().Done():
+				return
+			}
+		}
+	})
+	return mux
+}
+
+func decode(w http.ResponseWriter, r *http.Request, v any) bool {
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		reply(w, nil, fmt.Errorf("bad request: %w", err))
+		return false
+	}
+	return true
+}
+
+func reply(w http.ResponseWriter, v any, err error) {
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(hubapi.Error{Error: err.Error()})
+		return
+	}
+	if v == nil {
+		v = struct{}{}
+	}
+	_ = json.NewEncoder(w).Encode(v)
+}

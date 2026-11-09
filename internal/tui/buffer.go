@@ -1,0 +1,331 @@
+package tui
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/MahammadAgayev/neoharness/internal/model"
+)
+
+// BufKind is what a buffer shows. Every view in the TUI is a buffer; the
+// kind decides how it is filled and what <CR> does on a line.
+type BufKind int
+
+const (
+	KindProjects BufKind = iota
+	KindThreads
+	KindChat
+	KindMessages
+	KindHelp
+)
+
+type blockKind int
+
+const (
+	bRaw blockKind = iota
+	bMessage
+	bText
+	bTools
+	bError
+	bPermission
+	bAnswer
+	bAsk
+	bProgress
+	bNote
+)
+
+type toolCall struct{ tool, detail string }
+
+// block is one logical piece of a transcript. It renders itself to lines and
+// caches them per width, so appending to a long transcript only renders the
+// new block.
+type block struct {
+	kind   blockKind
+	from   string
+	text   string
+	text2  string // a permission's answer
+	tools  []toolCall
+	live   bool
+	open   bool
+	raw    []Line
+	cacheW int
+	cache  []Line
+}
+
+// Prompt is the editable region at the end of a chat buffer.
+type Prompt struct {
+	Text []rune
+	Cur  int
+}
+
+// Buffer is a named, append-mostly list of blocks.
+type Buffer struct {
+	Name    string
+	Kind    BufKind
+	Project string
+	Thread  string
+	Prompt  *Prompt
+
+	blocks []*block
+	lines  []Line
+	linesW int
+	dirty  bool
+}
+
+func newBuffer(name string, kind BufKind) *Buffer {
+	return &Buffer{Name: name, Kind: kind, dirty: true}
+}
+
+func newChat(project, thread string) *Buffer {
+	b := newBuffer(chatName(project, thread), KindChat)
+	b.Project, b.Thread = project, thread
+	b.Prompt = &Prompt{}
+	return b
+}
+
+func chatName(project, thread string) string { return "neoharness://" + project + "/" + thread }
+
+// SetLines replaces the buffer's content with fixed lines.
+func (b *Buffer) SetLines(lines []Line) {
+	b.blocks = []*block{{kind: bRaw, raw: lines}}
+	b.dirty = true
+}
+
+// Lines returns the buffer rendered at width w.
+func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
+	live := false
+	for _, bl := range b.blocks {
+		live = live || bl.live
+	}
+	if !b.dirty && !live && b.linesW == w {
+		return b.lines
+	}
+	var out []Line
+	for i, bl := range b.blocks {
+		if i > 0 && bl.kind != bRaw && !b.joins(i) {
+			out = append(out, Line{Block: i})
+		}
+		for _, l := range bl.render(w, th, spin) {
+			l.Block = i
+			out = append(out, l)
+		}
+	}
+	b.lines, b.linesW, b.dirty = out, w, false
+	return out
+}
+
+// joins reports whether block i sits directly under the one before it,
+// without a blank line: a run of permission lines reads as one list.
+func (b *Buffer) joins(i int) bool {
+	k := b.blocks[i].kind
+	return (k == bPermission || k == bAnswer) && b.blocks[i-1].kind == bPermission
+}
+
+// Live reports whether something in the buffer animates.
+func (b *Buffer) Live() bool {
+	for _, bl := range b.blocks {
+		if bl.live {
+			return true
+		}
+	}
+	return false
+}
+
+// Toggle opens or closes the fold at a block.
+func (b *Buffer) Toggle(i int) bool {
+	if i < 0 || i >= len(b.blocks) || b.blocks[i].kind != bTools {
+		return false
+	}
+	b.blocks[i].open = !b.blocks[i].open
+	b.blocks[i].cache = nil
+	b.dirty = true
+	return true
+}
+
+func (b *Buffer) push(bl *block) {
+	b.blocks = append(b.blocks, bl)
+	b.dirty = true
+}
+
+func (b *Buffer) last() *block {
+	if len(b.blocks) == 0 {
+		return nil
+	}
+	return b.blocks[len(b.blocks)-1]
+}
+
+// settle stops every activity line except, if the thread is running, the
+// last one. Used after loading history, which may end mid-turn.
+func (b *Buffer) settle(running bool) {
+	lastTools := -1
+	for i, bl := range b.blocks {
+		if bl.kind == bTools {
+			lastTools = i
+		}
+	}
+	for i, bl := range b.blocks {
+		if bl.live && !(running && i == lastTools) {
+			bl.live = false
+			bl.cache = nil
+		}
+	}
+	b.dirty = true
+}
+
+func (b *Buffer) endLive() {
+	if l := b.last(); l != nil && l.live {
+		l.live = false
+		l.cache = nil
+		b.dirty = true
+	}
+}
+
+// AddEvent appends a transcript event.
+func (b *Buffer) AddEvent(e model.Event) {
+	switch e.Kind {
+	case model.EventMessage:
+		b.endLive()
+		b.push(&block{kind: bMessage, from: e.From, text: e.Text})
+	case model.EventText:
+		b.endLive()
+		b.push(&block{kind: bText, text: e.Text})
+	case model.EventTool:
+		if l := b.last(); l != nil && l.kind == bTools && l.live {
+			l.tools = append(l.tools, toolCall{e.Tool, e.Detail})
+			l.cache = nil
+			b.dirty = true
+			return
+		}
+		b.push(&block{kind: bTools, live: true, tools: []toolCall{{e.Tool, e.Detail}}})
+	case model.EventTurnEnd:
+		b.endLive()
+	case model.EventError:
+		b.endLive()
+		b.push(&block{kind: bError, text: e.Text})
+	case model.EventPermission:
+		b.push(&block{kind: bPermission, from: e.Tool, text: e.Detail})
+	case model.EventAnswer:
+		for i := len(b.blocks) - 1; i >= 0; i-- {
+			if bl := b.blocks[i]; bl.kind == bPermission && bl.text2 == "" {
+				bl.text2 = e.Text
+				bl.cache = nil
+				b.dirty = true
+				return
+			}
+		}
+		b.push(&block{kind: bAnswer, text: e.Text})
+	case model.EventAsk:
+		b.push(&block{kind: bAsk, text: e.Text})
+	case model.EventProgress:
+		b.push(&block{kind: bProgress, text: e.Text})
+	case model.EventNote:
+		b.push(&block{kind: bNote, text: e.Text})
+	}
+}
+
+func (bl *block) render(w int, th *Theme, spin int) []Line {
+	if bl.kind == bRaw {
+		return bl.raw
+	}
+	if !bl.live && bl.cache != nil && bl.cacheW == w {
+		return bl.cache
+	}
+	lines := bl.renderFresh(w, th, spin)
+	if len(lines) > 0 && (bl.kind == bMessage || bl.kind == bText || bl.kind == bAsk) {
+		lines[0].Msg = true
+	}
+	bl.cache, bl.cacheW = lines, w
+	return lines
+}
+
+func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
+	pad := []Span{{"  ", th.Text}}
+	switch bl.kind {
+	case bMessage:
+		if bl.from == model.User {
+			bar := []Span{{"▎ ", th.Iris}}
+			return renderMarkdown(bl.text, w, th, bar)
+		}
+		bar := []Span{{"▎ ", th.Rose}}
+		label := Line{Prefix: bar, Spans: []Span{{"from " + bl.from, th.Rose.Italic(true)}}}
+		return append([]Line{label}, renderMarkdown(bl.text, w, th, bar)...)
+	case bText:
+		return renderMarkdown(bl.text, w, th, pad)
+	case bTools:
+		return bl.renderTools(w, th, spin)
+	case bError:
+		return wrap([]Span{{bl.text, th.Love}}, w, []Span{{"  ✗ ", th.Love}}, []Span{{"    ", th.Love}})
+	case bPermission:
+		if bl.text2 == "" {
+			return wrap([]Span{{shortTool(bl.from), th.Subtle}, {"  " + bl.text, th.Muted}}, w,
+				[]Span{{"  ◆ ", th.Gold}}, []Span{{"    ", th.Text}})
+		}
+		st := th.Muted
+		if strings.HasPrefix(bl.text2, string(model.Deny)) {
+			st = th.Love
+		}
+		spans := []Span{{shortTool(bl.from), th.Muted}}
+		if bl.text != "" {
+			spans = append(spans, Span{"  " + truncate(bl.text, max(w-30, 10)), th.Muted})
+		}
+		spans = append(spans, Span{"  · " + bl.text2, st})
+		return []Line{{Prefix: []Span{{"  ◇ ", th.Muted}}, Spans: spans}}
+	case bAnswer:
+		st := th.Pine
+		if strings.HasPrefix(bl.text, string(model.Deny)) {
+			st = th.Love
+		}
+		return wrap([]Span{{bl.text, st}}, w, []Span{{"    ↳ ", th.Muted}}, []Span{{"      ", th.Text}})
+	case bAsk:
+		bar := []Span{{"▎ ", th.Gold}}
+		label := Line{Prefix: bar, Spans: []Span{{"question", th.Gold.Italic(true)}}}
+		return append([]Line{label}, renderMarkdown(bl.text, w, th, bar)...)
+	case bProgress:
+		return wrap([]Span{{bl.text, th.Subtle}}, w, []Span{{"  ↳ ", th.Foam}}, []Span{{"    ", th.Text}})
+	case bNote:
+		return wrap([]Span{{bl.text, th.Muted.Italic(true)}}, w, []Span{{"  — ", th.Muted}}, []Span{{"    ", th.Text}})
+	}
+	return nil
+}
+
+func (bl *block) renderTools(w int, th *Theme, spin int) []Line {
+	n := len(bl.tools)
+	last := bl.tools[n-1]
+	count := fmt.Sprintf("%d tool calls", n)
+	if n == 1 {
+		count = "1 tool call"
+	}
+	var head Line
+	switch {
+	case bl.live:
+		head = Line{Prefix: []Span{{"  " + spinner[spin%len(spinner)] + " ", th.Foam}}, Spans: []Span{
+			{shortTool(last.tool), th.Subtle},
+			{"  " + truncate(last.detail, max(w-30, 10)), th.Muted},
+			{"  · " + count, th.Muted},
+		}}
+	case bl.open:
+		head = Line{Prefix: []Span{{"  ▾ ", th.Muted}}, Spans: []Span{{count, th.Muted}}}
+	default:
+		head = Line{Prefix: []Span{{"  ▸ ", th.Muted}}, Spans: []Span{{count, th.Muted}}}
+	}
+	lines := []Line{head}
+	if bl.open {
+		for _, t := range bl.tools {
+			lines = append(lines, Line{Prefix: []Span{{"      ", th.Text}}, Spans: []Span{
+				{shortTool(t.tool), th.Subtle},
+				{"  " + truncate(t.detail, max(w-24, 10)), th.Muted},
+			}})
+		}
+	}
+	return lines
+}
+
+// shortTool shows an MCP tool as server·tool instead of mcp__server__tool.
+func shortTool(name string) string {
+	if rest, ok := strings.CutPrefix(name, "mcp__"); ok {
+		if server, tool, ok := strings.Cut(rest, "__"); ok {
+			return server + "·" + tool
+		}
+	}
+	return name
+}
