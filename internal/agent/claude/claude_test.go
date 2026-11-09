@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -59,6 +60,16 @@ func TestRealRunFixture(t *testing.T) {
 	// components rather than reading input+output alone.
 	if acc.tokens != 81422 {
 		t.Errorf("tokens = %d, want 81422 (the highest total in the stream)", acc.tokens)
+	}
+
+	if !slices.Contains(acc.commands, "simplify") || !slices.Contains(acc.commands, "dev:pr-create") {
+		t.Errorf("commands = %v, want the init record's slash commands", acc.commands)
+	}
+	if acc.model != "claude-opus-5[1m]" || acc.context != 40716 || acc.cost != 0.751725 || acc.models["claude-opus-5[1m]"].ContextWindow != 1000000 {
+		t.Errorf("model %q context %d cost %v models %v", acc.model, acc.context, acc.cost, acc.models)
+	}
+	if slices.Contains(acc.commands, "doctor") {
+		t.Error("commands include doctor, a terminal-only command")
 	}
 
 	var tools, texts, turns int
@@ -257,7 +268,7 @@ func TestArgsOmitsEmptyOptionals(t *testing.T) {
 }
 
 func TestArgsAppendsRatherThanReplacesTheSystemPrompt(t *testing.T) {
-	// The role in the project is an overlay on a working coding agent, not a
+	// The role in the workspace is an overlay on a working coding agent, not a
 	// replacement for one: --system-prompt here would discard Claude's own.
 	got := strings.Join(New().args(agent.Request{Prompt: "hi", SystemPrompt: "be strict"}), " ")
 	if !strings.Contains(got, "--append-system-prompt be strict") {
@@ -331,7 +342,7 @@ func TestSSHCommandQuotesEverything(t *testing.T) {
 	if strings.Join(got[:5], " ") != "ssh -o BatchMode=yes gpu1 --" {
 		t.Fatalf("prefix = %q", got[:5])
 	}
-	want := `exec "$SHELL" -lc 'cd ~/'\''my proj'\'' && exec env MCP_TOOL_TIMEOUT=1 claude -p '\''it'\''\'\'''\''s -x'\'''`
+	want := `exec "$SHELL" -lc 'export PATH="$HOME/.local/bin:$PATH"; cd ~/'\''my proj'\'' && exec env MCP_TOOL_TIMEOUT=1 claude -p '\''it'\''\'\'''\''s -x'\'''`
 	if got[5] != want {
 		t.Errorf("remote =\n %s\nwant\n %s", got[5], want)
 	}
@@ -361,5 +372,28 @@ func TestTrimKeepsTheTail(t *testing.T) {
 	}
 	if got := trim("  hi  ", 100); got != "hi" {
 		t.Errorf("trim = %q, want trimmed", got)
+	}
+}
+
+// TestBuiltinCommandOutputIsShown: /context and the like answer only in the
+// result record.
+func TestBuiltinCommandOutputIsShown(t *testing.T) {
+	_, got := feed(t, []string{`{"type":"result","result":"## Context Usage\n31.7k / 400k","is_error":false}`})
+	if len(got) != 2 || got[0].Kind != agent.KindAssistantText || !strings.Contains(got[0].Text, "Context Usage") {
+		t.Fatalf("events = %+v", got)
+	}
+	_, got = feed(t, []string{
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"Done."}]}}`,
+		`{"type":"result","result":"Done.","is_error":false}`,
+	})
+	if len(got) != 2 {
+		t.Fatalf("a normal reply must not show twice: %+v", got)
+	}
+}
+
+func TestModelAndEffortFlags(t *testing.T) {
+	args := strings.Join(New().args(agent.Request{Prompt: "hi", Model: "sonnet", Effort: "high"}), " ")
+	if !strings.Contains(args, "--model sonnet") || !strings.Contains(args, "--effort high") || !strings.HasSuffix(args, "-p hi") {
+		t.Fatalf("args = %s", args)
 	}
 }

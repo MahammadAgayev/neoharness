@@ -121,8 +121,8 @@ func (n *node) find(w *Window) *node {
 	return nil
 }
 
-// splitWindow puts nw left of w (vert) or above it, sharing w's space: where
-// Neovim puts a new split by default.
+// splitWindow puts nw right of w (vert) or above it, sharing w's space: the
+// user's Neovim has splitright and nosplitbelow.
 func (n *node) splitWindow(w, nw *Window, vert bool) {
 	l := n.find(w)
 	if l == nil {
@@ -135,6 +135,9 @@ func (n *node) splitWindow(w, nw *Window, vert bool) {
 		nl.parent = p
 		for i, k := range p.kids {
 			if k == l {
+				if vert {
+					i++
+				}
 				p.kids = append(p.kids[:i], append([]*node{nl}, p.kids[i:]...)...)
 				break
 			}
@@ -148,6 +151,9 @@ func (n *node) splitWindow(w, nw *Window, vert bool) {
 	l.vert = vert
 	old.parent, nl.parent = l, l
 	l.kids = []*node{nl, old}
+	if vert {
+		l.kids = []*node{old, nl}
+	}
 }
 
 // closeWindow removes w. It reports false for the last window.

@@ -18,28 +18,38 @@ import (
 func Handler(h *hub.Hub) http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /projects", func(w http.ResponseWriter, r *http.Request) {
-		reply(w, h.Projects(), nil)
+	mux.HandleFunc("GET /workspaces", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, h.Workspaces(), nil)
 	})
-	mux.HandleFunc("POST /projects", func(w http.ResponseWriter, r *http.Request) {
-		var in hubapi.NewProject
+	mux.HandleFunc("POST /workspaces", func(w http.ResponseWriter, r *http.Request) {
+		var in hubapi.NewWorkspace
 		if !decode(w, r, &in) {
 			return
 		}
-		reply(w, nil, h.CreateProject(in.Name, in.Pin))
+		reply(w, nil, h.CreateWorkspace(in.Name, in.Pin))
 	})
-	mux.HandleFunc("GET /projects/{p}/threads", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /workspaces/{p}/folder", func(w http.ResponseWriter, r *http.Request) {
+		var in hubapi.Folder
+		if !decode(w, r, &in) {
+			return
+		}
+		reply(w, nil, h.SetFolder(r.PathValue("p"), in.Pin))
+	})
+	mux.HandleFunc("DELETE /workspaces/{p}", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, nil, h.DeleteWorkspace(r.PathValue("p")))
+	})
+	mux.HandleFunc("GET /workspaces/{p}/threads", func(w http.ResponseWriter, r *http.Request) {
 		vs, err := h.Threads(r.PathValue("p"))
 		reply(w, vs, err)
 	})
-	mux.HandleFunc("POST /projects/{p}/threads", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /workspaces/{p}/threads", func(w http.ResponseWriter, r *http.Request) {
 		var in hubapi.NewThread
 		if !decode(w, r, &in) {
 			return
 		}
 		reply(w, nil, h.OpenThread(r.PathValue("p"), model.User, in.Name, in.Brief, in.Location))
 	})
-	mux.HandleFunc("GET /projects/{p}/threads/{t}/events", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /workspaces/{p}/threads/{t}/events", func(w http.ResponseWriter, r *http.Request) {
 		n, _ := strconv.Atoi(r.URL.Query().Get("tail"))
 		evs, err := h.Events(r.PathValue("p"), r.PathValue("t"), n)
 		if evs == nil {
@@ -47,20 +57,31 @@ func Handler(h *hub.Hub) http.Handler {
 		}
 		reply(w, evs, err)
 	})
-	mux.HandleFunc("POST /projects/{p}/threads/{t}/messages", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /workspaces/{p}/threads/{t}/completions", func(w http.ResponseWriter, r *http.Request) {
+		c, err := h.Completions(r.PathValue("p"), r.PathValue("t"))
+		reply(w, c, err)
+	})
+	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/messages", func(w http.ResponseWriter, r *http.Request) {
 		var in hubapi.Message
 		if !decode(w, r, &in) {
 			return
 		}
+		if in.Now {
+			reply(w, nil, h.SendNow(r.PathValue("p"), r.PathValue("t"), in.Text))
+			return
+		}
 		reply(w, nil, h.Send(r.PathValue("p"), model.User, r.PathValue("t"), in.Text))
 	})
-	mux.HandleFunc("POST /projects/{p}/threads/{t}/resolve", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/resolve", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, nil, h.Resolve(r.PathValue("p"), model.User, r.PathValue("t")))
 	})
-	mux.HandleFunc("POST /projects/{p}/threads/{t}/reopen", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("DELETE /workspaces/{p}/threads/{t}", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, nil, h.Delete(r.PathValue("p"), r.PathValue("t")))
+	})
+	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/reopen", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, nil, h.Reopen(r.PathValue("p"), r.PathValue("t")))
 	})
-	mux.HandleFunc("POST /projects/{p}/threads/{t}/answer", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/answer", func(w http.ResponseWriter, r *http.Request) {
 		var in hubapi.Answer
 		if !decode(w, r, &in) {
 			return

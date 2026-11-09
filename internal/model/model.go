@@ -1,5 +1,5 @@
 // Package model holds the plain types shared by the hub, its HTTP API, and
-// the TUI: what a project, a thread, and a transcript event look like on the
+// the TUI: what a workspace, a thread, and a transcript event look like on the
 // wire.
 //
 // It is a leaf with no behaviour beyond parsing and formatting. The TUI depends
@@ -25,7 +25,7 @@ const (
 	StateResolved State = "resolved"
 )
 
-// Role separates the one coordinator per project from its threads. The
+// Role separates the one coordinator per workspace from its threads. The
 // coordinator gets the tools that open and resolve threads; nothing else does.
 type Role string
 
@@ -34,7 +34,7 @@ const (
 	RoleThread      Role = "thread"
 )
 
-// Coordinator is the coordinator's name and MCP address in every project.
+// Coordinator is the coordinator's name and MCP address in every workspace.
 const Coordinator = "coordinator"
 
 // User is the sender name for messages typed in the TUI.
@@ -42,7 +42,7 @@ const User = "user"
 
 var nameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
 
-// ValidName checks a project or thread name. Names are file names, MCP
+// ValidName checks a workspace or thread name. Names are file names, MCP
 // addresses, and buffer names at once, so they are kept to a slug.
 func ValidName(name string) error {
 	if !nameRE.MatchString(name) {
@@ -112,6 +112,13 @@ const (
 	EventProgress EventKind = "progress"
 	// EventNote is something the hub did to the thread: opened, resolved.
 	EventNote EventKind = "note"
+	// EventClear starts the conversation again: what came before it is no
+	// longer on screen or in Claude's context.
+	EventClear EventKind = "clear"
+	// EventShell is a command the user ran with `!`: Detail is the command.
+	// It comes twice with the same ID, when it starts and when it ends; the
+	// second has the output in Text and the exit code.
+	EventShell EventKind = "shell"
 )
 
 // Event is one transcript entry.
@@ -125,6 +132,7 @@ type Event struct {
 	ID     string    `json:"id,omitempty"`
 	Tools  int       `json:"tools,omitempty"`
 	Tokens int       `json:"tokens,omitempty"`
+	Exit   int       `json:"exit,omitempty"`
 }
 
 // Permission is a request waiting for the user.
@@ -136,7 +144,7 @@ type Permission struct {
 
 // ThreadView is a thread as the API shows it.
 type ThreadView struct {
-	Project    string      `json:"project"`
+	Workspace  string      `json:"workspace"`
 	Name       string      `json:"name"`
 	Role       Role        `json:"role"`
 	Location   Location    `json:"location"`
@@ -145,13 +153,29 @@ type ThreadView struct {
 	Progress   string      `json:"progress,omitempty"`
 	Waiting    string      `json:"waiting,omitempty"`
 	Permission *Permission `json:"permission,omitempty"`
-	Since      time.Time   `json:"since"`
-	UpdatedAt  time.Time   `json:"updatedAt"`
-	CreatedAt  time.Time   `json:"createdAt"`
+	// Model, Context and ContextWindow are as of the last turn; Cost is the
+	// total of every turn, in US dollars. Branch is the git branch of the
+	// thread's folder, empty outside a repository.
+	Model         string    `json:"model,omitempty"`
+	Context       int       `json:"context,omitempty"`
+	ContextWindow int       `json:"contextWindow,omitempty"`
+	Cost          float64   `json:"cost,omitempty"`
+	Branch        string    `json:"branch,omitempty"`
+	Since         time.Time `json:"since"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
-// ProjectView is a project with a summary of its threads.
-type ProjectView struct {
+// Completions is what the prompt of a thread can complete: `/` commands,
+// and after `@` the threads of its workspace and the files in its folder.
+type Completions struct {
+	Commands []string `json:"commands"`
+	Files    []string `json:"files"`
+	Threads  []string `json:"threads"`
+}
+
+// WorkspaceView is a workspace with a summary of its threads.
+type WorkspaceView struct {
 	Name      string        `json:"name"`
 	Pin       string        `json:"pin,omitempty"`
 	CreatedAt time.Time     `json:"createdAt"`
@@ -164,19 +188,22 @@ type ProjectView struct {
 type UpdateKind string
 
 const (
-	UpdateEvent   UpdateKind = "event"
-	UpdateThread  UpdateKind = "thread"
-	UpdateProject UpdateKind = "project"
+	UpdateEvent     UpdateKind = "event"
+	UpdateThread    UpdateKind = "thread"
+	UpdateWorkspace UpdateKind = "workspace"
+	// UpdateDeleted says Thread no longer exists, or with no Thread, that
+	// the whole workspace is gone.
+	UpdateDeleted UpdateKind = "deleted"
 )
 
 // Update is one change pushed to subscribers.
 type Update struct {
-	Kind    UpdateKind   `json:"kind"`
-	Project string       `json:"project"`
-	Thread  string       `json:"thread,omitempty"`
-	Event   *Event       `json:"event,omitempty"`
-	View    *ThreadView  `json:"view,omitempty"`
-	Summary *ProjectView `json:"summary,omitempty"`
+	Kind      UpdateKind     `json:"kind"`
+	Workspace string         `json:"workspace"`
+	Thread    string         `json:"thread,omitempty"`
+	Event     *Event         `json:"event,omitempty"`
+	View      *ThreadView    `json:"view,omitempty"`
+	Summary   *WorkspaceView `json:"summary,omitempty"`
 }
 
 // Decision is the user's answer to a permission request.

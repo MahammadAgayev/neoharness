@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -48,7 +49,12 @@ func New(port int) *Manager {
 
 func sshCommand(ctx context.Context, host string, port int) *exec.Cmd {
 	fwd := fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", port, port)
+	// No ControlMaster: with a shared connection open, ssh hands the forward
+	// to the master and exits at once, so the tunnel looks dead, and the
+	// forward stays bound on the host after the hub is gone.
 	return exec.CommandContext(ctx, "ssh", "-N",
+		"-o", "ControlMaster=no",
+		"-o", "ControlPath=none",
 		"-o", "BatchMode=yes",
 		"-o", "ExitOnForwardFailure=yes",
 		"-o", "ServerAliveInterval=15",
@@ -69,6 +75,12 @@ func (m *Manager) Ensure(host string) error {
 		}
 	}
 	cmd := m.command(m.ctx, host, m.Port)
+	// ssh on PATH can be a wrapper script that runs the real ssh as its child.
+	// Killing only the wrapper leaves that child holding the remote port, and
+	// Wait blocks on its stderr pipe, so Close never returns.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = time.Second
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {

@@ -1,4 +1,4 @@
-package project
+package workspace
 
 import (
 	"os"
@@ -13,13 +13,13 @@ import (
 func TestCreateListThreadsEvents(t *testing.T) {
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
 
-	if err := Create(Project{Name: "demo", Pin: "/tmp/x", CreatedAt: time.Now()}); err != nil {
+	if err := Create(Workspace{Name: "demo", Pin: "/tmp/x", CreatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Create(Project{Name: "demo"}); err == nil {
+	if err := Create(Workspace{Name: "demo"}); err == nil {
 		t.Fatal("second create of the same name should fail")
 	}
-	if err := Create(Project{Name: "Bad Name"}); err == nil {
+	if err := Create(Workspace{Name: "Bad Name"}); err == nil {
 		t.Fatal("invalid name should fail")
 	}
 	ps, err := List()
@@ -60,5 +60,34 @@ func TestNewIDIsUUIDv4(t *testing.T) {
 	re := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 	if id := NewID(); !re.MatchString(id) {
 		t.Fatalf("NewID = %q", id)
+	}
+}
+
+func TestMigrateFromProjects(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("NEOHARNESS_HOME", home)
+	old := filepath.Join(home, "projects")
+	if err := os.MkdirAll(filepath.Join(old, "demo", "threads", "coordinator"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(old, "demo", "project.json"), []byte(`{"name":"demo","pin":"/src/demo"}`), 0o644)
+	os.WriteFile(filepath.Join(old, "demo", "threads", "coordinator", "thread.json"), []byte(`{"name":"coordinator"}`), 0o600)
+
+	if err := Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := List()
+	if err != nil || len(ws) != 1 || ws[0].Pin != "/src/demo" {
+		t.Fatalf("List = %+v, %v", ws, err)
+	}
+	if ths, _ := Threads("demo"); len(ths) != 1 {
+		t.Fatalf("threads = %+v", ths)
+	}
+	// The old path still reaches the data, for sessions that ran inside it.
+	if _, err := os.Stat(filepath.Join(old, "demo", "workspace.json")); err != nil {
+		t.Fatalf("old path: %v", err)
+	}
+	if err := Migrate(); err != nil {
+		t.Fatalf("second run: %v", err)
 	}
 }

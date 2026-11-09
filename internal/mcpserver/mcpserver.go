@@ -3,8 +3,8 @@
 // coordinator's thread tools.
 //
 // Every session sends its thread's token as a bearer token, and the token
-// alone decides who is calling. Tools act on the caller's own project and
-// thread, so no tool takes a project argument and a thread cannot speak for
+// alone decides who is calling. Tools act on the caller's own workspace and
+// thread, so no tool takes a workspace argument and a thread cannot speak for
 // another one.
 package mcpserver
 
@@ -73,9 +73,15 @@ type askIn struct {
 }
 
 type openIn struct {
-	Name     string `json:"name" jsonschema:"short kebab-case name, unique in the project"`
+	Name     string `json:"name" jsonschema:"short kebab-case name, unique in the workspace"`
 	Brief    string `json:"brief" jsonschema:"the task: goal, area, what done means, who to agree with"`
-	Location string `json:"location,omitempty" jsonschema:"a local folder or host:dir; empty for the project folder"`
+	Location string `json:"location,omitempty" jsonschema:"a local folder or host:dir; empty for the workspace folder"`
+}
+
+type readIn struct {
+	Name  string `json:"name" jsonschema:"thread to read, or coordinator"`
+	Tail  int    `json:"tail" jsonschema:"how many of its last events to return, 1 to 200"`
+	Query string `json:"query,omitempty" jsonschema:"only events that contain this text; empty for all"`
 }
 
 type resolveIn struct {
@@ -90,18 +96,18 @@ type permissionIn struct {
 
 func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "neoharness", Version: "1"}, nil)
-	p, me := id.Project, id.Thread
+	p, me := id.Workspace, id.Thread
 
-	mcp.AddTool(s, &mcp.Tool{Name: "whoami", Description: "Your name, role, project and location."},
+	mcp.AddTool(s, &mcp.Tool{Name: "whoami", Description: "Your name, role, workspace and location."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ empty) (*mcp.CallToolResult, any, error) {
 			v, err := h.Whoami(p, me)
 			if err != nil {
 				return nil, nil, err
 			}
-			return text(fmt.Sprintf("You are %s (%s) in project %s, running in %s.", v.Name, v.Role, v.Project, v.Location)), nil, nil
+			return text(fmt.Sprintf("You are %s (%s) in workspace %s, running in %s.", v.Name, v.Role, v.Workspace, v.Location)), nil, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "project_status", Description: "Every thread in the project: state, last progress report, last update."},
+	mcp.AddTool(s, &mcp.Tool{Name: "workspace_status", Description: "Every thread in the workspace: state, last progress report, last update."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ empty) (*mcp.CallToolResult, any, error) {
 			vs, err := h.Threads(p)
 			if err != nil {
@@ -116,6 +122,15 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 				return nil, nil, err
 			}
 			return text("Sent to " + in.To + "."), nil, nil
+		})
+
+	mcp.AddTool(s, &mcp.Tool{Name: "read_thread", Description: "Read the transcript of a thread in this workspace: messages, replies, and tool calls, oldest first. Ask for only as much as you need."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in readIn) (*mcp.CallToolResult, any, error) {
+			evs, err := h.ReadThread(p, in.Name, in.Tail, in.Query)
+			if err != nil {
+				return nil, nil, err
+			}
+			return text(Transcript(evs)), nil, nil
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "report_progress", Description: "Tell the coordinator and the person where you are, in one line."},
@@ -187,7 +202,7 @@ func permissionReply(ok bool, msg string, input json.RawMessage) string {
 	return string(data)
 }
 
-// Status renders project_status as plain text, one thread per line.
+// Status renders workspace_status as plain text, one thread per line.
 func Status(vs []model.ThreadView, me string, now time.Time) string {
 	var b strings.Builder
 	for _, v := range vs {
@@ -206,6 +221,35 @@ func Status(vs []model.ThreadView, me string, now time.Time) string {
 			fmt.Fprintf(&b, " | progress: %s", v.Progress)
 		}
 		fmt.Fprintf(&b, " | updated %s ago\n", now.Sub(v.UpdatedAt).Round(time.Second))
+	}
+	return b.String()
+}
+
+// Transcript renders events as plain text, one per line.
+func Transcript(evs []model.Event) string {
+	if len(evs) == 0 {
+		return "No events."
+	}
+	var b strings.Builder
+	for _, e := range evs {
+		fmt.Fprintf(&b, "%s ", e.At.Format("15:04"))
+		switch e.Kind {
+		case model.EventMessage:
+			fmt.Fprintf(&b, "message from %s: %s", e.From, e.Text)
+		case model.EventText:
+			fmt.Fprintf(&b, "reply: %s", e.Text)
+		case model.EventTool:
+			fmt.Fprintf(&b, "tool %s: %s", e.Tool, e.Detail)
+		case model.EventPermission:
+			fmt.Fprintf(&b, "permission asked for %s: %s", e.Tool, e.Detail)
+		case model.EventAnswer:
+			fmt.Fprintf(&b, "permission for %s: %s", e.Tool, e.Text)
+		case model.EventTurnEnd:
+			fmt.Fprintf(&b, "turn ended, %d tool calls", e.Tools)
+		default:
+			fmt.Fprintf(&b, "%s: %s", e.Kind, e.Text)
+		}
+		b.WriteByte('\n')
 	}
 	return b.String()
 }

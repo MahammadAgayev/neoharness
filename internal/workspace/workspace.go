@@ -1,10 +1,10 @@
-// Package project stores projects, their threads, and thread transcripts on
-// disk under ~/.neoharness/projects/.
+// Package workspace stores workspaces, their threads, and thread transcripts on
+// disk under ~/.neoharness/workspaces/.
 //
 // The hub is the only writer. Files are written whole through a temp file and
 // a rename, so a crash leaves either the old version or the new one, never a
 // torn file. Transcripts are append-only JSON lines.
-package project
+package workspace
 
 import (
 	"bufio"
@@ -21,11 +21,14 @@ import (
 	"github.com/MahammadAgayev/neoharness/internal/model"
 )
 
-// Project is a workspace: a name and an optional local folder it is pinned to.
-type Project struct {
+// Workspace is a workspace: a name and an optional local folder it is pinned to.
+type Workspace struct {
 	Name      string    `json:"name"`
 	Pin       string    `json:"pin,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
+	// Deleted hides the workspace. Its data stays, so the delete can be
+	// undone by hand.
+	Deleted bool `json:"deleted,omitempty"`
 }
 
 // Message is one queued input for a thread.
@@ -33,6 +36,8 @@ type Message struct {
 	From string    `json:"from"`
 	Text string    `json:"text"`
 	At   time.Time `json:"at"`
+	// Compact marks a /compact request; Text is what to focus on.
+	Compact bool `json:"compact,omitempty"`
 }
 
 // Rule is an "allow always" answer. An empty Prefix matches every call of the
@@ -73,60 +78,113 @@ type Thread struct {
 	AgentTurns int `json:"agentTurns,omitempty"`
 	// Turns holds the start times of recent turns, for the activity line.
 	Turns []time.Time `json:"turns,omitempty"`
+	// Commands is the slash commands its last turn reported.
+	Commands []string `json:"commands,omitempty"`
+	// Model and Context are as of its last turn; Cost adds up every turn.
+	Model         string  `json:"model,omitempty"`
+	Context       int     `json:"context,omitempty"`
+	ContextWindow int     `json:"contextWindow,omitempty"`
+	Cost          float64 `json:"cost,omitempty"`
+	// ModelChoice and Effort are what /model and /effort chose; empty is
+	// Claude's default.
+	ModelChoice string `json:"modelChoice,omitempty"`
+	Effort      string `json:"effort,omitempty"`
+	// Summary is what /compact left for the next session's first message.
+	Summary string `json:"summary,omitempty"`
+	// Shell holds `!` commands and their output for the next turn's prompt.
+	Shell []string `json:"shell,omitempty"`
 
 	Since     time.Time `json:"since"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// Root is the folder that holds every project. It follows NEOHARNESS_HOME like
+// Root is the folder that holds every workspace. It follows NEOHARNESS_HOME like
 // the run folders do.
 func Root() string {
 	if h := os.Getenv("NEOHARNESS_HOME"); h != "" {
-		return filepath.Join(h, "projects")
+		return filepath.Join(h, "workspaces")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".neoharness", "projects")
+		return filepath.Join(".neoharness", "workspaces")
 	}
-	return filepath.Join(home, ".neoharness", "projects")
+	return filepath.Join(home, ".neoharness", "workspaces")
 }
 
-// Dir is a project's folder.
+// Migrate moves data from before workspaces were called projects: the
+// projects folder becomes the workspaces folder and each project.json becomes
+// workspace.json. A projects symlink stays behind, because an unpinned
+// coordinator runs inside that folder and Claude finds its session by the
+// path it ran in.
+func Migrate() error {
+	root := Root()
+	old := filepath.Join(filepath.Dir(root), "projects")
+	fi, err := os.Lstat(old)
+	if err != nil || !fi.IsDir() {
+		return nil
+	}
+	if _, err := os.Stat(root); err == nil {
+		return fmt.Errorf("both %s and %s exist; move your data into one", old, root)
+	}
+	if err := os.Rename(old, root); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		from := filepath.Join(root, e.Name(), "project.json")
+		if _, err := os.Stat(from); err == nil {
+			if err := os.Rename(from, workspaceFile(e.Name())); err != nil {
+				return err
+			}
+		}
+	}
+	return os.Symlink(filepath.Base(root), old)
+}
+
+// Dir is a workspace's folder.
 func Dir(name string) string { return filepath.Join(Root(), name) }
 
-func projectFile(name string) string { return filepath.Join(Dir(name), "project.json") }
+func workspaceFile(name string) string { return filepath.Join(Dir(name), "workspace.json") }
 
 // ThreadDir is a thread's folder.
-func ThreadDir(project, thread string) string {
-	return filepath.Join(Dir(project), "threads", thread)
+func ThreadDir(workspace, thread string) string {
+	return filepath.Join(Dir(workspace), "threads", thread)
 }
 
-func threadFile(project, thread string) string {
-	return filepath.Join(ThreadDir(project, thread), "thread.json")
+func threadFile(workspace, thread string) string {
+	return filepath.Join(ThreadDir(workspace, thread), "thread.json")
 }
 
-func eventsFile(project, thread string) string {
-	return filepath.Join(ThreadDir(project, thread), "events.jsonl")
+func eventsFile(workspace, thread string) string {
+	return filepath.Join(ThreadDir(workspace, thread), "events.jsonl")
 }
 
-// Create writes a new project. It fails if one of that name exists.
-func Create(p Project) error {
+// Create writes a new workspace. It fails if one of that name exists.
+func Create(p Workspace) error {
 	if err := model.ValidName(p.Name); err != nil {
 		return err
 	}
-	if _, err := os.Stat(projectFile(p.Name)); err == nil {
-		return fmt.Errorf("project %q already exists", p.Name)
+	if _, err := os.Stat(workspaceFile(p.Name)); err == nil {
+		return fmt.Errorf("workspace %q already exists", p.Name)
 	}
 	if err := os.MkdirAll(filepath.Join(Dir(p.Name), "threads"), 0o755); err != nil {
 		return err
 	}
-	return writeJSON(projectFile(p.Name), p, 0o644)
+	return writeJSON(workspaceFile(p.Name), p, 0o644)
 }
 
-// List returns every project, oldest first. A damaged project is skipped so
+// Save writes an existing workspace.
+func Save(p Workspace) error {
+	return writeJSON(workspaceFile(p.Name), p, 0o644)
+}
+
+// List returns every workspace, oldest first. A damaged workspace is skipped so
 // one bad folder does not hide the rest.
-func List() ([]Project, error) {
+func List() ([]Workspace, error) {
 	entries, err := os.ReadDir(Root())
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -134,13 +192,13 @@ func List() ([]Project, error) {
 	if err != nil {
 		return nil, err
 	}
-	var out []Project
+	var out []Workspace
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
-		var p Project
-		if err := readJSON(projectFile(e.Name()), &p); err != nil {
+		var p Workspace
+		if err := readJSON(workspaceFile(e.Name()), &p); err != nil {
 			continue
 		}
 		out = append(out, p)
@@ -149,9 +207,9 @@ func List() ([]Project, error) {
 	return out, nil
 }
 
-// Threads loads every thread of a project.
-func Threads(project string) ([]*Thread, error) {
-	entries, err := os.ReadDir(filepath.Join(Dir(project), "threads"))
+// Threads loads every thread of a workspace.
+func Threads(workspace string) ([]*Thread, error) {
+	entries, err := os.ReadDir(filepath.Join(Dir(workspace), "threads"))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -164,7 +222,7 @@ func Threads(project string) ([]*Thread, error) {
 			continue
 		}
 		var t Thread
-		if err := readJSON(threadFile(project, e.Name()), &t); err != nil {
+		if err := readJSON(threadFile(workspace, e.Name()), &t); err != nil {
 			continue
 		}
 		out = append(out, &t)
@@ -175,21 +233,26 @@ func Threads(project string) ([]*Thread, error) {
 
 // SaveThread writes a thread. 0600 because the file holds the thread's MCP
 // token.
-func SaveThread(project string, t *Thread) error {
-	if err := os.MkdirAll(ThreadDir(project, t.Name), 0o755); err != nil {
+func SaveThread(workspace string, t *Thread) error {
+	if err := os.MkdirAll(ThreadDir(workspace, t.Name), 0o755); err != nil {
 		return err
 	}
 	t.UpdatedAt = time.Now().UTC()
-	return writeJSON(threadFile(project, t.Name), t, 0o600)
+	return writeJSON(threadFile(workspace, t.Name), t, 0o600)
+}
+
+// DeleteThread removes a thread's folder: its state and transcript.
+func DeleteThread(workspace, thread string) error {
+	return os.RemoveAll(ThreadDir(workspace, thread))
 }
 
 // AppendEvent adds one event to a thread's transcript.
-func AppendEvent(project, thread string, e model.Event) error {
+func AppendEvent(workspace, thread string, e model.Event) error {
 	data, err := json.Marshal(e)
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(eventsFile(project, thread), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(eventsFile(workspace, thread), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
@@ -200,8 +263,8 @@ func AppendEvent(project, thread string, e model.Event) error {
 
 // Events reads the last n events of a transcript; n <= 0 reads all. A
 // truncated last line, left by a crash mid-write, is skipped.
-func Events(project, thread string, n int) ([]model.Event, error) {
-	f, err := os.Open(eventsFile(project, thread))
+func Events(workspace, thread string, n int) ([]model.Event, error) {
+	f, err := os.Open(eventsFile(workspace, thread))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}

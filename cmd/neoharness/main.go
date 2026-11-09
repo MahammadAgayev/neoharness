@@ -1,5 +1,5 @@
 // Command neoharness works with many Claude Code sessions at once, in the
-// terminal: a coordinator per project and the threads it opens.
+// terminal: a coordinator per workspace and the threads it opens.
 //
 // It is one program, like an editor. The hub that runs the sessions lives in
 // the same process as the TUI and stops when it closes. Each thread keeps its
@@ -18,7 +18,7 @@ const usage = `neoharness — many Claude Code sessions, in the terminal
   neoharness         open the workspace
   neoharness help    this text
 
-Projects and threads live in ~/.neoharness/. The hub log is ~/.neoharness/hub.log.
+Workspaces and threads live in ~/.neoharness/. The hub log is ~/.neoharness/hub.log.
 `
 
 func main() {

@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/MahammadAgayev/neoharness/internal/model"
@@ -12,7 +14,7 @@ import (
 type BufKind int
 
 const (
-	KindProjects BufKind = iota
+	KindWorkspaces BufKind = iota
 	KindThreads
 	KindChat
 	KindMessages
@@ -32,6 +34,7 @@ const (
 	bAsk
 	bProgress
 	bNote
+	bShell
 )
 
 type toolCall struct{ tool, detail string }
@@ -43,7 +46,9 @@ type block struct {
 	kind   blockKind
 	from   string
 	text   string
-	text2  string // a permission's answer
+	text2  string // a permission's answer, a shell command's output
+	id     string
+	exit   int
 	tools  []toolCall
 	live   bool
 	open   bool
@@ -60,11 +65,11 @@ type Prompt struct {
 
 // Buffer is a named, append-mostly list of blocks.
 type Buffer struct {
-	Name    string
-	Kind    BufKind
-	Project string
-	Thread  string
-	Prompt  *Prompt
+	Name      string
+	Kind      BufKind
+	Workspace string
+	Thread    string
+	Prompt    *Prompt
 
 	blocks []*block
 	lines  []Line
@@ -76,14 +81,14 @@ func newBuffer(name string, kind BufKind) *Buffer {
 	return &Buffer{Name: name, Kind: kind, dirty: true}
 }
 
-func newChat(project, thread string) *Buffer {
-	b := newBuffer(chatName(project, thread), KindChat)
-	b.Project, b.Thread = project, thread
+func newChat(workspace, thread string) *Buffer {
+	b := newBuffer(chatName(workspace, thread), KindChat)
+	b.Workspace, b.Thread = workspace, thread
 	b.Prompt = &Prompt{}
 	return b
 }
 
-func chatName(project, thread string) string { return "neoharness://" + project + "/" + thread }
+func chatName(workspace, thread string) string { return "neoharness://" + workspace + "/" + thread }
 
 // SetLines replaces the buffer's content with fixed lines.
 func (b *Buffer) SetLines(lines []Line) {
@@ -133,7 +138,7 @@ func (b *Buffer) Live() bool {
 
 // Toggle opens or closes the fold at a block.
 func (b *Buffer) Toggle(i int) bool {
-	if i < 0 || i >= len(b.blocks) || b.blocks[i].kind != bTools {
+	if i < 0 || i >= len(b.blocks) || b.blocks[i].kind != bTools && b.blocks[i].kind != bShell {
 		return false
 	}
 	b.blocks[i].open = !b.blocks[i].open
@@ -220,6 +225,19 @@ func (b *Buffer) AddEvent(e model.Event) {
 		b.push(&block{kind: bProgress, text: e.Text})
 	case model.EventNote:
 		b.push(&block{kind: bNote, text: e.Text})
+	case model.EventShell:
+		for _, bl := range b.blocks {
+			if bl.kind == bShell && bl.id == e.ID {
+				bl.text2, bl.exit, bl.live, bl.cache = e.Text, e.Exit, false, nil
+				b.dirty = true
+				return
+			}
+		}
+		b.endLive()
+		b.push(&block{kind: bShell, id: e.ID, text: e.Detail, live: true})
+	case model.EventClear:
+		b.blocks = nil
+		b.push(&block{kind: bNote, text: e.Text})
 	}
 }
 
@@ -284,8 +302,48 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 		return wrap([]Span{{bl.text, th.Subtle}}, w, []Span{{"  ↳ ", th.Foam}}, []Span{{"    ", th.Text}})
 	case bNote:
 		return wrap([]Span{{bl.text, th.Muted.Italic(true)}}, w, []Span{{"  — ", th.Muted}}, []Span{{"    ", th.Text}})
+	case bShell:
+		return bl.renderShell(w, th, spin)
 	}
 	return nil
+}
+
+// shellLines is how many lines of a `!` command's output show before za.
+const shellLines = 10
+
+var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+
+func (bl *block) renderShell(w int, th *Theme, spin int) []Line {
+	mark := Span{"  ! ", th.Rose}
+	if bl.live {
+		mark = Span{"  " + spinner[spin%len(spinner)] + " ", th.Foam}
+	}
+	lines := wrap([]Span{{bl.text, th.Subtle}}, w, []Span{mark}, []Span{{"    ", th.Text}})
+	out := strings.Split(strings.TrimRight(bl.text2, "\n"), "\n")
+	if bl.text2 == "" {
+		out = nil
+	}
+	hidden := 0
+	if !bl.open && len(out) > shellLines {
+		hidden = len(out) - shellLines
+		out = out[:shellLines]
+	}
+	pad := []Span{{"    ", th.Text}}
+	for _, l := range out {
+		l = ansi.ReplaceAllString(l, "")
+		if i := strings.LastIndexByte(l, '\r'); i >= 0 {
+			l = l[i+1:]
+		}
+		l = strings.ReplaceAll(l, "\t", "    ")
+		lines = append(lines, wrap([]Span{{l, th.Muted}}, w, pad, pad)...)
+	}
+	if hidden > 0 {
+		lines = append(lines, Line{Prefix: pad, Spans: []Span{{fmt.Sprintf("… %d more lines · za", hidden), th.Muted.Italic(true)}}})
+	}
+	if bl.exit != 0 && !bl.live {
+		lines = append(lines, Line{Prefix: pad, Spans: []Span{{"exit " + strconv.Itoa(bl.exit), th.Love}}})
+	}
+	return lines
 }
 
 func (bl *block) renderTools(w int, th *Theme, spin int) []Line {

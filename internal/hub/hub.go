@@ -1,9 +1,9 @@
-// Package hub owns every project and thread while neoharness runs: it queues
+// Package hub owns every workspace and thread while neoharness runs: it queues
 // messages, runs one turn at a time per thread, routes messages between
 // threads, holds permission requests until the user answers, and pushes every
 // change to subscribers.
 //
-// The hub is the only writer of project state. It knows agents only through
+// The hub is the only writer of workspace state. It knows agents only through
 // agent.Agent and a factory, and knows nothing of MCP, HTTP, ssh, or the TUI;
 // those are thin adapters around the methods here. That is what lets its tests
 // drive it with a scripted fake in milliseconds.
@@ -17,14 +17,15 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/MahammadAgayev/neoharness/internal/agent"
 	"github.com/MahammadAgayev/neoharness/internal/model"
-	"github.com/MahammadAgayev/neoharness/internal/project"
 	"github.com/MahammadAgayev/neoharness/internal/prompts"
+	"github.com/MahammadAgayev/neoharness/internal/workspace"
 )
 
 // Defaults.
@@ -42,10 +43,26 @@ const (
 	// mcpToolTimeout keeps Claude from giving up on a permission prompt
 	// while the user is away from the keyboard.
 	mcpToolTimeout = "MCP_TOOL_TIMEOUT=86400000"
+	// filesTTL is how long a folder's file list is reused. Listing a remote
+	// folder costs an ssh round trip, and the prompt asks on every Insert.
+	filesTTL = 30 * time.Second
+	// MaxReadTail is the most events read_thread returns at once.
+	MaxReadTail = 200
 )
 
 // AgentFactory builds the agent that runs a thread's turns.
-type AgentFactory func(p project.Project, t project.Thread) agent.Agent
+type AgentFactory func(p workspace.Workspace, t workspace.Thread) agent.Agent
+
+// FileLister lists the files in a location, relative to its folder.
+type FileLister func(ctx context.Context, l model.Location) ([]string, error)
+
+// BranchReader reads the git branch of a location; empty outside a
+// repository.
+type BranchReader func(ctx context.Context, l model.Location) (string, error)
+
+// ShellRunner runs a command line in a location's folder, in the user's
+// shell, and returns stdout and stderr together with the exit code.
+type ShellRunner func(ctx context.Context, l model.Location, command string) (out string, exit int, err error)
 
 // Config is how the hub is wired.
 type Config struct {
@@ -55,9 +72,16 @@ type Config struct {
 	MCPPort       int
 	MaxAgentTurns int
 	TurnTimeout   time.Duration
+	// Files lists a thread's folder for `@` completion. Nil lists nothing.
+	Files FileLister
+	// Branch reads a thread's git branch for the status line. Nil reads
+	// nothing.
+	Branch BranchReader
+	// Shell runs `!` commands. Nil refuses them.
+	Shell ShellRunner
 }
 
-// Hub is the running state of every project.
+// Hub is the running state of every workspace.
 type Hub struct {
 	cfg Config
 
@@ -65,26 +89,40 @@ type Hub struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
-	mu       sync.Mutex
-	projects map[string]*proj
-	tokens   map[string]ident
-	subs     map[int]chan model.Update
-	nextSub  int
-	nextPerm int
+	mu         sync.Mutex
+	workspaces map[string]*space
+	tokens     map[string]ident
+	subs       map[int]chan model.Update
+	nextSub    int
+	nextPerm   int
+
+	filesMu sync.Mutex
+	files   map[model.Location]fileList
 }
 
-type proj struct {
-	p       project.Project
+type fileList struct {
+	at    time.Time
+	paths []string
+}
+
+type space struct {
+	p       workspace.Workspace
 	threads map[string]*thread
 }
 
 type thread struct {
-	t       *project.Thread
+	t       *workspace.Thread
 	busy    bool
 	started bool // the current turn produced output, so its session exists
 	cancel  context.CancelFunc
-	perms   []*pending
-	state   model.State
+	// interrupted marks a turn that SendNow stopped.
+	interrupted bool
+	perms       []*pending
+	state       model.State
+	// deleted stops a turn that is still unwinding from writing the thread
+	// back to disk.
+	deleted bool
+	branch  string
 }
 
 type pending struct {
@@ -95,18 +133,18 @@ type pending struct {
 }
 
 type ident struct {
-	project string
-	thread  string
+	workspace string
+	thread    string
 }
 
 // Identity is who an MCP token belongs to.
 type Identity struct {
-	Project string
-	Thread  string
-	Role    model.Role
+	Workspace string
+	Thread    string
+	Role      model.Role
 }
 
-// New loads every project from disk and resumes any queued work.
+// New loads every workspace from disk and resumes any queued work.
 func New(cfg Config) (*Hub, error) {
 	if cfg.MaxAgentTurns == 0 {
 		cfg.MaxAgentTurns = MaxAgentTurns
@@ -116,44 +154,49 @@ func New(cfg Config) (*Hub, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &Hub{
-		cfg:      cfg,
-		ctx:      ctx,
-		cancel:   cancel,
-		projects: map[string]*proj{},
-		tokens:   map[string]ident{},
-		subs:     map[int]chan model.Update{},
+		cfg:        cfg,
+		ctx:        ctx,
+		cancel:     cancel,
+		workspaces: map[string]*space{},
+		tokens:     map[string]ident{},
+		subs:       map[int]chan model.Update{},
+		files:      map[model.Location]fileList{},
 	}
-	ps, err := project.List()
+	ps, err := workspace.List()
 	if err != nil {
 		return nil, err
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for _, p := range ps {
-		pr := &proj{p: p, threads: map[string]*thread{}}
-		h.projects[p.Name] = pr
-		ts, err := project.Threads(p.Name)
+		if p.Deleted {
+			continue
+		}
+		ws := &space{p: p, threads: map[string]*thread{}}
+		h.workspaces[p.Name] = ws
+		ts, err := workspace.Threads(p.Name)
 		if err != nil {
 			return nil, err
 		}
 		for _, t := range ts {
 			th := &thread{t: t}
-			pr.threads[t.Name] = th
+			ws.threads[t.Name] = th
 			h.tokens[t.Token] = ident{p.Name, t.Name}
 			if len(t.InFlight) > 0 {
 				// The hub died with this turn running, and its claude process
 				// died with it. Say so instead of pretending it finished.
 				t.InFlight = nil
-				h.event(pr, th, model.Event{Kind: model.EventError,
+				h.event(ws, th, model.Event{Kind: model.EventError,
 					Text: "The hub stopped during this turn, so it was lost. Send the message again to retry."})
 			}
 			th.state = th.derive()
-			_ = project.SaveThread(p.Name, t)
+			_ = workspace.SaveThread(p.Name, t)
 		}
 	}
-	for _, pr := range h.projects {
-		for _, th := range pr.threads {
-			h.kick(pr, th)
+	for _, ws := range h.workspaces {
+		for _, th := range ws.threads {
+			h.kick(ws, th)
+			h.readBranch(ws, th)
 		}
 	}
 	return h, nil
@@ -165,11 +208,11 @@ func (h *Hub) Close() {
 	h.wg.Wait()
 }
 
-// --- projects ---
+// --- workspaces ---
 
-// CreateProject creates a project and its coordinator. pin is an optional
+// CreateWorkspace creates a workspace and its coordinator. pin is an optional
 // local folder.
-func (h *Hub) CreateProject(name, pin string) error {
+func (h *Hub) CreateWorkspace(name, pin string) error {
 	if pin != "" {
 		abs, err := filepath.Abs(expandHome(pin))
 		if err != nil {
@@ -182,75 +225,229 @@ func (h *Hub) CreateProject(name, pin string) error {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if _, ok := h.projects[name]; ok {
-		return fmt.Errorf("project %q already exists", name)
+	if _, ok := h.workspaces[name]; ok {
+		return fmt.Errorf("workspace %q already exists", name)
 	}
-	p := project.Project{Name: name, Pin: pin, CreatedAt: time.Now().UTC()}
-	if err := project.Create(p); err != nil {
+	if _, err := os.Stat(workspace.Dir(name)); err == nil {
+		return fmt.Errorf("a deleted workspace %q still keeps its data in %s; choose another name", name, workspace.Dir(name))
+	}
+	p := workspace.Workspace{Name: name, Pin: pin, CreatedAt: time.Now().UTC()}
+	if err := workspace.Create(p); err != nil {
 		return err
 	}
-	pr := &proj{p: p, threads: map[string]*thread{}}
-	h.projects[name] = pr
+	ws := &space{p: p, threads: map[string]*thread{}}
+	h.workspaces[name] = ws
 
 	dir := pin
 	if dir == "" {
-		// An unpinned project still needs somewhere for its coordinator to
+		// An unpinned workspace still needs somewhere for its coordinator to
 		// stand; its own folder is the one place that certainly exists.
-		dir = filepath.Join(project.Dir(name), "workspace")
+		dir = filepath.Join(workspace.Dir(name), "workspace")
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}
 	}
-	if _, err := h.addThread(pr, model.Coordinator, model.RoleCoordinator, model.Location{Dir: dir}); err != nil {
+	if _, err := h.addThread(ws, model.Coordinator, model.RoleCoordinator, model.Location{Dir: dir}); err != nil {
 		return err
 	}
-	h.publishProject(pr)
+	h.publishWorkspace(ws)
 	return nil
 }
 
-// Projects lists every project with a summary.
-func (h *Hub) Projects() []model.ProjectView {
+// SetFolder changes the folder a workspace is pinned to. The coordinator
+// moves there and keeps its conversation: Claude finds a session from any
+// folder. Open threads stay where they are; new ones open in the new folder.
+func (h *Hub) SetFolder(name, dir string) error {
+	abs, err := filepath.Abs(expandHome(dir))
+	if err != nil {
+		return err
+	}
+	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
+		return fmt.Errorf("%s is not a folder", abs)
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	out := make([]model.ProjectView, 0, len(h.projects))
-	for _, pr := range h.projects {
-		out = append(out, h.summary(pr))
+	ws, err := h.workspace(name)
+	if err != nil {
+		return err
 	}
-	slices.SortFunc(out, func(a, b model.ProjectView) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	p := ws.p
+	p.Pin = abs
+	if err := workspace.Save(p); err != nil {
+		return err
+	}
+	ws.p = p
+	if th, ok := ws.threads[model.Coordinator]; ok {
+		th.t.Location = model.Location{Dir: abs}
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Folder changed to " + abs + ". New threads open there; open threads stay where they are."})
+		h.changed(ws, th)
+		h.readBranch(ws, th)
+	}
+	h.publishWorkspace(ws)
+	return nil
+}
+
+// DeleteWorkspace hides a workspace and stops its turns. Its data stays on
+// disk, marked deleted.
+func (h *Hub) DeleteWorkspace(name string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, err := h.workspace(name)
+	if err != nil {
+		return err
+	}
+	p := ws.p
+	p.Deleted = true
+	if err := workspace.Save(p); err != nil {
+		return err
+	}
+	for _, th := range ws.threads {
+		// Stops a turn that is still unwinding from writing to a workspace
+		// that is gone.
+		th.deleted = true
+		if th.cancel != nil {
+			th.cancel()
+		}
+		h.denyAll(th, "the workspace was deleted")
+		delete(h.tokens, th.t.Token)
+	}
+	delete(h.workspaces, name)
+	h.publish(model.Update{Kind: model.UpdateDeleted, Workspace: name})
+	return nil
+}
+
+// Workspaces lists every workspace with a summary.
+func (h *Hub) Workspaces() []model.WorkspaceView {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make([]model.WorkspaceView, 0, len(h.workspaces))
+	for _, ws := range h.workspaces {
+		out = append(out, h.summary(ws))
+	}
+	slices.SortFunc(out, func(a, b model.WorkspaceView) int { return a.CreatedAt.Compare(b.CreatedAt) })
 	return out
 }
 
-// Threads lists a project's threads: the coordinator first, then by age.
-func (h *Hub) Threads(projectName string) ([]model.ThreadView, error) {
+// Threads lists a workspace's threads: the coordinator first, then by age.
+func (h *Hub) Threads(workspaceName string) ([]model.ThreadView, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	pr, err := h.project(projectName)
+	ws, err := h.workspace(workspaceName)
 	if err != nil {
 		return nil, err
 	}
-	return h.views(pr), nil
+	return h.views(ws), nil
 }
 
 // Events returns the last n transcript events of a thread.
-func (h *Hub) Events(projectName, threadName string, n int) ([]model.Event, error) {
+func (h *Hub) Events(workspaceName, threadName string, n int) ([]model.Event, error) {
 	h.mu.Lock()
-	_, _, err := h.lookup(projectName, threadName)
+	_, _, err := h.lookup(workspaceName, threadName)
 	h.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	return project.Events(projectName, threadName, n)
+	return workspace.Events(workspaceName, threadName, n)
+}
+
+// Completions lists what the prompt of a thread can complete. The commands
+// are the ones the thread's last turn reported; before its first turn, those
+// of another thread in the same folder, else on the same host, because a
+// different machine has different plugins and skills.
+func (h *Hub) Completions(workspaceName, threadName string) (model.Completions, error) {
+	h.mu.Lock()
+	ws, th, err := h.lookup(workspaceName, threadName)
+	if err != nil {
+		h.mu.Unlock()
+		return model.Completions{}, err
+	}
+	c := model.Completions{Commands: th.t.Commands, Threads: []string{}}
+	loc := th.t.Location
+	if len(c.Commands) == 0 {
+		c.Commands = h.commandsNear(loc)
+	}
+	for _, v := range h.views(ws) {
+		if v.Name != threadName {
+			c.Threads = append(c.Threads, v.Name)
+		}
+	}
+	h.mu.Unlock()
+	c.Files = h.listFiles(loc)
+	if c.Commands == nil {
+		c.Commands = []string{}
+	}
+	return c, nil
+}
+
+func (h *Hub) commandsNear(loc model.Location) []string {
+	var sameHost []string
+	for _, ws := range h.workspaces {
+		for _, th := range ws.threads {
+			t := th.t
+			switch {
+			case len(t.Commands) == 0 || t.Location.Host != loc.Host:
+			case t.Location == loc:
+				return t.Commands
+			case sameHost == nil:
+				sameHost = t.Commands
+			}
+		}
+	}
+	return sameHost
+}
+
+// listFiles returns a location's files, cached for filesTTL. A failure is
+// cached too and shows as no files: one unreachable host must not cost an ssh
+// timeout on every Insert.
+func (h *Hub) listFiles(loc model.Location) []string {
+	if h.cfg.Files == nil {
+		return []string{}
+	}
+	h.filesMu.Lock()
+	defer h.filesMu.Unlock()
+	if f, ok := h.files[loc]; ok && time.Since(f.at) < filesTTL {
+		return f.paths
+	}
+	ctx, cancel := context.WithTimeout(h.ctx, 10*time.Second)
+	defer cancel()
+	paths, err := h.cfg.Files(ctx, loc)
+	if err != nil || paths == nil {
+		paths = []string{}
+	}
+	h.files[loc] = fileList{at: time.Now(), paths: paths}
+	return paths
+}
+
+// ReadThread returns the last tail events of a thread, only those that
+// contain query when it is not empty. The caller must say how much it wants:
+// a whole transcript can be larger than its context.
+func (h *Hub) ReadThread(workspaceName, name string, tail int, query string) ([]model.Event, error) {
+	if tail < 1 || tail > MaxReadTail {
+		return nil, fmt.Errorf("tail must be from 1 to %d", MaxReadTail)
+	}
+	if query == "" {
+		return h.Events(workspaceName, name, tail)
+	}
+	evs, err := h.Events(workspaceName, name, 0)
+	if err != nil {
+		return nil, err
+	}
+	q := strings.ToLower(query)
+	evs = slices.DeleteFunc(evs, func(e model.Event) bool {
+		return !strings.Contains(strings.ToLower(e.From+" "+e.Tool+" "+e.Detail+" "+e.Text), q)
+	})
+	return evs[max(len(evs)-tail, 0):], nil
 }
 
 // --- threads ---
 
 // OpenThread creates a thread and, if brief is not empty, sends it as the
 // first message. by is the user or the coordinator. loc is "host:dir", a
-// local folder, or empty for the project folder.
-func (h *Hub) OpenThread(projectName, by, name, brief, loc string) error {
+// local folder, or empty for the workspace folder.
+func (h *Hub) OpenThread(workspaceName, by, name, brief, loc string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	pr, err := h.project(projectName)
+	ws, err := h.workspace(workspaceName)
 	if err != nil {
 		return err
 	}
@@ -260,15 +457,15 @@ func (h *Hub) OpenThread(projectName, by, name, brief, loc string) error {
 	if name == model.Coordinator || name == model.User {
 		return fmt.Errorf("%q is reserved", name)
 	}
-	if _, ok := pr.threads[name]; ok {
-		return fmt.Errorf("thread %q already exists in %s; choose another name", name, projectName)
+	if _, ok := ws.threads[name]; ok {
+		return fmt.Errorf("thread %q already exists in %s; choose another name", name, workspaceName)
 	}
 	var l model.Location
 	if strings.TrimSpace(loc) == "" {
-		if pr.p.Pin == "" {
-			return fmt.Errorf("project %s is not pinned to a folder; give a location (a folder or host:dir)", projectName)
+		if ws.p.Pin == "" {
+			return fmt.Errorf("workspace %s is not pinned to a folder; give a location (a folder or host:dir)", workspaceName)
 		}
-		l = model.Location{Dir: pr.p.Pin}
+		l = model.Location{Dir: ws.p.Pin}
 	} else if l, err = model.ParseLocation(loc); err != nil {
 		return err
 	}
@@ -282,81 +479,218 @@ func (h *Hub) OpenThread(projectName, by, name, brief, loc string) error {
 		}
 		l.Dir = abs
 	}
-	th, err := h.addThread(pr, name, model.RoleThread, l)
+	th, err := h.addThread(ws, name, model.RoleThread, l)
 	if err != nil {
 		return err
 	}
-	h.event(pr, th, model.Event{Kind: model.EventNote, Text: "Opened by " + by + " in " + l.String()})
+	h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Opened by " + by + " in " + l.String()})
 	if strings.TrimSpace(brief) != "" {
-		h.enqueue(pr, th, by, brief)
+		h.enqueue(ws, th, by, brief)
 	}
 	return nil
 }
 
-func (h *Hub) addThread(pr *proj, name string, role model.Role, l model.Location) (*thread, error) {
+func (h *Hub) addThread(ws *space, name string, role model.Role, l model.Location) (*thread, error) {
 	now := time.Now().UTC()
-	t := &project.Thread{
+	t := &workspace.Thread{
 		Name:      name,
 		Role:      role,
 		Location:  l,
-		SessionID: project.NewID(),
-		Token:     project.NewToken(),
-		Queue:     []project.Message{},
+		SessionID: workspace.NewID(),
+		Token:     workspace.NewToken(),
+		Queue:     []workspace.Message{},
 		Since:     now,
 		CreatedAt: now,
 	}
-	if err := project.SaveThread(pr.p.Name, t); err != nil {
+	if err := workspace.SaveThread(ws.p.Name, t); err != nil {
 		return nil, err
 	}
 	th := &thread{t: t, state: model.StateIdle}
-	pr.threads[name] = th
-	h.tokens[t.Token] = ident{pr.p.Name, name}
-	h.changed(pr, th)
+	ws.threads[name] = th
+	h.tokens[t.Token] = ident{ws.p.Name, name}
+	h.changed(ws, th)
+	h.readBranch(ws, th)
 	return th, nil
 }
 
 // Send queues a message for a thread. from is model.User, the coordinator, or
 // another thread's name. A message from the user also answers any question the
 // thread asked and lifts a loop-guard pause.
-func (h *Hub) Send(projectName, from, to, text string) error {
-	if strings.TrimSpace(text) == "" {
-		return errors.New("empty message")
-	}
+func (h *Hub) Send(workspaceName, from, to, text string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	pr, th, err := h.lookup(projectName, to)
+	_, err := h.send(workspaceName, from, to, text)
+	return err
+}
+
+// SendNow sends a message from the user and stops the running turn, so the
+// message starts the next turn at once. Claude keeps the work of the stopped
+// turn in its session.
+func (h *Hub) SendNow(workspaceName, to, text string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	th, err := h.send(workspaceName, model.User, to, text)
 	if err != nil {
 		return err
 	}
-	if from == to {
-		return errors.New("a thread cannot message itself")
+	if th.busy && th.cancel != nil {
+		th.interrupted = true
+		th.cancel()
 	}
-	if th.t.Resolved {
-		return fmt.Errorf("thread %q is resolved; reopen it first", to)
-	}
-	h.enqueue(pr, th, from, text)
 	return nil
 }
 
-func (h *Hub) enqueue(pr *proj, th *thread, from, text string) {
+func (h *Hub) send(workspaceName, from, to, text string) (*thread, error) {
+	if strings.TrimSpace(text) == "" {
+		return nil, errors.New("empty message")
+	}
+	ws, th, err := h.lookup(workspaceName, to)
+	if err != nil {
+		return nil, err
+	}
+	if from == to {
+		return nil, errors.New("a thread cannot message itself")
+	}
+	if th.t.Resolved {
+		return nil, fmt.Errorf("thread %q is resolved; reopen it first", to)
+	}
+	if from == model.User {
+		if done, err := h.command(ws, th, text); done {
+			return th, err
+		}
+	}
+	h.enqueue(ws, th, from, text)
+	return th, nil
+}
+
+// efforts are the levels `claude --effort` takes.
+var efforts = []string{"low", "medium", "high", "xhigh", "max"}
+
+// command runs the slash commands that do not work under --print: each turn
+// is a new process, so /model and /effort last one turn, and /clear and
+// /compact do nothing. It reports whether text was one of them.
+func (h *Hub) command(ws *space, th *thread, text string) (bool, error) {
+	f := strings.Fields(text)
+	if len(f) == 0 {
+		return false, nil
+	}
+	t := th.t
+	switch {
+	case f[0] == "/clear" && len(f) == 1:
+		return true, h.clear(ws, th)
+	case f[0] == "/model" && len(f) == 2:
+		t.ModelChoice = f[1]
+		if f[1] == "default" {
+			t.ModelChoice = ""
+		}
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Model " + f[1] + " from the next turn."})
+	case f[0] == "/effort" && len(f) == 2:
+		if f[1] != "default" && !slices.Contains(efforts, f[1]) {
+			return true, fmt.Errorf("effort is one of %s, or default", strings.Join(efforts, ", "))
+		}
+		t.Effort = f[1]
+		if f[1] == "default" {
+			t.Effort = ""
+		}
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Effort " + f[1] + " from the next turn."})
+	case strings.HasPrefix(text, "!"):
+		return true, h.shell(ws, th, strings.TrimSpace(text[1:]))
+	case f[0] == "/compact":
+		if !t.Started {
+			return true, errors.New("nothing to compact yet")
+		}
+		focus := strings.Join(f[1:], " ")
+		t.AgentTurns, t.Paused, t.Asking = 0, false, ""
+		t.Queue = append(t.Queue, workspace.Message{From: model.User, Text: focus, At: time.Now().UTC(), Compact: true})
+		h.event(ws, th, model.Event{Kind: model.EventMessage, From: model.User, Text: strings.TrimSpace(text)})
+		h.changed(ws, th)
+		h.kick(ws, th)
+		return true, nil
+	default:
+		return false, nil
+	}
+	h.changed(ws, th)
+	return true, nil
+}
+
+// shellTimeout stops a `!` command that runs too long.
+const shellTimeout = 10 * time.Minute
+
+// shellLimit is how much of a `!` command's output is kept, from the end.
+const shellLimit = 30000
+
+// shell runs a `!` command, like Claude Code's shell mode: the output shows
+// in the transcript and goes to Claude with the next message. It starts no
+// turn. Claude's own `!` does not work under --print.
+func (h *Hub) shell(ws *space, th *thread, command string) error {
+	if command == "" {
+		return errors.New("write a command after !")
+	}
+	if h.cfg.Shell == nil {
+		return errors.New("! commands are not available")
+	}
+	id := strconv.FormatInt(time.Now().UnixNano(), 36)
+	h.event(ws, th, model.Event{Kind: model.EventShell, ID: id, Detail: command})
+	loc := th.t.Location
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		ctx, cancel := context.WithTimeout(h.ctx, shellTimeout)
+		defer cancel()
+		out, exit, err := h.cfg.Shell(ctx, loc, command)
+		if err != nil {
+			out, exit = strings.TrimSpace(out+"\n"+err.Error()), -1
+		}
+		if len(out) > shellLimit {
+			out = "…" + out[len(out)-shellLimit:]
+		}
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		if th.deleted {
+			return
+		}
+		h.event(ws, th, model.Event{Kind: model.EventShell, ID: id, Detail: command, Text: out, Exit: exit})
+		th.t.Shell = append(th.t.Shell, prompts.Shell(command, out, exit))
+		h.changed(ws, th)
+	}()
+	return nil
+}
+
+// clear gives a thread a new Claude session. Claude's own /clear does nothing
+// under --print: the next turn resumes the same session, so the hub does it.
+func (h *Hub) clear(ws *space, th *thread) error {
+	if th.busy {
+		return errors.New("a turn is running; /clear when it ends")
+	}
+	t := th.t
+	t.SessionID, t.Started = workspace.NewID(), false
+	t.Context, t.Summary = 0, ""
+	t.Queue = []workspace.Message{}
+	t.Asking, t.Paused, t.AgentTurns = "", false, 0
+	h.event(ws, th, model.Event{Kind: model.EventClear, Text: "Cleared. The next message starts a new conversation."})
+	h.changed(ws, th)
+	return nil
+}
+
+func (h *Hub) enqueue(ws *space, th *thread, from, text string) {
 	t := th.t
 	if from == model.User {
 		t.AgentTurns = 0
 		t.Paused = false
 		t.Asking = ""
 	}
-	t.Queue = append(t.Queue, project.Message{From: from, Text: text, At: time.Now().UTC()})
-	h.event(pr, th, model.Event{Kind: model.EventMessage, From: from, Text: text})
-	h.changed(pr, th)
-	h.kick(pr, th)
+	t.Queue = append(t.Queue, workspace.Message{From: from, Text: text, At: time.Now().UTC()})
+	h.event(ws, th, model.Event{Kind: model.EventMessage, From: from, Text: text})
+	h.changed(ws, th)
+	h.kick(ws, th)
 }
 
 // Resolve closes a thread. A running turn is cancelled and queued messages
 // are dropped. The coordinator cannot be resolved.
-func (h *Hub) Resolve(projectName, by, name string) error {
+func (h *Hub) Resolve(workspaceName, by, name string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	pr, th, err := h.lookup(projectName, name)
+	ws, th, err := h.lookup(workspaceName, name)
 	if err != nil {
 		return err
 	}
@@ -368,24 +702,52 @@ func (h *Hub) Resolve(projectName, by, name string) error {
 	}
 	t := th.t
 	t.Resolved = true
-	t.Queue = []project.Message{}
+	t.Queue = []workspace.Message{}
 	t.Asking = ""
 	t.Paused = false
 	if th.cancel != nil {
 		th.cancel()
 	}
 	h.denyAll(th, "the thread was resolved")
-	h.event(pr, th, model.Event{Kind: model.EventNote, Text: "Resolved by " + by})
-	h.changed(pr, th)
+	h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Resolved by " + by})
+	h.changed(ws, th)
+	return nil
+}
+
+// Delete removes a thread and its transcript for good. A running turn is
+// stopped. The coordinator cannot be deleted.
+func (h *Hub) Delete(workspaceName, name string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	if th.t.Role == model.RoleCoordinator {
+		return errors.New("the coordinator cannot be deleted")
+	}
+	th.deleted = true
+	th.t.Queue = nil
+	if th.cancel != nil {
+		th.cancel()
+	}
+	h.denyAll(th, "the thread was deleted")
+	delete(ws.threads, name)
+	delete(h.tokens, th.t.Token)
+	if err := workspace.DeleteThread(workspaceName, name); err != nil {
+		return err
+	}
+	h.publish(model.Update{Kind: model.UpdateDeleted, Workspace: workspaceName, Thread: name})
+	h.publishWorkspace(ws)
 	return nil
 }
 
 // Reopen brings a resolved thread back. It keeps its Claude session, so it
 // remembers everything before it was resolved.
-func (h *Hub) Reopen(projectName, name string) error {
+func (h *Hub) Reopen(workspaceName, name string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	pr, th, err := h.lookup(projectName, name)
+	ws, th, err := h.lookup(workspaceName, name)
 	if err != nil {
 		return err
 	}
@@ -394,39 +756,39 @@ func (h *Hub) Reopen(projectName, name string) error {
 	}
 	th.t.Resolved = false
 	th.t.AgentTurns = 0
-	h.event(pr, th, model.Event{Kind: model.EventNote, Text: "Reopened"})
-	h.changed(pr, th)
+	h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Reopened"})
+	h.changed(ws, th)
 	return nil
 }
 
 // ReportProgress sets a thread's progress line.
-func (h *Hub) ReportProgress(projectName, name, summary string) error {
+func (h *Hub) ReportProgress(workspaceName, name, summary string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	pr, th, err := h.lookup(projectName, name)
+	ws, th, err := h.lookup(workspaceName, name)
 	if err != nil {
 		return err
 	}
 	summary = strings.TrimSpace(summary)
 	th.t.Progress = summary
 	th.t.ProgressAt = time.Now().UTC()
-	h.event(pr, th, model.Event{Kind: model.EventProgress, Text: summary})
-	h.changed(pr, th)
+	h.event(ws, th, model.Event{Kind: model.EventProgress, Text: summary})
+	h.changed(ws, th)
 	return nil
 }
 
 // AskUser posts a question to the user. The thread waits until the user
 // writes to it.
-func (h *Hub) AskUser(projectName, name, question string) error {
+func (h *Hub) AskUser(workspaceName, name, question string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	pr, th, err := h.lookup(projectName, name)
+	ws, th, err := h.lookup(workspaceName, name)
 	if err != nil {
 		return err
 	}
 	th.t.Asking = strings.TrimSpace(question)
-	h.event(pr, th, model.Event{Kind: model.EventAsk, Text: th.t.Asking})
-	h.changed(pr, th)
+	h.event(ws, th, model.Event{Kind: model.EventAsk, Text: th.t.Asking})
+	h.changed(ws, th)
 	return nil
 }
 
@@ -438,20 +800,20 @@ func (h *Hub) Identify(token string) (Identity, bool) {
 	if !ok {
 		return Identity{}, false
 	}
-	pr := h.projects[id.project]
-	th := pr.threads[id.thread]
-	return Identity{Project: id.project, Thread: id.thread, Role: th.t.Role}, true
+	ws := h.workspaces[id.workspace]
+	th := ws.threads[id.thread]
+	return Identity{Workspace: id.workspace, Thread: id.thread, Role: th.t.Role}, true
 }
 
 // Whoami describes a thread to itself.
-func (h *Hub) Whoami(projectName, name string) (model.ThreadView, error) {
+func (h *Hub) Whoami(workspaceName, name string) (model.ThreadView, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	pr, th, err := h.lookup(projectName, name)
+	ws, th, err := h.lookup(workspaceName, name)
 	if err != nil {
 		return model.ThreadView{}, err
 	}
-	return h.view(pr, th), nil
+	return h.view(ws, th), nil
 }
 
 // --- permissions ---
@@ -459,9 +821,9 @@ func (h *Hub) Whoami(projectName, name string) (model.ThreadView, error) {
 // Permission blocks until the user answers a permission request, or a rule
 // answers it, or the turn ends. It returns whether the call may go ahead and,
 // for a denial, the user's reason.
-func (h *Hub) Permission(ctx context.Context, projectName, name, tool string, input json.RawMessage) (bool, string) {
+func (h *Hub) Permission(ctx context.Context, workspaceName, name, tool string, input json.RawMessage) (bool, string) {
 	h.mu.Lock()
-	pr, th, err := h.lookup(projectName, name)
+	ws, th, err := h.lookup(workspaceName, name)
 	if err != nil {
 		h.mu.Unlock()
 		return false, err.Error()
@@ -487,8 +849,8 @@ func (h *Hub) Permission(ctx context.Context, projectName, name, tool string, in
 		done:       make(chan model.Decision, 1),
 	}
 	th.perms = append(th.perms, p)
-	h.event(pr, th, model.Event{Kind: model.EventPermission, ID: p.ID, Tool: tool, Detail: detail})
-	h.changed(pr, th)
+	h.event(ws, th, model.Event{Kind: model.EventPermission, ID: p.ID, Tool: tool, Detail: detail})
+	h.changed(ws, th)
 	h.mu.Unlock()
 
 	var d model.Decision
@@ -497,7 +859,7 @@ func (h *Hub) Permission(ctx context.Context, projectName, name, tool string, in
 	case <-ctx.Done():
 		d = model.Deny
 		h.mu.Lock()
-		h.dropPerm(pr, th, p.ID)
+		h.dropPerm(ws, th, p.ID)
 		h.mu.Unlock()
 	case <-h.ctx.Done():
 		return false, "neoharness is shutting down"
@@ -506,10 +868,10 @@ func (h *Hub) Permission(ctx context.Context, projectName, name, tool string, in
 }
 
 // Answer resolves a pending permission request.
-func (h *Hub) Answer(projectName, name, id string, d model.Decision, msg string) error {
+func (h *Hub) Answer(workspaceName, name, id string, d model.Decision, msg string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	pr, th, err := h.lookup(projectName, name)
+	ws, th, err := h.lookup(workspaceName, name)
 	if err != nil {
 		return err
 	}
@@ -526,22 +888,22 @@ func (h *Hub) Answer(projectName, name, id string, d model.Decision, msg string)
 		return fmt.Errorf("no pending permission %q on %s", id, name)
 	}
 	if d == model.Always {
-		th.t.Rules = append(th.t.Rules, project.Rule{Tool: p.Tool, Prefix: p.prefix})
+		th.t.Rules = append(th.t.Rules, workspace.Rule{Tool: p.Tool, Prefix: p.prefix})
 	}
 	p.msg = msg
 	text := string(d)
 	if msg != "" {
 		text += ": " + msg
 	}
-	h.event(pr, th, model.Event{Kind: model.EventAnswer, ID: p.ID, Tool: p.Tool, Text: text})
-	h.dropPerm(pr, th, p.ID)
+	h.event(ws, th, model.Event{Kind: model.EventAnswer, ID: p.ID, Tool: p.Tool, Text: text})
+	h.dropPerm(ws, th, p.ID)
 	p.done <- d
 	return nil
 }
 
-func (h *Hub) dropPerm(pr *proj, th *thread, id string) {
+func (h *Hub) dropPerm(ws *space, th *thread, id string) {
 	th.perms = slices.DeleteFunc(th.perms, func(p *pending) bool { return p.ID == id })
-	h.changed(pr, th)
+	h.changed(ws, th)
 }
 
 func (h *Hub) denyAll(th *thread, why string) {
@@ -555,24 +917,31 @@ func (h *Hub) denyAll(th *thread, why string) {
 // --- turns ---
 
 // kick starts a turn if the thread has work and nothing stops it.
-func (h *Hub) kick(pr *proj, th *thread) {
+func (h *Hub) kick(ws *space, th *thread) {
 	t := th.t
 	if th.busy || t.Resolved || t.Paused || len(t.Queue) == 0 {
 		return
 	}
-	fromUser := slices.ContainsFunc(t.Queue, func(m project.Message) bool { return m.From == model.User })
+	fromUser := slices.ContainsFunc(t.Queue, func(m workspace.Message) bool { return m.From == model.User })
 	if !fromUser && t.AgentTurns >= h.cfg.MaxAgentTurns {
 		t.Paused = true
-		h.event(pr, th, model.Event{Kind: model.EventNote,
+		h.event(ws, th, model.Event{Kind: model.EventNote,
 			Text: fmt.Sprintf("Paused after %d turns without your input. Write to continue.", t.AgentTurns)})
-		h.changed(pr, th)
+		h.changed(ws, th)
 		return
 	}
 	if !fromUser {
 		t.AgentTurns++
 	}
-	batch := t.Queue
-	t.Queue = []project.Message{}
+	// A /compact request is a turn of its own.
+	n := len(t.Queue)
+	if t.Queue[0].Compact {
+		n = 1
+	} else if i := slices.IndexFunc(t.Queue, func(m workspace.Message) bool { return m.Compact }); i > 0 {
+		n = i
+	}
+	batch := t.Queue[:n:n]
+	t.Queue = append([]workspace.Message{}, t.Queue[n:]...)
 	t.InFlight = batch
 	now := time.Now().UTC()
 	t.Turns = append(slices.DeleteFunc(t.Turns, func(at time.Time) bool { return now.Sub(at) > 24*time.Hour }), now)
@@ -580,12 +949,26 @@ func (h *Hub) kick(pr *proj, th *thread) {
 	ctx, cancel := context.WithTimeout(h.ctx, h.cfg.TurnTimeout)
 	th.busy = true
 	th.started = false
+	th.interrupted = false
 	th.cancel = cancel
-	h.changed(pr, th)
+	h.changed(ws, th)
 
+	prompt := compose(batch, ws.threads)
+	switch {
+	case batch[0].Compact:
+		prompt = prompts.Compact(batch[0].Text)
+	case t.Summary != "":
+		prompt = prompts.Compacted(t.Summary) + "\n\n---\n\n" + prompt
+	}
+	if len(t.Shell) > 0 && !batch[0].Compact {
+		prompt = strings.Join(t.Shell, "\n\n") + "\n\n---\n\n" + prompt
+		t.Shell = nil
+	}
 	req := agent.Request{
-		Prompt:               compose(batch),
-		SystemPrompt:         h.systemPrompt(pr, th),
+		Prompt:               prompt,
+		Model:                t.ModelChoice,
+		Effort:               t.Effort,
+		SystemPrompt:         h.systemPrompt(ws, th),
 		Conversation:         t.SessionID,
 		Resume:               t.Started,
 		MCPConfig:            h.mcpConfig(t.Token),
@@ -595,22 +978,24 @@ func (h *Hub) kick(pr *proj, th *thread) {
 	if !t.Location.Remote() {
 		req.Cwd = t.Location.Dir
 	}
-	req.OnEvent = func(e agent.Event) { h.onAgentEvent(pr, th, e) }
-	ag := h.cfg.Factory(pr.p, *t)
+	req.OnEvent = func(e agent.Event) { h.onAgentEvent(ws, th, e) }
+	ag := h.cfg.Factory(ws.p, *t)
 
 	h.wg.Add(1)
 	go func() {
 		defer h.wg.Done()
 		defer cancel()
 		res, err := ag.Run(ctx, req)
-		h.endTurn(pr, th, ctx, res, err)
+		h.endTurn(ws, th, ctx, res, err)
 	}()
 }
 
-func (h *Hub) endTurn(pr *proj, th *thread, ctx context.Context, res agent.Result, err error) {
+func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Result, err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	t := th.t
+	compact := len(t.InFlight) > 0 && t.InFlight[0].Compact
+	batch := t.InFlight
 	th.busy = false
 	th.cancel = nil
 	t.InFlight = nil
@@ -618,45 +1003,98 @@ func (h *Hub) endTurn(pr *proj, th *thread, ctx context.Context, res agent.Resul
 	if th.started {
 		t.Started = true
 	}
+	if len(res.Commands) > 0 {
+		t.Commands = res.Commands
+	}
+	if res.Model != "" {
+		t.Model = res.Model
+	}
+	if res.Context > 0 {
+		t.Context, t.ContextWindow = res.Context, res.ContextWindow
+	}
+	// A failed turn was still paid for.
+	t.Cost += res.Cost
+	h.readBranch(ws, th)
 	switch {
 	case h.ctx.Err() != nil:
 		// Shutting down. The next start reports nothing lost, because nothing
 		// is in flight on disk any more; say it here while we still can.
-		h.event(pr, th, model.Event{Kind: model.EventError, Text: "neoharness stopped during this turn"})
+		h.event(ws, th, model.Event{Kind: model.EventError, Text: "neoharness stopped during this turn"})
 	case t.Resolved:
 		// Cancelled by Resolve; the note already says so.
+	case th.interrupted:
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Interrupted."})
+		// Claude never saw these messages, so they go again with the new one.
+		if !th.started {
+			t.Queue = append(batch, t.Queue...)
+		}
 	case ctx.Err() == context.DeadlineExceeded:
-		h.event(pr, th, model.Event{Kind: model.EventError, Text: fmt.Sprintf("the turn ran past %s and was stopped", h.cfg.TurnTimeout)})
+		h.event(ws, th, model.Event{Kind: model.EventError, Text: fmt.Sprintf("the turn ran past %s and was stopped", h.cfg.TurnTimeout)})
 	case err != nil:
-		h.event(pr, th, model.Event{Kind: model.EventError, Text: err.Error()})
+		h.event(ws, th, model.Event{Kind: model.EventError, Text: err.Error()})
 	case res.ExitCode != 0:
-		h.event(pr, th, model.Event{Kind: model.EventError, Text: "claude failed: " + lastLine(res.Stderr, res.Text)})
+		h.event(ws, th, model.Event{Kind: model.EventError, Text: "claude failed: " + lastLine(res.Stderr, res.Text)})
 	default:
 		t.Started = true
-		h.event(pr, th, model.Event{Kind: model.EventTurnEnd, Tools: res.Tools, Tokens: res.Tokens})
+		h.event(ws, th, model.Event{Kind: model.EventTurnEnd, Tools: res.Tools, Tokens: res.Tokens})
+		switch {
+		case compact && strings.TrimSpace(res.Text) == "":
+			h.event(ws, th, model.Event{Kind: model.EventError, Text: "/compact got no summary; the conversation is unchanged"})
+		case compact:
+			t.Summary = strings.TrimSpace(res.Text)
+			t.SessionID, t.Started, t.Context = workspace.NewID(), false, 0
+			h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Compacted. The next message starts a new conversation from the summary above."})
+		default:
+			t.Summary = ""
+		}
 	}
-	h.changed(pr, th)
+	h.changed(ws, th)
 	if h.ctx.Err() == nil {
-		h.kick(pr, th)
+		h.kick(ws, th)
 	}
 }
 
-func (h *Hub) onAgentEvent(pr *proj, th *thread, e agent.Event) {
+func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	th.started = true
 	switch e.Kind {
 	case agent.KindToolStart:
-		h.event(pr, th, model.Event{Kind: model.EventTool, Tool: e.Tool, Detail: e.Detail})
+		h.event(ws, th, model.Event{Kind: model.EventTool, Tool: e.Tool, Detail: e.Detail})
 	case agent.KindAssistantText:
-		h.event(pr, th, model.Event{Kind: model.EventText, Text: e.Text})
+		h.event(ws, th, model.Event{Kind: model.EventText, Text: e.Text})
 	case agent.KindError:
-		h.event(pr, th, model.Event{Kind: model.EventError, Text: e.Text})
+		h.event(ws, th, model.Event{Kind: model.EventError, Text: e.Text})
 	}
 }
 
-func (h *Hub) systemPrompt(pr *proj, th *thread) string {
-	in := prompts.SessionInput{Project: pr.p.Name, Name: th.t.Name, Location: th.t.Location.String()}
+// readBranch reads a thread's git branch in the background: over ssh it is a
+// round trip, and callers hold h.mu.
+func (h *Hub) readBranch(ws *space, th *thread) {
+	if h.cfg.Branch == nil {
+		return
+	}
+	loc := th.t.Location
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		ctx, cancel := context.WithTimeout(h.ctx, 10*time.Second)
+		defer cancel()
+		b, err := h.cfg.Branch(ctx, loc)
+		if err != nil {
+			b = ""
+		}
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		if th.branch != b {
+			th.branch = b
+			h.changed(ws, th)
+		}
+	}()
+}
+
+func (h *Hub) systemPrompt(ws *space, th *thread) string {
+	in := prompts.SessionInput{Workspace: ws.p.Name, Name: th.t.Name, Location: th.t.Location.String()}
 	if th.t.Role == model.RoleCoordinator {
 		return prompts.Coordinator(in)
 	}
@@ -674,17 +1112,32 @@ func (h *Hub) mcpConfig(token string) string {
 }
 
 // compose turns a batch of queued messages into one prompt. Messages from
-// anyone but the user are labelled, so the agent knows who to answer.
-func compose(batch []project.Message) string {
+// anyone but the user are labelled, so the agent knows who to answer. An
+// `@name` of a thread gets a note that says how to read it, not the thread's
+// history: the agent decides how much of it it needs.
+func compose(batch []workspace.Message, threads map[string]*thread) string {
 	parts := make([]string, 0, len(batch))
+	var named []string
 	for _, m := range batch {
 		if m.From == model.User {
 			parts = append(parts, m.Text)
 		} else {
 			parts = append(parts, "Message from "+m.From+":\n"+m.Text)
 		}
+		for _, w := range strings.Fields(m.Text) {
+			// `@api,` at the end of a clause still names api; `@api.go` is a
+			// file, because the whole word must be a thread name.
+			n, ok := strings.CutPrefix(strings.TrimRight(w, ".,;:!?)"), "@")
+			if _, thread := threads[n]; ok && thread && !slices.Contains(named, n) {
+				named = append(named, n)
+			}
+		}
 	}
-	return strings.Join(parts, "\n\n---\n\n")
+	prompt := strings.Join(parts, "\n\n---\n\n")
+	for _, n := range named {
+		prompt += "\n\n@" + n + " is the thread " + n + " in this workspace. Read its transcript with read_thread if you need it."
+	}
+	return prompt
 }
 
 // --- state and updates ---
@@ -709,29 +1162,35 @@ func (th *thread) derive() model.State {
 }
 
 // changed saves a thread and tells subscribers. Callers hold h.mu.
-func (h *Hub) changed(pr *proj, th *thread) {
+func (h *Hub) changed(ws *space, th *thread) {
+	if th.deleted {
+		return
+	}
 	if s := th.derive(); s != th.state {
 		th.state = s
 		th.t.Since = time.Now().UTC()
 	}
-	_ = project.SaveThread(pr.p.Name, th.t)
-	v := h.view(pr, th)
-	h.publish(model.Update{Kind: model.UpdateThread, Project: pr.p.Name, Thread: th.t.Name, View: &v})
-	h.publishProject(pr)
+	_ = workspace.SaveThread(ws.p.Name, th.t)
+	v := h.view(ws, th)
+	h.publish(model.Update{Kind: model.UpdateThread, Workspace: ws.p.Name, Thread: th.t.Name, View: &v})
+	h.publishWorkspace(ws)
 }
 
-func (h *Hub) publishProject(pr *proj) {
-	s := h.summary(pr)
-	h.publish(model.Update{Kind: model.UpdateProject, Project: pr.p.Name, Summary: &s})
+func (h *Hub) publishWorkspace(ws *space) {
+	s := h.summary(ws)
+	h.publish(model.Update{Kind: model.UpdateWorkspace, Workspace: ws.p.Name, Summary: &s})
 }
 
 // event appends to a transcript and tells subscribers. Callers hold h.mu.
-func (h *Hub) event(pr *proj, th *thread, e model.Event) {
+func (h *Hub) event(ws *space, th *thread, e model.Event) {
+	if th.deleted {
+		return
+	}
 	if e.At.IsZero() {
 		e.At = time.Now().UTC()
 	}
-	_ = project.AppendEvent(pr.p.Name, th.t.Name, e)
-	h.publish(model.Update{Kind: model.UpdateEvent, Project: pr.p.Name, Thread: th.t.Name, Event: &e})
+	_ = workspace.AppendEvent(ws.p.Name, th.t.Name, e)
+	h.publish(model.Update{Kind: model.UpdateEvent, Workspace: ws.p.Name, Thread: th.t.Name, Event: &e})
 }
 
 // Subscribe returns a channel of every update from now on. A subscriber that
@@ -765,19 +1224,24 @@ func (h *Hub) publish(u model.Update) {
 	}
 }
 
-func (h *Hub) view(pr *proj, th *thread) model.ThreadView {
+func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 	t := th.t
 	v := model.ThreadView{
-		Project:   pr.p.Name,
-		Name:      t.Name,
-		Role:      t.Role,
-		Location:  t.Location,
-		State:     th.state,
-		Queued:    len(t.Queue),
-		Progress:  t.Progress,
-		Since:     t.Since,
-		UpdatedAt: t.UpdatedAt,
-		CreatedAt: t.CreatedAt,
+		Workspace:     ws.p.Name,
+		Name:          t.Name,
+		Role:          t.Role,
+		Location:      t.Location,
+		State:         th.state,
+		Queued:        len(t.Queue),
+		Progress:      t.Progress,
+		Model:         t.Model,
+		Context:       t.Context,
+		ContextWindow: t.ContextWindow,
+		Cost:          t.Cost,
+		Branch:        th.branch,
+		Since:         t.Since,
+		UpdatedAt:     t.UpdatedAt,
+		CreatedAt:     t.CreatedAt,
 	}
 	switch {
 	case len(th.perms) > 0:
@@ -792,10 +1256,10 @@ func (h *Hub) view(pr *proj, th *thread) model.ThreadView {
 	return v
 }
 
-func (h *Hub) views(pr *proj) []model.ThreadView {
-	out := make([]model.ThreadView, 0, len(pr.threads))
-	for _, th := range pr.threads {
-		out = append(out, h.view(pr, th))
+func (h *Hub) views(ws *space) []model.ThreadView {
+	out := make([]model.ThreadView, 0, len(ws.threads))
+	for _, th := range ws.threads {
+		out = append(out, h.view(ws, th))
 	}
 	slices.SortFunc(out, func(a, b model.ThreadView) int {
 		if (a.Role == model.RoleCoordinator) != (b.Role == model.RoleCoordinator) {
@@ -809,16 +1273,16 @@ func (h *Hub) views(pr *proj) []model.ThreadView {
 	return out
 }
 
-func (h *Hub) summary(pr *proj) model.ProjectView {
-	v := model.ProjectView{
-		Name:      pr.p.Name,
-		Pin:       pr.p.Pin,
-		CreatedAt: pr.p.CreatedAt,
+func (h *Hub) summary(ws *space) model.WorkspaceView {
+	v := model.WorkspaceView{
+		Name:      ws.p.Name,
+		Pin:       ws.p.Pin,
+		CreatedAt: ws.p.CreatedAt,
 		Counts:    map[model.State]int{},
 		Activity:  make([]int, 24),
 	}
 	now := time.Now()
-	for _, th := range pr.threads {
+	for _, th := range ws.threads {
 		if th.t.Role == model.RoleThread {
 			v.Counts[th.state]++
 		}
@@ -831,24 +1295,24 @@ func (h *Hub) summary(pr *proj) model.ProjectView {
 	return v
 }
 
-func (h *Hub) project(name string) (*proj, error) {
-	pr, ok := h.projects[name]
+func (h *Hub) workspace(name string) (*space, error) {
+	ws, ok := h.workspaces[name]
 	if !ok {
-		return nil, fmt.Errorf("no project %q", name)
+		return nil, fmt.Errorf("no workspace %q", name)
 	}
-	return pr, nil
+	return ws, nil
 }
 
-func (h *Hub) lookup(projectName, name string) (*proj, *thread, error) {
-	pr, err := h.project(projectName)
+func (h *Hub) lookup(workspaceName, name string) (*space, *thread, error) {
+	ws, err := h.workspace(workspaceName)
 	if err != nil {
 		return nil, nil, err
 	}
-	th, ok := pr.threads[name]
+	th, ok := ws.threads[name]
 	if !ok {
-		return nil, nil, fmt.Errorf("no thread %q in %s", name, projectName)
+		return nil, nil, fmt.Errorf("no thread %q in %s", name, workspaceName)
 	}
-	return pr, th, nil
+	return ws, th, nil
 }
 
 // --- helpers ---

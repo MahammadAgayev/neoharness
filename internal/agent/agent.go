@@ -70,7 +70,7 @@ type Request struct {
 	// Prompt is the user-role instruction for this turn.
 	Prompt string
 	// SystemPrompt is added to the CLI's own system prompt: who this session
-	// is in the project.
+	// is in the workspace.
 	SystemPrompt string
 	// Cwd is the directory the agent operates on.
 	Cwd string
@@ -87,6 +87,10 @@ type Request struct {
 	PermissionPromptTool string
 	// Env is extra KEY=VALUE pairs for the agent process.
 	Env []string
+	// Model and Effort choose the model and effort level; empty leaves the
+	// CLI's default.
+	Model  string
+	Effort string
 	// OnEvent receives events as they arrive. Called from the adapter's read
 	// goroutine, one at a time, never concurrently. May be nil.
 	OnEvent func(Event)
@@ -106,6 +110,17 @@ type Result struct {
 	// Stderr is captured standard error, for reporting a failure. Trimmed by the
 	// adapter to something loggable.
 	Stderr string
+	// Commands is the slash commands the CLI offers in this session, without
+	// the `/`. Empty when the CLI did not say.
+	Commands []string
+	// Model is the model the session runs, as the CLI names it.
+	Model string
+	// Context is how many tokens the last model call carried, out of
+	// ContextWindow: how full the conversation is.
+	Context       int
+	ContextWindow int
+	// Cost is what this invocation cost in US dollars.
+	Cost float64
 }
 
 // Agent runs one turn and reports what happened.

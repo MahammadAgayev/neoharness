@@ -72,6 +72,14 @@ func (a *App) key(ev *tcell.EventKey) {
 	if k == "" {
 		return
 	}
+	if run := a.confirm; run != nil {
+		a.confirm = nil
+		a.notice = ""
+		if k == "y" {
+			run()
+		}
+		return
+	}
 	switch a.mode {
 	case modeInsert:
 		a.insertKey(k, ev)
@@ -95,8 +103,8 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<Up>":           func(n int) { a.move(w(), -max(n, 1)) },
 		"gg":             func(n int) { a.moveTo(w(), max(n, 1)-1) },
 		"G":              func(n int) { a.goEnd(w(), n) },
-		"<C-d>":          func(int) { a.move(w(), w().textH/2) },
-		"<C-u>":          func(int) { a.move(w(), -w().textH/2) },
+		"<C-d>":          func(int) { a.move(w(), w().textH/2); center(w()) },
+		"<C-u>":          func(int) { a.move(w(), -w().textH/2); center(w()) },
 		"<C-f>":          func(int) { a.move(w(), w().textH) },
 		"<PageDown>":     func(int) { a.move(w(), w().textH) },
 		"<C-b>":          func(int) { a.move(w(), -w().textH) },
@@ -111,7 +119,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"w":              func(n int) { a.word(w(), max(n, 1)) },
 		"b":              func(n int) { a.word(w(), -max(n, 1)) },
 		"zt":             func(int) { w().Top = w().Cur },
-		"zz":             func(int) { w().Top = max(w().Cur-w().textH/2, 0) },
+		"zz":             func(int) { center(w()) },
 		"zb":             func(int) { w().Top = max(w().Cur-w().textH+1, 0) },
 		"za":             func(int) { a.toggleFold(w()) },
 		"]m":             func(n int) { a.nextMsg(w(), max(n, 1)) },
@@ -121,8 +129,8 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<C-^>":          func(int) { a.alternate() },
 		"/":              func(int) { a.startCmd('/') },
 		":":              func(int) { a.startCmd(':') },
-		"n":              func(int) { a.findNext(1) },
-		"N":              func(int) { a.findNext(-1) },
+		"n":              func(int) { a.findNext(1); center(w()) },
+		"N":              func(int) { a.findNext(-1); center(w()) },
 		"yy":             func(int) { a.yankLines(w().Cur, w().Cur) },
 		"y":              func(int) { a.yankVisual() },
 		"v":              func(int) { a.visual('v') },
@@ -155,13 +163,18 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<C-w>=":         func(int) { a.root.equalize() },
 		"<Esc>":          func(int) { a.cur.vmode = 0; a.mode = modeNormal },
 		"<Space><Space>": func(int) { a.pickBuffers() },
-		"<Space>t":       func(int) { a.pickThreads() },
-		"<Space>p":       func(int) { a.pickProjects() },
+		"<Space>t":       func(int) { a.showList() },
+		"<Space>w":       func(int) { a.pickWorkspaces() },
 		"<Space>/":       func(int) { a.pickGrep() },
-		"<Space>w":       func(int) { a.nextWaiting() },
-		"<Space>y":       func(int) { a.answer(model.Allow, "") },
-		"<Space>Y":       func(int) { a.answer(model.Always, "") },
-		"<Space>n":       func(int) { a.answer(model.Deny, "") },
+		"<Space>y":       func(int) { a.yank() },
+		"<Space>Y":       func(int) { a.yank() },
+		"<Space>a":       func(int) { a.answer(model.Allow, "") },
+		"<Space>A":       func(int) { a.answer(model.Always, "") },
+		"<Space>x":       func(int) { a.answer(model.Deny, "") },
+		"<Space>nc":      func(int) { a.toasts = nil },
+		"<Space>nh":      func(int) { a.cur.show(a.messagesBuf) },
+		"<Space>pv":      func(int) { a.loadWorkspaces(); a.showWorkspaces() },
+		"<Space>pc":      func(int) { a.goCoordinator() },
 		"<Space>r":       func(int) { a.insert() },
 		"<Space>e":       func(int) { a.toggleFold(w()) },
 	}
@@ -240,6 +253,9 @@ func (a *App) moveTo(w *Window, i int) {
 
 func (a *App) move(w *Window, d int) { a.moveTo(w, w.Cur+d) }
 
+// center puts the cursor line in the middle of the window, as zz does.
+func center(w *Window) { w.Top = max(w.Cur-w.textH/2, 0) }
+
 func (a *App) goEnd(w *Window, n int) {
 	if n > 0 {
 		a.moveTo(w, n-1)
@@ -280,6 +296,26 @@ func (a *App) word(w *Window, d int) {
 		}
 	}
 	w.Col = max(i, 0)
+}
+
+// goCoordinator focuses the coordinator of the open workspace, as <leader>pc.
+// The pane stays as it is.
+func (a *App) goCoordinator() {
+	if a.workspace == "" {
+		a.notify("open a workspace first · <leader>w", a.th.Muted)
+		return
+	}
+	if w := a.windowOf(model.Coordinator); w != nil {
+		a.cur = w
+		return
+	}
+	for _, w := range a.root.windows() {
+		if w != a.pane {
+			a.cur = w
+			break
+		}
+	}
+	a.cur.show(a.chat(model.Coordinator))
 }
 
 func (a *App) nextMsg(w *Window, d int) {
@@ -348,7 +384,7 @@ func (a *App) closeCur(force bool) {
 // hub lives in this process, so quitting ends every turn in flight.
 func (a *App) quitAll(force bool) {
 	n := 0
-	for _, p := range a.projects {
+	for _, p := range a.workspaces {
 		n += p.Counts[model.StateRunning]
 	}
 	if n > 0 && !force {
@@ -372,7 +408,7 @@ func (a *App) alternate() {
 // cycleThread shows the next or previous thread in the current window.
 func (a *App) cycleThread(d int) {
 	names := append([]string{model.Coordinator}, a.listOrder()...)
-	if len(names) == 0 || a.project == "" {
+	if len(names) == 0 || a.workspace == "" {
 		return
 	}
 	i := 0
@@ -389,12 +425,17 @@ func (a *App) cycleThread(d int) {
 func (a *App) enter() {
 	l := a.line(a.cur)
 	switch a.cur.Buf.Kind {
-	case KindProjects:
+	case KindWorkspaces:
 		if l.Item != "" {
-			a.openProject(l.Item)
+			a.openWorkspace(l.Item)
 		}
 	case KindThreads:
-		if l.Item != "" {
+		switch l.Item {
+		case "":
+		case resolvedRow:
+			a.showResolved = !a.showResolved
+			a.renderThreads()
+		default:
 			a.showThread(l.Item)
 		}
 	default:
@@ -402,31 +443,20 @@ func (a *App) enter() {
 	}
 }
 
-// splitFromList opens the thread under the cursor of the threads list in a
-// split, as <C-v> and <C-x> do in a picker.
+// splitFromList opens the thread under the cursor of the threads list in the
+// pane (<C-v>) or a split above (<C-x>), as in a picker.
 func (a *App) splitFromList(vert bool) {
 	if a.cur.Buf.Kind != KindThreads {
 		return
 	}
-	if l := a.line(a.cur); l.Item != "" {
-		a.splitThread(l.Item, vert)
+	l := a.line(a.cur)
+	switch {
+	case l.Item == "" || l.Item == resolvedRow:
+	case vert:
+		a.paneThread(l.Item)
+	default:
+		a.splitThread(l.Item)
 	}
-}
-
-func (a *App) nextWaiting() {
-	var waiting []string
-	for _, n := range append([]string{model.Coordinator}, a.listOrder()...) {
-		if a.threads[n].State == model.StateWaiting {
-			waiting = append(waiting, n)
-		}
-	}
-	if len(waiting) == 0 {
-		a.notify("nothing is waiting for you", a.th.Muted)
-		return
-	}
-	a.waitNext %= len(waiting)
-	a.showThread(waiting[a.waitNext])
-	a.waitNext++
 }
 
 // --- insert ---
@@ -443,6 +473,7 @@ func (a *App) insert() {
 	a.mode = modeInsert
 	a.cur.vmode = 0
 	a.cur.Follow = true
+	a.fetchCompletions(a.cur.Buf)
 }
 
 func (a *App) insertKey(k string, ev *tcell.EventKey) {
@@ -451,6 +482,23 @@ func (a *App) insertKey(k string, ev *tcell.EventKey) {
 		a.mode = modeNormal
 		return
 	}
+	// <C-x><C-s> sends now, like Claude Code's send-now: it stops the turn
+	// that runs.
+	if a.ctrlX {
+		a.ctrlX = false
+		if k == "<C-s>" {
+			a.send(true)
+			return
+		}
+	}
+	if k == "<C-x>" {
+		a.ctrlX = true
+		return
+	}
+	if a.menuKey(k) {
+		return
+	}
+	defer a.updateMenu()
 	switch k {
 	case "<Esc>":
 		a.mode = modeNormal
@@ -459,7 +507,7 @@ func (a *App) insertKey(k string, ev *tcell.EventKey) {
 			p.insert('\n')
 			return
 		}
-		a.send()
+		a.send(false)
 	case "<S-CR>", "<C-j>", "<M-\r>":
 		p.insert('\n')
 	case "<BS>":
@@ -506,13 +554,17 @@ func (p *Prompt) insert(r rune) {
 	p.Cur++
 }
 
-func (a *App) send() {
+func (a *App) send(now bool) {
 	b := a.cur.Buf
 	text := strings.TrimSpace(string(b.Prompt.Text))
 	if text == "" {
 		return
 	}
-	if err := a.c.Send(b.Project, b.Thread, text); err != nil {
+	send := a.c.Send
+	if now {
+		send = a.c.SendNow
+	}
+	if err := send(b.Workspace, b.Thread, text); err != nil {
 		a.notify(err.Error(), a.th.Love)
 		return
 	}
@@ -533,11 +585,11 @@ func (a *App) answer(d model.Decision, msg string) {
 		}
 	}
 	if name == "" {
-		a.notify("no permission request in this window · <leader>w finds one", a.th.Muted)
+		a.notify("no permission request in this window", a.th.Muted)
 		return
 	}
 	v := a.threads[name]
-	if err := a.c.Answer(a.project, name, v.Permission.ID, d, msg); err != nil {
+	if err := a.c.Answer(a.workspace, name, v.Permission.ID, d, msg); err != nil {
 		a.notify(err.Error(), a.th.Love)
 		return
 	}
@@ -589,6 +641,16 @@ func (a *App) yankVisual() {
 	}
 	w.vmode = 0
 	a.mode = modeNormal
+}
+
+// yank is <leader>y: the selection in Visual, else the line. y already goes
+// to the system clipboard, so this is y for Neovim fingers.
+func (a *App) yank() {
+	if a.mode == modeVisual {
+		a.yankVisual()
+		return
+	}
+	a.yankLines(a.cur.Cur, a.cur.Cur)
 }
 
 func (a *App) yankLines(l1, l2 int) {

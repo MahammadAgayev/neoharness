@@ -6,11 +6,14 @@ import "strings"
 //
 // The remote side runs it through the user's login shell, because a
 // non-interactive ssh command gets a minimal PATH and claude is usually
-// installed somewhere only the login profile adds (~/.local/bin and similar).
+// installed somewhere only the login profile adds. ~/.local/bin, where
+// Claude's own installer puts it, is added too: some profiles add it only in
+// the interactive rc, and an interactive shell may start tmux or ask things.
 // BatchMode makes a missing key fail at once instead of waiting on a password
 // prompt nobody can see.
 func sshCommand(host, dir string, env, args []string) []string {
 	var script strings.Builder
+	script.WriteString(`export PATH="$HOME/.local/bin:$PATH"; `)
 	if dir != "" {
 		script.WriteString("cd " + quoteDir(dir) + " && ")
 	}
@@ -29,6 +32,12 @@ func sshCommand(host, dir string, env, args []string) []string {
 	}
 	remote := `exec "$SHELL" -lc ` + shellQuote(script.String())
 	return []string{"ssh", "-o", "BatchMode=yes", host, "--", remote}
+}
+
+// SSHCommand runs args in dir on host the way a remote turn runs, for other
+// work the hub does in a remote thread's folder.
+func SSHCommand(host, dir string, args []string) []string {
+	return sshCommand(host, dir, nil, args)
 }
 
 // quoteDir quotes a directory but leaves a leading ~ outside the quotes, so

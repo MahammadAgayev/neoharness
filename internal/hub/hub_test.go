@@ -3,6 +3,9 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -10,7 +13,7 @@ import (
 
 	"github.com/MahammadAgayev/neoharness/internal/agent"
 	"github.com/MahammadAgayev/neoharness/internal/model"
-	"github.com/MahammadAgayev/neoharness/internal/project"
+	"github.com/MahammadAgayev/neoharness/internal/workspace"
 )
 
 // fake is a scripted agent. Each turn calls script, which may block, emit
@@ -46,7 +49,7 @@ func (f *fake) requests() []agent.Request {
 func newHub(t *testing.T, f *fake) *Hub {
 	t.Helper()
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
-	h, err := New(Config{Factory: func(project.Project, project.Thread) agent.Agent { return f }, MCPPort: 4242})
+	h, err := New(Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }, MCPPort: 4242})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +59,7 @@ func newHub(t *testing.T, f *fake) *Hub {
 
 func pinned(t *testing.T, h *Hub, name string) {
 	t.Helper()
-	if err := h.CreateProject(name, t.TempDir()); err != nil {
+	if err := h.CreateWorkspace(name, t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -93,22 +96,22 @@ func stateIs(t *testing.T, h *Hub, p, name string, s model.State) {
 	eventually(t, name+" to be "+string(s), func() bool { return view(t, h, p, name).State == s })
 }
 
-func TestProjectGetsACoordinator(t *testing.T) {
+func TestWorkspaceGetsACoordinator(t *testing.T) {
 	h := newHub(t, &fake{})
 	pinned(t, h, "demo")
 	vs, _ := h.Threads("demo")
 	if len(vs) != 1 || vs[0].Name != model.Coordinator || vs[0].Role != model.RoleCoordinator {
 		t.Fatalf("threads = %+v", vs)
 	}
-	if err := h.CreateProject("demo", ""); err == nil {
-		t.Fatal("duplicate project should fail")
+	if err := h.CreateWorkspace("demo", ""); err == nil {
+		t.Fatal("duplicate workspace should fail")
 	}
-	// Unpinned projects still get a coordinator, standing in their own folder.
-	if err := h.CreateProject("loose", ""); err != nil {
+	// Unpinned workspaces still get a coordinator, standing in their own folder.
+	if err := h.CreateWorkspace("loose", ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.OpenThread("loose", model.User, "x", "", ""); err == nil {
-		t.Fatal("a thread in an unpinned project needs a location")
+		t.Fatal("a thread in an unpinned workspace needs a location")
 	}
 }
 
@@ -386,17 +389,17 @@ func TestRestartReportsTheLostTurn(t *testing.T) {
 		return agent.Result{Text: "ok"}
 	}
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
-	factory := func(project.Project, project.Thread) agent.Agent { return f }
+	factory := func(workspace.Workspace, workspace.Thread) agent.Agent { return f }
 	h, err := New(Config{Factory: factory})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = h.CreateProject("demo", t.TempDir())
+	_ = h.CreateWorkspace("demo", t.TempDir())
 	_ = h.Send("demo", model.User, model.Coordinator, "work")
 	eventually(t, "turn to start", func() bool { return len(f.requests()) == 1 })
 
 	// Simulate a crash: the turn is on disk as in flight.
-	ths, _ := project.Threads("demo")
+	ths, _ := workspace.Threads("demo")
 	if len(ths[0].InFlight) != 1 {
 		t.Fatalf("in-flight not persisted: %+v", ths[0])
 	}
@@ -444,5 +447,451 @@ func TestHarnessToolsNeverAsk(t *testing.T) {
 	}
 	if v := view(t, h, "demo", model.Coordinator); v.Permission != nil {
 		t.Fatal("no permission request should be left pending")
+	}
+}
+
+func TestCompletionsCommandsFilesAndThreads(t *testing.T) {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		return agent.Result{Text: "ok", Commands: []string{"simplify", "review"}}
+	}
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	lists := 0
+	h, err := New(Config{
+		Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f },
+		Files: func(ctx context.Context, l model.Location) ([]string, error) {
+			lists++
+			return []string{"main.go", "go.mod"}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.User, "api", "", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := h.Completions("demo", model.Coordinator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Commands) != 0 || strings.Join(c.Threads, " ") != "api" || len(c.Files) != 2 {
+		t.Fatalf("before any turn: %+v", c)
+	}
+
+	if err := h.Send("demo", model.User, model.Coordinator, "hi"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the turn's commands", func() bool {
+		c, _ := h.Completions("demo", model.Coordinator)
+		return strings.Join(c.Commands, " ") == "simplify review"
+	})
+	// api has had no turn, but stands in the same folder.
+	c, _ = h.Completions("demo", "api")
+	if strings.Join(c.Commands, " ") != "simplify review" || strings.Join(c.Threads, " ") != model.Coordinator {
+		t.Fatalf("api: %+v", c)
+	}
+	if lists != 1 {
+		t.Errorf("listed the folder %d times, want 1 cached", lists)
+	}
+}
+
+func TestComposeNotesThreadMentions(t *testing.T) {
+	threads := map[string]*thread{"api": {}, model.Coordinator: {}}
+	got := compose([]workspace.Message{{From: model.User, Text: "compare @api and @coordinator, not @api.go, @nope or a@api"}}, threads)
+	if strings.Count(got, "read_thread") != 2 || !strings.Contains(got, "@api is the thread api") || !strings.Contains(got, "@coordinator is the thread") {
+		t.Fatalf("prompt = %q", got)
+	}
+	if strings.Contains(got, "nope is the thread") {
+		t.Fatal("an unknown name got a note")
+	}
+}
+
+func TestReadThreadNeedsATailAndFilters(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	for _, m := range []string{"first", "the token bug", "third"} {
+		if err := h.Send("demo", model.User, model.Coordinator, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := h.ReadThread("demo", model.Coordinator, 0, ""); err == nil {
+		t.Fatal("tail 0 should fail")
+	}
+	if _, err := h.ReadThread("demo", model.Coordinator, MaxReadTail+1, ""); err == nil {
+		t.Fatal("a tail over the limit should fail")
+	}
+	evs, err := h.ReadThread("demo", model.Coordinator, 5, "TOKEN")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(evs) != 1 || evs[0].Text != "the token bug" {
+		t.Fatalf("query: %+v", evs)
+	}
+}
+
+func TestDeleteStopsTheTurnAndRemovesTheThread(t *testing.T) {
+	ended := make(chan struct{})
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		<-ctx.Done()
+		req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "late"})
+		close(ended)
+		return agent.Result{ExitCode: 1}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.User, "api", "go", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "api", model.StateRunning)
+	ch, stop := h.Subscribe()
+	defer stop()
+
+	if err := h.Delete("demo", model.Coordinator); err == nil {
+		t.Fatal("the coordinator must not be deletable")
+	}
+	if err := h.Delete("demo", "api"); err != nil {
+		t.Fatal(err)
+	}
+	<-ended
+	h.Close()
+	if _, err := os.Stat(workspace.ThreadDir("demo", "api")); !os.IsNotExist(err) {
+		t.Fatalf("the thread folder is still there or came back: %v", err)
+	}
+	if vs, _ := h.Threads("demo"); len(vs) != 1 {
+		t.Fatalf("threads = %+v", vs)
+	}
+	deleted := false
+	for len(ch) > 0 {
+		if u := <-ch; u.Kind == model.UpdateDeleted && u.Thread == "api" {
+			deleted = true
+		}
+	}
+	if !deleted {
+		t.Error("subscribers were not told")
+	}
+}
+
+func TestStatusUsageAddsCostAndReadsBranch(t *testing.T) {
+	f := &fake{}
+	turn := 0
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		turn++
+		return agent.Result{Text: "ok", Model: "claude-opus-5[1m]", Context: 1000 * turn, ContextWindow: 1000000, Cost: 0.5}
+	}
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	h, err := New(Config{
+		Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f },
+		Branch:  func(context.Context, model.Location) (string, error) { return "main", nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	pinned(t, h, "demo")
+	for _, m := range []string{"one", "two"} {
+		if err := h.Send("demo", model.User, model.Coordinator, m); err != nil {
+			t.Fatal(err)
+		}
+		stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	}
+	eventually(t, "both turns and the branch", func() bool {
+		v := view(t, h, "demo", model.Coordinator)
+		return v.Cost == 1.0 && v.Context == 2000 && v.Branch == "main"
+	})
+	v := view(t, h, "demo", model.Coordinator)
+	if v.Model != "claude-opus-5[1m]" || v.ContextWindow != 1000000 {
+		t.Fatalf("view = %+v", v)
+	}
+}
+
+func TestClearStartsANewSession(t *testing.T) {
+	gate := make(chan struct{})
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		<-gate
+		req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "ok"})
+		return agent.Result{Text: "ok", Context: 5000, ContextWindow: 100000}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	h.Send("demo", model.User, model.Coordinator, "remember pelican")
+	stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
+	if err := h.Send("demo", model.User, model.Coordinator, "/clear"); err == nil {
+		t.Fatal("/clear during a turn should fail")
+	}
+	gate <- struct{}{}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+
+	if err := h.Send("demo", model.User, model.Coordinator, " /clear "); err != nil {
+		t.Fatal(err)
+	}
+	if v := view(t, h, "demo", model.Coordinator); v.Context != 0 || v.Queued != 0 {
+		t.Fatalf("after /clear: %+v", v)
+	}
+	h.Send("demo", model.User, model.Coordinator, "what word?")
+	gate <- struct{}{}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+
+	reqs := f.requests()
+	if len(reqs) != 2 || reqs[1].Resume || reqs[1].Conversation == reqs[0].Conversation {
+		t.Fatalf("the turn after /clear must start a new session: %+v", reqs)
+	}
+	if strings.Contains(reqs[1].Prompt, "/clear") {
+		t.Fatal("/clear reached Claude")
+	}
+	evs, _ := h.Events("demo", model.Coordinator, 0)
+	var kinds []string
+	for _, e := range evs {
+		kinds = append(kinds, string(e.Kind))
+	}
+	if !strings.Contains(strings.Join(kinds, " "), "turn clear message") {
+		t.Fatalf("events = %v", kinds)
+	}
+}
+
+func TestModelAndEffortLastAcrossTurns(t *testing.T) {
+	h := newHub(t, &fake{})
+	f := &fake{}
+	h.cfg.Factory = func(workspace.Workspace, workspace.Thread) agent.Agent { return f }
+	pinned(t, h, "demo")
+	if err := h.Send("demo", model.User, model.Coordinator, "/effort huge"); err == nil {
+		t.Fatal("an unknown effort should fail")
+	}
+	for _, m := range []string{"/model sonnet", "/effort high", "one", "two", "/model default", "three"} {
+		if err := h.Send("demo", model.User, model.Coordinator, m); err != nil {
+			t.Fatal(err)
+		}
+		stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	}
+	reqs := f.requests()
+	if len(reqs) != 3 {
+		t.Fatalf("%d turns, want 3: the commands are not turns", len(reqs))
+	}
+	for i, want := range []string{"sonnet", "sonnet", ""} {
+		if reqs[i].Model != want || reqs[i].Effort != "high" {
+			t.Errorf("turn %d: model %q effort %q", i, reqs[i].Model, reqs[i].Effort)
+		}
+	}
+}
+
+func TestCompactStartsANewSessionFromASummary(t *testing.T) {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		text := "ok"
+		if strings.Contains(req.Prompt, "Reply with only the summary") {
+			text = "SUMMARY: pelican"
+		}
+		req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: text})
+		return agent.Result{Text: text}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.Send("demo", model.User, model.Coordinator, "/compact"); err == nil {
+		t.Fatal("/compact before any turn should fail")
+	}
+	for _, m := range []string{"remember pelican", "/compact the word", "what word?", "and now?"} {
+		if err := h.Send("demo", model.User, model.Coordinator, m); err != nil {
+			t.Fatal(err)
+		}
+		stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	}
+	r := f.requests()
+	if len(r) != 4 {
+		t.Fatalf("%d turns", len(r))
+	}
+	if !strings.Contains(r[1].Prompt, "Focus on: the word") || !r[1].Resume || r[1].Conversation != r[0].Conversation {
+		t.Errorf("the summary turn runs in the old session: %+v", r[1])
+	}
+	if r[2].Resume || r[2].Conversation == r[0].Conversation || !strings.HasPrefix(r[2].Prompt, "This conversation continues") ||
+		!strings.Contains(r[2].Prompt, "SUMMARY: pelican") || !strings.HasSuffix(r[2].Prompt, "what word?") {
+		t.Errorf("the turn after /compact: %+v", r[2])
+	}
+	if !r[3].Resume || strings.Contains(r[3].Prompt, "SUMMARY") {
+		t.Errorf("the summary goes only into the first message: %+v", r[3])
+	}
+}
+
+func TestSetFolderMovesTheCoordinator(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	h.Send("demo", model.User, model.Coordinator, "one")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+
+	if err := h.SetFolder("demo", "/no/such/folder"); err == nil {
+		t.Fatal("a missing folder should fail")
+	}
+	dir := t.TempDir()
+	if err := h.SetFolder("demo", dir); err != nil {
+		t.Fatal(err)
+	}
+	if ws := h.Workspaces(); ws[0].Pin != dir {
+		t.Fatalf("pin = %q", ws[0].Pin)
+	}
+	h.Send("demo", model.User, model.Coordinator, "two")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	r := f.requests()
+	if r[1].Cwd != dir || !r[1].Resume || r[1].Conversation != r[0].Conversation {
+		t.Fatalf("the coordinator should run in the new folder and keep its session: %+v", r[1])
+	}
+	if err := h.OpenThread("demo", model.User, "api", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if v := view(t, h, "demo", "api"); v.Location.Dir != dir {
+		t.Fatalf("a new thread opened in %q", v.Location.Dir)
+	}
+}
+
+func TestDeleteWorkspaceHidesItAndStopsTurns(t *testing.T) {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		<-ctx.Done()
+		return agent.Result{ExitCode: 1}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	h.Send("demo", model.User, model.Coordinator, "work")
+	stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
+	if err := h.DeleteWorkspace("demo"); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.Workspaces()) != 0 {
+		t.Fatal("a deleted workspace is still listed")
+	}
+	h.Close()
+	ws, _ := workspace.List()
+	if len(ws) != 1 || !ws[0].Deleted {
+		t.Fatalf("the data should stay, marked deleted: %+v", ws)
+	}
+	h2, err := New(Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h2.Close()
+	if len(h2.Workspaces()) != 0 {
+		t.Fatal("a restart brought the deleted workspace back")
+	}
+	if err := h2.CreateWorkspace("demo", ""); err == nil || !strings.Contains(err.Error(), "deleted") {
+		t.Fatalf("reusing the name: %v", err)
+	}
+}
+
+func TestSendNowInterruptsTheTurn(t *testing.T) {
+	for _, started := range []bool{true, false} {
+		t.Run(fmt.Sprintf("started=%v", started), func(t *testing.T) {
+			f := &fake{}
+			f.script = func(ctx context.Context, req agent.Request) agent.Result {
+				if strings.Contains(req.Prompt, "now") {
+					return agent.Result{Text: "ok"}
+				}
+				if started {
+					req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "working"})
+				}
+				<-ctx.Done()
+				return agent.Result{ExitCode: -1}
+			}
+			h := newHub(t, f)
+			pinned(t, h, "demo")
+			if err := h.Send("demo", model.User, model.Coordinator, "long task"); err != nil {
+				t.Fatal(err)
+			}
+			stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
+			if err := h.SendNow("demo", model.Coordinator, "stop, do this now"); err != nil {
+				t.Fatal(err)
+			}
+			stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+
+			reqs := f.requests()
+			if len(reqs) != 2 {
+				t.Fatalf("%d turns, want 2", len(reqs))
+			}
+			p := reqs[1].Prompt
+			if !strings.Contains(p, "stop, do this now") {
+				t.Fatalf("second prompt = %q", p)
+			}
+			if strings.Contains(p, "long task") != !started {
+				t.Errorf("second prompt = %q; the stopped message goes again only if Claude never saw it", p)
+			}
+			evs, _ := h.Events("demo", model.Coordinator, 50)
+			var kinds []string
+			for _, e := range evs {
+				if e.Kind == model.EventError {
+					t.Errorf("an interrupt is not an error: %q", e.Text)
+				}
+				if e.Kind == model.EventNote {
+					kinds = append(kinds, e.Text)
+				}
+			}
+			if !slices.Contains(kinds, "Interrupted.") {
+				t.Errorf("notes = %q", kinds)
+			}
+		})
+	}
+}
+
+func TestShellCommandRunsWithoutATurnAndReachesTheNextPrompt(t *testing.T) {
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	f := &fake{}
+	var ran []string
+	var mu sync.Mutex
+	h, err := New(Config{
+		Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f },
+		MCPPort: 4242,
+		Shell: func(ctx context.Context, l model.Location, command string) (string, int, error) {
+			mu.Lock()
+			ran = append(ran, l.Dir+" $ "+command)
+			mu.Unlock()
+			return "no such file\n", 2, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	dir := t.TempDir()
+	if err := h.CreateWorkspace("demo", dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Send("demo", model.User, model.Coordinator, "!"); err == nil {
+		t.Error("! alone should ask for a command")
+	}
+	if err := h.Send("demo", model.User, model.Coordinator, "!ls nope"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the command to end", func() bool {
+		evs, _ := h.Events("demo", model.Coordinator, 10)
+		return len(evs) > 0 && evs[len(evs)-1].Kind == model.EventShell && evs[len(evs)-1].Text != ""
+	})
+	mu.Lock()
+	if len(ran) != 1 || ran[0] != dir+" $ ls nope" {
+		t.Fatalf("ran = %q", ran)
+	}
+	mu.Unlock()
+	if n := len(f.requests()); n != 0 {
+		t.Fatalf("! started %d turns", n)
+	}
+	evs, _ := h.Events("demo", model.Coordinator, 10)
+	last := evs[len(evs)-1]
+	if last.Exit != 2 || last.Detail != "ls nope" || evs[len(evs)-2].ID != last.ID {
+		t.Fatalf("events = %+v", evs)
+	}
+
+	if err := h.Send("demo", model.User, model.Coordinator, "why did it fail?"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	_ = h.Send("demo", model.User, model.Coordinator, "and now?")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	reqs := f.requests()
+	want := "<bash-input>ls nope</bash-input>\n<bash-stdout>no such file\n</bash-stdout>\n<bash-exit-code>2</bash-exit-code>\n\n---\n\nwhy did it fail?"
+	if len(reqs) != 2 || reqs[0].Prompt != want {
+		t.Fatalf("first prompt = %q", reqs[0].Prompt)
+	}
+	if strings.Contains(reqs[1].Prompt, "bash-input") {
+		t.Error("the command went to Claude twice")
 	}
 }

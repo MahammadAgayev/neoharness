@@ -28,9 +28,9 @@ type cmdline struct {
 }
 
 var commands = []string{
-	"allow", "always", "b", "buffer", "deny", "help", "ls", "messages", "new",
-	"only", "open", "project", "projects", "q", "qa", "quit", "reopen", "resolve",
-	"split", "threads", "vsplit",
+	"allow", "always", "b", "buffer", "deny", "folder", "help", "ls", "messages", "new",
+	"only", "open", "q", "qa", "quit", "reopen", "resolve", "split", "threads",
+	"vsplit", "workspace", "workspaces",
 }
 
 func (a *App) startCmd(prefix rune) {
@@ -125,7 +125,7 @@ func (a *App) cmdKey(k string, ev *tcell.EventKey) {
 
 // complete cycles through candidates for the word before the cursor: a
 // command name for the first word, a folder for the folder of :new and :open,
-// else a thread or project name.
+// else a thread or workspace name.
 func (a *App) complete(forward bool) {
 	c := a.cmd
 	if c.comp == nil {
@@ -143,12 +143,12 @@ func (a *App) complete(forward bool) {
 		var pool []string
 		if argIdx == 0 {
 			pool = commands
-		} else if argIdx == 2 && (fields[0] == "new" || fields[0] == "open") && !strings.Contains(word, ":") {
+		} else if (argIdx == 2 && (fields[0] == "new" || fields[0] == "open") || argIdx == 1 && fields[0] == "folder") && !strings.Contains(word, ":") {
 			pool = folderCompletions(word)
 		} else {
 			switch fields[0] {
-			case "project", "new":
-				for _, p := range a.projects {
+			case "workspace", "new":
+				for _, p := range a.workspaces {
 					pool = append(pool, p.Name)
 				}
 			default:
@@ -231,9 +231,9 @@ func (a *App) exec(line string) {
 		}
 		return ""
 	}
-	needProject := func() bool {
-		if a.project == "" {
-			a.notify("open a project first · <leader>p", a.th.Muted)
+	needWorkspace := func() bool {
+		if a.workspace == "" {
+			a.notify("open a workspace first · <leader>w", a.th.Muted)
 			return false
 		}
 		return true
@@ -251,20 +251,19 @@ func (a *App) exec(line string) {
 	case "only", "on":
 		a.only()
 	case "threads":
-		if !needProject() {
+		if !needWorkspace() {
 			return
 		}
-		a.cur.show(a.threadsBuf)
-		a.cur.Follow = false
-	case "projects":
-		a.loadProjects()
-		a.showProjects()
-	case "project", "p":
+		a.showList()
+	case "workspaces":
+		a.loadWorkspaces()
+		a.showWorkspaces()
+	case "workspace", "p":
 		if arg(0) == "" {
-			a.pickProjects()
+			a.pickWorkspaces()
 			return
 		}
-		a.openProject(arg(0))
+		a.openWorkspace(arg(0))
 	case "new":
 		if arg(0) == "" {
 			a.notify("usage: :new <name> [folder]", a.th.Muted)
@@ -274,16 +273,25 @@ func (a *App) exec(line string) {
 			a.pickFolder(arg(0))
 			return
 		}
-		a.createProject(arg(0), arg(1))
+		a.createWorkspace(arg(0), arg(1))
+	case "folder":
+		if !needWorkspace() {
+			return
+		}
+		if arg(0) == "" {
+			a.pickNewFolder()
+			return
+		}
+		a.setFolder(arg(0))
 	case "open":
-		if !needProject() {
+		if !needWorkspace() {
 			return
 		}
 		if arg(0) == "" {
 			a.notify("usage: :open <name> [folder|host:dir]", a.th.Muted)
 			return
 		}
-		if err := a.c.OpenThread(a.project, arg(0), "", arg(1)); err != nil {
+		if err := a.c.OpenThread(a.workspace, arg(0), "", arg(1)); err != nil {
 			a.notify(err.Error(), a.th.Love)
 			return
 		}
@@ -294,20 +302,20 @@ func (a *App) exec(line string) {
 			a.order = append(a.order, arg(0))
 			a.renderThreads()
 		}
-		a.splitThread(arg(0), true)
+		a.paneThread(arg(0))
 		a.insert()
 	case "resolve":
-		if !needProject() {
+		if !needWorkspace() {
 			return
 		}
-		if err := a.c.Resolve(a.project, target()); err != nil {
+		if err := a.c.Resolve(a.workspace, target()); err != nil {
 			a.notify(err.Error(), a.th.Love)
 		}
 	case "reopen":
-		if !needProject() {
+		if !needWorkspace() {
 			return
 		}
-		if err := a.c.Reopen(a.project, target()); err != nil {
+		if err := a.c.Reopen(a.workspace, target()); err != nil {
 			a.notify(err.Error(), a.th.Love)
 		}
 	case "b", "buffer", "buf":
@@ -350,7 +358,7 @@ func (a *App) exec(line string) {
 // findBuffer resolves a name typed after :b — a thread name, a full buffer
 // name, or a unique substring of one.
 func (a *App) findBuffer(name string) *Buffer {
-	if a.project != "" {
+	if a.workspace != "" {
 		if _, ok := a.threads[name]; ok {
 			return a.chat(name)
 		}
@@ -409,47 +417,54 @@ func (a *App) helpBuf() *Buffer {
 		{},
 		{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{"neoharness", th.Iris.Bold(true)}, {"  keys", th.Subtle}}},
 		{},
-		sec("WRITE"),
+		sec("write"),
 		row("i a o", "write to the thread in this window"),
 		row("<CR>", "send (in Insert)"),
+		row("<C-x><C-s>", "send now: stop the running turn (in Insert)"),
+		row("!<command>", "run it in the thread's folder; the output goes with your next message"),
 		row("<C-j>  <S-CR>", "new line (in Insert)"),
+		row("/  @", "complete a command, a thread (#) or a file (in Insert)"),
+		row("<C-n> <C-p>  <Tab>", "next / previous completion, take it"),
 		row("<Esc>", "back to Normal"),
 		{},
-		sec("MOVE"),
+		sec("move"),
 		row("j k  gg G  <C-d> <C-u>", "lines, ends, half pages"),
 		row("h l  w b  0 $", "within a line"),
 		row("]m [m", "next / previous message"),
 		row("/ n N", "search"),
 		row("za  <leader>e", "open or close a turn's tool calls"),
-		row("v V  y  yy", "select and yank to the clipboard"),
+		row("v V  y  yy  <leader>y", "select and yank to the clipboard"),
 		{},
-		sec("WINDOWS AND BUFFERS"),
+		sec("windows and buffers"),
 		row("<Tab>  <C-w>w", "next window"),
 		row("<C-w>h j k l  <C-h>…", "window in a direction"),
 		row("<C-w>v  <C-w>s", "split vertically / horizontally"),
 		row("<C-w>c  <C-w>o  <C-w>=", "close, only, equal sizes"),
 		row("]b [b  <C-^>", "next / previous thread, alternate"),
-		row("<CR>", "open the project, or switch to the thread"),
-		row("<C-v>  <C-x>", "thread in a vertical / horizontal split (pickers, :threads)"),
+		row("<CR>", "open the workspace, or switch to the thread"),
+		row("<C-v>  <C-x>", "thread in the pane / a split above (pickers, threads list)"),
+		row("<C-d>", "delete the thread or workspace, after y (pickers)"),
 		{},
-		sec("LEADER  <Space>"),
+		sec("leader  <Space>"),
 		row("<leader><leader>", "buffers"),
-		row("<leader>t", "threads"),
-		row("<leader>p", "projects"),
+		row("<leader>t", "threads pane on the right; <CR> opens a thread in it"),
+		row("<leader>w", "workspaces"),
+		row("<leader>pv  <leader>pc", "workspaces screen, coordinator"),
+		row("<leader>nc  <leader>nh", "dismiss notifications, their history"),
 		row("<leader>/", "search every transcript"),
-		row("<leader>w", "go to a thread waiting for you"),
-		row("<leader>y Y n", "allow, allow always, deny a permission"),
+		row("<leader>a A x", "allow, allow always, deny a permission"),
 		{},
-		sec("COMMANDS"),
-		row(":new <name> [folder]", "create a project; no folder opens a folder picker"),
+		sec("commands"),
+		row(":new <name> [folder]", "create a workspace; no folder opens a folder picker"),
+		row(":folder [folder]", "change the workspace's folder; no folder opens a folder picker"),
 		row(":open <name> [where]", "open a thread: folder or host:dir"),
 		row(":resolve  :reopen", "close or bring back a thread"),
 		row(":allow :always :deny", "answer a permission (:deny <reason>)"),
 		row(":b <name>  :ls", "switch buffer"),
 		row(":vsplit :split [name]", "split with a buffer"),
-		row(":threads", "list the threads in this window"),
+		row(":threads", "threads pane, as <leader>t"),
 		row(":messages", "notice history"),
-		row(":projects  :project <n>", "project list, switch project"),
+		row(":workspaces  :workspace <n>", "workspace list, switch workspace"),
 		row(":q  :qa", "close window, quit"),
 		row(":q!  :qa!", "quit even if threads are running (stops them)"),
 	}

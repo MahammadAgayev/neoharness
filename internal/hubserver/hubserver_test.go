@@ -12,7 +12,7 @@ import (
 	"github.com/MahammadAgayev/neoharness/internal/hub"
 	"github.com/MahammadAgayev/neoharness/internal/hubapi"
 	"github.com/MahammadAgayev/neoharness/internal/model"
-	"github.com/MahammadAgayev/neoharness/internal/project"
+	"github.com/MahammadAgayev/neoharness/internal/workspace"
 )
 
 type echo struct{}
@@ -28,7 +28,7 @@ func (echo) Run(ctx context.Context, req agent.Request) (agent.Result, error) {
 func TestClientServerRoundTrip(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("NEOHARNESS_HOME", home)
-	h, err := hub.New(hub.Config{Factory: func(project.Project, project.Thread) agent.Agent { return echo{} }})
+	h, err := hub.New(hub.Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return echo{} }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,10 +51,10 @@ func TestClientServerRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := c.CreateProject("demo", t.TempDir()); err != nil {
+	if err := c.CreateWorkspace("demo", t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.CreateProject("demo", ""); err == nil || err.Error() != `project "demo" already exists` {
+	if err := c.CreateWorkspace("demo", ""); err == nil || err.Error() != `workspace "demo" already exists` {
 		t.Fatalf("duplicate create error = %v", err)
 	}
 	if err := c.OpenThread("demo", "api-tests", "", ""); err != nil {
@@ -74,9 +74,9 @@ func TestClientServerRoundTrip(t *testing.T) {
 		}
 	}
 
-	ps, err := c.Projects()
+	ps, err := c.Workspaces()
 	if err != nil || len(ps) != 1 || ps[0].Name != "demo" {
-		t.Fatalf("projects = %+v, %v", ps, err)
+		t.Fatalf("workspaces = %+v, %v", ps, err)
 	}
 	vs, err := c.Threads("demo")
 	if err != nil || len(vs) != 2 || vs[0].Name != model.Coordinator {
@@ -94,5 +94,29 @@ func TestClientServerRoundTrip(t *testing.T) {
 	}
 	if err := c.Reopen("demo", "api-tests"); err != nil {
 		t.Fatal(err)
+	}
+	if err := c.SendNow("demo", "api-tests", "now"); err != nil {
+		t.Fatal(err)
+	}
+	for got := false; !got; {
+		select {
+		case u := <-updates:
+			got = u.Kind == model.UpdateEvent && u.Thread == "api-tests" && u.Event.Kind == model.EventText && u.Event.Text == "echo: now"
+		case <-timeout:
+			t.Fatal("no echo for a message sent now")
+		}
+	}
+	dir := t.TempDir()
+	if err := c.SetFolder("demo", dir); err != nil {
+		t.Fatal(err)
+	}
+	if ps, _ := c.Workspaces(); ps[0].Pin != dir {
+		t.Fatalf("pin = %q", ps[0].Pin)
+	}
+	if err := c.DeleteWorkspace("demo"); err != nil {
+		t.Fatal(err)
+	}
+	if ps, _ := c.Workspaces(); len(ps) != 0 {
+		t.Fatalf("workspaces after delete = %+v", ps)
 	}
 }

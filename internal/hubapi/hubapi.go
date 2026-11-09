@@ -38,7 +38,7 @@ func SocketPath() string {
 
 // Request bodies, shared with the server.
 type (
-	NewProject struct {
+	NewWorkspace struct {
 		Name string `json:"name"`
 		Pin  string `json:"pin,omitempty"`
 	}
@@ -49,6 +49,11 @@ type (
 	}
 	Message struct {
 		Text string `json:"text"`
+		// Now stops the running turn so the message goes at once.
+		Now bool `json:"now,omitempty"`
+	}
+	Folder struct {
+		Pin string `json:"pin"`
 	}
 	Answer struct {
 		ID       string         `json:"id,omitempty"`
@@ -77,47 +82,68 @@ func New(socket string) *Client {
 
 // Ping reports whether a hub answers.
 func (c *Client) Ping() error {
-	_, err := c.Projects()
+	_, err := c.Workspaces()
 	return err
 }
 
-func (c *Client) Projects() ([]model.ProjectView, error) {
-	var out []model.ProjectView
-	return out, c.do("GET", "/projects", nil, &out)
+func (c *Client) Workspaces() ([]model.WorkspaceView, error) {
+	var out []model.WorkspaceView
+	return out, c.do("GET", "/workspaces", nil, &out)
 }
 
-func (c *Client) CreateProject(name, pin string) error {
-	return c.do("POST", "/projects", NewProject{Name: name, Pin: pin}, nil)
+func (c *Client) CreateWorkspace(name, pin string) error {
+	return c.do("POST", "/workspaces", NewWorkspace{Name: name, Pin: pin}, nil)
 }
 
-func (c *Client) Threads(project string) ([]model.ThreadView, error) {
+func (c *Client) SetFolder(name, pin string) error {
+	return c.do("PUT", "/workspaces/"+esc(name)+"/folder", Folder{Pin: pin}, nil)
+}
+
+func (c *Client) DeleteWorkspace(name string) error {
+	return c.do("DELETE", "/workspaces/"+esc(name), nil, nil)
+}
+
+func (c *Client) Threads(workspace string) ([]model.ThreadView, error) {
 	var out []model.ThreadView
-	return out, c.do("GET", "/projects/"+esc(project)+"/threads", nil, &out)
+	return out, c.do("GET", "/workspaces/"+esc(workspace)+"/threads", nil, &out)
 }
 
-func (c *Client) OpenThread(project, name, brief, location string) error {
-	return c.do("POST", "/projects/"+esc(project)+"/threads", NewThread{Name: name, Brief: brief, Location: location}, nil)
+func (c *Client) OpenThread(workspace, name, brief, location string) error {
+	return c.do("POST", "/workspaces/"+esc(workspace)+"/threads", NewThread{Name: name, Brief: brief, Location: location}, nil)
 }
 
-func (c *Client) Events(project, thread string, tail int) ([]model.Event, error) {
+func (c *Client) Events(workspace, thread string, tail int) ([]model.Event, error) {
 	var out []model.Event
-	return out, c.do("GET", fmt.Sprintf("%s/events?tail=%d", threadPath(project, thread), tail), nil, &out)
+	return out, c.do("GET", fmt.Sprintf("%s/events?tail=%d", threadPath(workspace, thread), tail), nil, &out)
 }
 
-func (c *Client) Send(project, thread, text string) error {
-	return c.do("POST", threadPath(project, thread)+"/messages", Message{Text: text}, nil)
+func (c *Client) Completions(workspace, thread string) (model.Completions, error) {
+	var out model.Completions
+	return out, c.do("GET", threadPath(workspace, thread)+"/completions", nil, &out)
 }
 
-func (c *Client) Resolve(project, thread string) error {
-	return c.do("POST", threadPath(project, thread)+"/resolve", nil, nil)
+func (c *Client) Send(workspace, thread, text string) error {
+	return c.do("POST", threadPath(workspace, thread)+"/messages", Message{Text: text}, nil)
 }
 
-func (c *Client) Reopen(project, thread string) error {
-	return c.do("POST", threadPath(project, thread)+"/reopen", nil, nil)
+func (c *Client) SendNow(workspace, thread, text string) error {
+	return c.do("POST", threadPath(workspace, thread)+"/messages", Message{Text: text, Now: true}, nil)
 }
 
-func (c *Client) Answer(project, thread, id string, d model.Decision, msg string) error {
-	return c.do("POST", threadPath(project, thread)+"/answer", Answer{ID: id, Decision: d, Message: msg}, nil)
+func (c *Client) Resolve(workspace, thread string) error {
+	return c.do("POST", threadPath(workspace, thread)+"/resolve", nil, nil)
+}
+
+func (c *Client) Delete(workspace, thread string) error {
+	return c.do("DELETE", threadPath(workspace, thread), nil, nil)
+}
+
+func (c *Client) Reopen(workspace, thread string) error {
+	return c.do("POST", threadPath(workspace, thread)+"/reopen", nil, nil)
+}
+
+func (c *Client) Answer(workspace, thread, id string, d model.Decision, msg string) error {
+	return c.do("POST", threadPath(workspace, thread)+"/answer", Answer{ID: id, Decision: d, Message: msg}, nil)
 }
 
 // Updates streams hub updates until ctx ends or the connection drops. The
@@ -191,8 +217,8 @@ func (c *Client) do(method, path string, body, out any) error {
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
-func threadPath(project, thread string) string {
-	return "/projects/" + esc(project) + "/threads/" + esc(thread)
+func threadPath(workspace, thread string) string {
+	return "/workspaces/" + esc(workspace) + "/threads/" + esc(thread)
 }
 
 func esc(s string) string { return url.PathEscape(s) }

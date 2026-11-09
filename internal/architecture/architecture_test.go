@@ -99,7 +99,7 @@ func TestTUIGoesThroughTheAPI(t *testing.T) {
 	}
 }
 
-// TestDataPackagesStayLeaves: model depends on nothing internal, and project
+// TestDataPackagesStayLeaves: model depends on nothing internal, and workspace
 // only on model.
 func TestDataPackagesStayLeaves(t *testing.T) {
 	root := repoRoot(t)
@@ -108,7 +108,7 @@ func TestDataPackagesStayLeaves(t *testing.T) {
 			t.Errorf("internal/model should be a leaf but imports %s", imp)
 		}
 	}
-	for _, pkg := range []string{"internal/project", "internal/hubapi"} {
+	for _, pkg := range []string{"internal/workspace", "internal/hubapi"} {
 		for _, imp := range imports(t, root, pkg) {
 			if strings.HasPrefix(imp, module+"/") && imp != module+"/internal/model" {
 				t.Errorf("%s may import only model, imports %s", pkg, imp)

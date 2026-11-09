@@ -23,7 +23,7 @@ type Line struct {
 	Msg bool
 	// Block is the index of the block the line came from, for folding.
 	Block int
-	// Item is what <CR> on this line opens: a project or thread name.
+	// Item is what <CR> on this line opens: a workspace or thread name.
 	Item string
 }
 

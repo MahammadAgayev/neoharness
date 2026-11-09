@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -13,10 +14,14 @@ import (
 )
 
 // scrollOff keeps this many lines visible around the cursor.
-const scrollOff = 2
+const scrollOff = 8
 
-// maxPromptLines is how tall the prompt grows before it scrolls.
-const maxPromptLines = 6
+// The prompt is at least minPromptLines tall, so it reads as a place to
+// write, and grows to maxPromptLines before it scrolls.
+const (
+	minPromptLines = 3
+	maxPromptLines = 12
+)
 
 func (a *App) draw() {
 	s := a.s
@@ -42,6 +47,7 @@ func (a *App) draw() {
 		a.drawWindow(w, w == a.cur)
 		live = live || w.Buf.Live()
 	}
+	a.drawToasts(W, H)
 	if a.picker != nil {
 		a.drawPicker(W, H)
 	}
@@ -51,11 +57,6 @@ func (a *App) draw() {
 		s.ShowCursor(a.cursorX, a.cursorY)
 	} else {
 		s.HideCursor()
-	}
-	if a.mode == modeInsert || a.mode == modeCommand || a.mode == modePicker {
-		s.SetCursorStyle(tcell.CursorStyleSteadyBar)
-	} else {
-		s.SetCursorStyle(tcell.CursorStyleSteadyBlock)
 	}
 	s.Show()
 
@@ -195,7 +196,43 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	if b.Kind == KindChat {
 		a.drawFloats(w, top, textBottom)
 	}
+	if focused && a.menu != nil {
+		a.drawMenu(w, top, promptTop)
+	}
 	a.drawStatus(w, status, focused)
+}
+
+// drawMenu draws the completion popup just above the prompt.
+func (a *App) drawMenu(w *Window, top, bottom int) {
+	m := a.menu
+	r := w.rect
+	rows := min(len(m.items), menuRows, bottom-top-2)
+	if rows < 1 {
+		return
+	}
+	bw := 0
+	for _, it := range m.items {
+		bw = max(bw, width(it.glyph.Text+it.label))
+	}
+	bw = min(bw+4, r.W-4, 64)
+	if bw < 12 {
+		return
+	}
+	x0, y0 := r.X+2, bottom-rows-2
+	th := a.th
+	a.box(x0, y0, bw, rows+2, "", th.Iris)
+	start := max(m.sel-rows+1, 0)
+	for i := 0; i < rows && start+i < len(m.items); i++ {
+		y := y0 + 1 + i
+		it := m.items[start+i]
+		glyphSt, st := it.glyph.Style, th.Subtle
+		if start+i == m.sel {
+			a.fill(x0+1, y, x0+bw-1, th.CursorLine)
+			glyphSt, st = overlay(glyphSt, th.CursorLine), overlay(th.Text.Bold(true), th.CursorLine)
+		}
+		x := a.put(x0+2, y, x0+bw-2, it.glyph.Text, glyphSt)
+		a.put(x, y, x0+bw-2, truncate(it.label, x0+bw-2-x), st)
+	}
 }
 
 func (a *App) selected(w *Window, li, col int, l Line) bool {
@@ -235,16 +272,23 @@ func (a *App) promptLines(w *Window, focused bool) []Line {
 	}
 	first := []Span{{" › ", caret}}
 	rest := []Span{{"   ", a.th.Text}}
+	statusY := w.rect.Y + w.rect.H - 1
+	pad := func(lines []Line) []Line {
+		for len(lines) < minPromptLines {
+			lines = append(lines, Line{Prefix: rest})
+		}
+		return lines
+	}
 	if len(p.Text) == 0 {
 		if !writing {
-			return []Line{{Prefix: first}}
+			return pad([]Line{{Prefix: first}})
 		}
-		a.cursorX, a.cursorY = w.rect.X+3, w.rect.Y+w.rect.H-2
-		return []Line{{Prefix: first, Spans: []Span{{"Message " + w.Buf.Thread + "…", a.th.Muted}}}}
+		a.cursorX, a.cursorY = w.rect.X+3, statusY-minPromptLines
+		return pad([]Line{{Prefix: first, Spans: []Span{{"Message " + w.Buf.Thread + "…", a.th.Muted}}}})
 	}
 	all := wrap([]Span{{string(p.Text), a.th.Text}}, a.textWidth(w), first, rest)
 	hidden := max(len(all)-maxPromptLines, 0)
-	lines := all[hidden:]
+	lines := pad(all[hidden:])
 	if writing {
 		// Wrapping the text up to the cursor the same way puts the cursor at
 		// the end of its last line.
@@ -255,7 +299,6 @@ func (a *App) promptLines(w *Window, focused bool) []Line {
 		if p.Cur > 0 && p.Text[p.Cur-1] == ' ' {
 			x++
 		}
-		statusY := w.rect.Y + w.rect.H - 1
 		a.cursorX = w.rect.X + min(x, w.rect.W-1)
 		a.cursorY = statusY - len(lines) + max(len(head)-1-hidden, 0)
 	}
@@ -268,12 +311,12 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 	b := w.Buf
 	x := r.X + 1
 	dim := a.th.Muted
-	// Other modes show themselves: the bar cursor and the caret in Insert, the
+	// Other modes show themselves: the colored caret in Insert, the
 	// command line, the picker box. Visual needs a word to tell v from V.
 	if focused && a.mode == modeVisual {
-		label := "VISUAL"
+		label := "visual"
 		if w.vmode == 'V' {
-			label = "V-LINE"
+			label = "v-line"
 		}
 		x = a.put(x, y, right, label, dim) + 2
 	}
@@ -283,7 +326,13 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 	}
 	x = a.put(x, y, right, name, nameSt) + 2
 
-	var rightText []Span
+	// Right side, in muted color. When it does not fit, the first parts of
+	// drop go first: context matters most, it says when to start fresh.
+	type part struct {
+		Span
+		rank int // 0 stays
+	}
+	var rightText []part
 	if b.Kind == KindChat {
 		v := a.threads[b.Thread]
 		st := a.th.state(v.State)
@@ -294,29 +343,78 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 		if !v.Since.IsZero() && v.State != model.StateIdle {
 			x = a.put(x+2, y, right, elapsed(time.Since(v.Since)), dim)
 		}
+		add := func(text string, st tcell.Style, rank int) {
+			if text != "" {
+				rightText = append(rightText, part{Span{text, st}, rank})
+			}
+		}
 		if v.Queued > 0 {
-			rightText = append(rightText, Span{fmt.Sprintf("+%d queued", v.Queued), dim})
+			add(fmt.Sprintf("+%d queued", v.Queued), dim, 0)
+		}
+		// Colored in the window with focus, like Claude Code's status line;
+		// muted in the others.
+		color := func(st tcell.Style) tcell.Style {
+			if focused {
+				return st
+			}
+			return dim
+		}
+		add(v.Branch, color(a.th.Foam), 1)
+		add(shortModel(v.Model), color(a.th.Rose), 2)
+		if v.ContextWindow > 0 {
+			pct := v.Context * 100 / v.ContextWindow
+			ctxSt := color(a.th.Gold)
+			if pct >= 80 {
+				// A nearly full context needs the person: time to /compact.
+				ctxSt = a.th.Love
+			}
+			add(fmt.Sprintf("ctx %d%%", pct), ctxSt, 4)
+		}
+		if v.Cost > 0 {
+			add(fmt.Sprintf("$%.2f", v.Cost), color(a.th.Pine), 3)
 		}
 		if v.Location.Remote() {
-			rightText = append(rightText, Span{"ssh:" + v.Location.Host, dim})
+			add("ssh:"+v.Location.Host, dim, 0)
 		}
+	}
+	const sep = " · "
+	fits := func() bool {
+		total := 0
+		for i, sp := range rightText {
+			total += width(sp.Text)
+			if i > 0 {
+				total += width(sep)
+			}
+		}
+		return right-1-total > x+2
+	}
+	for rank := 1; !fits() && rank <= 4; rank++ {
+		rightText = slices.DeleteFunc(rightText, func(p part) bool { return p.rank == rank })
+	}
+	if !fits() {
+		return
 	}
 	total := 0
 	for i, sp := range rightText {
 		total += width(sp.Text)
 		if i > 0 {
-			total += 2
+			total += width(sep)
 		}
 	}
 	rx := right - 1 - total
-	if rx > x+2 {
-		for i, sp := range rightText {
-			if i > 0 {
-				rx += 2
-			}
-			rx = a.put(rx, y, right, sp.Text, sp.Style)
+	for i, sp := range rightText {
+		if i > 0 {
+			rx = a.put(rx, y, right, sep, dim)
 		}
+		rx = a.put(rx, y, right, sp.Text, sp.Style)
 	}
+}
+
+// shortModel turns "claude-opus-5[1m]" into "opus-5 1m".
+func shortModel(m string) string {
+	m = strings.TrimPrefix(m, "claude-")
+	m = strings.ReplaceAll(m, "[", " ")
+	return strings.TrimSuffix(m, "]")
 }
 
 func bufTitle(b *Buffer) string {
@@ -325,8 +423,8 @@ func bufTitle(b *Buffer) string {
 		return b.Thread
 	case KindThreads:
 		return "threads"
-	case KindProjects:
-		return "projects"
+	case KindWorkspaces:
+		return "workspaces"
 	case KindMessages:
 		return "messages"
 	case KindHelp:
@@ -354,7 +452,7 @@ func (a *App) drawFloats(w *Window, top, bottom int) {
 		title = "permission"
 		body = [][]Span{
 			{{v.Permission.Tool, th.Text.Bold(true)}, {"  " + truncate(v.Permission.Detail, bw-8-width(v.Permission.Tool)), th.Subtle}},
-			{{"␣y", th.Iris}, {" allow   ", th.Muted}, {"␣Y", th.Iris}, {" always   ", th.Muted}, {"␣n", th.Iris}, {" deny", th.Muted}},
+			{{"␣a", th.Iris}, {" allow   ", th.Muted}, {"␣A", th.Iris}, {" always   ", th.Muted}, {"␣x", th.Iris}, {" deny", th.Muted}},
 		}
 	case v.Waiting == "paused":
 		title = "paused"
@@ -476,7 +574,7 @@ func (a *App) drawGlobal(W, H int) {
 		}
 		return
 	}
-	// Right side: how many threads of the project run or wait for you, then
+	// Right side: how many threads of the workspace run or wait for you, then
 	// keys typed so far, as Vim's showcmd.
 	var right []Span
 	if len(a.pending) > 0 || a.count > 0 {

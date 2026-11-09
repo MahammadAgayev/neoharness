@@ -17,8 +17,8 @@ import (
 	"github.com/MahammadAgayev/neoharness/internal/hubapi"
 	"github.com/MahammadAgayev/neoharness/internal/hubserver"
 	"github.com/MahammadAgayev/neoharness/internal/mcpserver"
-	"github.com/MahammadAgayev/neoharness/internal/project"
 	"github.com/MahammadAgayev/neoharness/internal/tunnel"
+	"github.com/MahammadAgayev/neoharness/internal/workspace"
 )
 
 // defaultMCPPort is fixed rather than random because remote hosts reach it
@@ -69,8 +69,15 @@ func startHub() (stop func(), err error) {
 	// its owner's.
 	_ = os.Chmod(sock, 0o600)
 
+	if err := workspace.Migrate(); err != nil {
+		apiLn.Close()
+		mcpLn.Close()
+		logFile.Close()
+		return nil, err
+	}
+
 	tunnels := tunnel.New(port)
-	h, err := hub.New(hub.Config{MCPPort: port, Factory: agentFactory(tunnels)})
+	h, err := hub.New(hub.Config{MCPPort: port, Factory: agentFactory(tunnels), Files: listFiles, Branch: gitBranch, Shell: runShell})
 	if err != nil {
 		apiLn.Close()
 		mcpLn.Close()
@@ -86,7 +93,7 @@ func startHub() (stop func(), err error) {
 	go apiSrv.Serve(apiLn)
 
 	logf("hub up · api %s · mcp 127.0.0.1:%d", sock, port)
-	logf("projects in %s", project.Root())
+	logf("workspaces in %s", workspace.Root())
 	go logUpdates(h)
 
 	return func() {
@@ -106,7 +113,7 @@ func startHub() (stop func(), err error) {
 // agentFactory builds the claude adapter for a thread, opening the ssh tunnel
 // first for a remote one.
 func agentFactory(tunnels *tunnel.Manager) hub.AgentFactory {
-	return func(p project.Project, t project.Thread) agent.Agent {
+	return func(p workspace.Workspace, t workspace.Thread) agent.Agent {
 		if !t.Location.Remote() {
 			return agentclaude.New(commandFor("NEOHARNESS_CLAUDE_COMMAND")...)
 		}
@@ -141,7 +148,7 @@ func logUpdates(h *hub.Hub) {
 		if u.View == nil {
 			continue
 		}
-		key := u.Project + "/" + u.Thread
+		key := u.Workspace + "/" + u.Thread
 		s := string(u.View.State)
 		if last[key] != s {
 			last[key] = s

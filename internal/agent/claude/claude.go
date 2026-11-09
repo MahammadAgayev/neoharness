@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -102,10 +103,17 @@ func (a *Agent) run(ctx context.Context, req agent.Request) (agent.Result, error
 	waitErr := cmd.Wait()
 
 	res := agent.Result{
-		Text:   acc.text,
-		Tools:  acc.tools,
-		Tokens: acc.tokens,
-		Stderr: trim(stderr.String(), maxStderr),
+		Text:     acc.text,
+		Tools:    acc.tools,
+		Tokens:   acc.tokens,
+		Stderr:   trim(stderr.String(), maxStderr),
+		Commands: acc.commands,
+		Model:    acc.model,
+		Context:  acc.context,
+		Cost:     acc.cost,
+	}
+	for _, m := range acc.models {
+		res.ContextWindow = max(res.ContextWindow, m.ContextWindow)
 	}
 	switch {
 	case waitErr != nil:
@@ -143,8 +151,14 @@ func (a *Agent) args(req agent.Request) []string {
 			args = append(args, "--session-id", req.Conversation)
 		}
 	}
+	if req.Model != "" {
+		args = append(args, "--model", req.Model)
+	}
+	if req.Effort != "" {
+		args = append(args, "--effort", req.Effort)
+	}
 	if req.SystemPrompt != "" {
-		// Appended, not replaced: the role in the project is an overlay on a
+		// Appended, not replaced: the role in the workspace is an overlay on a
 		// working coding agent, not a replacement for one.
 		args = append(args, "--append-system-prompt", req.SystemPrompt)
 	}
@@ -156,11 +170,17 @@ func (a *Agent) args(req agent.Request) []string {
 
 // accumulator folds Claude's stream into a Result.
 type accumulator struct {
-	onEvent func(agent.Event)
-	text    string
-	tools   int
-	tokens  int
-	isError bool
+	onEvent  func(agent.Event)
+	text     string
+	tools    int
+	tokens   int
+	isError  bool
+	said     bool // emitted assistant text this turn
+	commands []string
+	model    string
+	context  int
+	cost     float64
+	models   map[string]modelUsage
 }
 
 type wire struct {
@@ -179,6 +199,17 @@ type wire struct {
 	Result  string `json:"result"`
 	IsError bool   `json:"is_error"`
 	Usage   *usage `json:"usage"`
+	// Init record.
+	Model            string   `json:"model"`
+	SlashCommands    []string `json:"slash_commands"`
+	TerminalCommands []string `json:"terminal_slash_commands"`
+	// Terminal record.
+	Cost       float64               `json:"total_cost_usd"`
+	ModelUsage map[string]modelUsage `json:"modelUsage"`
+}
+
+type modelUsage struct {
+	ContextWindow int `json:"contextWindow"`
 }
 
 type usage struct {
@@ -205,12 +236,25 @@ func (a *accumulator) consume(line []byte) {
 	}
 
 	switch e.Type {
+	case "system":
+		if e.Subtype == "init" {
+			a.model = e.Model
+			// Terminal commands act on the interactive screen, which a
+			// --print session does not have.
+			a.commands = slices.DeleteFunc(e.SlashCommands, func(c string) bool {
+				return slices.Contains(e.TerminalCommands, c)
+			})
+		}
+
 	case "assistant":
 		if e.Message == nil {
 			return
 		}
 		if t := e.Message.Usage.total(); t > a.tokens {
 			a.tokens = t
+		}
+		if t := e.Message.Usage.total(); t > 0 {
+			a.context = t
 		}
 		var prose []string
 		for _, c := range e.Message.Content {
@@ -231,6 +275,7 @@ func (a *accumulator) consume(line []byte) {
 			}
 		}
 		if len(prose) > 0 {
+			a.said = true
 			a.text = strings.TrimSpace(strings.Join(prose, " "))
 			a.emit(agent.Event{Kind: agent.KindAssistantText, Text: a.text, Tokens: a.tokens})
 		}
@@ -240,14 +285,21 @@ func (a *accumulator) consume(line []byte) {
 			a.tokens = t
 		}
 		a.isError = e.IsError
+		a.cost = e.Cost
+		a.models = e.ModelUsage
 		// The authoritative final answer. Preferred over the last assistant
 		// message because that is what the CLI itself considers the reply.
 		if strings.TrimSpace(e.Result) != "" {
 			a.text = strings.TrimSpace(e.Result)
+			// Built-in commands such as /context answer only here, with no
+			// assistant message; without this the turn looks silent.
+			if !a.said {
+				a.emit(agent.Event{Kind: agent.KindAssistantText, Text: a.text, Tokens: a.tokens})
+			}
 		}
 		a.emit(agent.Event{Kind: agent.KindTurnEnd, Tokens: a.tokens})
 	}
-	// "system" records are hooks, init, and progress — machinery, not work.
+	// Other "system" records are hooks and progress — machinery, not work.
 	// "user" records carry tool results back in; the neoharness does not display
 	// them, on the same principle that keeps the tool firehose off the screen.
 }

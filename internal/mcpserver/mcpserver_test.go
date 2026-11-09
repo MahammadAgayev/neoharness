@@ -15,7 +15,7 @@ import (
 	"github.com/MahammadAgayev/neoharness/internal/agent"
 	"github.com/MahammadAgayev/neoharness/internal/hub"
 	"github.com/MahammadAgayev/neoharness/internal/model"
-	"github.com/MahammadAgayev/neoharness/internal/project"
+	"github.com/MahammadAgayev/neoharness/internal/workspace"
 )
 
 type idle struct{}
@@ -39,12 +39,12 @@ func (w withToken) RoundTrip(r *http.Request) (*http.Response, error) {
 func setup(t *testing.T) (*hub.Hub, *httptest.Server) {
 	t.Helper()
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
-	h, err := hub.New(hub.Config{Factory: func(project.Project, project.Thread) agent.Agent { return idle{} }})
+	h, err := hub.New(hub.Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return idle{} }})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(h.Close)
-	if err := h.CreateProject("demo", t.TempDir()); err != nil {
+	if err := h.CreateWorkspace("demo", t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
 	srv := httptest.NewServer(Handler(h))
@@ -54,7 +54,7 @@ func setup(t *testing.T) (*hub.Hub, *httptest.Server) {
 
 func token(t *testing.T, name string) string {
 	t.Helper()
-	ths, _ := project.Threads("demo")
+	ths, _ := workspace.Threads("demo")
 	for _, th := range ths {
 		if th.Name == name {
 			return th.Token
@@ -138,13 +138,13 @@ func TestCoordinatorOpensThreadsAndThreadsCannot(t *testing.T) {
 		t.Fatalf("a thread must not get coordinator tools: %v", names)
 	}
 	out, _ := call(t, th, "whoami", nil)
-	if !strings.Contains(out, "api-tests (thread) in project demo") {
+	if !strings.Contains(out, "api-tests (thread) in workspace demo") {
 		t.Errorf("whoami = %q", out)
 	}
 	call(t, th, "report_progress", map[string]any{"summary": "halfway"})
-	out, _ = call(t, coord, "project_status", nil)
+	out, _ = call(t, coord, "workspace_status", nil)
 	if !strings.Contains(out, "api-tests") || !strings.Contains(out, "progress: halfway") || !strings.Contains(out, "coordinator (you)") {
-		t.Errorf("project_status = %q", out)
+		t.Errorf("workspace_status = %q", out)
 	}
 	if out, isErr := call(t, th, "send_message", map[string]any{"to": "coordinator", "text": "done?"}); isErr {
 		t.Fatalf("send_message: %s", out)
@@ -187,5 +187,24 @@ func TestPermissionReplyDeny(t *testing.T) {
 	got := permissionReply(false, "", nil)
 	if got != `{"behavior":"deny","message":"The person denied this."}` {
 		t.Errorf("deny reply = %s", got)
+	}
+}
+
+func TestReadThreadNeedsATail(t *testing.T) {
+	h, srv := setup(t)
+	if err := h.OpenThread("demo", model.User, "api", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Send("demo", model.User, model.Coordinator, "plan the token fix"); err != nil {
+		t.Fatal(err)
+	}
+	th := connect(t, srv, token(t, "api"))
+	res, err := th.CallTool(context.Background(), &mcp.CallToolParams{Name: "read_thread", Arguments: map[string]any{"name": model.Coordinator}})
+	if err == nil && !res.IsError {
+		t.Fatal("read_thread without a tail should fail")
+	}
+	out, isErr := call(t, th, "read_thread", map[string]any{"name": model.Coordinator, "tail": 10, "query": "token"})
+	if isErr || !strings.Contains(out, "message from user: plan the token fix") {
+		t.Fatalf("read_thread = %q", out)
 	}
 }
