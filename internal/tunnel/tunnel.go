@@ -33,6 +33,8 @@ type Manager struct {
 	tunnels map[string]*tunnel
 	// command builds the ssh command; replaced in tests.
 	command func(ctx context.Context, host string, port int) *exec.Cmd
+	// reopenEvery is how long a dropped tunnel waits before it opens again.
+	reopenEvery time.Duration
 }
 
 type tunnel struct {
@@ -44,7 +46,7 @@ type tunnel struct {
 // here.
 func New(port int) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Manager{Port: port, ctx: ctx, cancel: cancel, tunnels: map[string]*tunnel{}, command: sshCommand}
+	return &Manager{Port: port, ctx: ctx, cancel: cancel, tunnels: map[string]*tunnel{}, command: sshCommand, reopenEvery: 5 * time.Second}
 }
 
 func sshCommand(ctx context.Context, host string, port int) *exec.Cmd {
@@ -101,7 +103,28 @@ func (m *Manager) Ensure(host string) error {
 	case <-time.After(startGrace):
 	}
 	m.tunnels[host] = t
+	go m.reopen(host, t)
 	return nil
+}
+
+// reopenTries is how often a dropped tunnel tries to open again before it
+// leaves it to the next turn.
+const reopenTries = 12
+
+// reopen opens a tunnel again when it drops (the network went away, the
+// laptop slept), so an MCP call later in the same turn still reaches the hub.
+func (m *Manager) reopen(host string, t *tunnel) {
+	<-t.done
+	for range reopenTries {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-time.After(m.reopenEvery):
+		}
+		if m.ctx.Err() != nil || m.Ensure(host) == nil {
+			return
+		}
+	}
 }
 
 // Close stops every tunnel.

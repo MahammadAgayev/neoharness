@@ -85,6 +85,9 @@ type Request struct {
 	// PermissionPromptTool names an MCP tool that answers permission prompts,
 	// so a human can approve tool calls without a terminal.
 	PermissionPromptTool string
+	// PermissionMode is the agent's own permission mode, like "auto"; empty
+	// is its default.
+	PermissionMode string
 	// Env is extra KEY=VALUE pairs for the agent process.
 	Env []string
 	// Model and Effort choose the model and effort level; empty leaves the

@@ -28,9 +28,9 @@ type cmdline struct {
 }
 
 var commands = []string{
-	"allow", "always", "b", "buffer", "deny", "folder", "help", "ls", "messages", "new",
+	"allow", "always", "artifacts", "b", "buffer", "deny", "edit", "folder", "help", "ls", "messages", "new",
 	"only", "open", "q", "qa", "quit", "reopen", "resolve", "split", "threads",
-	"vsplit", "workspace", "workspaces",
+	"vsplit", "workspace", "workspaces", "wq",
 }
 
 func (a *App) startCmd(prefix rune) {
@@ -239,11 +239,45 @@ func (a *App) exec(line string) {
 		return true
 	}
 
+	edit := a.cur.Buf.Edit
 	switch cmd {
 	case "q", "quit", "close":
+		if edit != nil {
+			a.leaveEdit(false)
+			return
+		}
 		a.closeCur(false)
 	case "q!", "quit!":
+		if edit != nil {
+			a.leaveEdit(true)
+			return
+		}
 		a.closeCur(true)
+	case "e", "edit":
+		if a.cur.Buf.Kind != KindArtifact {
+			a.notify("only an artifact can be edited", a.th.Muted)
+			return
+		}
+		a.startEdit(0)
+	case "e!", "edit!":
+		if edit != nil {
+			a.stopEdit(a.cur)
+			a.startEdit(0)
+		}
+	case "w", "write", "w!", "write!":
+		if edit == nil {
+			a.notify("nothing to write here", a.th.Muted)
+			return
+		}
+		a.saveEdit(strings.HasSuffix(cmd, "!"))
+	case "wq", "x", "xit":
+		if edit == nil {
+			a.notify("nothing to write here", a.th.Muted)
+			return
+		}
+		if a.saveEdit(false) {
+			a.stopEdit(a.cur)
+		}
 	case "qa", "qall", "quitall":
 		a.quitAll(false)
 	case "qa!", "qall!", "quitall!":
@@ -303,7 +337,7 @@ func (a *App) exec(line string) {
 			a.renderThreads()
 		}
 		a.paneThread(arg(0))
-		a.insert()
+		a.insert('i')
 	case "resolve":
 		if !needWorkspace() {
 			return
@@ -348,6 +382,8 @@ func (a *App) exec(line string) {
 		a.answer(model.Always, "")
 	case "deny":
 		a.answer(model.Deny, strings.Join(args, " "))
+	case "artifacts":
+		a.pickArtifacts()
 	case "help", "h":
 		a.cur.show(a.helpBuf())
 	default:
@@ -430,7 +466,7 @@ func (a *App) helpBuf() *Buffer {
 		sec("move"),
 		row("j k  gg G  <C-d> <C-u>", "lines, ends, half pages"),
 		row("h l  w b  0 $", "within a line"),
-		row("]m [m", "next / previous message"),
+		row("]m [m", "next / previous message, or heading in an artifact"),
 		row("/ n N", "search"),
 		row("za  <leader>e", "open or close a turn's tool calls"),
 		row("v V  y  yy  <leader>y", "select and yank to the clipboard"),
@@ -450,6 +486,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<leader>t", "threads pane on the right; <CR> opens a thread in it"),
 		row("<leader>w", "workspaces"),
 		row("<leader>pv  <leader>pc", "workspaces screen, coordinator"),
+		row("<leader>pa", "artifacts; <CR> on a name in a chat opens it too"),
 		row("<leader>nc  <leader>nh", "dismiss notifications, their history"),
 		row("<leader>/", "search every transcript"),
 		row("<leader>a A x", "allow, allow always, deny a permission"),
@@ -463,6 +500,11 @@ func (a *App) helpBuf() *Buffer {
 		row(":b <name>  :ls", "switch buffer"),
 		row(":vsplit :split [name]", "split with a buffer"),
 		row(":threads", "threads pane, as <leader>t"),
+		row(":artifacts", "pick an artifact; <CR> on ◇ in a chat opens one beside it"),
+		row(":e  i a o", "edit the artifact's markdown, where you are reading"),
+		row(":w  :wq  :q!", "save it, save and go back, drop the changes"),
+		row(":w!  :e!", "save over a newer version, take the newer version"),
+		row("x dd D p P u <C-r>", "change it in Normal; the writer sees the diff with your next message"),
 		row(":messages", "notice history"),
 		row(":workspaces  :workspace <n>", "workspace list, switch workspace"),
 		row(":q  :qa", "close window, quit"),

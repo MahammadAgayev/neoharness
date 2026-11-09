@@ -183,6 +183,33 @@ func (a *App) threadItems() []pickItem {
 	return items
 }
 
+func (a *App) artifactItems() []pickItem {
+	var items []pickItem
+	for _, art := range a.artifacts {
+		art := art
+		items = append(items, pickItem{
+			glyph:  Span{"◇", a.th.Foam},
+			label:  art.Name,
+			detail: fmt.Sprintf("%s · %s · v%d", art.Title, art.Thread, art.Version),
+			run:    func() { a.openArtifact(art.Name) },
+		})
+	}
+	return items
+}
+
+func (a *App) pickArtifacts() {
+	if a.workspace == "" {
+		a.notify("open a workspace first", a.th.Muted)
+		return
+	}
+	if len(a.artifacts) == 0 {
+		a.notify("no artifacts yet", a.th.Muted)
+		return
+	}
+	items := a.artifactItems()
+	a.openPicker("artifacts", func(q string) []pickItem { return fuzzy(items, q) })
+}
+
 func (a *App) pickWorkspaces() {
 	var items []pickItem
 	for _, p := range a.workspaces {
@@ -268,7 +295,7 @@ func candidateFolders() []string {
 func (a *App) pickBuffers() {
 	var items []pickItem
 	if a.workspace != "" {
-		items = a.threadItems()
+		items = append(a.threadItems(), a.artifactItems()...)
 		if a.threadsBuf != nil {
 			b := a.threadsBuf
 			items = append(items, pickItem{glyph: Span{"≡", a.th.Muted}, label: "threads", detail: b.Name, run: func() { a.cur.show(b) }})

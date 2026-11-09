@@ -37,12 +37,25 @@ func (a *App) draw() {
 	// list is redrawn here rather than after each of them.
 	a.renderThreads()
 
-	a.root.layout(Rect{0, 0, W, H - 1}, func(x, y, h int) {
+	sep := func(x, y, h int) {
 		for i := 0; i < h; i++ {
 			s.SetContent(x, y+i, '│', nil, a.th.Separator)
 		}
-	})
+	}
 	live := false
+	area := Rect{0, 0, W, H - 1}
+	if a.under != nil {
+		// The layout stays live under the popup.
+		a.under.layout(area, sep)
+		for _, w := range a.under.windows() {
+			a.drawWindow(w, false)
+			live = live || w.Buf.Live()
+		}
+		area = Rect{2, 1, W - 4, H - 3}
+		a.box(area.X, area.Y, area.W, area.H, "", a.th.Iris)
+		area = Rect{area.X + 1, area.Y + 1, area.W - 2, area.H - 2}
+	}
+	a.root.layout(area, sep)
 	for _, w := range a.root.windows() {
 		a.drawWindow(w, w == a.cur)
 		live = live || w.Buf.Live()
@@ -119,6 +132,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	lines := b.Lines(a.textWidth(w), a.th, a.spin)
 	n := len(lines)
 	w.linesN = n
+	rail := railWidth(w)
 	if n == 0 {
 		w.Cur = 0
 	} else if w.Follow || w.Cur >= n {
@@ -136,7 +150,8 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		w.Top = max(n-h, 0)
 	}
 
-	showCursor := focused && (a.mode == modeNormal || a.mode == modeVisual)
+	editing := b.Edit != nil && focused && a.mode == modeInsert
+	showCursor := focused && (a.mode == modeNormal || a.mode == modeVisual) || editing
 	vl1, vl2 := -1, -1
 	if w.vmode != 0 && focused {
 		vl1, vl2 = min(w.vLine, w.Cur), max(w.vLine, w.Cur)
@@ -150,9 +165,13 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		if showCursor && li == w.Cur && w.vmode == 0 {
 			bg, hasBG = a.th.CursorLine, true
 		}
-		x := r.X
+		x := r.X + rail
 		col := 0
-		for _, sp := range append(clone(l.Prefix), l.Spans...) {
+		spans := l.Spans
+		if w.Buf.Kind == KindChat {
+			spans = a.linkify(spans)
+		}
+		for _, sp := range append(clone(l.Prefix), spans...) {
 			g := uniseg.NewGraphemes(sp.Text)
 			for g.Next() {
 				gw := g.Width()
@@ -181,11 +200,18 @@ func (a *App) drawWindow(w *Window, focused bool) {
 			a.fill(x, y, right, a.th.Selection)
 		}
 		if showCursor && li == w.Cur {
-			a.cursorX, a.cursorY = r.X+min(w.Col, r.W-1), y
+			a.cursorX, a.cursorY = r.X+rail+min(w.Col, r.W-rail-1), y
+			// The caret of the prompt: you type here.
+			if editing {
+				a.put(r.X+rail, y, right, "›", overlay(a.th.Iris, a.th.CursorLine))
+			}
 		}
 	}
 	if showCursor && n == 0 {
-		a.cursorX, a.cursorY = r.X, top
+		a.cursorX, a.cursorY = r.X+rail, top
+	}
+	if rail > 0 {
+		a.drawRail(w, lines, top, h)
 	}
 
 	if b.Prompt != nil {
@@ -200,6 +226,44 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		a.drawMenu(w, top, promptTop)
 	}
 	a.drawStatus(w, status, focused)
+}
+
+// railWidth is the left gutter of an artifact window, where the outline rail
+// goes. Narrow windows keep their columns for the text.
+func railWidth(w *Window) int {
+	if w.Buf.Kind != KindArtifact || w.rect.W < 60 {
+		return 0
+	}
+	return 5
+}
+
+// drawRail draws the outline of a document in its gutter: a dash per heading,
+// longer for higher levels, the cursor's section heavier and brighter.
+func (a *App) drawRail(w *Window, lines []Line, top, h int) {
+	var heads []int
+	cur := 0
+	for i, l := range lines {
+		if l.Head == 0 {
+			continue
+		}
+		if i <= w.Cur {
+			cur = len(heads)
+		}
+		heads = append(heads, i)
+	}
+	if len(heads) < 2 {
+		return
+	}
+	rows := min(len(heads), h)
+	first := max(min(cur-rows/2, len(heads)-rows), 0)
+	y := top + (h-rows)/2
+	for i := first; i < first+rows; i++ {
+		dash, st := "─", a.th.Separator
+		if i == cur {
+			dash, st = "━", a.th.Subtle
+		}
+		a.put(w.rect.X+1, y+i-first, w.rect.X+railWidth(w), strings.Repeat(dash, max(4-lines[heads[i]].Head, 1)), st)
+	}
 }
 
 // drawMenu draws the completion popup just above the prompt.
@@ -321,6 +385,9 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 		x = a.put(x, y, right, label, dim) + 2
 	}
 	name, nameSt := bufTitle(b), a.th.Subtle
+	if b.Edit != nil && b.Edit.Dirty {
+		name += " [+]"
+	}
 	if focused {
 		nameSt = a.th.Text
 	}
@@ -429,6 +496,8 @@ func bufTitle(b *Buffer) string {
 		return "messages"
 	case KindHelp:
 		return "help"
+	case KindArtifact:
+		return b.Artifact
 	}
 	return b.Name
 }

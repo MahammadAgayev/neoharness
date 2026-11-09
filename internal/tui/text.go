@@ -21,6 +21,11 @@ type Line struct {
 	Spans  []Span
 	// Msg marks the first line of a message, for ]m and [m.
 	Msg bool
+	// Head is the level of a document heading, for the outline rail.
+	Head int
+	// Src is the 1-based source line of a document line, 0 when none. Off
+	// is the rune offset in it where an edited line's row starts.
+	Src, Off int
 	// Block is the index of the block the line came from, for folding.
 	Block int
 	// Item is what <CR> on this line opens: a workspace or thread name.

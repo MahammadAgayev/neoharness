@@ -38,6 +38,22 @@ func Handler(h *hub.Hub) http.Handler {
 	mux.HandleFunc("DELETE /workspaces/{p}", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, nil, h.DeleteWorkspace(r.PathValue("p")))
 	})
+	mux.HandleFunc("GET /workspaces/{p}/artifacts", func(w http.ResponseWriter, r *http.Request) {
+		as, err := h.Artifacts(r.PathValue("p"))
+		reply(w, as, err)
+	})
+	mux.HandleFunc("GET /workspaces/{p}/artifacts/{a}", func(w http.ResponseWriter, r *http.Request) {
+		a, text, err := h.ReadArtifact(r.PathValue("p"), r.PathValue("a"))
+		reply(w, hubapi.ArtifactText{Artifact: a, Text: text}, err)
+	})
+	mux.HandleFunc("PUT /workspaces/{p}/artifacts/{a}", func(w http.ResponseWriter, r *http.Request) {
+		var in hubapi.ArtifactEdit
+		if !decode(w, r, &in) {
+			return
+		}
+		a, err := h.EditArtifact(r.PathValue("p"), r.PathValue("a"), in.Text, in.Base, in.Force)
+		reply(w, a, err)
+	})
 	mux.HandleFunc("GET /workspaces/{p}/threads", func(w http.ResponseWriter, r *http.Request) {
 		vs, err := h.Threads(r.PathValue("p"))
 		reply(w, vs, err)

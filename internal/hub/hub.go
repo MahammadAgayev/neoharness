@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -39,6 +40,9 @@ const (
 	// PermissionTool is the MCP tool Claude asks before a tool call it may not
 	// make on its own.
 	PermissionTool = harnessTools + "permission_prompt"
+	// PermissionMode is Claude's auto mode: it decides what is safe on its
+	// own, and asks through PermissionTool only for the rest.
+	PermissionMode = "auto"
 	harnessTools   = "mcp__neoharness__"
 	// mcpToolTimeout keeps Claude from giving up on a permission prompt
 	// while the user is away from the keyboard.
@@ -762,6 +766,165 @@ func (h *Hub) Reopen(workspaceName, name string) error {
 }
 
 // ReportProgress sets a thread's progress line.
+// artifactLimit is the largest artifact, in bytes. It travels in one MCP call,
+// over the ssh tunnel for a remote thread.
+const artifactLimit = 1 << 20
+
+// WriteArtifact creates or replaces a workspace's artifact. Its title is the
+// first heading, else the name.
+func (h *Hub) WriteArtifact(workspaceName, by, name, text string) (model.Artifact, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, th, err := h.lookup(workspaceName, by)
+	if err != nil {
+		return model.Artifact{}, err
+	}
+	if err := model.ValidName(name); err != nil {
+		return model.Artifact{}, err
+	}
+	if strings.TrimSpace(text) == "" {
+		return model.Artifact{}, errors.New("the artifact is empty")
+	}
+	if len(text) > artifactLimit {
+		return model.Artifact{}, fmt.Errorf("the artifact is %d KB; the limit is %d KB. Split it into several artifacts", len(text)>>10, artifactLimit>>10)
+	}
+	now := time.Now().UTC()
+	a, old, err := workspace.Artifact(workspaceName, name)
+	if errors.Is(err, os.ErrNotExist) {
+		a = model.Artifact{Name: name, CreatedAt: now}
+	} else if err != nil {
+		return model.Artifact{}, err
+	}
+	// Writing over an edit the writer has not seen would drop it without
+	// anyone knowing. The refusal carries the edit instead.
+	if wt, ok := ws.threads[a.Thread]; ok {
+		if e, unseen := wt.t.Edits[name]; unseen {
+			delete(wt.t.Edits, name)
+			h.changed(ws, wt)
+			return model.Artifact{}, errors.New(editNote(name, e, old, a.Version) + "\n\nNothing was saved. Write the whole document again with their changes in it.")
+		}
+	}
+	a.Title, a.Thread, a.UpdatedAt, a.UserEdit = title(text, name), by, now, false
+	a.Version++
+	if err := workspace.SaveArtifact(workspaceName, a, text); err != nil {
+		return model.Artifact{}, err
+	}
+	h.event(ws, th, model.Event{Kind: model.EventArtifact, Detail: name, Text: a.Title, Version: a.Version})
+	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: by, Artifact: &a})
+	return a, nil
+}
+
+// EditArtifact saves the person's edit of an artifact as a new version. base
+// is the version the edit started from: if the artifact moved on since, the
+// edit is refused unless force. The writer gets the diff with its next
+// message; edits until then add up to one diff.
+func (h *Hub) EditArtifact(workspaceName, name, text string, base int, force bool) (model.Artifact, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, err := h.workspace(workspaceName)
+	if err != nil {
+		return model.Artifact{}, err
+	}
+	a, old, err := workspace.Artifact(workspaceName, name)
+	if errors.Is(err, os.ErrNotExist) {
+		return a, fmt.Errorf("no artifact %q in %s", name, workspaceName)
+	} else if err != nil {
+		return a, err
+	}
+	if strings.TrimSpace(text) == "" {
+		return a, errors.New("the artifact is empty")
+	}
+	if len(text) > artifactLimit {
+		return a, fmt.Errorf("the artifact is %d KB; the limit is %d KB", len(text)>>10, artifactLimit>>10)
+	}
+	if a.Version != base && !force {
+		return a, fmt.Errorf("v%d was written while you edited · :w! saves over it", a.Version)
+	}
+	if text == old {
+		return a, nil
+	}
+	th, ok := ws.threads[a.Thread]
+	if ok {
+		if _, unseen := th.t.Edits[name]; !unseen {
+			if th.t.Edits == nil {
+				th.t.Edits = map[string]workspace.Edit{}
+			}
+			th.t.Edits[name] = workspace.Edit{Version: a.Version, Text: old}
+		}
+	}
+	a.Title, a.UpdatedAt, a.UserEdit = title(text, name), time.Now().UTC(), true
+	a.Version++
+	if err := workspace.SaveArtifact(workspaceName, a, text); err != nil {
+		return model.Artifact{}, err
+	}
+	if ok {
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: fmt.Sprintf("You edited %s, v%d. %s sees the change with its next message.", name, a.Version, a.Thread)})
+		h.changed(ws, th)
+	}
+	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: a.Thread, Artifact: &a})
+	return a, nil
+}
+
+// editNotes tells a thread what the person changed in the artifacts it
+// wrote, one note each, and forgets the edits. Callers hold h.mu.
+func (h *Hub) editNotes(ws *space, t *workspace.Thread) []string {
+	var notes []string
+	for _, name := range slices.Sorted(maps.Keys(t.Edits)) {
+		a, text, err := workspace.Artifact(ws.p.Name, name)
+		if err != nil || text == t.Edits[name].Text {
+			continue
+		}
+		notes = append(notes, editNote(name, t.Edits[name], text, a.Version))
+	}
+	t.Edits = nil
+	return notes
+}
+
+// editNote is the diff from what a thread saw to the artifact now.
+func editNote(name string, seen workspace.Edit, now string, version int) string {
+	diff, sections, added, removed := unifiedDiff(seen.Text, now)
+	if len(diff) > diffLimit {
+		diff = ""
+	}
+	return prompts.ArtifactEdited(name, seen.Version, version, diff, sections, added, removed)
+}
+
+// ReadArtifact returns an artifact and its text.
+func (h *Hub) ReadArtifact(workspaceName, name string) (model.Artifact, string, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, err := h.workspace(workspaceName); err != nil {
+		return model.Artifact{}, "", err
+	}
+	a, text, err := workspace.Artifact(workspaceName, name)
+	if errors.Is(err, os.ErrNotExist) {
+		return a, "", fmt.Errorf("no artifact %q in %s", name, workspaceName)
+	}
+	return a, text, err
+}
+
+// Artifacts lists a workspace's artifacts, newest first.
+func (h *Hub) Artifacts(workspaceName string) ([]model.Artifact, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, err := h.workspace(workspaceName); err != nil {
+		return nil, err
+	}
+	return workspace.Artifacts(workspaceName)
+}
+
+// title is a document's first heading, without its marks.
+func title(text, fallback string) string {
+	for _, l := range strings.Split(text, "\n") {
+		if h, ok := strings.CutPrefix(strings.TrimSpace(l), "#"); ok {
+			if t := strings.TrimSpace(strings.TrimLeft(h, "#")); t != "" {
+				return t
+			}
+		}
+	}
+	return fallback
+}
+
 func (h *Hub) ReportProgress(workspaceName, name, summary string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -964,6 +1127,11 @@ func (h *Hub) kick(ws *space, th *thread) {
 		prompt = strings.Join(t.Shell, "\n\n") + "\n\n---\n\n" + prompt
 		t.Shell = nil
 	}
+	if len(t.Edits) > 0 && !batch[0].Compact {
+		if notes := h.editNotes(ws, t); len(notes) > 0 {
+			prompt = strings.Join(notes, "\n\n") + "\n\n---\n\n" + prompt
+		}
+	}
 	req := agent.Request{
 		Prompt:               prompt,
 		Model:                t.ModelChoice,
@@ -973,6 +1141,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 		Resume:               t.Started,
 		MCPConfig:            h.mcpConfig(t.Token),
 		PermissionPromptTool: PermissionTool,
+		PermissionMode:       PermissionMode,
 		Env:                  []string{mcpToolTimeout},
 	}
 	if !t.Location.Remote() {

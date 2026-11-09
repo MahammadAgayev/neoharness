@@ -27,6 +27,8 @@ type fakeClient struct {
 	deleted    []string
 	folders    []string
 	gone       []string
+	docs       map[string]string
+	arts       []model.Artifact
 }
 
 func (f *fakeClient) Workspaces() ([]model.WorkspaceView, error) { return f.workspaces, nil }
@@ -44,6 +46,30 @@ func (f *fakeClient) DeleteWorkspace(name string) error {
 	return nil
 }
 func (f *fakeClient) Threads(p string) ([]model.ThreadView, error) { return f.threads[p], nil }
+func (f *fakeClient) Artifacts(p string) ([]model.Artifact, error) { return slices.Clone(f.arts), nil }
+func (f *fakeClient) Artifact(p, name string) (model.Artifact, string, error) {
+	for _, a := range f.arts {
+		if a.Name == name {
+			return a, f.docs[name], nil
+		}
+	}
+	return model.Artifact{}, "", fmt.Errorf("no artifact %q", name)
+}
+func (f *fakeClient) EditArtifact(p, name, text string, base int, force bool) (model.Artifact, error) {
+	i := slices.IndexFunc(f.arts, func(a model.Artifact) bool { return a.Name == name })
+	if i < 0 {
+		return model.Artifact{}, fmt.Errorf("no artifact %q", name)
+	}
+	if f.arts[i].Version != base && !force {
+		return f.arts[i], fmt.Errorf("v%d was written while you edited · :w! saves over it", f.arts[i].Version)
+	}
+	if f.docs[name] != text {
+		f.arts[i].Version++
+		f.arts[i].UserEdit = true
+		f.docs[name] = text
+	}
+	return f.arts[i], nil
+}
 func (f *fakeClient) OpenThread(p, name, brief, loc string) error {
 	f.opened = append(f.opened, name+"@"+loc)
 	return nil
@@ -225,8 +251,8 @@ func TestWorkspacesScreenAndOpen(t *testing.T) {
 	h.see("/src/demo")
 	h.see("● 1")
 	h.openDemo()
-	if wins := h.a.root.windows(); len(wins) != 1 || h.a.cur.Buf.Thread != model.Coordinator {
-		t.Fatalf("a workspace should open as the coordinator alone; got %d windows", len(wins))
+	if wins := h.a.root.windows(); len(wins) != 2 || wins[0] != h.a.cur || h.a.cur.Buf.Thread != model.Coordinator || wins[1].Buf.Kind != KindThreads {
+		t.Fatalf("a workspace should open with the coordinator on the left and threads on the right; got %d windows", len(wins))
 	}
 	h.see("split the session store out")
 	h.see("Opened auth-refactor and api-tests.")
@@ -237,8 +263,8 @@ func TestWorkspacesScreenAndOpen(t *testing.T) {
 func TestNewWorkspaceStartsReadyToWrite(t *testing.T) {
 	h := start(t)
 	h.press(":new solo /tmp", "<CR>")
-	if n := len(h.a.root.windows()); n != 1 || h.a.cur.Buf.Thread != model.Coordinator {
-		t.Fatalf("a new workspace should be the coordinator alone; got %d windows", n)
+	if n := len(h.a.root.windows()); n != 2 || h.a.cur.Buf.Thread != model.Coordinator {
+		t.Fatalf("a new workspace should focus the coordinator beside the threads; got %d windows", n)
 	}
 	if h.a.mode != modeInsert {
 		t.Fatal("a new workspace should start ready to write")
@@ -246,7 +272,7 @@ func TestNewWorkspaceStartsReadyToWrite(t *testing.T) {
 	h.press("<Esc>")
 	v := model.ThreadView{Workspace: "solo", Name: "first", Role: model.RoleThread, State: model.StateRunning}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "solo", Thread: v.Name, View: &v})
-	if n := len(h.a.root.windows()); n != 1 || h.a.cur.Buf.Thread != model.Coordinator {
+	if n := len(h.a.root.windows()); n != 2 || h.a.cur.Buf.Thread != model.Coordinator {
 		t.Fatal("a new thread should not open a window or take the focus")
 	}
 }
@@ -278,9 +304,9 @@ func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
 	h.press("<Space>", "t")
 	wins := h.a.root.windows()
 	if len(wins) != 2 || wins[1] != h.a.cur || h.a.cur.Buf.Kind != KindThreads || wins[0].Buf.Thread != model.Coordinator {
-		t.Fatalf("<leader>t should open the list in a pane on the right; got %d windows", len(wins))
+		t.Fatalf("<leader>t should focus the threads pane on the right; got %d windows", len(wins))
 	}
-	pane := wins[1]
+	coord, pane := wins[0], wins[1]
 	// Rows: running, auth-refactor, blank, idle, api-tests.
 	h.press("G", "<CR>")
 	if len(h.a.root.windows()) != 2 || h.a.cur != pane || pane.Buf.Thread != "api-tests" {
@@ -300,11 +326,11 @@ func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
 	}
 
 	h.press("<Space>", "p", "c")
-	if h.a.cur != wins[0] || pane.Buf.Thread != "api-tests" {
+	if h.a.cur != coord || pane.Buf.Thread != "api-tests" {
 		t.Fatal("<leader>pc should focus the coordinator and leave the pane")
 	}
 	h.press(":b auth-refactor", "<CR>", "<C-l>", "<Space>", "p", "c")
-	if h.a.cur != wins[0] || wins[0].Buf.Thread != model.Coordinator || pane.Buf.Thread != "api-tests" {
+	if h.a.cur != coord || coord.Buf.Thread != model.Coordinator || pane.Buf.Thread != "api-tests" {
 		t.Fatalf("<leader>pc from the pane should show the coordinator on the left; cur %q", h.a.cur.Buf.Name)
 	}
 }
@@ -314,11 +340,11 @@ func TestPickerOpensInPlaceOrSplit(t *testing.T) {
 	h.openDemo()
 	h.press("<Space>", "<Space>", "api", "<C-x>")
 	wins := h.a.root.windows()
-	if len(wins) != 2 || wins[0] != h.a.cur || h.a.cur.Buf.Thread != "api-tests" || wins[1].Buf.Thread != model.Coordinator {
+	if len(wins) != 3 || wins[0] != h.a.cur || h.a.cur.Buf.Thread != "api-tests" || wins[1].Buf.Thread != model.Coordinator {
 		t.Fatalf("<C-x> in a picker should split api-tests above the coordinator; got %d windows", len(wins))
 	}
 	h.press("<Space>", "<Space>", "auth", "<CR>")
-	if len(h.a.root.windows()) != 2 || h.a.cur != wins[0] || h.a.cur.Buf.Thread != "auth-refactor" {
+	if len(h.a.root.windows()) != 3 || h.a.cur != wins[0] || h.a.cur.Buf.Thread != "auth-refactor" {
 		t.Fatal("<CR> in the picker should switch the current window")
 	}
 }
@@ -447,7 +473,7 @@ func TestSplitsAndWindowMotion(t *testing.T) {
 	first := h.a.cur
 	h.press("<C-w>", "v")
 	wins := h.a.root.windows()
-	if len(wins) != 2 || wins[1] != h.a.cur || wins[0] != first {
+	if len(wins) != 3 || wins[1] != h.a.cur || wins[0] != first {
 		t.Fatalf("<C-w>v should open a focused window on the right; got %d windows", len(wins))
 	}
 	h.press("<C-w>", "h")
@@ -459,7 +485,7 @@ func TestSplitsAndWindowMotion(t *testing.T) {
 		t.Fatal("<C-w>l should move to the right window")
 	}
 	h.press("<C-w>", "c")
-	if n := len(h.a.root.windows()); n != 1 {
+	if n := len(h.a.root.windows()); n != 2 {
 		t.Fatalf("%d windows after <C-w>c", n)
 	}
 	h.press("<C-w>", "s", "<C-w>", "o")
@@ -744,6 +770,7 @@ func TestCompletionsReloadWhenTheTurnEnds(t *testing.T) {
 func TestStatusLineShowsUsage(t *testing.T) {
 	h := start(t)
 	h.openDemo()
+	h.press("<C-w>", "o")
 	v := h.a.threads[model.Coordinator]
 	v.Model, v.Context, v.ContextWindow, v.Cost, v.Branch = "claude-opus-5[1m]", 81000, 1000000, 9.17, "neoharness-hub-tui"
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
@@ -1002,5 +1029,352 @@ func TestShellCommandShowsAndFolds(t *testing.T) {
 	h.press("i", "!ls", "<CR>")
 	if h.hub.sent[len(h.hub.sent)-1] != "coordinator: !ls" {
 		t.Fatalf("sent = %q", h.hub.sent)
+	}
+}
+
+func TestArtifactOpensInAPopupBesideItsWriter(t *testing.T) {
+	h := start(t)
+	h.hub.arts = []model.Artifact{{Name: "design", Title: "Session store design", Thread: "auth-refactor", Version: 1}}
+	h.hub.docs = map[string]string{"design": "# Session store design\n\nFirst draft."}
+	h.openDemo()
+	layout, coord := h.a.root, h.a.cur
+	e := model.Event{Kind: model.EventArtifact, Detail: "design", Text: "Session store design", Version: 1}
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &e})
+	h.a.draw()
+	h.see("◇ Session store design  · artifact")
+
+	h.press("G")
+	for !strings.Contains(h.a.line(coord).Text(), "artifact") {
+		h.press("k")
+	}
+	h.press("<CR>")
+	wins := h.a.root.windows()
+	if h.a.under != layout || len(wins) != 2 || wins[0] != h.a.cur || h.a.cur.Buf.Kind != KindArtifact || wins[1].Buf.Thread != "auth-refactor" {
+		t.Fatalf("<CR> should open a popup: the artifact left, its writer right; %d windows, cur %q", len(wins), h.a.cur.Buf.Name)
+	}
+	if wins[0].rect.W <= wins[1].rect.W {
+		t.Errorf("the chat should be narrower than the document: %d vs %d", wins[0].rect.W, wins[1].rect.W)
+	}
+	h.see("by auth-refactor · v1")
+	h.see("First draft.")
+	h.see("╭")
+
+	h.hub.arts[0].Version = 2
+	h.hub.docs["design"] = "# Session store design\n\nSecond draft."
+	a := h.hub.arts[0]
+	h.a.apply(model.Update{Kind: model.UpdateArtifact, Workspace: "demo", Thread: "auth-refactor", Artifact: &a})
+	h.a.draw()
+	h.see("Second draft.")
+
+	h.press("<C-l>", "i", "looks good", "<CR>", "<Esc>")
+	if h.hub.sent[len(h.hub.sent)-1] != "auth-refactor: looks good" {
+		t.Fatalf("the popup chat should write to the writer; sent = %q", h.hub.sent)
+	}
+	h.press("<Esc>")
+	if h.a.under != nil || h.a.root != layout || h.a.cur != coord {
+		t.Fatal("<Esc> in Normal should close the popup and give the focus back")
+	}
+	h.press("<Space>", "p", "a", "<CR>")
+	if h.a.under == nil || h.a.cur.Buf.Artifact != "design" {
+		t.Fatal("<leader>pa should open the popup too")
+	}
+	h.press("q")
+	if h.a.under != nil {
+		t.Fatal("q should close the popup")
+	}
+	h.press("<Space>", "p", "a", "<CR>", ":q", "<CR>", ":q", "<CR>")
+	if h.a.under != nil || h.a.quit {
+		t.Fatal(":q on the last popup window should close the popup, not neoharness")
+	}
+}
+
+func TestDocumentRendering(t *testing.T) {
+	th := newTheme()
+	src := "# Title\n\nSee [the docs](https://x.dev).\n\n## Steps\n\n- [x] done\n- [ ] todo\n  - nested\n\n" +
+		"1. a\n2. b\n3. c\n4. d\n5. e\n6. f\n7. g\n8. h\n9. i\n10. j\n\n> [!WARNING]\n> Careful here.\n\n```go\nfmt.Println(1)\n```\n\n" +
+		"| Option | Cost |\n|---|---|\n| shared cache | one more service to run, and a network hop on every read of the hot path |\n"
+	lines := renderDocument(model.Artifact{Name: "doc", Thread: "api", Version: 3}, src, 80, th)
+	var text []string
+	var heads []string
+	for _, l := range lines {
+		text = append(text, strings.TrimRight(spansText(l.Prefix)+l.Text(), " "))
+		if l.Msg {
+			heads = append(heads, l.Text())
+		}
+	}
+	all := strings.Join(text, "\n")
+	for _, want := range []string{
+		"◇ doc · by api · v3",
+		"  Title\n  ━━━━",
+		"  Steps\n  ────",
+		"the docs (https://x.dev)",
+		"  ☑ done", "  ☐ todo", "    ◦ nested",
+		"shared cache │ one more service to run, and a network hop on every read of the\n" + strings.Repeat(" ", 15) + "│ hot path",
+		"   9. i", "  10. j",
+		"▎ warning\n  ▎ Careful here.",
+		"  go\n  │ fmt.Println(1)",
+	} {
+		if !strings.Contains(all, want) {
+			t.Errorf("missing %q in:\n%s", want, all)
+		}
+	}
+	if strings.Contains(all, "[!WARNING]") {
+		t.Error("the alert marker should not show")
+	}
+	if strings.Join(heads, "|") != "Title|Steps" {
+		t.Errorf("headings for ]m = %q", heads)
+	}
+	for _, l := range lines {
+		if w := width(spansText(l.Prefix) + l.Text()); w > 80 {
+			t.Errorf("line wider than the window: %q", l.Text())
+		}
+	}
+}
+
+// counting counts the cells the app passes on to the terminal.
+type counting struct {
+	tcell.SimulationScreen
+	n int
+}
+
+func (c *counting) SetContent(x, y int, r rune, comb []rune, st tcell.Style) {
+	c.n++
+	c.SimulationScreen.SetContent(x, y, r, comb, st)
+}
+
+func TestFramesSendOnlyWhatChangedAndTheCursorIsDrawn(t *testing.T) {
+	sim := tcell.NewSimulationScreen("UTF-8")
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	sim.SetSize(120, 36)
+	s := &counting{SimulationScreen: sim}
+	h := &neoharness{t: t, a: newApp(s, newFake()), s: sim, hub: nil}
+	h.a.draw()
+	h.openDemo()
+	h.press(":b auth-refactor", "<CR>")
+	if !h.a.chat("auth-refactor").Live() {
+		t.Fatal("the running thread should have a spinner")
+	}
+	s.n = 0
+	h.a.draw()
+	if s.n != 0 {
+		t.Fatalf("an unchanged frame sent %d cells", s.n)
+	}
+	h.a.spin++
+	h.a.draw()
+	if s.n == 0 || s.n > 3 {
+		t.Fatalf("a spinner frame sent %d cells, want the spinner only", s.n)
+	}
+
+	if _, _, visible := sim.GetCursor(); visible {
+		t.Fatal("the terminal cursor should stay hidden")
+	}
+	h.press("i")
+	cells, w, _ := sim.GetContents()
+	c := cells[h.a.cursorY*w+h.a.cursorX]
+	if _, _, attrs := c.Style.Decompose(); attrs&tcell.AttrReverse == 0 {
+		t.Fatal("the cursor cell should be drawn in reverse")
+	}
+}
+
+func TestOnlyTheNewestToolBlockSpins(t *testing.T) {
+	b := newChat("demo", "api")
+	for _, e := range []model.Event{
+		{Kind: model.EventTool, Tool: "Write", Detail: "a"},
+		{Kind: model.EventPermission, Tool: "Write", Detail: "a"},
+		{Kind: model.EventTool, Tool: "Read", Detail: "b"},
+	} {
+		b.AddEvent(e)
+	}
+	live := 0
+	for _, bl := range b.blocks {
+		if bl.live {
+			live++
+		}
+	}
+	if live != 1 || !b.last().live {
+		t.Fatalf("%d live blocks; only the last should spin", live)
+	}
+}
+
+func TestArtifactNamesInAChatAreLinks(t *testing.T) {
+	h := start(t)
+	h.hub.arts = []model.Artifact{{Name: "cache-design", Title: "Cache", Thread: "auth-refactor", Version: 1}}
+	h.hub.docs = map[string]string{"cache-design": "# Cache\n\nLRU."}
+	h.openDemo()
+	e := model.Event{Kind: model.EventText, Text: "auth-refactor wrote `cache-design`; see the cache-designer note too."}
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &e})
+	h.a.draw()
+	cells, w, _ := h.s.GetContents()
+	screen := h.screen()
+	i := strings.Index(screen, "cache-design;")
+	line := strings.Count(screen[:i], "\n")
+	col := len([]rune(screen[strings.LastIndex(screen[:i], "\n")+1 : i]))
+	if _, _, attrs := cells[line*w+col].Style.Decompose(); attrs&tcell.AttrUnderline == 0 {
+		t.Fatal("the artifact name should be drawn as a link")
+	}
+	j := strings.Index(screen, "cache-designer")
+	jl, jc := strings.Count(screen[:j], "\n"), len([]rune(screen[strings.LastIndex(screen[:j], "\n")+1:j]))
+	if _, _, attrs := cells[jl*w+jc].Style.Decompose(); attrs&tcell.AttrUnderline != 0 {
+		t.Fatal("a longer word that starts with the name is not a link")
+	}
+
+	h.press("G")
+	for !strings.Contains(h.a.line(h.a.cur).Text(), "cache-design") {
+		h.press("k")
+	}
+	h.press("<CR>")
+	if h.a.cur.Buf.Kind != KindArtifact || h.a.cur.Buf.Artifact != "cache-design" {
+		t.Fatalf("<CR> on the line should open the artifact; cur %q", h.a.cur.Buf.Name)
+	}
+	h.press("<C-w>", "h", "<Space>", "p", "a")
+	if h.a.picker == nil || h.a.picker.title != "artifacts" {
+		t.Fatal("<leader>pa should open the artifacts picker")
+	}
+}
+
+func TestTurnEndStopsEverySpinner(t *testing.T) {
+	b := newChat("demo", "api")
+	for _, e := range []model.Event{
+		{Kind: model.EventTool, Tool: "mcp__neoharness__ask_user", Detail: "which release?"},
+		{Kind: model.EventAsk, Text: "which release?"},
+		{Kind: model.EventTurnEnd},
+	} {
+		b.AddEvent(e)
+	}
+	if b.Live() {
+		t.Fatal("a turn that ended still spins")
+	}
+}
+
+func TestArtifactRailFollowsTheCursor(t *testing.T) {
+	h := start(t)
+	body := "# Design\n\nIntro.\n\n## Store\n\n" + strings.Repeat("Text.\n\n", 30) + "## Tunnel\n\nEnd."
+	h.hub.arts = []model.Artifact{{Name: "design", Title: "Design", Thread: "auth-refactor", Version: 1}}
+	h.hub.docs = map[string]string{"design": body}
+	h.openDemo()
+	h.a.openArtifact("design")
+	h.a.draw()
+	h.see("━━━")
+	h.see("──")
+	h.press("G")
+	h.a.draw()
+	if !strings.Contains(h.screen(), "───") || !strings.Contains(h.screen(), "━━") {
+		t.Fatalf("at the end the last section should be the heavy dash:\n%s", h.screen())
+	}
+	w := h.a.cur
+	if lines := w.Buf.Lines(h.a.textWidth(w), h.a.th, 0); !strings.Contains(lines[len(lines)-1].Text(), "End.") || h.a.textWidth(w) != w.rect.W-1-railWidth(w) {
+		t.Fatal("the text should start after the rail")
+	}
+}
+
+func editDemo(t *testing.T, body string) *neoharness {
+	h := start(t)
+	h.hub.arts = []model.Artifact{{Name: "design", Title: "Design", Thread: "auth-refactor", Version: 1}}
+	h.hub.docs = map[string]string{"design": body}
+	h.openDemo()
+	h.a.openArtifact("design")
+	h.a.draw()
+	return h
+}
+
+func TestArtifactEditOpensWhereYouReadAndSaves(t *testing.T) {
+	h := editDemo(t, "# Design\n\nIntro.\n\n## Store\n\nKeep it in redis.\n")
+	for !strings.Contains(h.a.line(h.a.cur).Text(), "Keep it") {
+		h.press("j")
+	}
+	h.press("A", " Or sqlite.", "<Esc>")
+	if h.a.mode != modeNormal || h.a.cur.Buf.Edit == nil {
+		t.Fatal("<Esc> from Insert should stay in the source")
+	}
+	h.a.draw()
+	h.see("Keep it in redis. Or sqlite.")
+	h.see("design [+]")
+	h.press("<Esc>")
+	if h.a.cur.Buf.Edit == nil {
+		t.Fatal("<Esc> should not drop unsaved changes")
+	}
+	h.see("unsaved changes")
+	h.press(":w", "<CR>")
+	if h.hub.docs["design"] != "# Design\n\nIntro.\n\n## Store\n\nKeep it in redis. Or sqlite.\n" || h.hub.arts[0].Version != 2 {
+		t.Fatalf("saved %q v%d", h.hub.docs["design"], h.hub.arts[0].Version)
+	}
+	h.press("<Esc>")
+	if h.a.cur.Buf.Edit != nil || h.a.under == nil {
+		t.Fatal("<Esc> after a save should show the document, still in the popup")
+	}
+	h.a.draw()
+	if l := h.a.line(h.a.cur).Text(); !strings.Contains(l, "Keep it in redis. Or sqlite.") {
+		t.Fatalf("the document should open at the edited paragraph, cursor on %q", l)
+	}
+	h.see("v2 · edited by you")
+}
+
+func TestArtifactEditNormalCommandsAndUndo(t *testing.T) {
+	h := editDemo(t, "# D\n\none\ntwo\n")
+	h.press(":e", "<CR>", "gg")
+	ed := h.a.cur.Buf.Edit
+	h.press("j", "j", "dd", "p")
+	if got := ed.Text(); got != "# D\n\ntwo\none\n" {
+		t.Fatalf("dd p = %q", got)
+	}
+	h.press("x", "o", "new", "<Esc>")
+	if got := ed.Text(); got != "# D\n\ntwo\nne\nnew\n" {
+		t.Fatalf("x o = %q", got)
+	}
+	h.press("u")
+	if got := ed.Text(); got != "# D\n\ntwo\nne\n" {
+		t.Fatalf("u = %q", got)
+	}
+	h.press("u", "u", "u")
+	if got := ed.Text(); got != "# D\n\none\ntwo\n" || ed.Dirty == false {
+		t.Fatalf("u back to the start = %q", got)
+	}
+	h.press("<C-r>")
+	if got := ed.Text(); got != "# D\n\ntwo\n" {
+		t.Fatalf("<C-r> = %q", got)
+	}
+	h.press(":q!", "<CR>")
+	if h.a.cur.Buf.Edit != nil || h.hub.docs["design"] != "# D\n\none\ntwo\n" {
+		t.Fatal(":q! should drop the changes and show the document")
+	}
+}
+
+func TestArtifactEditWrapsLongLines(t *testing.T) {
+	long := strings.Repeat("word ", 40)
+	h := editDemo(t, "# D\n\n"+long+"end\n")
+	h.press(":e", "<CR>", "G")
+	w := h.a.cur
+	if lines := w.Buf.Lines(h.a.textWidth(w), h.a.th, 0); len(lines) < 5 {
+		t.Fatalf("a long line should wrap; %d rows", len(lines))
+	}
+	h.press("k", "$", "x")
+	if got := w.Buf.Edit.Text(); !strings.HasSuffix(got, "word en\n") {
+		t.Fatalf("x at the end of a wrapped line = %q", got[len(got)-12:])
+	}
+	h.press("k", "0", "i", "X", "<Esc>")
+	l := w.Buf.Edit.Src[2]
+	if strings.Count(string(l), "X") != 1 || l[0] == 'X' {
+		t.Fatalf("i on a wrapped row should write in that row, got %q", string(l))
+	}
+}
+
+func TestArtifactEditRefusesToSaveOverANewerVersion(t *testing.T) {
+	h := editDemo(t, "# D\n\nmine\n")
+	h.press(":e", "<CR>", "G", "k", "A", "!", "<Esc>")
+	h.hub.arts[0].Version = 2
+	h.hub.docs["design"] = "# D\n\ntheirs\n"
+	a := h.hub.arts[0]
+	h.a.apply(model.Update{Kind: model.UpdateArtifact, Workspace: "demo", Thread: "auth-refactor", Artifact: &a})
+	h.a.draw()
+	h.see("auth-refactor wrote v2 while you edit")
+	h.press(":w", "<CR>")
+	if h.hub.docs["design"] != "# D\n\ntheirs\n" {
+		t.Fatal(":w should not save over a newer version")
+	}
+	h.press(":w!", "<CR>")
+	if h.hub.docs["design"] != "# D\n\nmine!\n" || h.hub.arts[0].Version != 3 {
+		t.Fatalf(":w! = %q v%d", h.hub.docs["design"], h.hub.arts[0].Version)
 	}
 }

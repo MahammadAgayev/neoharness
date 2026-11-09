@@ -19,6 +19,7 @@ const (
 	KindChat
 	KindMessages
 	KindHelp
+	KindArtifact
 )
 
 type blockKind int
@@ -35,6 +36,8 @@ const (
 	bProgress
 	bNote
 	bShell
+	bArtifact
+	bDoc
 )
 
 type toolCall struct{ tool, detail string }
@@ -49,6 +52,7 @@ type block struct {
 	text2  string // a permission's answer, a shell command's output
 	id     string
 	exit   int
+	art    model.Artifact
 	tools  []toolCall
 	live   bool
 	open   bool
@@ -69,7 +73,10 @@ type Buffer struct {
 	Kind      BufKind
 	Workspace string
 	Thread    string
+	Artifact  string
 	Prompt    *Prompt
+	// Edit is the artifact's source while the person edits it.
+	Edit *Editor
 
 	blocks []*block
 	lines  []Line
@@ -90,6 +97,22 @@ func newChat(workspace, thread string) *Buffer {
 
 func chatName(workspace, thread string) string { return "neoharness://" + workspace + "/" + thread }
 
+func newArtifact(workspace, name string) *Buffer {
+	b := newBuffer(artifactName(workspace, name), KindArtifact)
+	b.Workspace, b.Artifact = workspace, name
+	return b
+}
+
+func artifactName(workspace, name string) string {
+	return "neoharness://" + workspace + "/artifacts/" + name
+}
+
+// SetDoc replaces an artifact buffer's document.
+func (b *Buffer) SetDoc(a model.Artifact, text string) {
+	b.blocks = []*block{{kind: bDoc, art: a, text: text}}
+	b.dirty = true
+}
+
 // SetLines replaces the buffer's content with fixed lines.
 func (b *Buffer) SetLines(lines []Line) {
 	b.blocks = []*block{{kind: bRaw, raw: lines}}
@@ -98,6 +121,9 @@ func (b *Buffer) SetLines(lines []Line) {
 
 // Lines returns the buffer rendered at width w.
 func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
+	if b.Edit != nil {
+		return b.Edit.render(w, th)
+	}
 	live := false
 	for _, bl := range b.blocks {
 		live = live || bl.live
@@ -201,11 +227,20 @@ func (b *Buffer) AddEvent(e model.Event) {
 			b.dirty = true
 			return
 		}
+		// Only the newest activity spins; a permission card between two tool
+		// calls splits them into two blocks.
+		for _, bl := range b.blocks {
+			if bl.kind == bTools && bl.live {
+				bl.live, bl.cache = false, nil
+			}
+		}
 		b.push(&block{kind: bTools, live: true, tools: []toolCall{{e.Tool, e.Detail}}})
 	case model.EventTurnEnd:
-		b.endLive()
+		// A question or permission card after the tool calls is the last
+		// block, so ending only the last one left the tools spinning.
+		b.settle(false)
 	case model.EventError:
-		b.endLive()
+		b.settle(false)
 		b.push(&block{kind: bError, text: e.Text})
 	case model.EventPermission:
 		b.push(&block{kind: bPermission, from: e.Tool, text: e.Detail})
@@ -235,6 +270,9 @@ func (b *Buffer) AddEvent(e model.Event) {
 		}
 		b.endLive()
 		b.push(&block{kind: bShell, id: e.ID, text: e.Detail, live: true})
+	case model.EventArtifact:
+		b.endLive()
+		b.push(&block{kind: bArtifact, art: model.Artifact{Name: e.Detail, Title: e.Text, Version: e.Version}})
 	case model.EventClear:
 		b.blocks = nil
 		b.push(&block{kind: bNote, text: e.Text})
@@ -304,6 +342,14 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 		return wrap([]Span{{bl.text, th.Muted.Italic(true)}}, w, []Span{{"  — ", th.Muted}}, []Span{{"    ", th.Text}})
 	case bShell:
 		return bl.renderShell(w, th, spin)
+	case bArtifact:
+		spans := []Span{{bl.art.Title, th.Text}, {"  · artifact", th.Muted}}
+		if bl.art.Version > 1 {
+			spans = append(spans, Span{" v" + strconv.Itoa(bl.art.Version), th.Muted})
+		}
+		return wrap(spans, w, []Span{{"  ◇ ", th.Foam}}, []Span{{"    ", th.Text}})
+	case bDoc:
+		return renderDocument(bl.art, bl.text, w, th)
 	}
 	return nil
 }

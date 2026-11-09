@@ -4,6 +4,7 @@ package prompts
 
 import (
 	_ "embed"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -53,6 +54,21 @@ func Shell(command, out string, exit int) string {
 		s += "\n<bash-exit-code>" + strconv.Itoa(exit) + "</bash-exit-code>"
 	}
 	return s
+}
+
+// ArtifactEdited tells a session what the person changed in an artifact,
+// from version from to version to. An empty diff means it was too long to
+// send: the counts and sections stand in for it.
+func ArtifactEdited(name string, from, to int, diff string, sections []string, added, removed int) string {
+	head := fmt.Sprintf("The person edited the artifact %s (v%d → v%d).", name, from, to)
+	if diff == "" {
+		where := ""
+		if len(sections) > 0 {
+			where = " Under: " + strings.Join(sections, " · ") + "."
+		}
+		return fmt.Sprintf("%s %d lines added, %d removed.%s Read it with read_artifact before you change it.", head, added, removed, where)
+	}
+	return head + " The change, as a unified diff:\n\n```diff\n" + diff + "\n```\n\nKeep their changes when you write it again."
 }
 
 func fill(tmpl string, in SessionInput) string {

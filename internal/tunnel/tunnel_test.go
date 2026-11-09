@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -80,4 +81,36 @@ func TestCloseKillsAWrappersChild(t *testing.T) {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 		t.Fatal("the wrapper's child is still alive")
 	}
+}
+
+func TestADroppedTunnelOpensAgain(t *testing.T) {
+	startGrace = 50 * time.Millisecond
+	m := New(4242)
+	m.reopenEvery = 10 * time.Millisecond
+	defer m.Close()
+	var mu sync.Mutex
+	starts := 0
+	m.command = func(ctx context.Context, host string, port int) *exec.Cmd {
+		mu.Lock()
+		defer mu.Unlock()
+		starts++
+		if starts == 1 {
+			return exec.CommandContext(ctx, "sleep", "0.2")
+		}
+		return exec.CommandContext(ctx, "sleep", "30")
+	}
+	if err := m.Ensure("gpu1"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := starts
+		mu.Unlock()
+		if n == 2 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the dropped tunnel was not opened again")
 }

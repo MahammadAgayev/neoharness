@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"bytes"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -13,6 +15,8 @@ import (
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
+
+	"github.com/MahammadAgayev/neoharness/internal/model"
 )
 
 var md = goldmark.New(goldmark.WithExtensions(extension.GFM))
@@ -32,11 +36,76 @@ func renderMarkdown(src string, w int, th *Theme, prefix []Span) []Line {
 	return r.out
 }
 
+// docWidth is the widest text column of an artifact: long lines are hard to
+// read.
+const docWidth = 96
+
+// renderDocument renders an artifact as a document: a line about it, then
+// the markdown with headings, rules, labels and links spelled out.
+func renderDocument(a model.Artifact, src string, w int, th *Theme) []Line {
+	margin := []Span{{"  ", th.Text}}
+	meta := fmt.Sprintf("◇ %s · by %s · v%d", a.Name, a.Thread, a.Version)
+	if a.UserEdit {
+		meta += " · edited by you"
+	}
+	meta += " · " + a.UpdatedAt.Local().Format("Jan 2 15:04")
+	out := []Line{{}, {Prefix: margin, Spans: []Span{{meta, th.Muted}}}, {}}
+	source := []byte(src)
+	r := &mdRenderer{src: source, th: th, w: min(w, docWidth+width(spansText(margin))), doc: true}
+	r.blocks(md.Parser().Parse(text.NewReader(source)), margin, margin)
+	return append(out, r.out...)
+}
+
 type mdRenderer struct {
-	src []byte
-	th  *Theme
-	w   int
-	out []Line
+	src   []byte
+	th    *Theme
+	w     int
+	out   []Line
+	doc   bool
+	depth int
+	// strip is an alert marker, like [!NOTE], to drop from the next
+	// paragraph.
+	strip string
+}
+
+// alerts are GitHub's blockquote alerts: > [!NOTE] and the like.
+var alerts = map[string]string{"NOTE": "note", "TIP": "tip", "IMPORTANT": "important", "WARNING": "warning", "CAUTION": "caution"}
+
+func (r *mdRenderer) alertStyle(kind string) tcell.Style {
+	switch kind {
+	case "TIP":
+		return r.th.Pine
+	case "IMPORTANT":
+		return r.th.Iris
+	case "WARNING":
+		return r.th.Gold
+	case "CAUTION":
+		return r.th.Love
+	}
+	return r.th.Foam
+}
+
+// headingStyle gives each level of a document its own color.
+func headingStyle(th *Theme, level int) tcell.Style {
+	switch level {
+	case 1:
+		return th.Iris.Bold(true)
+	case 2:
+		return th.Foam.Bold(true)
+	case 3:
+		return th.Rose.Bold(true)
+	}
+	return th.Subtle.Bold(true)
+}
+
+// srcLine is the 1-based source line where block n starts, 0 if unknown.
+func (r *mdRenderer) srcLine(n ast.Node) int {
+	for c := n; c != nil; c = c.FirstChild() {
+		if c.Type() == ast.TypeBlock && c.Lines().Len() > 0 {
+			return bytes.Count(r.src[:c.Lines().At(0).Start], []byte("\n")) + 1
+		}
+	}
+	return 0
 }
 
 func (r *mdRenderer) blank(prefix []Span) {
@@ -60,11 +129,42 @@ func (r *mdRenderer) blocks(n ast.Node, first, rest []Span) {
 }
 
 func (r *mdRenderer) block(n ast.Node, first, rest []Span) {
+	// A document line knows its source line, so editing opens where the
+	// person was reading.
+	if r.doc {
+		from := len(r.out)
+		defer func() {
+			src := r.srcLine(n)
+			for i := from; i < len(r.out) && src > 0; i++ {
+				if r.out[i].Src == 0 {
+					r.out[i].Src = src
+				}
+			}
+		}()
+	}
 	switch n := n.(type) {
 	case *ast.Paragraph, *ast.TextBlock:
-		r.out = append(r.out, wrap(r.inline(n, r.th.Text), r.w, first, rest)...)
+		spans := r.inline(n, r.th.Text)
+		if r.strip != "" {
+			spans = trimSpans(spans, r.strip)
+			r.strip = ""
+		}
+		r.out = append(r.out, wrap(spans, r.w, first, rest)...)
 	case *ast.Heading:
-		r.out = append(r.out, wrap(r.inline(n, r.th.Bold), r.w, first, rest)...)
+		if !r.doc {
+			r.out = append(r.out, wrap(r.inline(n, r.th.Bold), r.w, first, rest)...)
+			break
+		}
+		lines := wrap(r.inline(n, headingStyle(r.th, n.Level)), r.w, first, rest)
+		lines[0].Msg, lines[0].Head = true, n.Level
+		r.out = append(r.out, lines...)
+		if n.Level <= 2 {
+			rule := "─"
+			if n.Level == 1 {
+				rule = "━"
+			}
+			r.out = append(r.out, Line{Prefix: rest, Spans: []Span{{strings.Repeat(rule, max(r.w-width(spansText(rest)), 1)), r.th.Muted}}})
+		}
 	case *ast.FencedCodeBlock:
 		lang := string(n.Language(r.src))
 		r.code(r.lines(n), lang, first, rest)
@@ -72,19 +172,35 @@ func (r *mdRenderer) block(n ast.Node, first, rest []Span) {
 		r.code(r.lines(n), "", first, rest)
 	case *ast.Blockquote:
 		bar := []Span{{"▎ ", r.th.Muted}}
+		if kind := r.alert(n); kind != "" {
+			st := r.alertStyle(kind)
+			bar = []Span{{"▎ ", st}}
+			r.out = append(r.out, Line{Prefix: append(clone(first), bar...), Spans: []Span{{alerts[kind], st.Bold(true)}}})
+			first = rest
+			r.strip = "[!" + kind + "]"
+		}
 		r.blocks(n, append(clone(first), bar...), append(clone(rest), bar...))
 	case *ast.List:
 		i := n.Start
 		if i == 0 {
 			i = 1
 		}
+		// Numbers line up on the dot: " 9." above "10.".
+		numW := len(strconv.Itoa(i + n.ChildCount() - 1))
+		glyph := []string{"• ", "◦ ", "▪ "}[r.depth%3]
+		r.depth++
+		defer func() { r.depth-- }()
 		for item := n.FirstChild(); item != nil; item = item.NextSibling() {
-			bullet := "• "
+			bullet := glyph
 			if n.IsOrdered() {
-				bullet = strconv.Itoa(i) + ". "
+				bullet = fmt.Sprintf("%*d. ", numW, i)
 				i++
 			}
 			indent := strings.Repeat(" ", width(bullet))
+			// A task's box is its bullet, as on GitHub.
+			if r.doc && isTask(item) {
+				bullet, indent = "", "  "
+			}
 			if item != n.FirstChild() {
 				first = rest
 				if !n.IsTight {
@@ -96,7 +212,11 @@ func (r *mdRenderer) block(n ast.Node, first, rest []Span) {
 				append(clone(rest), Span{indent, r.th.Text}))
 		}
 	case *ast.ThematicBreak:
-		r.out = append(r.out, Line{Prefix: first, Spans: []Span{{strings.Repeat("─", min(r.w-width(spansText(first)), 40)), r.th.Muted}}})
+		rule := min(r.w-width(spansText(first)), 40)
+		if r.doc {
+			rule = r.w - width(spansText(first))
+		}
+		r.out = append(r.out, Line{Prefix: first, Spans: []Span{{strings.Repeat("─", max(rule, 1)), r.th.Muted}}})
 	case *east.Table:
 		r.table(n, first, rest)
 	case *ast.HTMLBlock:
@@ -153,6 +273,10 @@ func (r *mdRenderer) table(n ast.Node, first, rest []Span) {
 		}
 		widths[widest]--
 	}
+	if r.doc {
+		r.wrappedRows(rows, widths, aligns, first, rest)
+		return
+	}
 	for ri, cells := range rows {
 		var spans []Span
 		for i, w := range widths {
@@ -183,6 +307,60 @@ func (r *mdRenderer) table(n ast.Node, first, rest []Span) {
 			r.out = append(r.out, Line{Prefix: first, Spans: []Span{{strings.Join(rule, "─┼─"), r.th.Muted}}})
 		}
 	}
+}
+
+// wrappedRows draws table rows with long cells wrapped onto more lines, so a
+// document shows every word.
+func (r *mdRenderer) wrappedRows(rows [][][]Span, widths []int, aligns []east.Alignment, first, rest []Span) {
+	for ri, cells := range rows {
+		cols := make([][]Line, len(widths))
+		height := 1
+		for i, w := range widths {
+			if i < len(cells) {
+				cols[i] = wrap(cells[i], w, nil, nil)
+			}
+			height = max(height, len(cols[i]))
+		}
+		for k := 0; k < height; k++ {
+			var spans []Span
+			for i, w := range widths {
+				if i > 0 {
+					spans = append(spans, Span{" │ ", r.th.Muted})
+				}
+				var c []Span
+				if k < len(cols[i]) {
+					c = cols[i][k].Spans
+				}
+				gap := Span{strings.Repeat(" ", max(w-width(spansText(c)), 0)), r.th.Text}
+				switch {
+				case aligns[i] == east.AlignRight:
+					spans = append(append(spans, gap), c...)
+				case i == len(widths)-1:
+					spans = append(spans, c...)
+				default:
+					spans = append(append(spans, c...), gap)
+				}
+			}
+			r.out = append(r.out, Line{Prefix: first, Spans: spans})
+			first = rest
+		}
+		rule := make([]string, len(widths))
+		for i, w := range widths {
+			rule[i] = strings.Repeat("─", w)
+		}
+		if ri == 0 {
+			r.out = append(r.out, Line{Prefix: first, Spans: []Span{{strings.Join(rule, "─┼─"), r.th.Muted}}})
+		}
+	}
+}
+
+// isTask reports whether a list item starts with a [ ] or [x] box.
+func isTask(item ast.Node) bool {
+	if p := item.FirstChild(); p != nil {
+		_, ok := p.FirstChild().(*east.TaskCheckBox)
+		return ok
+	}
+	return false
 }
 
 // fitSpans cuts spans to w cells, ending in "…" when it cuts.
@@ -229,6 +407,15 @@ func (r *mdRenderer) code(lines []string, lang string, first, rest []Span) {
 	lexer = chroma.Coalesce(lexer)
 	it, err := lexer.Tokenise(nil, src)
 	indent := Span{"  ", r.th.Text}
+	if r.doc {
+		// No background is painted, so a gutter marks where code starts and
+		// ends.
+		indent = Span{"│ ", r.th.Muted}
+		if lang != "" {
+			r.out = append(r.out, Line{Prefix: first, Spans: []Span{{lang, r.th.Muted.Italic(true)}}})
+			first = rest
+		}
+	}
 	cur := Line{Prefix: append(clone(first), indent)}
 	if err != nil {
 		for _, l := range lines {
@@ -302,6 +489,15 @@ func (r *mdRenderer) inline(n ast.Node, base tcell.Style) []Span {
 				walk(c, st.StrikeThrough(true))
 			case *ast.Link:
 				walk(c, r.th.Foam.Underline(true))
+				if dest := string(c.Destination); r.doc && dest != "" && dest != spansText(r.inline(c, r.th.Text)) {
+					out = append(out, Span{" (" + dest + ")", r.th.Muted})
+				}
+			case *east.TaskCheckBox:
+				if c.IsChecked {
+					out = append(out, Span{"☑ ", r.th.Pine})
+				} else {
+					out = append(out, Span{"☐ ", r.th.Muted})
+				}
 			case *ast.AutoLink:
 				out = append(out, Span{string(c.URL(r.src)), r.th.Foam.Underline(true)})
 			case *ast.Image:
@@ -318,6 +514,46 @@ func (r *mdRenderer) inline(n ast.Node, base tcell.Style) []Span {
 		}
 	}
 	walk(n, base)
+	return out
+}
+
+// alert returns the kind of a GitHub alert quote, or "".
+func (r *mdRenderer) alert(n *ast.Blockquote) string {
+	p := n.FirstChild()
+	if p == nil {
+		return ""
+	}
+	if _, ok := p.(*ast.Paragraph); !ok {
+		return ""
+	}
+	t := spansText(r.inline(p, r.th.Text))
+	for kind := range alerts {
+		if strings.HasPrefix(t, "[!"+kind+"]") {
+			return kind
+		}
+	}
+	return ""
+}
+
+// trimSpans drops prefix from the start of spans, and the spaces after it.
+func trimSpans(spans []Span, prefix string) []Span {
+	var out []Span
+	for _, sp := range spans {
+		if prefix != "" {
+			n := min(len(prefix), len(sp.Text))
+			if sp.Text[:n] != prefix[:n] {
+				prefix = ""
+			} else {
+				sp.Text, prefix = sp.Text[n:], prefix[n:]
+			}
+		}
+		if prefix == "" && len(out) == 0 {
+			sp.Text = strings.TrimLeft(sp.Text, " \n")
+		}
+		if sp.Text != "" || len(out) > 0 {
+			out = append(out, sp)
+		}
+	}
 	return out
 }
 

@@ -139,6 +139,9 @@ func (a *Agent) args(req agent.Request) []string {
 	if req.PermissionPromptTool != "" {
 		args = append(args, "--permission-prompt-tool", req.PermissionPromptTool)
 	}
+	if req.PermissionMode != "" {
+		args = append(args, "--permission-mode", req.PermissionMode)
+	}
 	if req.MCPConfig != "" {
 		args = append(args, "--mcp-config", req.MCPConfig)
 	}

@@ -135,11 +135,19 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"y":              func(int) { a.yankVisual() },
 		"v":              func(int) { a.visual('v') },
 		"V":              func(int) { a.visual('V') },
-		"i":              func(int) { a.insert() },
-		"a":              func(int) { a.insert() },
-		"o":              func(int) { a.insert() },
-		"A":              func(int) { a.insert() },
-		"I":              func(int) { a.insert() },
+		"i":              func(int) { a.insert('i') },
+		"a":              func(int) { a.insert('a') },
+		"o":              func(int) { a.insert('o') },
+		"O":              func(int) { a.insert('O') },
+		"A":              func(int) { a.insert('A') },
+		"I":              func(int) { a.insert('I') },
+		"x":              func(n int) { a.editNormal("x", n) },
+		"D":              func(n int) { a.editNormal("D", n) },
+		"dd":             func(n int) { a.editNormal("dd", n) },
+		"p":              func(n int) { a.editNormal("p", n) },
+		"P":              func(n int) { a.editNormal("P", n) },
+		"u":              func(n int) { a.editNormal("u", n) },
+		"<C-r>":          func(n int) { a.editNormal("<C-r>", n) },
 		"<CR>":           func(int) { a.enter() },
 		"<C-v>":          func(int) { a.splitFromList(true) },
 		"<C-x>":          func(int) { a.splitFromList(false) },
@@ -161,7 +169,8 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<C-w>q":         func(int) { a.closeCur(false) },
 		"<C-w>o":         func(int) { a.only() },
 		"<C-w>=":         func(int) { a.root.equalize() },
-		"<Esc>":          func(int) { a.cur.vmode = 0; a.mode = modeNormal },
+		"<Esc>":          func(int) { a.escape() },
+		"q":              func(int) { a.q() },
 		"<Space><Space>": func(int) { a.pickBuffers() },
 		"<Space>t":       func(int) { a.showList() },
 		"<Space>w":       func(int) { a.pickWorkspaces() },
@@ -175,7 +184,8 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<Space>nh":      func(int) { a.cur.show(a.messagesBuf) },
 		"<Space>pv":      func(int) { a.loadWorkspaces(); a.showWorkspaces() },
 		"<Space>pc":      func(int) { a.goCoordinator() },
-		"<Space>r":       func(int) { a.insert() },
+		"<Space>pa":      func(int) { a.pickArtifacts() },
+		"<Space>r":       func(int) { a.insert('i') },
 		"<Space>e":       func(int) { a.toggleFold(w()) },
 	}
 }
@@ -238,7 +248,7 @@ func (a *App) line(w *Window) Line {
 	return Line{}
 }
 
-func (a *App) textWidth(w *Window) int { return max(w.rect.W-1, 8) }
+func (a *App) textWidth(w *Window) int { return max(w.rect.W-1-railWidth(w), 8) }
 
 func (a *App) lineCount(w *Window) int {
 	return len(w.Buf.Lines(a.textWidth(w), a.th, a.spin))
@@ -305,6 +315,7 @@ func (a *App) goCoordinator() {
 		a.notify("open a workspace first · <leader>w", a.th.Muted)
 		return
 	}
+	a.closePopup()
 	if w := a.windowOf(model.Coordinator); w != nil {
 		a.cur = w
 		return
@@ -372,9 +383,31 @@ func (a *App) splitCur(vert bool, b *Buffer) {
 	a.cur = nw
 }
 
+// escape leaves Visual; in Normal it closes the artifact popup, as in a
+// Neovim float.
+func (a *App) escape() {
+	if a.mode == modeVisual {
+		a.cur.vmode = 0
+		a.mode = modeNormal
+		return
+	}
+	a.q()
+}
+
+// q leaves an artifact's source, else closes the artifact popup.
+func (a *App) q() {
+	if a.cur.Buf.Edit != nil {
+		a.leaveEdit(false)
+		return
+	}
+	a.closePopup()
+}
+
 func (a *App) closeCur(force bool) {
 	if !a.root.closeWindow(a.cur) {
-		a.quitAll(force)
+		if !a.closePopup() {
+			a.quitAll(force)
+		}
 		return
 	}
 	a.cur = a.root.windows()[0]
@@ -390,6 +423,12 @@ func (a *App) quitAll(force bool) {
 	if n > 0 && !force {
 		a.notify(fmt.Sprintf("%d running · :qa! stops them", n), a.th.Gold)
 		return
+	}
+	for _, b := range a.bufs {
+		if b.Edit != nil && b.Edit.Dirty && !force {
+			a.notify("unsaved changes in "+b.Artifact+" · :w saves, :qa! drops them", a.th.Gold)
+			return
+		}
 	}
 	a.quit = true
 }
@@ -423,6 +462,10 @@ func (a *App) cycleThread(d int) {
 }
 
 func (a *App) enter() {
+	if a.cur.Buf.Edit != nil {
+		a.move(a.cur, 1)
+		return
+	}
 	l := a.line(a.cur)
 	switch a.cur.Buf.Kind {
 	case KindWorkspaces:
@@ -439,6 +482,14 @@ func (a *App) enter() {
 			a.showThread(l.Item)
 		}
 	default:
+		if bs := a.cur.Buf.blocks; l.Block < len(bs) && bs[l.Block].kind == bArtifact {
+			a.openArtifact(bs[l.Block].art.Name)
+			return
+		}
+		if name := a.artifactAt(l, a.cur.Col); name != "" {
+			a.openArtifact(name)
+			return
+		}
 		a.cur.Buf.Toggle(l.Block)
 	}
 }
@@ -461,7 +512,13 @@ func (a *App) splitFromList(vert bool) {
 
 // --- insert ---
 
-func (a *App) insert() {
+// insert starts Insert mode with one of i a I A o O. In a chat they all
+// write in the prompt; in an artifact they edit its source.
+func (a *App) insert(k rune) {
+	if a.cur.Buf.Kind == KindArtifact {
+		a.startEdit(k)
+		return
+	}
 	if a.cur.Buf.Prompt == nil {
 		a.notify("this buffer is read-only; i writes in a thread or the coordinator", a.th.Muted)
 		return
@@ -477,6 +534,10 @@ func (a *App) insert() {
 }
 
 func (a *App) insertKey(k string, ev *tcell.EventKey) {
+	if a.cur.Buf.Edit != nil {
+		a.editInsert(k, ev.Rune(), ev.Key() == tcell.KeyRune)
+		return
+	}
 	p := a.cur.Buf.Prompt
 	if p == nil {
 		a.mode = modeNormal

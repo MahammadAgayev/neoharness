@@ -119,6 +119,9 @@ const (
 	// It comes twice with the same ID, when it starts and when it ends; the
 	// second has the output in Text and the exit code.
 	EventShell EventKind = "shell"
+	// EventArtifact is a document the thread wrote: Detail is its name, Text
+	// its title.
+	EventArtifact EventKind = "artifact"
 )
 
 // Event is one transcript entry.
@@ -133,6 +136,21 @@ type Event struct {
 	Tools  int       `json:"tools,omitempty"`
 	Tokens int       `json:"tokens,omitempty"`
 	Exit   int       `json:"exit,omitempty"`
+	// Version is an artifact's version.
+	Version int `json:"version,omitempty"`
+}
+
+// Artifact is a markdown document an agent wrote for the person to read. Its
+// text is stored apart from this summary.
+type Artifact struct {
+	Name    string `json:"name"`
+	Title   string `json:"title"`
+	Thread  string `json:"thread"`
+	Version int    `json:"version"`
+	// UserEdit says the newest version is the person's edit.
+	UserEdit  bool      `json:"userEdit,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Permission is a request waiting for the user.
@@ -194,6 +212,8 @@ const (
 	// UpdateDeleted says Thread no longer exists, or with no Thread, that
 	// the whole workspace is gone.
 	UpdateDeleted UpdateKind = "deleted"
+	// UpdateArtifact says an artifact was written.
+	UpdateArtifact UpdateKind = "artifact"
 )
 
 // Update is one change pushed to subscribers.
@@ -204,6 +224,7 @@ type Update struct {
 	Event     *Event         `json:"event,omitempty"`
 	View      *ThreadView    `json:"view,omitempty"`
 	Summary   *WorkspaceView `json:"summary,omitempty"`
+	Artifact  *Artifact      `json:"artifact,omitempty"`
 }
 
 // Decision is the user's answer to a permission request.

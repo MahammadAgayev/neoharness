@@ -260,7 +260,7 @@ func TestArgsUsesTheConfiguredCommand(t *testing.T) {
 
 func TestArgsOmitsEmptyOptionals(t *testing.T) {
 	got := strings.Join(New().args(agent.Request{Prompt: "hi"}), " ")
-	for _, unwanted := range []string{"--append-system-prompt", "--session-id", "--resume", "--permission-prompt-tool"} {
+	for _, unwanted := range []string{"--append-system-prompt", "--session-id", "--resume", "--permission-prompt-tool", "--permission-mode"} {
 		if strings.Contains(got, unwanted) {
 			t.Errorf("args should omit %s when unset, got %q", unwanted, got)
 		}
@@ -289,6 +289,7 @@ func TestHubTurnsKeepPermissionChecks(t *testing.T) {
 		Conversation:         "11111111-1111-4111-8111-111111111111",
 		MCPConfig:            `{"mcpServers":{}}`,
 		PermissionPromptTool: "mcp__neoharness__permission_prompt",
+		PermissionMode:       "auto",
 	}), " ")
 	if strings.Contains(got, "bypassPermissions") {
 		t.Errorf("args = %q, want permission checks kept", got)
@@ -296,6 +297,7 @@ func TestHubTurnsKeepPermissionChecks(t *testing.T) {
 	for _, want := range []string{
 		"--session-id 11111111-1111-4111-8111-111111111111",
 		"--permission-prompt-tool mcp__neoharness__permission_prompt",
+		"--permission-mode auto",
 		`--mcp-config {"mcpServers":{}}`,
 	} {
 		if !strings.Contains(got, want) {

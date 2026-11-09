@@ -84,6 +84,15 @@ type readIn struct {
 	Query string `json:"query,omitempty" jsonschema:"only events that contain this text; empty for all"`
 }
 
+type artifactIn struct {
+	Name    string `json:"name" jsonschema:"short kebab-case name; the same name replaces that artifact with a new version"`
+	Content string `json:"content" jsonschema:"the whole document in markdown; start with a # title"`
+}
+
+type artifactNameIn struct {
+	Name string `json:"name" jsonschema:"the artifact to read"`
+}
+
 type resolveIn struct {
 	Name string `json:"name" jsonschema:"thread to close"`
 }
@@ -107,13 +116,35 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			return text(fmt.Sprintf("You are %s (%s) in workspace %s, running in %s.", v.Name, v.Role, v.Workspace, v.Location)), nil, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "workspace_status", Description: "Every thread in the workspace: state, last progress report, last update."},
+	mcp.AddTool(s, &mcp.Tool{Name: "workspace_status", Description: "Every thread in the workspace: state, last progress report, last update. Also the workspace's artifacts."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ empty) (*mcp.CallToolResult, any, error) {
 			vs, err := h.Threads(p)
 			if err != nil {
 				return nil, nil, err
 			}
-			return text(Status(vs, me, time.Now())), nil, nil
+			as, err := h.Artifacts(p)
+			if err != nil {
+				return nil, nil, err
+			}
+			return text(Status(vs, me, time.Now()) + Artifacts(as)), nil, nil
+		})
+
+	mcp.AddTool(s, &mcp.Tool{Name: "write_artifact", Description: "Write a markdown document for the person to read: a plan, design, report, or summary longer than a screen. The person opens it beside your chat. Writing the same name again replaces it with a new version; send the whole document each time."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in artifactIn) (*mcp.CallToolResult, any, error) {
+			a, err := h.WriteArtifact(p, me, in.Name, in.Content)
+			if err != nil {
+				return nil, nil, err
+			}
+			return text(fmt.Sprintf("Saved artifact %s, version %d. The person opens it from your chat; do not repeat it in your reply.", a.Name, a.Version)), nil, nil
+		})
+
+	mcp.AddTool(s, &mcp.Tool{Name: "read_artifact", Description: "Read an artifact of this workspace, by name. workspace_status lists them."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in artifactNameIn) (*mcp.CallToolResult, any, error) {
+			_, body, err := h.ReadArtifact(p, in.Name)
+			if err != nil {
+				return nil, nil, err
+			}
+			return text(body), nil, nil
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "send_message", Description: "Send a message to another thread or to the coordinator. It arrives as their next turn; replies come back to you the same way."},
@@ -225,6 +256,19 @@ func Status(vs []model.ThreadView, me string, now time.Time) string {
 	return b.String()
 }
 
+// Artifacts renders the artifact list of workspace_status.
+func Artifacts(as []model.Artifact) string {
+	if len(as) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\nArtifacts:\n")
+	for _, a := range as {
+		fmt.Fprintf(&b, "- %s: %q by %s, version %d\n", a.Name, a.Title, a.Thread, a.Version)
+	}
+	return b.String()
+}
+
 // Transcript renders events as plain text, one per line.
 func Transcript(evs []model.Event) string {
 	if len(evs) == 0 {
@@ -246,6 +290,14 @@ func Transcript(evs []model.Event) string {
 			fmt.Fprintf(&b, "permission for %s: %s", e.Tool, e.Text)
 		case model.EventTurnEnd:
 			fmt.Fprintf(&b, "turn ended, %d tool calls", e.Tools)
+		case model.EventArtifact:
+			fmt.Fprintf(&b, "wrote artifact %s (%q), version %d", e.Detail, e.Text, e.Version)
+		case model.EventShell:
+			if e.Text == "" && e.Exit == 0 {
+				fmt.Fprintf(&b, "the person started ! %s", e.Detail)
+			} else {
+				fmt.Fprintf(&b, "the person ran ! %s, exit %d", e.Detail, e.Exit)
+			}
 		default:
 			fmt.Fprintf(&b, "%s: %s", e.Kind, e.Text)
 		}

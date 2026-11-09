@@ -191,6 +191,9 @@ func TestMessagesQueueWhileBusyAndBatch(t *testing.T) {
 	if len(reqs) != 2 {
 		t.Fatalf("%d turns, want 2 (queued messages go in one turn)", len(reqs))
 	}
+	if reqs[0].PermissionMode != "auto" {
+		t.Errorf("permission mode = %q, want auto on every turn", reqs[0].PermissionMode)
+	}
 	if !strings.HasPrefix(reqs[0].Prompt, "Message from coordinator:\nwrite tests") {
 		t.Errorf("first prompt = %q", reqs[0].Prompt)
 	}
@@ -893,5 +896,110 @@ func TestShellCommandRunsWithoutATurnAndReachesTheNextPrompt(t *testing.T) {
 	}
 	if strings.Contains(reqs[1].Prompt, "bash-input") {
 		t.Error("the command went to Claude twice")
+	}
+}
+
+func TestWriteArtifactVersionsAndLimits(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	ch, stop := h.Subscribe()
+	defer stop()
+	a, err := h.WriteArtifact("demo", model.Coordinator, "plan", "intro\n\n## The plan\n")
+	if err != nil || a.Version != 1 || a.Title != "The plan" {
+		t.Fatalf("first write = %+v, %v", a, err)
+	}
+	if a, _ = h.WriteArtifact("demo", model.Coordinator, "plan", "no heading"); a.Version != 2 || a.Title != "plan" {
+		t.Fatalf("second write = %+v", a)
+	}
+	for _, bad := range []struct{ name, text string }{
+		{"../x", "# x"}, {"plan", "  "}, {"big", strings.Repeat("x", artifactLimit+1)},
+	} {
+		if _, err := h.WriteArtifact("demo", model.Coordinator, bad.name, bad.text); err == nil {
+			t.Errorf("WriteArtifact(%q, %d bytes) should fail", bad.name, len(bad.text))
+		}
+	}
+	if _, _, err := h.ReadArtifact("demo", "nope"); err == nil {
+		t.Error("a missing artifact should be an error")
+	}
+	as, _ := h.Artifacts("demo")
+	if len(as) != 1 || as[0].Name != "plan" {
+		t.Fatalf("artifacts = %+v", as)
+	}
+	evs, _ := h.Events("demo", model.Coordinator, 10)
+	if e := evs[len(evs)-1]; e.Kind != model.EventArtifact || e.Detail != "plan" || e.Version != 2 {
+		t.Errorf("last event = %+v", e)
+	}
+	seen := false
+	for len(ch) > 0 {
+		if u := <-ch; u.Kind == model.UpdateArtifact && u.Artifact.Version == 2 {
+			seen = true
+		}
+	}
+	if !seen {
+		t.Error("subscribers were not told")
+	}
+}
+
+func TestPersonEditsReachTheWriterAsOneDiff(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	doc := "# Plan\n\n## Store\n\none\ntwo\nthree\n\n## Tunnel\n\nssh\n"
+	if _, err := h.WriteArtifact("demo", model.Coordinator, "plan", doc); err != nil {
+		t.Fatal(err)
+	}
+	a, err := h.EditArtifact("demo", "plan", strings.Replace(doc, "two", "TWO", 1), 1, false)
+	if err != nil || a.Version != 2 || !a.UserEdit {
+		t.Fatalf("first edit = %+v, %v", a, err)
+	}
+	if _, err := h.EditArtifact("demo", "plan", doc, 1, false); err == nil {
+		t.Error("an edit from an old version should be refused")
+	}
+	if a, err = h.EditArtifact("demo", "plan", strings.Replace(doc, "two", "TWO", 1)+"more\n", 2, false); err != nil || a.Version != 3 {
+		t.Fatalf("second edit = %+v, %v", a, err)
+	}
+	if len(f.requests()) != 0 {
+		t.Fatal("an edit should not start a turn")
+	}
+
+	_ = h.Send("demo", model.User, model.Coordinator, "go on")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	_ = h.Send("demo", model.User, model.Coordinator, "and now?")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	reqs := f.requests()
+	want := "The person edited the artifact plan (v1 → v3). The change, as a unified diff:\n\n```diff\n" +
+		"@@ -5,3 +5,3 @@ ## Store\n one\n-two\n+TWO\n three\n" +
+		"@@ -11,2 +11,3 @@ ## Tunnel\n ssh\n+more\n \n```\n\nKeep their changes when you write it again.\n\n---\n\ngo on"
+	if len(reqs) != 2 || reqs[0].Prompt != want {
+		t.Fatalf("first prompt = %q", reqs[0].Prompt)
+	}
+	if strings.Contains(reqs[1].Prompt, "edited") {
+		t.Error("the edit went to Claude twice")
+	}
+}
+
+func TestWriteOverAnUnseenEditIsRefused(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	_, _ = h.WriteArtifact("demo", model.Coordinator, "plan", "# Plan\n\nold\n")
+	_, _ = h.EditArtifact("demo", "plan", "# Plan\n\nmine\n", 1, false)
+	_, err := h.WriteArtifact("demo", model.Coordinator, "plan", "# Plan\n\nnew\n")
+	if err == nil || !strings.Contains(err.Error(), "+mine") || !strings.Contains(err.Error(), "Nothing was saved") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, text, _ := h.ReadArtifact("demo", "plan"); text != "# Plan\n\nmine\n" {
+		t.Fatalf("the person's edit was lost: %q", text)
+	}
+	if a, err := h.WriteArtifact("demo", model.Coordinator, "plan", "# Plan\n\nmine and new\n"); err != nil || a.Version != 3 || a.UserEdit {
+		t.Fatalf("a write after the refusal = %+v, %v", a, err)
+	}
+}
+
+func TestLargeEditsAreToldAsCounts(t *testing.T) {
+	old := "# Plan\n\n## Store\n\n" + strings.Repeat("a line\n", 10)
+	now := "# Plan\n\n## Store\n\n" + strings.Repeat("a much longer line that changed\n", 400)
+	note := editNote("plan", workspace.Edit{Version: 1, Text: old}, now, 2)
+	if strings.Contains(note, "```") || !strings.Contains(note, "400 lines added, 10 removed") || !strings.Contains(note, "## Store") {
+		t.Fatalf("note = %q", note)
 	}
 }

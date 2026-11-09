@@ -30,6 +30,9 @@ type Client interface {
 	SetFolder(name, pin string) error
 	DeleteWorkspace(name string) error
 	Threads(workspace string) ([]model.ThreadView, error)
+	Artifacts(workspace string) ([]model.Artifact, error)
+	Artifact(workspace, name string) (model.Artifact, string, error)
+	EditArtifact(workspace, name, text string, base int, force bool) (model.Artifact, error)
 	OpenThread(workspace, name, brief, location string) error
 	Events(workspace, thread string, tail int) ([]model.Event, error)
 	Completions(workspace, thread string) (model.Completions, error)
@@ -85,12 +88,18 @@ type App struct {
 
 	root *node
 	cur  *Window
-	bufs map[string]*Buffer
+	// under is the layout below the artifact popup while it is open; root
+	// is then the popup, so window commands work inside it. back is the
+	// window that had the focus before it opened.
+	under *node
+	back  *Window
+	bufs  map[string]*Buffer
 
 	workspaces []model.WorkspaceView
 	workspace  string
 	threads    map[string]model.ThreadView
 	order      []string
+	artifacts  []model.Artifact
 
 	workspacesBuf *Buffer
 	threadsBuf    *Buffer
@@ -152,7 +161,7 @@ func Run(c Client, restart func() error) error {
 
 func newApp(s tcell.Screen, c Client) *App {
 	a := &App{
-		s:        s,
+		s:        newCanvas(s),
 		c:        c,
 		th:       newTheme(),
 		bufs:     map[string]*Buffer{},
@@ -191,6 +200,9 @@ func (a *App) handle(ev tcell.Event) {
 		a.key(ev)
 	case *tcell.EventPaste:
 		a.pasting = ev.Start()
+		if !a.pasting && a.mode == modeInsert && a.cur.Buf.Edit != nil {
+			a.toWindow(a.cur)
+		}
 	case *tcell.EventResize:
 		a.s.Sync()
 	case evUpdate:
@@ -269,7 +281,7 @@ func (a *App) createWorkspace(name, pin string) {
 	}
 	a.loadWorkspaces()
 	a.openWorkspace(name)
-	a.insert()
+	a.insert('i')
 }
 
 // resync reloads everything after a (re)connect, keeping windows on the
@@ -292,6 +304,14 @@ func (a *App) resync() {
 		a.loadHistory(v)
 	}
 	a.renderThreads()
+	if a.artifacts, err = a.c.Artifacts(a.workspace); err != nil {
+		a.notify(err.Error(), a.th.Love)
+	}
+	for _, b := range a.bufs {
+		if b.Kind == KindArtifact && b.Workspace == a.workspace {
+			a.loadArtifact(b)
+		}
+	}
 }
 
 func (a *App) loadHistory(v model.ThreadView) {
@@ -330,6 +350,18 @@ func (a *App) apply(u model.Update) {
 			a.chat(u.Thread).AddEvent(*u.Event)
 			if u.Event.Kind == model.EventError {
 				a.toast(u.Thread, Span{"✗", a.th.Love}, u.Event.Text, a.th.Love, 8*time.Second)
+			}
+		}
+	case model.UpdateArtifact:
+		if u.Workspace != a.workspace || u.Artifact == nil {
+			return
+		}
+		a.artifacts = slices.DeleteFunc(a.artifacts, func(x model.Artifact) bool { return x.Name == u.Artifact.Name })
+		a.artifacts = append([]model.Artifact{*u.Artifact}, a.artifacts...)
+		if b, ok := a.bufs[artifactName(a.workspace, u.Artifact.Name)]; ok {
+			a.loadArtifact(b)
+			if b.Edit != nil && u.Artifact.Version != b.Edit.Base {
+				a.notify(fmt.Sprintf("%s wrote v%d while you edit · :w! saves over it, :e! takes it", u.Artifact.Thread, u.Artifact.Version), a.th.Gold)
 			}
 		}
 	case model.UpdateDeleted:
@@ -461,6 +493,7 @@ func (a *App) showWorkspaces() {
 	w := newWindow(a.workspacesBuf)
 	w.Follow = false
 	w.Cur = 4
+	a.under = nil
 	a.root = leaf(w, 1)
 	a.cur = w
 	a.mode = modeNormal
@@ -477,9 +510,11 @@ func (a *App) openWorkspace(name string) {
 	a.resync()
 
 	coord := newWindow(a.chat(model.Coordinator))
-	a.root = leaf(coord, 1)
+	a.pane = newWindow(a.threadsBuf)
+	a.pane.Follow = false
+	a.under = nil
+	a.root = split(true, leaf(coord, 1), leaf(a.pane, 1))
 	a.cur = coord
-	a.pane = nil
 	a.mode = modeNormal
 }
 
@@ -503,11 +538,13 @@ func (a *App) knownThread(name string) bool {
 	return true
 }
 
-// toPane shows a buffer in the pane on the right and focuses it. The first
-// call opens the pane at full height.
+// toPane shows a buffer in the threads pane on the right and focuses it. If
+// the pane was closed, it opens again at full height.
 func (a *App) toPane(b *Buffer) {
+	a.closePopup()
 	if a.pane == nil || a.root.find(a.pane) == nil {
 		a.pane = newWindow(b)
+		a.root.weight = 1
 		a.root = split(true, a.root, leaf(a.pane, 1))
 	} else {
 		a.pane.show(b)
@@ -550,6 +587,124 @@ func (a *App) showThread(name string) {
 		return
 	}
 	a.cur.show(a.chat(name))
+}
+
+// openArtifact shows an artifact in a popup over the layout: the document on
+// the left, the chat of the thread that wrote it on the right, narrower.
+func (a *App) openArtifact(name string) {
+	b, ok := a.bufs[artifactName(a.workspace, name)]
+	if !ok {
+		b = newArtifact(a.workspace, name)
+	}
+	art, ok := a.loadArtifact(b)
+	if !ok {
+		return
+	}
+	a.bufs[b.Name] = b
+	doc := newWindow(b)
+	doc.Follow = false
+	if b.Edit != nil {
+		a.toWindow(doc)
+	}
+	popup := leaf(doc, 1)
+	if _, known := a.threads[art.Thread]; known {
+		popup = split(true, leaf(doc, 3), leaf(newWindow(a.chat(art.Thread)), 2))
+	}
+	if a.under == nil {
+		a.under, a.back = a.root, a.cur
+	}
+	a.root, a.cur = popup, doc
+	a.mode = modeNormal
+}
+
+// closePopup closes the artifact popup, if open, and gives the focus back.
+func (a *App) closePopup() bool {
+	if a.under == nil {
+		return false
+	}
+	a.root, a.under = a.under, nil
+	a.cur = a.root.windows()[0]
+	if a.back != nil && a.root.find(a.back) != nil {
+		a.cur = a.back
+	}
+	a.mode = modeNormal
+	return true
+}
+
+// mention is an artifact name in a text, from byte start to end.
+type mention struct {
+	name       string
+	start, end int
+}
+
+// mentions finds the artifact names in s, as whole words.
+func (a *App) mentions(s string) []mention {
+	var out []mention
+	for _, art := range a.artifacts {
+		for i := 0; ; {
+			j := strings.Index(s[i:], art.Name)
+			if j < 0 {
+				break
+			}
+			start, end := i+j, i+j+len(art.Name)
+			if (start == 0 || !nameByte(s[start-1])) && (end == len(s) || !nameByte(s[end])) {
+				out = append(out, mention{art.Name, start, end})
+			}
+			i = end
+		}
+	}
+	slices.SortFunc(out, func(x, y mention) int { return x.start - y.start })
+	return out
+}
+
+func nameByte(c byte) bool { return c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' }
+
+// linkify marks the artifact names in a chat line as links.
+func (a *App) linkify(spans []Span) []Span {
+	if len(a.artifacts) == 0 {
+		return spans
+	}
+	var out []Span
+	for _, sp := range spans {
+		at := 0
+		for _, m := range a.mentions(sp.Text) {
+			if m.start < at {
+				continue
+			}
+			out = append(out, Span{sp.Text[at:m.start], sp.Style}, Span{sp.Text[m.start:m.end], a.th.Foam.Underline(true)})
+			at = m.end
+		}
+		out = append(out, Span{sp.Text[at:], sp.Style})
+	}
+	return out
+}
+
+// artifactAt is the artifact named in a line under column col, else the
+// first one named in it.
+func (a *App) artifactAt(l Line, col int) string {
+	text := l.Text()
+	ms := a.mentions(text)
+	if len(ms) == 0 {
+		return ""
+	}
+	col -= l.prefixWidth()
+	for _, m := range ms {
+		if c := width(text[:m.start]); col >= c && col < c+width(m.name) {
+			return m.name
+		}
+	}
+	return ms[0].name
+}
+
+// loadArtifact reads an artifact's text into its buffer.
+func (a *App) loadArtifact(b *Buffer) (model.Artifact, bool) {
+	art, text, err := a.c.Artifact(b.Workspace, b.Artifact)
+	if err != nil {
+		a.notify(err.Error(), a.th.Love)
+		return art, false
+	}
+	b.SetDoc(art, text)
+	return art, true
 }
 
 // --- rendering lists ---

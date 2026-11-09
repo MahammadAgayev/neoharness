@@ -40,6 +40,12 @@ type Message struct {
 	Compact bool `json:"compact,omitempty"`
 }
 
+// Edit is an artifact as a thread last saw it.
+type Edit struct {
+	Version int    `json:"version"`
+	Text    string `json:"text"`
+}
+
 // Rule is an "allow always" answer. An empty Prefix matches every call of the
 // tool; for Bash it holds the command's first word, so allowing `go test`
 // once also allows `go build` but not `rm`.
@@ -93,6 +99,9 @@ type Thread struct {
 	Summary string `json:"summary,omitempty"`
 	// Shell holds `!` commands and their output for the next turn's prompt.
 	Shell []string `json:"shell,omitempty"`
+	// Edits holds, per artifact the thread wrote, the version it last saw
+	// before the person edited it. The next turn's prompt gets the diff.
+	Edits map[string]Edit `json:"edits,omitempty"`
 
 	Since     time.Time `json:"since"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -153,6 +162,48 @@ func workspaceFile(name string) string { return filepath.Join(Dir(name), "worksp
 // ThreadDir is a thread's folder.
 func ThreadDir(workspace, thread string) string {
 	return filepath.Join(Dir(workspace), "threads", thread)
+}
+
+func artifactDir(workspace string) string { return filepath.Join(Dir(workspace), "artifacts") }
+
+// SaveArtifact writes an artifact's text and summary.
+func SaveArtifact(workspace string, a model.Artifact, text string) error {
+	dir := artifactDir(workspace)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if err := writeFile(filepath.Join(dir, a.Name+".md"), []byte(text), 0o644); err != nil {
+		return err
+	}
+	return writeJSON(filepath.Join(dir, a.Name+".json"), a, 0o644)
+}
+
+// Artifact reads an artifact's summary and text. A missing one is
+// os.ErrNotExist.
+func Artifact(workspace, name string) (model.Artifact, string, error) {
+	var a model.Artifact
+	if err := readJSON(filepath.Join(artifactDir(workspace), name+".json"), &a); err != nil {
+		return a, "", err
+	}
+	text, err := os.ReadFile(filepath.Join(artifactDir(workspace), name+".md"))
+	return a, string(text), err
+}
+
+// Artifacts lists a workspace's artifacts, newest first.
+func Artifacts(workspace string) ([]model.Artifact, error) {
+	paths, err := filepath.Glob(filepath.Join(artifactDir(workspace), "*.json"))
+	if err != nil {
+		return nil, err
+	}
+	out := []model.Artifact{}
+	for _, p := range paths {
+		var a model.Artifact
+		if readJSON(p, &a) == nil {
+			out = append(out, a)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
+	return out, nil
 }
 
 func threadFile(workspace, thread string) string {
@@ -318,8 +369,12 @@ func writeJSON(path string, v any, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	data = append(data, '\n')
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*.json")
+	return writeFile(path, append(data, '\n'), mode)
+}
+
+// writeFile replaces a file in one step, so a crash never leaves half of it.
+func writeFile(path string, data []byte, mode os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
 	if err != nil {
 		return err
 	}

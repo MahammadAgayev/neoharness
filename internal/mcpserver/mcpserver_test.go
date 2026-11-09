@@ -208,3 +208,33 @@ func TestReadThreadNeedsATail(t *testing.T) {
 		t.Fatalf("read_thread = %q", out)
 	}
 }
+
+func TestArtifactsBelongToTheWorkspace(t *testing.T) {
+	h, srv := setup(t)
+	coord := connect(t, srv, token(t, model.Coordinator))
+	call(t, coord, "open_thread", map[string]any{"name": "api-tests", "brief": "write tests"})
+	th := connect(t, srv, token(t, "api-tests"))
+
+	out, isErr := call(t, th, "write_artifact", map[string]any{"name": "test-plan", "content": "# Test plan\n\n- unit\n"})
+	if isErr || !strings.Contains(out, "version 1") {
+		t.Fatalf("write_artifact = %q", out)
+	}
+	if out, isErr := call(t, th, "write_artifact", map[string]any{"name": "Bad Name", "content": "# x"}); !isErr {
+		t.Fatalf("a bad name should be a tool error, got %q", out)
+	}
+	out, _ = call(t, coord, "workspace_status", nil)
+	if !strings.Contains(out, `test-plan: "Test plan" by api-tests, version 1`) {
+		t.Errorf("workspace_status = %q", out)
+	}
+	if out, _ := call(t, coord, "read_artifact", map[string]any{"name": "test-plan"}); out != "# Test plan\n\n- unit\n" {
+		t.Errorf("read_artifact = %q", out)
+	}
+	out, _ = call(t, coord, "write_artifact", map[string]any{"name": "test-plan", "content": "# Test plan\n\n- unit\n- e2e\n"})
+	if !strings.Contains(out, "version 2") {
+		t.Fatalf("an update by another session = %q", out)
+	}
+	a, _, err := h.ReadArtifact("demo", "test-plan")
+	if err != nil || a.Thread != model.Coordinator || a.Version != 2 {
+		t.Fatalf("artifact = %+v, %v", a, err)
+	}
+}

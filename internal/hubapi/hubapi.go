@@ -55,6 +55,17 @@ type (
 	Folder struct {
 		Pin string `json:"pin"`
 	}
+	ArtifactText struct {
+		Artifact model.Artifact `json:"artifact"`
+		Text     string         `json:"text"`
+	}
+	ArtifactEdit struct {
+		Text string `json:"text"`
+		// Base is the version the edit started from.
+		Base int `json:"base"`
+		// Force saves over a newer version.
+		Force bool `json:"force,omitempty"`
+	}
 	Answer struct {
 		ID       string         `json:"id,omitempty"`
 		Decision model.Decision `json:"decision"`
@@ -101,6 +112,23 @@ func (c *Client) SetFolder(name, pin string) error {
 
 func (c *Client) DeleteWorkspace(name string) error {
 	return c.do("DELETE", "/workspaces/"+esc(name), nil, nil)
+}
+
+func (c *Client) Artifacts(workspace string) ([]model.Artifact, error) {
+	var out []model.Artifact
+	return out, c.do("GET", "/workspaces/"+esc(workspace)+"/artifacts", nil, &out)
+}
+
+func (c *Client) Artifact(workspace, name string) (model.Artifact, string, error) {
+	var out ArtifactText
+	err := c.do("GET", "/workspaces/"+esc(workspace)+"/artifacts/"+esc(name), nil, &out)
+	return out.Artifact, out.Text, err
+}
+
+func (c *Client) EditArtifact(workspace, name, text string, base int, force bool) (model.Artifact, error) {
+	var out model.Artifact
+	err := c.do("PUT", "/workspaces/"+esc(workspace)+"/artifacts/"+esc(name), ArtifactEdit{Text: text, Base: base, Force: force}, &out)
+	return out, err
 }
 
 func (c *Client) Threads(workspace string) ([]model.ThreadView, error) {

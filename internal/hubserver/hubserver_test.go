@@ -106,6 +106,18 @@ func TestClientServerRoundTrip(t *testing.T) {
 			t.Fatal("no echo for a message sent now")
 		}
 	}
+	if _, err := h.WriteArtifact("demo", "api-tests", "plan", "# Plan\n\nold\n"); err != nil {
+		t.Fatal(err)
+	}
+	if a, err := c.EditArtifact("demo", "plan", "# Plan\n\nnew\n", 1, false); err != nil || a.Version != 2 || !a.UserEdit {
+		t.Fatalf("edit = %+v, %v", a, err)
+	}
+	if _, err := c.EditArtifact("demo", "plan", "# Plan\n\nagain\n", 1, false); err == nil {
+		t.Fatal("an edit from an old version should be refused")
+	}
+	if _, text, _ := c.Artifact("demo", "plan"); text != "# Plan\n\nnew\n" {
+		t.Fatalf("artifact text = %q", text)
+	}
 	dir := t.TempDir()
 	if err := c.SetFolder("demo", dir); err != nil {
 		t.Fatal(err)
