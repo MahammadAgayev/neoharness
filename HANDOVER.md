@@ -1,13 +1,13 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 195 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 196 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
 Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
-52 to 61 in the ten commits after it.
+52 to 62 in the eleven commits after it.
 
 ## 1. What neoharness is
 
@@ -1129,6 +1129,15 @@ Not committed:
     `W` after a wrap (`/thread  W [1/23]`), in chats and artifacts
     (`searchCount`). A chat counts matches per screen row, so a match
     over a wrapped break is not counted.
+62. **One register**. A yank in a chat went only to the clipboard (OSC
+    52); `p` in a chat did nothing, and `<C-r>"` in Insert typed `"`.
+    Now the App has the unnamed register (`App.reg`, a `register`), as
+    Vim has one: chat yanks set it, and an editor's `reg` points to it
+    once the editor is in a window (`toWindow`), so its deletes and yanks
+    set it too. `p`/`P` in a chat put it into the prompt (`putPrompt`);
+    `<C-r>` then `"` `0` `+` or `*` in Insert put it, in a prompt or an
+    artifact. A chat line yanked with `yy` pastes as a line in an
+    artifact. Copying text in from outside is still the terminal's paste.
 
 
 Things found on the user's machine:

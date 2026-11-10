@@ -182,6 +182,8 @@ func (h *neoharness) press(keys ...string) {
 			ev = tcell.NewEventKey(tcell.KeyCtrlW, 0, 0)
 		case "<C-j>":
 			ev = tcell.NewEventKey(tcell.KeyCtrlJ, 0, 0)
+		case "<C-r>":
+			ev = tcell.NewEventKey(tcell.KeyCtrlR, 0, 0)
 		case "<C-v>":
 			ev = tcell.NewEventKey(tcell.KeyCtrlV, 0, 0)
 		case "<C-x>":
@@ -2509,6 +2511,35 @@ func TestASearchShowsItsCountOverTheLastMessage(t *testing.T) {
 	h.press("?red", "<CR>")
 	if h.a.notice != "?red  W [3/3]" {
 		t.Fatalf("notice %q, want ?red  W [3/3]", h.a.notice)
+	}
+}
+
+func TestOneRegisterForEveryWindow(t *testing.T) {
+	h := editDemo(t, "# D\n\nfirst\n")
+	h.press("<C-o>")
+	coord := h.a.cur
+	e := model.Event{Kind: model.EventText, Text: "count.py is 70 bytes"}
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &e})
+	h.a.draw()
+	h.press("G")
+	for !strings.Contains(h.a.line(coord).Text(), "70 bytes") {
+		h.press("k")
+	}
+	h.press("y", "y", "p")
+	if got := h.prompt(); got != "count.py is 70 bytes" {
+		t.Fatalf("p in a chat should put the yank in the prompt; prompt %q", got)
+	}
+	h.press("i", " and ", "<C-r>", "\"")
+	if got := h.prompt(); got != "count.py is 70 bytes and count.py is 70 bytes" {
+		t.Fatalf("<C-r>\" should put the register; prompt %q", got)
+	}
+	h.press("<Esc>", ":b design", "<CR>")
+	if h.a.cur.Buf.Edit == nil {
+		t.Fatal(":b design should go back to the artifact")
+	}
+	h.press("G", "p")
+	if got := h.a.cur.Buf.Edit.Text(); got != "# D\n\nfirst\n\ncount.py is 70 bytes" {
+		t.Fatalf("p in an artifact should put the chat's line under the cursor; text %q", got)
 	}
 }
 

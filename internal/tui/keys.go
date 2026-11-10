@@ -1015,6 +1015,26 @@ func (a *App) insert(k rune) {
 }
 
 func (a *App) insertKey(k string, ev *tcell.EventKey) {
+	// <C-r>" puts the unnamed register, as in Vim; 0 + * name it too, as
+	// every yank is also the clipboard.
+	if a.ctrlR {
+		a.ctrlR = false
+		if k == "\"" || k == "0" || k == "+" || k == "*" {
+			if e := a.cur.Buf.Edit; e != nil {
+				e.insertText(a.reg.text)
+				a.toWindow(a.cur)
+			} else if p := a.cur.Buf.Prompt; p != nil {
+				for _, r := range a.reg.text {
+					p.insert(r)
+				}
+			}
+		}
+		return
+	}
+	if k == "<C-r>" {
+		a.ctrlR = true
+		return
+	}
 	if a.cur.Buf.Edit != nil {
 		a.editInsert(k, ev.Rune(), ev.Key() == tcell.KeyRune)
 		return
@@ -1183,7 +1203,8 @@ func (a *App) yankVisual() {
 			}
 			parts = append(parts, cellSlice(lines[i].Text(), from, to))
 		}
-		a.clip(strings.Join(parts, "\n"), l2-l1+1)
+		a.reg = register{text: strings.Join(parts, "\n")}
+		a.clip(a.reg.text, l2-l1+1)
 	}
 	w.vmode = 0
 	a.mode = modeNormal
@@ -1209,7 +1230,21 @@ func (a *App) yankLines(l1, l2 int) {
 	for i := l1; i <= l2 && i < len(lines); i++ {
 		parts = append(parts, strings.TrimRight(lines[i].Text(), " "))
 	}
-	a.clip(strings.Join(parts, "\n"), l2-l1+1)
+	a.reg = register{text: strings.Join(parts, "\n"), lines: true}
+	a.clip(a.reg.text, l2-l1+1)
+}
+
+// putPrompt is p and P in a chat: the register goes into the prompt, the
+// only text there you can change, at its cursor.
+func (a *App) putPrompt() {
+	p := a.cur.Buf.Prompt
+	if p == nil || a.reg.text == "" {
+		return
+	}
+	for _, r := range a.reg.text {
+		p.insert(r)
+	}
+	a.cur.Follow = true
 }
 
 // clip copies to the system clipboard with OSC 52, which works inside tmux

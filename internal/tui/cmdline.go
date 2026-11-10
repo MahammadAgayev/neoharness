@@ -545,6 +545,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<C-x><C-s>", "send now: stop the running turn (in Insert)"),
 		row("!<command>", "run it in the thread's folder; the output goes with your next message"),
 		row("<C-j>  <S-CR>", "new line (in Insert)"),
+		row("p  <C-r>\"", "put the last yank in the prompt; <C-r>\" in Insert"),
 		row("/  @", "complete a command, a thread (#) or a file (in Insert)"),
 		row("<C-n> <C-p>  <Tab>", "next / previous completion, take it"),
 		row("<Esc>", "back to Normal"),

@@ -40,10 +40,9 @@ type Editor struct {
 	diff *diffMode
 
 	undo, redo []snapshot
-	// reg is what the last delete or yank took, for p and P. lines says it
-	// took whole lines.
-	reg   string
-	lines bool
+	// reg is the unnamed register, for p and P: the app's, shared by every
+	// window, once the editor is in one.
+	reg *register
 
 	rev        int
 	cache      []Line
@@ -72,8 +71,15 @@ type pos struct{ line, off int }
 
 func (p pos) before(q pos) bool { return p.line < q.line || p.line == q.line && p.off < q.off }
 
+// register is what the last delete or yank took. lines says it took whole
+// lines.
+type register struct {
+	text  string
+	lines bool
+}
+
 func newEditor(name, text string, base int) *Editor {
-	e := &Editor{Name: name, Base: base, rev: 1, saved: text, shown: -1, shownTo: -1, want: -1}
+	e := &Editor{Name: name, Base: base, rev: 1, saved: text, shown: -1, shownTo: -1, want: -1, reg: &register{}}
 	for _, l := range strings.Split(text, "\n") {
 		e.Src = append(e.Src, []rune(l))
 	}
@@ -219,7 +225,7 @@ func (e *Editor) del() {
 func (e *Editor) cut(from, to int) {
 	to = min(to, len(e.Src[e.Line]))
 	if from < to {
-		e.reg, e.lines = e.remove(pos{e.Line, from}, pos{e.Line, to}), false
+		e.reg.text, e.reg.lines = e.remove(pos{e.Line, from}, pos{e.Line, to}), false
 	}
 }
 
@@ -241,21 +247,21 @@ func (e *Editor) yankLines(a, b int) {
 	for _, l := range e.Src[a : b+1] {
 		parts = append(parts, string(l))
 	}
-	e.reg, e.lines = strings.Join(parts, "\n"), true
+	e.reg.text, e.reg.lines = strings.Join(parts, "\n"), true
 }
 
 // put pastes the register after the cursor, or before it.
 func (e *Editor) put(after bool) {
-	if e.reg == "" && !e.lines {
+	if e.reg.text == "" && !e.reg.lines {
 		return
 	}
-	if e.lines {
+	if e.reg.lines {
 		at := e.Line
 		if after {
 			at++
 		}
 		var rows [][]rune
-		for _, l := range strings.Split(e.reg, "\n") {
+		for _, l := range strings.Split(e.reg.text, "\n") {
 			rows = append(rows, []rune(l))
 		}
 		e.Src = slices.Insert(e.Src, at, rows...)
@@ -266,7 +272,7 @@ func (e *Editor) put(after bool) {
 	if after && len(e.Src[e.Line]) > 0 {
 		e.Off++
 	}
-	e.insertText(e.reg)
+	e.insertText(e.reg.text)
 	e.Off = max(e.Off-1, 0)
 }
 
@@ -575,7 +581,7 @@ func (a *App) bracketLines(e *Editor, op byte, motion string) bool {
 		case op == 'y':
 			if first <= last {
 				e.yankLines(first, last)
-				a.clip(e.reg, last-first+1)
+				a.clip(e.reg.text, last-first+1)
 			}
 		case first > last:
 			return false
@@ -592,12 +598,12 @@ func (a *App) bracketLines(e *Editor, op byte, motion string) bool {
 		return true
 	}
 	if op == 'y' {
-		e.reg, e.lines = e.text(from, to), false
-		a.clip(e.reg, to.line-from.line+1)
+		e.reg.text, e.reg.lines = e.text(from, to), false
+		a.clip(e.reg.text, to.line-from.line+1)
 		return true
 	}
 	e.save()
-	e.reg, e.lines = e.remove(from, to), false
+	e.reg.text, e.reg.lines = e.remove(from, to), false
 	return true
 }
 
@@ -922,6 +928,7 @@ func (a *App) fromWindow(w *Window) {
 // toWindow moves the window's cursor to the editor's.
 func (a *App) toWindow(w *Window) {
 	e := w.Buf.Edit
+	e.reg = &a.reg
 	e.Line = max(min(e.Line, len(e.Src)-1), 0)
 	e.Off = max(min(e.Off, len(e.Src[e.Line])), 0)
 	w.Cur, w.Col = a.rowCol(w, e.cursor())
@@ -1051,7 +1058,8 @@ func (a *App) yankMotion(motion string, n int) {
 	if !ok || to <= from {
 		return
 	}
-	a.clip(string(row.Src[0][from:to]), 1)
+	a.reg = register{text: string(row.Src[0][from:to])}
+	a.clip(a.reg.text, 1)
 }
 
 // saveEdit sends the source to the hub as the person's new version.
@@ -1105,6 +1113,9 @@ func (a *App) editNormal(k string, n int) {
 		if k[0] == 'y' {
 			a.yankMotion(k[1:], n)
 		}
+		if k == "p" || k == "P" {
+			a.putPrompt()
+		}
 		return
 	}
 	a.fromWindow(w)
@@ -1134,14 +1145,14 @@ func (a *App) editNormal(k string, n int) {
 	case "yy":
 		last := min(e.Line+n-1, len(e.Src)-1)
 		e.yankLines(e.Line, last)
-		a.clip(e.reg, last-e.Line+1)
+		a.clip(e.reg.text, last-e.Line+1)
 	case "dip", "dap", "yip", "yap", "cip", "cap":
 		blank := func(i int) bool { return strings.TrimSpace(string(e.Src[i])) == "" }
 		from, to := paragraph(len(e.Src), e.Line, k[1] == 'a', blank)
 		switch k[0] {
 		case 'y':
 			e.yankLines(from, to)
-			a.clip(e.reg, to-from+1)
+			a.clip(e.reg.text, to-from+1)
 			e.Line = from
 		case 'd':
 			e.save()
@@ -1186,9 +1197,9 @@ func (a *App) editNormal(k string, n int) {
 		}
 		switch op {
 		case 'y':
-			e.reg, e.lines = string(e.Src[e.Line][from:to]), false
+			e.reg.text, e.reg.lines = string(e.Src[e.Line][from:to]), false
 			e.Off = from
-			a.clip(e.reg, 1)
+			a.clip(e.reg.text, 1)
 		case 'd', 'c':
 			e.save()
 			e.cut(from, to)
@@ -1237,7 +1248,7 @@ func (a *App) editVisual(k string) {
 		switch k {
 		case "y":
 			e.yankLines(p1.line, p2.line)
-			a.clip(e.reg, p2.line-p1.line+1)
+			a.clip(e.reg.text, p2.line-p1.line+1)
 		case "c":
 			e.save()
 			e.yankLines(p1.line, p2.line)
@@ -1260,14 +1271,14 @@ func (a *App) editVisual(k string) {
 		}
 	}
 	if k == "y" {
-		e.reg, e.lines = e.text(p1, end), false
+		e.reg.text, e.reg.lines = e.text(p1, end), false
 		e.Line, e.Off = p1.line, p1.off
-		a.clip(e.reg, p2.line-p1.line+1)
+		a.clip(e.reg.text, p2.line-p1.line+1)
 		a.toWindow(w)
 		return
 	}
 	e.save()
-	e.reg, e.lines = e.remove(p1, end), false
+	e.reg.text, e.reg.lines = e.remove(p1, end), false
 	if k == "c" {
 		a.toInsert(w)
 		return

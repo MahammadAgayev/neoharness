@@ -190,6 +190,10 @@ type App struct {
 	quit    bool
 	pasting bool
 	restart func() error
+	// reg is the unnamed register: every yank and delete, in any window.
+	// ctrlR is <C-r> in Insert waiting for the register it names.
+	reg   register
+	ctrlR bool
 }
 
 // Run opens the workspace on a terminal and blocks until the user quits.
