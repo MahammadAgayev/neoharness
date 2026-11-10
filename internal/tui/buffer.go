@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -93,9 +94,12 @@ type Buffer struct {
 	marks map[rune][2]int
 
 	blocks []*block
-	lines  []Line
-	linesW int
-	dirty  bool
+	// pending are a chat's queued messages, shown after the transcript
+	// until the turn that reads them starts.
+	pending []model.Event
+	lines   []Line
+	linesW  int
+	dirty   bool
 }
 
 func newBuffer(name string, kind BufKind) *Buffer {
@@ -182,8 +186,31 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 			out = append(out, l)
 		}
 	}
+	for _, e := range b.pending {
+		bar := []Span{{"▎ ", th.Muted}}
+		label := "queued"
+		if e.From != model.User {
+			label = "queued from " + e.From
+		}
+		rows := []Line{{}, {Prefix: bar, Spans: []Span{{label, th.Muted.Italic(true)}}}}
+		for _, l := range strings.Split(e.Text, "\n") {
+			rows = append(rows, wrap([]Span{{l, th.Muted}}, w, bar, bar)...)
+		}
+		for _, l := range rows {
+			l.Block = len(b.blocks)
+			out = append(out, l)
+		}
+	}
 	b.lines, b.linesW, b.dirty = out, w, false
 	return out
+}
+
+// SetPending shows a chat's queued messages after its transcript.
+func (b *Buffer) SetPending(evs []model.Event) {
+	if !slices.Equal(b.pending, evs) {
+		b.pending = evs
+		b.dirty = true
+	}
 }
 
 // joins reports whether block i sits directly under the one before it,

@@ -2661,6 +2661,20 @@ func TestOneRegisterForEveryWindow(t *testing.T) {
 	}
 }
 
+func TestQueuedMessagesShowAfterTheTranscript(t *testing.T) {
+	b := newChat("demo", "api")
+	b.AddEvent(model.Event{Kind: model.EventMessage, From: model.User, Text: "first"})
+	b.SetPending([]model.Event{{Kind: model.EventMessage, From: model.User, Text: "second"}})
+	all := strings.Join(texts(b.Lines(80, newTheme(), 0)), "\n")
+	if !strings.HasSuffix(all, "queued\nsecond") {
+		t.Fatalf("a queued message should end the chat, marked queued:\n%s", all)
+	}
+	b.SetPending(nil)
+	if all := strings.Join(texts(b.Lines(80, newTheme(), 0)), "\n"); strings.Contains(all, "queued") {
+		t.Fatalf("a delivered message is no longer queued:\n%s", all)
+	}
+}
+
 func TestYourMessagesShowAsTyped(t *testing.T) {
 	b := newChat("demo", "api")
 	b.AddEvent(model.Event{Kind: model.EventMessage, From: model.User, Text: "run sum(i*i for i in range(3*10))\n\n# not a heading"})

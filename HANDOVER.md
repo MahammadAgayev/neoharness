@@ -1,13 +1,13 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 200 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 202 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
 Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
-52 to 65 in the fifteen commits after it.
+52 to 66 in the sixteen commits after it.
 
 ## 1. What neoharness is
 
@@ -1167,6 +1167,16 @@ Not committed:
     the same row and column were another rune: `x` took one in the
     middle. `fitPrompt` maps the cursor back to its rune and then to its
     new row when the width changes (`Window.promptW`).
+66. **Queued messages wait at the end**. A message sent while a turn ran
+    went into the transcript at once, above the running tool call, so
+    afterwards the chat read: both messages, then both replies. Now the
+    hub puts a message in the transcript when the turn that reads it
+    starts (`kick`; `workspace.Message.Shown`, so a batch that goes back
+    in the queue is not shown twice), and `ThreadView.Pending` lists the
+    queued ones. The chat shows them after the transcript, dim, marked
+    "queued" (`Buffer.SetPending`), as Claude Code does. `read_thread`
+    does not see a message until its turn starts. A queue saved before
+    this change shows its messages once more when they run.
 
 
 Things found on the user's machine:

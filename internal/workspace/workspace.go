@@ -38,6 +38,9 @@ type Message struct {
 	At   time.Time `json:"at"`
 	// Compact marks a /compact request; Text is what to focus on.
 	Compact bool `json:"compact,omitempty"`
+	// Shown says the message is in the transcript: it goes there when the
+	// turn that reads it starts, not when it is queued.
+	Shown bool `json:"shown,omitempty"`
 }
 
 // Edit is an artifact as a thread last saw it.

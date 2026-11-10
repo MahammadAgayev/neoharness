@@ -549,8 +549,8 @@ func (a *App) onView(v model.ThreadView) {
 	a.threads[v.Name] = v
 	if !had {
 		a.order = append(a.order, v.Name)
-		a.chat(v.Name)
 	}
+	a.chat(v.Name).SetPending(v.Pending)
 	// A turn that ended may have reported the thread's first command list.
 	if had && old.State == model.StateRunning && v.State != model.StateRunning {
 		if b := a.chat(v.Name); a.mode == modeInsert && a.cur.Buf == b {

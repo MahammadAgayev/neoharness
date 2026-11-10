@@ -659,7 +659,7 @@ func (h *Hub) command(ws *space, th *thread, text string) (bool, error) {
 		}
 		focus := strings.Join(f[1:], " ")
 		t.AgentTurns, t.Paused, t.Asking = 0, false, ""
-		t.Queue = append(t.Queue, workspace.Message{From: model.User, Text: focus, At: time.Now().UTC(), Compact: true})
+		t.Queue = append(t.Queue, workspace.Message{From: model.User, Text: focus, At: time.Now().UTC(), Compact: true, Shown: true})
 		h.event(ws, th, model.Event{Kind: model.EventMessage, From: model.User, Text: strings.TrimSpace(text)})
 		h.changed(ws, th)
 		h.kick(ws, th)
@@ -737,8 +737,9 @@ func (h *Hub) enqueue(ws *space, th *thread, from, text string) {
 		t.Paused = false
 		t.Asking = ""
 	}
+	// The message goes into the transcript when its turn starts (kick), so
+	// the transcript shows what the agent read in the order it read it.
 	t.Queue = append(t.Queue, workspace.Message{From: from, Text: text, At: time.Now().UTC()})
-	h.event(ws, th, model.Event{Kind: model.EventMessage, From: from, Text: text})
 	h.changed(ws, th)
 	h.kick(ws, th)
 }
@@ -1183,6 +1184,12 @@ func (h *Hub) kick(ws *space, th *thread) {
 	}
 	batch := t.Queue[:n:n]
 	t.Queue = append([]workspace.Message{}, t.Queue[n:]...)
+	for i, m := range batch {
+		if !m.Shown {
+			h.event(ws, th, model.Event{Kind: model.EventMessage, From: m.From, Text: m.Text})
+			batch[i].Shown = true
+		}
+	}
 	t.InFlight = batch
 	now := time.Now().UTC()
 	t.Turns = append(slices.DeleteFunc(t.Turns, func(at time.Time) bool { return now.Sub(at) > 24*time.Hour }), now)
@@ -1505,6 +1512,17 @@ func (h *Hub) publish(u model.Update) {
 	}
 }
 
+// unshown are the queued messages that are not in the transcript yet.
+func unshown(q []workspace.Message) []model.Event {
+	var out []model.Event
+	for _, m := range q {
+		if !m.Shown {
+			out = append(out, model.Event{Kind: model.EventMessage, From: m.From, Text: m.Text})
+		}
+	}
+	return out
+}
+
 func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 	t := th.t
 	v := model.ThreadView{
@@ -1514,6 +1532,7 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		Location:      t.Location,
 		State:         th.state,
 		Queued:        len(t.Queue),
+		Pending:       unshown(t.Queue),
 		Progress:      t.Progress,
 		Model:         t.Model,
 		Context:       t.Context,

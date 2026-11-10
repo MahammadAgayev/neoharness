@@ -171,6 +171,7 @@ type ThreadView struct {
 	Progress   string      `json:"progress,omitempty"`
 	Waiting    string      `json:"waiting,omitempty"`
 	Permission *Permission `json:"permission,omitempty"`
+	Pending    []Event     `json:"pending,omitempty"` // queued, not yet in the transcript
 	// Model, Context and ContextWindow are as of the last turn; Cost is the
 	// total of every turn, in US dollars. Branch is the git branch of the
 	// thread's folder, empty outside a repository.

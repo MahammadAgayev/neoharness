@@ -207,6 +207,40 @@ func TestMessagesQueueWhileBusyAndBatch(t *testing.T) {
 	}
 }
 
+func TestAQueuedMessageJoinsTheTranscriptWhenItsTurnStarts(t *testing.T) {
+	gate := make(chan struct{})
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "reply"})
+		<-gate
+		return agent.Result{Text: "reply"}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "first")
+	stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
+	_ = h.Send("demo", model.User, model.Coordinator, "second")
+	if v := view(t, h, "demo", model.Coordinator); len(v.Pending) != 1 || v.Pending[0].Text != "second" {
+		t.Fatalf("pending = %+v, want the second message", v.Pending)
+	}
+	gate <- struct{}{}
+	gate <- struct{}{}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	evs, _ := h.Events("demo", model.Coordinator, 0)
+	var got []string
+	for _, e := range evs {
+		if e.Kind == model.EventMessage || e.Kind == model.EventText {
+			got = append(got, e.Text)
+		}
+	}
+	if want := "first reply second reply"; strings.Join(got, " ") != want {
+		t.Errorf("transcript = %q, want %q: a queued message comes after the reply it waited for", strings.Join(got, " "), want)
+	}
+	if v := view(t, h, "demo", model.Coordinator); len(v.Pending) != 0 {
+		t.Errorf("pending after the turn = %+v", v.Pending)
+	}
+}
+
 func TestCoordinatorHearsWhichThreadsEnded(t *testing.T) {
 	f := &fake{}
 	h := newHub(t, f)
@@ -548,6 +582,8 @@ func TestReadThreadNeedsATailAndFilters(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// A queued message joins the transcript when its turn starts.
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
 	if _, err := h.ReadThread("demo", model.Coordinator, 0, ""); err == nil {
 		t.Fatal("tail 0 should fail")
 	}
