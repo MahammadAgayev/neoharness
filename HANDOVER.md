@@ -1,13 +1,13 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 194 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 195 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
 Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
-52 to 59 in the eight commits after it.
+52 to 60 in the nine commits after it.
 
 ## 1. What neoharness is
 
@@ -1116,6 +1116,12 @@ Not committed:
     `listScript` (used only when `git ls-files` fails) now also skips
     `__pycache__/` and `venv/`, as it skips `node_modules/` and hidden
     folders.
+60. **gO starts where you are**. In a long chat `gO` opened on the oldest
+    message, though the cursor was at the end. It now starts on the last
+    entry at or above the cursor, as aerial.nvim marks the section you
+    are in. A thread's message showed as "from lint", and a question as
+    "question"; they now show the sender and the first line under the
+    label ("lint: count.py is clean.").
 
 
 Things found on the user's machine:

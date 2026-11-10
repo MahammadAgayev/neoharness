@@ -768,13 +768,27 @@ func (a *App) nextMsg(w *Window, d int) {
 func (a *App) outline() {
 	w := a.cur
 	var items []pickItem
-	for i, l := range w.Buf.Lines(a.textWidth(w), a.th, a.spin) {
+	// here is the entry the cursor is in, the last one at or above it.
+	here := 0
+	lines := w.Buf.Lines(a.textWidth(w), a.th, a.spin)
+	for i, l := range lines {
 		if !l.Msg {
 			continue
 		}
+		if i <= w.Cur {
+			here = len(items)
+		}
+		label := strings.TrimSpace(l.Text())
+		// A thread's message and a question start with a label line ("from
+		// lint", "question"); the line under it says what it is about.
+		if w.Buf.Edit == nil && l.Block < len(w.Buf.blocks) && i+1 < len(lines) {
+			if bl := w.Buf.blocks[l.Block]; bl.kind == bAsk || bl.kind == bMessage && bl.from != model.User {
+				label = strings.TrimPrefix(label, "from ") + ": " + strings.TrimSpace(lines[i+1].Text())
+			}
+		}
 		items = append(items, pickItem{
 			glyph: Span{"─", a.th.Muted},
-			label: strings.TrimSpace(l.Text()),
+			label: label,
 			run:   func() { a.moveTo(w, i); w.Follow = false; center(w) },
 		})
 	}
@@ -783,6 +797,7 @@ func (a *App) outline() {
 		return
 	}
 	a.openPicker("outline", func(q string) []pickItem { return fuzzy(items, q) })
+	a.picker.sel = here
 }
 
 // openArtifactAt is gf: it opens the artifact named under the cursor.

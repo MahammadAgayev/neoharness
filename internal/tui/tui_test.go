@@ -1398,6 +1398,24 @@ func TestOutlineJumpsToAHeading(t *testing.T) {
 	if got := h.a.line(h.a.cur).Text(); !strings.Contains(got, "Auth") {
 		t.Fatalf("cursor on %q, want the Auth heading", got)
 	}
+	// From under Auth, gO starts on Auth, the section the cursor is in.
+	h.press("j", "j", "g", "O")
+	if h.a.picker.sel != 2 {
+		t.Fatalf("gO should start on the heading above the cursor; sel %d", h.a.picker.sel)
+	}
+}
+
+func TestOutlineNamesAThreadsMessageByItsText(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	e := model.Event{Kind: model.EventMessage, From: "lint", Text: "count.py is clean."}
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &e})
+	h.a.draw()
+	h.press("G", "g", "O")
+	items := h.a.picker.items
+	if last := items[len(items)-1].label; last != "lint: count.py is clean." || h.a.picker.sel != len(items)-1 {
+		t.Fatalf("gO should end on %q and start there; got %q, sel %d of %d", "lint: count.py is clean.", last, h.a.picker.sel, len(items))
+	}
 }
 
 func TestGfOpensTheArtifactUnderTheCursor(t *testing.T) {
