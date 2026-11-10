@@ -101,6 +101,10 @@ type fileList struct {
 type space struct {
 	p       workspace.Workspace
 	threads map[string]*thread
+	// ended holds the threads that ended a turn since the coordinator's last
+	// turn began. A thread's report does not wake the coordinator, so its
+	// next turn starts with a note about them.
+	ended []string
 }
 
 type thread struct {
@@ -1204,6 +1208,11 @@ func (h *Hub) kick(ws *space, th *thread) {
 			prompt = strings.Join(notes, "\n\n") + "\n\n---\n\n" + prompt
 		}
 	}
+	if t.Role == model.RoleCoordinator && !batch[0].Compact {
+		if note := h.endedNote(ws, batch); note != "" {
+			prompt = note + "\n\n---\n\n" + prompt
+		}
+	}
 	req := agent.Request{
 		Prompt:       prompt,
 		Model:        t.ModelChoice,
@@ -1233,6 +1242,9 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	defer h.mu.Unlock()
 	t := th.t
 	compact := len(t.InFlight) > 0 && t.InFlight[0].Compact
+	if t.Role != model.RoleCoordinator && !compact && !slices.Contains(ws.ended, t.Name) {
+		ws.ended = append(ws.ended, t.Name)
+	}
 	batch := t.InFlight
 	th.busy = false
 	th.cancel = nil
@@ -1380,6 +1392,25 @@ func compose(batch []workspace.Message, threads map[string]*thread) string {
 		prompt += "\n\n@" + n + " is the thread " + n + " in this workspace. Read its transcript with read_thread if you need it."
 	}
 	return prompt
+}
+
+// endedNote tells the coordinator which threads ended a turn since its last
+// turn, with their state and last report, and forgets them. A thread whose
+// message is in the batch says it there. Callers hold h.mu.
+func (h *Hub) endedNote(ws *space, batch []workspace.Message) string {
+	var lines []string
+	for _, n := range ws.ended {
+		th, ok := ws.threads[n]
+		if !ok || slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From == n }) {
+			continue
+		}
+		lines = append(lines, prompts.ThreadEnded(n, string(th.state), th.t.Progress))
+	}
+	ws.ended = nil
+	if len(lines) == 0 {
+		return ""
+	}
+	return prompts.ThreadsEnded(lines)
 }
 
 // --- state and updates ---

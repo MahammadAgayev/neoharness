@@ -1,13 +1,13 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 192 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 193 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
 Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
-52 to 55 in the four commits after it.
+52 to 56 in the five commits after it.
 
 ## 1. What neoharness is
 
@@ -1085,6 +1085,19 @@ Not committed:
     covered half the screen. Now it fits the rows the picker has before a
     query (`picker.all`, counted once, so the box does not jump as you
     type), at most 22. A picker that starts empty, as grep, keeps 22.
+56. **The coordinator hears which threads ended**. A real run: docs ended
+    its turn with only `report_progress`, which does not wake the
+    coordinator, and 40 s later the coordinator still said "the docs
+    thread is still running"; it did not call `workspace_status` first.
+    Now the hub keeps `space.ended`, the threads that ended a turn since
+    the coordinator's last turn began, and the coordinator's next turn
+    starts with a note (`endedNote`, `prompts.ThreadsEnded`): one line per
+    thread, its state and last report. A thread whose message is in the
+    same batch is left out. No extra turn, as before. coordinator.md
+    says so. Checked in a real run: two threads ended with only
+    `report_progress`, and the coordinator gave both results with no tool
+    call. `space.ended` is in memory only; after a restart the coordinator
+    reads `workspace_status`.
 
 
 Things found on the user's machine:

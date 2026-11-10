@@ -207,6 +207,42 @@ func TestMessagesQueueWhileBusyAndBatch(t *testing.T) {
 	}
 }
 
+func TestCoordinatorHearsWhichThreadsEnded(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	for _, n := range []string{"lint", "docs"} {
+		if err := h.OpenThread("demo", model.Coordinator, n, "work", ""); err != nil {
+			t.Fatal(err)
+		}
+		stateIs(t, h, "demo", n, model.StateIdle)
+	}
+	_ = h.ReportProgress("demo", "docs", "Done: usage written")
+	_ = h.Send("demo", "lint", model.Coordinator, "lint done")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	_ = h.Send("demo", model.User, model.Coordinator, "status?")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+
+	var coord []string
+	for _, r := range f.requests() {
+		if strings.Contains(r.Prompt, "lint done") || strings.Contains(r.Prompt, "status?") {
+			coord = append(coord, r.Prompt)
+		}
+	}
+	if len(coord) != 2 {
+		t.Fatalf("%d coordinator turns, want 2", len(coord))
+	}
+	if !strings.HasPrefix(coord[0], "Since your last turn, these threads ended a turn:\n- docs: idle. Last report: Done: usage written\n\n---\n\n") {
+		t.Errorf("the coordinator should hear that docs ended; got %q", coord[0])
+	}
+	if strings.Contains(coord[0], "- lint:") {
+		t.Error("lint's own message says it ended; the note should not repeat it")
+	}
+	if strings.Contains(coord[1], "ended a turn") {
+		t.Errorf("the note comes once; got %q", coord[1])
+	}
+}
+
 func TestNamesAreChecked(t *testing.T) {
 	h := newHub(t, &fake{})
 	pinned(t, h, "demo")

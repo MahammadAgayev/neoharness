@@ -71,6 +71,21 @@ func ArtifactEdited(name string, from, to int, diff string, sections []string, a
 	return head + " The change, as a unified diff:\n\n```diff\n" + diff + "\n```\n\nKeep their changes when you write it again."
 }
 
+// ThreadEnded is one line of ThreadsEnded: a thread, its state, and its
+// last progress report.
+func ThreadEnded(name, state, progress string) string {
+	if progress == "" {
+		return fmt.Sprintf("- %s: %s.", name, state)
+	}
+	return fmt.Sprintf("- %s: %s. Last report: %s", name, state, progress)
+}
+
+// ThreadsEnded tells the coordinator which threads ended a turn since its
+// last turn, as their reports do not wake it.
+func ThreadsEnded(lines []string) string {
+	return "Since your last turn, these threads ended a turn:\n" + strings.Join(lines, "\n")
+}
+
 func fill(tmpl string, in SessionInput) string {
 	return strings.NewReplacer(
 		"{{workspace}}", in.Workspace,
