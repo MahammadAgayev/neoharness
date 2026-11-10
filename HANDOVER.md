@@ -1,13 +1,17 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 202 tests). Section 11.3 items 18 to 41
-are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
-Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
-reference links, exact columns) are in commit `557e7b1`, item 46 in the
-commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
-Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
-52 to 66 in the sixteen commits after it.
+vet ./...`, `go test -race ./...`: 200 tests). Everything is committed on
+branch `neoharness-hub-tui`; nothing is pushed. Section 11.3 items 18 to 41
+are in the commit after `6cabc42`. Items 42 to 45 are in `557e7b1`, 46 to
+48 in the commits up to `4149998`, 49 and 50 in `02f8a2b`, 51 in
+`3ec7a9b`, and 52 to 66 in the sixteen commits from `4211f8f` to
+`0d04890` (section 10 lists them).
+
+Where it stands (2026-11-10, end of the fourth session): the user paused
+the real-use passes ("Pause here") to try the build themselves; the last
+three passes (resolve and reopen, a remote thread, permission cards) found
+nothing to fix. Next: what the user reports from their own use.
 
 ## 1. What neoharness is
 
@@ -105,7 +109,15 @@ with key auth, and `claude` installed and logged in on that host.
 - Messages that arrive while a thread is busy wait in a queue. All queued
   messages go into the next turn as one prompt. Messages from others start
   with `Message from <name>:`. A `/compact` request is always a turn of its
-  own.
+  own. A message goes into the transcript when the turn that reads it
+  starts (`kick`, `workspace.Message.Shown`), so the transcript is in the
+  order the agent read it; until then `ThreadView.Pending` lists it and the
+  chat shows it at the end, dim, as "queued" (item 66).
+- **The coordinator hears which threads ended**: a thread's report does not
+  wake the coordinator, so the hub keeps the threads that ended a turn
+  since the coordinator's last turn (`space.ended`) and starts its next turn
+  with a note: each thread's state, last report and last reply (300
+  characters; `endedNote`, `prompts.ThreadsEnded`). Items 56 and 57.
 - **Send now** (`<C-x><C-s>` in Insert, `hub.SendNow`, `"now": true` on the
   messages route): the message is queued and the running turn is stopped, so
   the queue goes in the next turn at once. Claude keeps the stopped turn's
@@ -329,13 +341,15 @@ you resets the count.
 | `internal/tui` | The terminal UI (see section 5) |
 | `internal/agent` | Agent interface: one `Run` per turn. Request: `Prompt`, `SystemPrompt`, `Cwd`, `Conversation`, `Resume`, `Harness` (MCP URL and token), `Model`, `Effort`, `OnEvent`. Result: `Text`, `Tools`, `Tokens`, `ExitCode`, `Stderr`, `Commands`, `Model`, `Context`, `ContextWindow`, `Cost`, `Lost`. `Permission` is a neutral permission question; an adapter may implement `Efforter` |
 | `internal/agent/claude` | Claude Code adapter. `remote.go` builds the ssh command and quoting (`SSHCommand` is exported for `files.go`) |
-| `internal/prompts` | Prompts: `coordinator.md`, `thread.md`, `compact.md`; `Shell` formats a `!` command for the next message |
+| `internal/prompts` | Prompts: `coordinator.md`, `thread.md`, `compact.md`; `Shell` formats a `!` command for the next message; `ArtifactEdited` the person's artifact diff; `ThreadsEnded` the coordinator's note on threads that ended |
+| `internal/linediff` | Line diff (`Lines`), for the hub's artifact merge and the TUI's diff mode. Leaf package |
 | `internal/architecture` | Tests that enforce the import rules below |
 
 Import rules (enforced by tests):
 - `hub` imports no adapter, TUI, MCP, API server, tunnel, or MCP SDK.
-- `tui` imports only `hubapi` and `model` from this module.
-- `model` is a leaf; `workspace` and `hubapi` import only `model`.
+- `tui` imports only `hubapi`, `model` and `linediff` from this module.
+- `model` and `linediff` are leaves; `workspace` and `hubapi` import only
+  `model`.
 
 Local API routes (all under `/workspaces`): list and create workspaces;
 `PUT /{w}/folder`; `DELETE /{w}` (soft); `GET /{w}/artifacts` and
@@ -355,8 +369,11 @@ chroma (code colors, style `rose-pine-moon`).
   coordinator on the left, focused, and the threads pane on the right, half
   and half. New
   vertical splits go right, horizontal ones above, like the user's Neovim
-  (`splitright`, `nosplitbelow`). The bottom line counts running (`●`) and
-  waiting (`◆`) threads.
+  (`splitright`, `nosplitbelow`). After a split or a close the windows get
+  the same size, as Neovim's `equalalways` (the user's Neovim has it on);
+  `vim.o.equalalways = false` turns it off, and then a close gives its space
+  to one neighbor. The cursor goes to the window that got the space. The
+  bottom line counts running (`●`) and waiting (`◆`) threads.
 - **Threads pane** (`App.pane`, `toPane`): `<leader>t` or `:threads` focuses
   it and shows the threads list; if it was closed, it opens again on the right
   at full height. The list is grouped by state (waiting, running, idle; the
@@ -371,7 +388,20 @@ chroma (code colors, style `rose-pine-moon`).
   the prompt is the buffer's end in Normal too, item 63),
   Visual (`v`, `V`), Command-line (`:` and `/`), Picker (`<leader>…`).
 - **Prompt**: at least 3 lines tall, grows to 12 lines before it scrolls.
-  `<CR>` sends, `<C-j>` makes a new line, `<C-x><C-s>` sends now.
+  `<CR>` sends, `<C-j>` makes a new line, `<C-x><C-s>` sends now. It is the
+  end of the chat buffer in Normal mode too (`prompt.go`, items 63 to 65):
+  `<Esc>` leaves the cursor in it, one rune back; `j` below the transcript
+  and `G` go in, `k` above it and `gg` go out. There every motion, change
+  (`x dw cc C D dd r J p .`), undo (`u <C-r>`, what was typed in Insert is
+  one change) and Visual mode work; `i a I A o O` start at the cursor and
+  `<CR>` sends. Keys that read or move in the transcript (`/ n ]m gO zt
+  <C-d>` …) leave the prompt first.
+- **Register**: one unnamed register for every window (`App.reg`), as Vim
+  has: chat yanks and an artifact's yanks and deletes set it. `p` in a chat
+  puts it in the prompt; `<C-r>"` (or `0 + *`) in Insert puts it. Every yank
+  also goes to the system clipboard (OSC 52).
+- **Search**: `/ ? n N` show `/word  [2/7]`, with `W` after a wrap, as
+  Neovim with `shortmess` without `S`.
 - **Completion in Insert** (`complete.go`): `/` at the start of the prompt
   completes slash commands; `@` at the start of a word completes threads
   (marked `#` in the popup, listed first) and files. `<C-n>` / `<C-p>` move,
@@ -441,9 +471,13 @@ links), `keys.go` (modes, key sequences, motions, insert, yank), `cmdline.go`
 (`:` commands, completion, search, help text), `complete.go` (Insert
 completion), `picker.go` (fuzzy pickers), `toast.go` (notifications),
 `draw.go` (all drawing, status line), `canvas.go` (frame buffer and drawn
-cursor), `buffer.go` (blocks, events, `!` and artifact lines), `layout.go`,
-`text.go` (wrapping), `markdown.go` (chat and document rendering),
-`theme.go`.
+cursor), `buffer.go` (blocks, events, `!` and artifact lines, queued
+messages, help rows), `layout.go` (split tree, windows, jumps), `prompt.go`
+(the prompt in Normal mode), `editor.go` (an artifact's source: motions,
+operators, undo, rendering), `doc.go` (artifact document rendering),
+`diff.go` (diff mode), `config.go` and `defaults.lua` (the Lua config),
+`text.go` (wrapping, Vim patterns), `markdown.go` (chat rendering),
+`json.go`, `theme.go`.
 
 ### Keys
 
@@ -453,7 +487,9 @@ are `<leader>p…` (`pf`, `pb`, `ps`), and `<leader>f` formats code.
 
 | Keys | What |
 |---|---|
-| `i a o A I` / `<CR>` / `<C-j>` / `<Esc>` | write / send / new line / Normal |
+| `i a o A I` / `<CR>` / `<C-j>` / `<Esc>` | write / send / new line / Normal (the cursor stays in the prompt) |
+| `j` at the end, `G` / `k` at the top, `gg` | into the prompt / out of it; there `x dw cc u . r v` edit it and `<CR>` sends |
+| `p` / `<C-r>"` (Insert) | put the last yank in the prompt |
 | `<C-x><C-s>` (Insert) | send now: stop the running turn |
 | `!<command>` (Insert, at the start) | run it in the thread's folder |
 | `j k gg G h l w b 0 ^ $` | move |
@@ -461,7 +497,8 @@ are `<leader>p…` (`pf`, `pb`, `ps`), and `<leader>f` formats code.
 | `]m` `[m` / `]b` `[b` / `<C-^>` | next/previous message (heading in an artifact) / thread / alternate |
 | `<CR>` on `◇` or an artifact name, `gf` | open the artifact in the window |
 | `<C-o>` | back to the buffer the window showed before |
-| `/` `n` `N` | search in the buffer |
+| `/` `?` `n` `N` | search in the buffer; shows `[n/m]`, `W` after a wrap |
+| `gO` | outline: headings, or messages in a chat; starts where the cursor is |
 | `za` `<leader>e` | open or close a turn's tool calls, or a long `!` output |
 | `v V y yy` `<leader>y` `<leader>Y` | select and yank to the system clipboard (OSC 52) |
 | `<C-w>h/j/k/l` `<C-h/j/k/l>` `<Tab>` | move between windows |
@@ -533,7 +570,8 @@ frames.
 ```
 
 `thread.json` fields: name, role, location, sessionId, started, token,
-resolved, asking, paused, progress, progressAt, queue, inFlight, rules,
+resolved, asking, paused, progress, progressAt, queue and inFlight (each
+message: from, text, at, compact, shown), rules,
 agentTurns, turns, commands (last slash command list), model, context,
 contextWindow, cost (total), modelChoice and effort (from `/model` and
 `/effort`), summary (left by `/compact` for the next message), shell (`!`
@@ -590,7 +628,7 @@ vim.notify("loaded")
 
 ## 8. How it was tested
 
-- `go vet ./...` and `go test -race ./...`: all pass (162 tests).
+- `go vet ./...` and `go test -race ./...`: all pass (200 tests).
   Hub, MCP, API, and TUI tests need no model and no real terminal (fake
   agent, fake client, tcell simulation screen). TUI tests also check real
   cell colors, the drawn cursor, and the cells sent per frame.
@@ -628,6 +666,17 @@ vim.notify("loaded")
       merge, the same case saved v9 with both changes and the editor showed
       them; `ciw` and `.` on two lines; undo back to the saved text cleared
       `[+]`.
+  - fourth session (items 42 to 66; each fix checked in a scratch run):
+    splits from the list and pickers, `equalalways`, close focus; two
+    threads at once, an edit thread, an artifact edit and `:w`; the
+    coordinator's note on ended threads (no tool call needed); 80×24
+    (help, pickers, completion); `gO`, `]m`, search counts, `zt`; yank and
+    `p` into the prompt; Normal and Visual mode in the prompt, and a resize
+    with the cursor in it; a queued message, locally and on the remote host;
+    `:resolve`, the fold, `:reopen`; permission cards (asked straight
+    through the `permission_prompt` MCP tool with a thread's token, as
+    auto mode approved what haiku was asked to do): the card in the chat,
+    the list and the bottom line, deny, and "always" with its rule.
 
 ### How to test end to end without touching real data
 
@@ -702,9 +751,11 @@ Pitfalls seen in this work:
    splits. They are not saved across restarts.
 9. **Ask the user to confirm the cursor shiver is gone** with the frame buffer
    (section 5).
-10. **Auto mode**: the permission card path under auto mode was not seen in
-    tests. Agents may run commands without asking that the default mode would
-    have asked about.
+10. **Auto mode**: Claude did not ask for anything haiku was asked to do
+    (an out-of-folder write, `rm -rf`), so the card was tested through the
+    MCP tool directly (section 8). Agents may run commands without asking
+    that the default mode would have asked about. The adapter always passes
+    `--permission-mode auto`; there is no setting for another mode.
 11. **Artifacts**: an agent's update sends the whole document (no partial
     edit); no delete or rename; a name that is one plain word (`plan`) is a
     link only in code (backticks), not in prose.
@@ -716,15 +767,24 @@ Pitfalls seen in this work:
     progress`), from `ThreadView.Since`.
 15. The workspace `e2e` (pinned to `/tmp/nh-e2e-proj`) is left from an old
     test. Delete it with `<C-d>` in `<leader>w` when the user agrees.
-16. `/` matches across one row break (a wrapped line), not more. It is
-    Vim's magic syntax goes through Go's regexp (`vimPattern`): no `\v`,
-    `\zs`, `~` or offsets, and `\{n}` is Go's `{n}`.
+16. `/` matches across one row break (a wrapped line), not more, and such a
+    match is not in the `[n/m]` count. Vim's magic syntax goes through Go's
+    regexp (`vimPattern`): no `\v`, `\zs`, `~` or offsets, and `\{n}` is
+    Go's `{n}`.
 17. **Artifact editing limits**: `j`/`k` move by screen row in the source
     (like `gj`/`gk`); operators take `w e b $ 0 ^ iw aw ip ap`, quote
     objects on one line, bracket objects over lines, `f F t T` and `%`.
     Macro registers are `a`-`z` only (no `A`-`Z` append, no `@:`).
     The line merge refuses when both sides add
     different lines at the same place (git would write conflict markers).
+18. **Queued messages**: `read_thread` does not see a message until its turn
+    starts. A queue saved before item 66 shows its messages once more when
+    they run. `/compact` still shows at once.
+19. **The ended note** (`space.ended`) is in memory only; after a restart the
+    coordinator reads `workspace_status`.
+20. **Prompt in Normal mode**: Visual mode stays in the prompt (a selection
+    cannot reach the transcript). `:` commands, `<leader>` maps and window
+    keys keep the cursor in the prompt.
 
 ## 10. Repository
 
@@ -739,6 +799,12 @@ Pitfalls seen in this work:
   11.3 items 1–6).
 - Commit `f2b8e90`: 11.3 items 7–16 (artifacts, editing, rail, layout).
 - Commit `6cabc42`: 11.3 item 17 (editing polish after a real run).
+- Fourth session: `557e7b1` (items 42–45), then items 46–48 up to
+  `4149998`, `02f8a2b` (49–50), `3ec7a9b` (51), and one commit per item
+  for 52–66: `4211f8f` (52), `fcbe16d` (53), `68934f9` (54), `a5aec49`
+  (55), `6e7cf33` (56), `a728a00` (57), `226d16d` (58), `4552baf` (59),
+  `73b7f12` (60), `64d7b03` (61), `7bc0866` (62), `7cbe401` (63), `4883dfb`
+  and `6a0976b` (64), `5b79534` (65), `0d04890` (66).
 - Commit after `6cabc42`: 11.3 items 18 (rail without names, held edit) and 19
   (links, lists, search, `.`, `…`, `plain`, chat tables, JSON) and 20 (f/t, %, text objects, Visual objects, marks, paragraphs) and 21 (fast Esc), 22 (y motions anywhere), 23 (brackets over lines), 24 (help, messages), 25 (tool names, transcript search), 26 (failed tool calls), 27 (<br>, images), 28 (quit guard), 29 (live context), 30 (run time in the list), 31 (layouts kept), 32 (plain-word links), 33 (popup margins), 34 (:restore), 35 (mode 2027), 36 (review fixes, wide characters), 37 (lost conversation), 38 (no Claude in the hub), 39 (macros), 40 (fast Esc in Normal), 41 (gO, gf): `agent/claude/permission.go`, `cmd/neoharness/hub.go`, `draw.go`, `buffer.go`,
   `editor.go`, `keys.go`, `cmdline.go`, `app.go`, `markdown.go`, `text.go`,
@@ -933,6 +999,12 @@ Not committed:
     artifact named under the cursor, as `<CR>` does, and says so when there
     is none. A picker whose rows have no detail gives the label the whole
     row.
+### 11.4 Fourth session (2026-11-10)
+
+Real-use passes on a scratch hub, one fix per item, each committed after
+its tests and a scratch run (the user asked to commit as we go). The
+numbers go on from 11.3.
+
 42. **One buffer per artifact** (user's choice, 2026-11-10), as
     render-markdown.nvim does. The buffer is the markdown source
     (`Buffer.Edit` always set, made by `SetDoc`); there is no document view
