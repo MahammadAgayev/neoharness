@@ -111,9 +111,9 @@ func (a *App) drawWindow(w *Window, focused bool) {
 
 	// The prompt sits at the bottom of a chat window, above the statusline.
 	var promptLines []Line
-	promptTop := status
+	promptTop, promptCur := status, -1
 	if b.Prompt != nil {
-		promptLines = a.promptLines(w, focused)
+		promptLines, promptCur = a.promptLines(w, focused)
 		promptTop = status - len(promptLines)
 	}
 	textBottom := promptTop
@@ -127,17 +127,22 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	n := len(lines)
 	w.linesN = n
 	rail := railWidth(w)
+	// With the cursor in the prompt, the transcript keeps its own place.
+	cur := &w.Cur
+	if w.inPrompt {
+		cur = &w.chatCur
+	}
 	if n == 0 {
-		w.Cur = 0
-	} else if w.Follow || w.Cur >= n {
-		w.Cur = n - 1
+		*cur = 0
+	} else if w.Follow || *cur >= n {
+		*cur = n - 1
 	}
 	off := min(scrollOff, h/2)
-	if w.Cur < w.Top+off {
-		w.Top = max(w.Cur-off, 0)
+	if *cur < w.Top+off {
+		w.Top = max(*cur-off, 0)
 	}
-	if w.Cur >= w.Top+h-off {
-		w.Top = w.Cur - h + off + 1
+	if *cur >= w.Top+h-off {
+		w.Top = *cur - h + off + 1
 	}
 	w.Top = max(min(w.Top, n-h), 0)
 	if w.Follow {
@@ -145,7 +150,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	}
 
 	editing := b.Edit != nil && focused && a.mode == modeInsert
-	showCursor := focused && (a.mode == modeNormal || a.mode == modeVisual) || editing
+	showCursor := focused && !w.inPrompt && (a.mode == modeNormal || a.mode == modeVisual) || editing
 	vl1, vl2 := -1, -1
 	if w.vmode != 0 && focused {
 		vl1, vl2 = min(w.vLine, w.Cur), max(w.vLine, w.Cur)
@@ -211,7 +216,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 			}
 		}
 	}
-	if showCursor && n == 0 {
+	if showCursor && n == 0 && b.Prompt == nil {
 		a.cursorX, a.cursorY = r.X+rail, top
 	}
 	if rail > 0 {
@@ -220,6 +225,16 @@ func (a *App) drawWindow(w *Window, focused bool) {
 
 	if b.Prompt != nil {
 		for i, l := range promptLines {
+			if i == promptCur {
+				a.fill(r.X, promptTop+i, right, a.th.CursorLine)
+				l.Prefix, l.Spans = clone(l.Prefix), clone(l.Spans)
+				for k := range l.Prefix {
+					l.Prefix[k].Style = overlay(l.Prefix[k].Style, a.th.CursorLine)
+				}
+				for k := range l.Spans {
+					l.Spans[k].Style = overlay(l.Spans[k].Style, a.th.CursorLine)
+				}
+			}
 			a.drawLine(r.X, promptTop+i, right, l)
 		}
 	}
@@ -330,15 +345,11 @@ func (a *App) drawLine(x, y, maxX int, l Line) int {
 	return x
 }
 
-// promptLines renders the prompt, and places the cursor in it when writing.
-func (a *App) promptLines(w *Window, focused bool) []Line {
+// promptLines renders the prompt and places the cursor in it. The row it
+// returns has the Normal cursor, -1 when there is none.
+func (a *App) promptLines(w *Window, focused bool) ([]Line, int) {
 	p := w.Buf.Prompt
 	writing := focused && a.mode == modeInsert
-	caret := a.th.Muted
-	if writing {
-		caret = a.th.Iris
-	}
-	first := []Span{{" › ", caret}}
 	rest := []Span{{"   ", a.th.Text}}
 	statusY := w.rect.Y + w.rect.H - 1
 	pad := func(lines []Line) []Line {
@@ -347,30 +358,35 @@ func (a *App) promptLines(w *Window, focused bool) []Line {
 		}
 		return lines
 	}
-	if len(p.Text) == 0 {
-		if !writing {
-			return pad([]Line{{Prefix: first}})
-		}
+	rows := a.promptRows(w)
+	if len(p.Text) == 0 && writing {
 		a.cursorX, a.cursorY = w.rect.X+3, statusY-minPromptLines
-		return pad([]Line{{Prefix: first, Spans: []Span{{"Message " + w.Buf.Thread + "…", a.th.Muted}}}})
+		rows[0].Spans = []Span{{"Message " + w.Buf.Thread + "…", a.th.Muted}}
+		return pad(rows), -1
 	}
-	all := wrap([]Span{{string(p.Text), a.th.Text}}, a.textWidth(w), first, rest)
-	hidden := max(len(all)-maxPromptLines, 0)
-	lines := pad(all[hidden:])
+	// The cursor's row: where you type, or the Normal cursor in the prompt.
+	row, col := -1, 0
+	switch {
+	case writing:
+		line, off := lineOff(p.Text, p.Cur)
+		row, col = promptAt(rows, line, off)
+	case focused && w.inPrompt && a.mode == modeNormal:
+		row, col = min(w.Cur, len(rows)-1), w.Col
+	}
+	hidden := max(len(rows)-maxPromptLines, 0)
+	if row >= 0 && row < hidden {
+		hidden = row
+	}
+	lines := pad(rows[hidden:min(hidden+maxPromptLines, len(rows))])
+	if row < 0 {
+		return lines, -1
+	}
+	a.cursorX = w.rect.X + min(col, w.rect.W-1)
+	a.cursorY = statusY - len(lines) + row - hidden
 	if writing {
-		// Wrapping the text up to the cursor the same way puts the cursor at
-		// the end of its last line.
-		head := wrap([]Span{{string(p.Text[:p.Cur]), a.th.Text}}, a.textWidth(w), first, rest)
-		last := head[len(head)-1]
-		x := last.prefixWidth() + width(last.Text())
-		// wrap drops a trailing space, but the cursor sits after it.
-		if p.Cur > 0 && p.Text[p.Cur-1] == ' ' {
-			x++
-		}
-		a.cursorX = w.rect.X + min(x, w.rect.W-1)
-		a.cursorY = statusY - len(lines) + max(len(head)-1-hidden, 0)
+		return lines, -1
 	}
-	return lines
+	return lines, row - hidden
 }
 
 func (a *App) drawStatus(w *Window, y int, focused bool) {

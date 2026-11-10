@@ -1109,6 +1109,10 @@ func (a *App) saveEdit(force bool) bool {
 func (a *App) editNormal(k string, n int) {
 	w := a.cur
 	e := w.Buf.Edit
+	if w.inPrompt {
+		a.onPrompt(func(e *Editor) (bool, bool) { return a.editOp(e, k, n) })
+		return
+	}
 	if e == nil {
 		if k[0] == 'y' {
 			a.yankMotion(k[1:], n)
@@ -1119,8 +1123,24 @@ func (a *App) editNormal(k string, n int) {
 		return
 	}
 	a.fromWindow(w)
+	insert, ok := a.editOp(e, k, n)
+	if !ok {
+		return
+	}
+	if insert {
+		a.toInsert(w)
+		return
+	}
+	if len(e.Src[e.Line]) > 0 {
+		e.Off = min(e.Off, len(e.Src[e.Line])-1)
+	}
+	a.toWindow(w)
+}
+
+// editOp runs a Normal mode change on an editor, an artifact's source or a
+// prompt. It reports whether Insert follows, and false when nothing ran.
+func (a *App) editOp(e *Editor, k string, n int) (insert, ok bool) {
 	n = max(n, 1)
-	insert := false
 	switch k {
 	case "x":
 		e.save()
@@ -1193,7 +1213,7 @@ func (a *App) editNormal(k string, n int) {
 				insert = op == 'c'
 				break
 			}
-			return
+			return false, false
 		}
 		switch op {
 		case 'y':
@@ -1206,30 +1226,33 @@ func (a *App) editNormal(k string, n int) {
 			insert = op == 'c'
 		}
 	}
-	if insert {
-		a.toInsert(w)
-		return
-	}
-	if len(e.Src[e.Line]) > 0 {
-		e.Off = min(e.Off, len(e.Src[e.Line])-1)
-	}
-	a.toWindow(w)
+	return insert, true
 }
 
 // replace is r: the next n runes become c.
 func (a *App) replace(c rune, n int) {
+	if a.cur.inPrompt {
+		a.onPrompt(func(e *Editor) (bool, bool) { return false, e.replaceRunes(c, n) })
+		return
+	}
 	e := a.cur.Buf.Edit
 	a.fromWindow(a.cur)
+	if e.replaceRunes(c, n) {
+		a.toWindow(a.cur)
+	}
+}
+
+func (e *Editor) replaceRunes(c rune, n int) bool {
 	l := e.Src[e.Line]
 	if e.Off+max(n, 1) > len(l) {
-		return
+		return false
 	}
 	e.save()
 	from := e.Off
 	e.remove(pos{e.Line, from}, pos{e.Line, from + max(n, 1)})
 	e.insertText(strings.Repeat(string(c), max(n, 1)))
 	e.Off = from + max(n, 1) - 1
-	a.toWindow(a.cur)
+	return true
 }
 
 // editVisual runs d, x, c or y on the Visual selection in the source.

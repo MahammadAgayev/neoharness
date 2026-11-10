@@ -100,7 +100,10 @@ func (a *App) key(ev *tcell.EventKey) {
 	// where Insert starts in the source and ends back on the document.
 	b := a.cur.Buf
 	ed := b.Edit
-	recording := (b.Edit != nil || b.Kind == KindArtifact) && !a.replaying
+	recording := (b.Edit != nil || b.Kind == KindArtifact || a.cur.inPrompt) && !a.replaying
+	if ed == nil && b.Prompt != nil {
+		ed = b.Prompt.ed
+	}
 	idle := func() bool {
 		return a.mode == modeNormal && len(a.pending) == 0 && a.count == 0 && !a.replacing && a.finding == "" && a.selecting == "" && a.marking == "" && a.macroKey == ""
 	}
@@ -131,7 +134,11 @@ func (a *App) key(ev *tcell.EventKey) {
 	a.settle(a.cur)
 	// A change ends back in Normal; its keys are what `.` types again.
 	if recording && idle() && a.cur.Buf == b {
-		if e := b.Edit; e != nil && (e != ed && e.Dirty || e == ed && e.rev != a.recRev) && !a.noRepeat {
+		e := b.Edit
+		if e == nil && b.Prompt != nil {
+			e = b.Prompt.ed
+		}
+		if e != nil && (e != ed && e.Dirty || e == ed && e.rev != a.recRev) && !a.noRepeat {
 			a.lastChange = slices.Clone(a.rec)
 		}
 		a.noRepeat = false
@@ -256,7 +263,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"C":          func(n int) { a.editNormal("C", n) },
 		"cc":         func(n int) { a.editNormal("cc", n) },
 		".":          func(int) { a.repeat() },
-		"r":          func(n int) { a.replacing, a.replaceN = a.cur.Buf.Edit != nil, n },
+		"r":          func(n int) { a.replacing, a.replaceN = a.cur.Buf.Edit != nil || a.cur.inPrompt, n },
 		"%":          func(int) { a.matchPair() },
 		"m":          func(int) { a.marking = "m" },
 		"'":          func(int) { a.marking = "'" },
@@ -313,7 +320,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 
 // yy yanks the line; in an artifact's source, into the register too.
 func (a *App) yy(n int) {
-	if a.cur.Buf.Edit != nil {
+	if a.cur.Buf.Edit != nil || a.cur.inPrompt {
 		a.editNormal("yy", n)
 		return
 	}
@@ -355,7 +362,7 @@ func (a *App) macro(m string, r rune, n int) {
 
 // repeat is `.`: it types the last change in an artifact again.
 func (a *App) repeat() {
-	if a.cur.Buf.Kind != KindArtifact || len(a.lastChange) == 0 {
+	if a.cur.Buf.Kind != KindArtifact && !a.cur.inPrompt || len(a.lastChange) == 0 {
 		return
 	}
 	a.replaying = true
@@ -399,7 +406,7 @@ func (a *App) normalKey(k string) {
 		a.pending = nil
 		n := a.count
 		a.count = 0
-		fn(n)
+		a.run(seq, fn, n)
 	case longer:
 		a.pendSeq++
 		seqID := a.pendSeq
@@ -418,14 +425,23 @@ func (a *App) flushPending() {
 	if fn, ok := a.bindings()[seq]; ok {
 		n := a.count
 		a.count = 0
-		fn(n)
+		a.run(seq, fn, n)
 	}
+}
+
+// run calls a binding. A key that reads or moves in the transcript takes
+// the cursor out of the prompt first.
+func (a *App) run(seq string, fn func(int), n int) {
+	if a.cur.inPrompt && transcriptKeys[seq] {
+		a.leavePrompt(a.cur)
+	}
+	fn(n)
 }
 
 // --- motions ---
 
 func (a *App) line(w *Window) Line {
-	lines := w.Buf.Lines(a.textWidth(w), a.th, a.spin)
+	lines := a.rows(w)
 	if w.Cur >= 0 && w.Cur < len(lines) {
 		return lines[w.Cur]
 	}
@@ -434,12 +450,36 @@ func (a *App) line(w *Window) Line {
 
 func (a *App) textWidth(w *Window) int { return max(w.rect.W-1-railWidth(w), 8) }
 
-func (a *App) lineCount(w *Window) int {
-	return len(w.Buf.Lines(a.textWidth(w), a.th, a.spin))
+func (a *App) lineCount(w *Window) int { return len(a.rows(w)) }
+
+// rows are the rows the cursor moves over: the prompt's while it is there.
+func (a *App) rows(w *Window) []Line {
+	if w.inPrompt {
+		return a.promptRows(w)
+	}
+	return w.Buf.Lines(a.textWidth(w), a.th, a.spin)
 }
 
 func (a *App) moveTo(w *Window, i int) {
 	n := a.lineCount(w)
+	// k above the prompt goes back to the transcript; j below the
+	// transcript goes into the prompt, as the prompt ends the buffer.
+	if w.inPrompt {
+		if i < 0 {
+			a.leavePrompt(w)
+			a.moveTo(w, a.lineCount(w)+i)
+			return
+		}
+		w.Cur = min(i, n-1)
+		a.clampCol(w)
+		return
+	}
+	if i >= n && n > 0 && w.Buf.Prompt != nil && a.mode == modeNormal {
+		w.Cur = n - 1
+		a.enterPrompt(w)
+		a.moveTo(w, i-n)
+		return
+	}
 	w.Cur = max(min(i, n-1), 0)
 	if w.Buf.Edit != nil {
 		w.Cur = max(w.Cur, metaRows)
@@ -455,8 +495,13 @@ func center(w *Window) { w.Top = max(w.Cur-w.textH/2, 0) }
 
 func (a *App) goEnd(w *Window, n int) {
 	if n > 0 {
+		a.leavePrompt(w)
 		a.moveTo(w, n-1)
 		return
+	}
+	// The last line of a chat is the prompt's.
+	if w.Buf.Prompt != nil && a.mode == modeNormal {
+		a.enterPrompt(w)
 	}
 	a.moveTo(w, a.lineCount(w)-1)
 	w.Follow = true
@@ -469,8 +514,8 @@ func (a *App) clampCol(w *Window) {
 	// The cursor sits on the first column of a wide character.
 	rs := []rune(strings.Repeat(" ", l.prefixWidth()) + l.Text())
 	w.Col = width(string(rs[:runeAt(rs, w.Col)]))
-	// In an artifact's source the margin is not text.
-	if w.Buf.Edit != nil {
+	// In an artifact's source and the prompt the margin is not text.
+	if w.Buf.Edit != nil || w.inPrompt {
 		w.Col = max(w.Col, l.prefixWidth())
 	}
 }
@@ -941,6 +986,11 @@ func (a *App) cycleThread(d int) {
 }
 
 func (a *App) enter() {
+	// <CR> on the prompt sends it, as in Insert.
+	if a.cur.inPrompt {
+		a.send(false)
+		return
+	}
 	if a.cur.Buf.Edit != nil {
 		if name := a.artifactAt(a.line(a.cur), a.cur.Col); name != "" && a.mode == modeNormal {
 			a.openArtifact(name)
@@ -1008,6 +1058,9 @@ func (a *App) insert(k rune) {
 		a.notify(v.Name+" is resolved · :reopen to write to it", a.th.Muted)
 		return
 	}
+	if a.cur.inPrompt {
+		a.insertInPrompt(k)
+	}
 	a.mode = modeInsert
 	a.cur.vmode = 0
 	a.cur.Follow = true
@@ -1064,6 +1117,12 @@ func (a *App) insertKey(k string, ev *tcell.EventKey) {
 	switch k {
 	case "<Esc>":
 		a.mode = modeNormal
+		// As in Vim, the cursor stays where you typed, one rune back.
+		if _, off := lineOff(p.Text, p.Cur); off > 0 {
+			p.Cur--
+		}
+		a.cur.outOfPrompt()
+		a.enterPrompt(a.cur)
 	case "<CR>":
 		if a.pasting {
 			p.insert('\n')
@@ -1130,7 +1189,10 @@ func (a *App) send(now bool) {
 		a.notify(err.Error(), a.th.Love)
 		return
 	}
-	b.Prompt.Text, b.Prompt.Cur = nil, 0
+	b.Prompt.Text, b.Prompt.Cur, b.Prompt.ed = nil, 0, nil
+	if a.cur.inPrompt {
+		a.cur.Cur, a.cur.Col = 0, width(" › ")
+	}
 	a.cur.Follow = true
 }
 

@@ -72,6 +72,8 @@ type block struct {
 type Prompt struct {
 	Text []rune
 	Cur  int
+	// ed runs Normal mode changes on the text, with their undo.
+	ed *Editor
 }
 
 // Buffer is a named, append-mostly list of blocks.

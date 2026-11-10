@@ -1,13 +1,13 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 196 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 198 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
 Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
-52 to 62 in the eleven commits after it.
+52 to 63 in the twelve commits after it.
 
 ## 1. What neoharness is
 
@@ -367,7 +367,8 @@ chroma (code colors, style `rose-pine-moon`).
   side. `:open` uses the pane. `<leader>pc`
   focuses the coordinator and leaves the pane as it is.
 - **Artifacts**: see section 3, Artifacts.
-- **Modes**: Normal, Insert (write in the prompt at the end of a chat buffer),
+- **Modes**: Normal, Insert (write in the prompt at the end of a chat buffer;
+  the prompt is the buffer's end in Normal too, item 63),
   Visual (`v`, `V`), Command-line (`:` and `/`), Picker (`<leader>…`).
 - **Prompt**: at least 3 lines tall, grows to 12 lines before it scrolls.
   `<CR>` sends, `<C-j>` makes a new line, `<C-x><C-s>` sends now.
@@ -1138,6 +1139,24 @@ Not committed:
     `<C-r>` then `"` `0` `+` or `*` in Insert put it, in a prompt or an
     artifact. A chat line yanked with `yy` pastes as a line in an
     artifact. Copying text in from outside is still the terminal's paste.
+63. **The prompt is the end of the chat buffer** (user's choice,
+    2026-11-10: "Prompt in the buffer"). Normal mode could not reach the
+    prompt: `<Esc>` put the cursor back in the transcript, `dw` `u` `x`
+    did nothing, and `cc` then "replaced" typed "ced" (the `a` began
+    Append). Now, as in Neovim chat plugins (`prompt.go`): `<Esc>` leaves
+    the cursor in the prompt, one rune back, as Vim; `j` below the
+    transcript and `G` go in, `k` above it and `gg` go out. While it is
+    there (`Window.inPrompt`; `chatCur`, `chatCol` keep the transcript's
+    place), `a.rows` gives the prompt's rows (`promptRows`: each line of
+    the message wrapped, with `Src`/`Off` as an artifact's rows), so every
+    motion works as is. Changes run in the prompt's own editor
+    (`Prompt.ed`, through `onPrompt` and `editOp`, the core of
+    `editNormal`): `x` `dw` `cc` `C` `D` `dd` `p` `r` `J` `.`, and `u`
+    `<C-r>` with what was typed in Insert as one change. `i a I A o O`
+    start at the cursor. `<CR>` sends. Keys that read or move in the
+    transcript (`transcriptKeys`: `/` `n` `]m` `gO` `zt` `<C-d>` `v` …)
+    leave the prompt first. Visual mode does not work in the prompt yet
+    (`v` goes to the transcript).
 
 
 Things found on the user's machine:

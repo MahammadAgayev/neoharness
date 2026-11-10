@@ -27,6 +27,16 @@ type Window struct {
 	// <C-o>; views are where the window was in each.
 	jumps []*Buffer
 	views map[*Buffer]view
+	// inPrompt says the Normal cursor is in a chat's prompt (prompt.go).
+	inPrompt         bool
+	chatCur, chatCol int
+}
+
+// outOfPrompt puts Cur and Col back on the transcript.
+func (w *Window) outOfPrompt() {
+	if w.inPrompt {
+		w.Cur, w.Col, w.inPrompt = w.chatCur, w.chatCol, false
+	}
 }
 
 type view struct {
@@ -64,6 +74,7 @@ func (w *Window) back() bool {
 
 // swap shows b where the window last was in it.
 func (w *Window) swap(b *Buffer) {
+	w.outOfPrompt()
 	if w.views == nil {
 		w.views = map[*Buffer]view{}
 	}

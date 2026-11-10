@@ -2227,6 +2227,82 @@ func TestBracketObjectsOverLines(t *testing.T) {
 	}
 }
 
+func TestNormalModeEditsThePrompt(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	w := h.a.cur
+	h.press("i", "hello big world", "<Esc>")
+	if !w.inPrompt || h.a.mode != modeNormal {
+		t.Fatal("<Esc> should leave the cursor in the prompt, as in Vim")
+	}
+	h.press("b", "d", "w")
+	if h.prompt() != "hello big " {
+		t.Fatalf("b dw: prompt %q", h.prompt())
+	}
+	h.press("u")
+	if h.prompt() != "hello big world" {
+		t.Fatalf("u: prompt %q", h.prompt())
+	}
+	h.press("u")
+	if h.prompt() != "" {
+		t.Fatalf("u again should take back what was typed; prompt %q", h.prompt())
+	}
+	h.press("<C-r>", "0", "x", ".")
+	if h.prompt() != "llo big world" {
+		t.Fatalf("<C-r> redoes the typing; 0 x .: prompt %q", h.prompt())
+	}
+	h.press("r", "H")
+	if h.prompt() != "Hlo big world" {
+		t.Fatalf("rH: prompt %q", h.prompt())
+	}
+	h.press("c", "c", "new", "<Esc>")
+	if h.prompt() != "new" || h.a.mode != modeNormal {
+		t.Fatalf("cc: prompt %q, mode %v", h.prompt(), h.a.mode)
+	}
+	h.press("A", " text", "<Esc>", "0", "w", "i", "more ", "<Esc>")
+	if h.prompt() != "new more text" {
+		t.Fatalf("A, w i: prompt %q", h.prompt())
+	}
+
+	h.press("k")
+	if w.inPrompt {
+		t.Fatal("k should go up into the transcript")
+	}
+	h.press("j")
+	if !w.inPrompt {
+		t.Fatal("j from the last line should go into the prompt")
+	}
+	h.press("/", "api", "<CR>")
+	if w.inPrompt {
+		t.Fatal("a search should go to the transcript")
+	}
+	h.press("G", "<CR>")
+	if len(h.hub.sent) != 1 || h.hub.sent[0] != "coordinator: new more text" || h.prompt() != "" {
+		t.Fatalf("G then <CR> should send the prompt; sent %q", h.hub.sent)
+	}
+}
+
+func TestPromptMotionsFollowItsWrappedRows(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	w := h.a.cur
+	long := strings.Repeat("word ", 40) + "end"
+	h.press("i", long, "<Esc>")
+	rows := h.a.promptRows(w)
+	if len(rows) < 2 || w.Cur != len(rows)-1 {
+		t.Fatalf("the cursor should be on the last of %d rows, on %d", len(rows), w.Cur)
+	}
+	h.press("k", "$")
+	line, off := promptPos(rows, w.Cur, w.Col)
+	if line != 0 || off != rows[len(rows)-1].Off-1 {
+		t.Fatalf("k $ should end the row above: line %d off %d, want off %d", line, off, rows[len(rows)-1].Off-1)
+	}
+	h.press("x")
+	if got := h.prompt(); len(got) != len(long)-1 {
+		t.Fatalf("x on a wrapped row should take one rune; %d runes, want %d", len(got), len(long)-1)
+	}
+}
+
 func TestInsertMaps(t *testing.T) {
 	h := start(t)
 	h.openDemo()
@@ -2235,7 +2311,8 @@ func TestInsertMaps(t *testing.T) {
 	if h.a.mode != modeNormal || h.prompt() != "hi" {
 		t.Fatalf("jk should leave Insert without typing: mode %v, prompt %q", h.a.mode, h.prompt())
 	}
-	h.press("i", "j", "x")
+	// <Esc> left the cursor on the i, as in Vim, so a appends.
+	h.press("a", "j", "x")
 	if h.a.mode != modeInsert || h.prompt() != "hijx" {
 		t.Fatalf("j then x should go in as typed: mode %v, prompt %q", h.a.mode, h.prompt())
 	}
