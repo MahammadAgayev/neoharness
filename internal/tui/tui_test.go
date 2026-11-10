@@ -341,9 +341,21 @@ func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
 		t.Fatal("<C-^> should go back to the list")
 	}
 	h.press("<Space>", "<Space>", "api", "<C-v>")
-	if len(h.a.root.windows()) != 2 || h.a.cur != pane || pane.Buf.Thread != "api-tests" {
-		t.Fatalf("<C-v> in a picker should use the pane; got %d windows", len(h.a.root.windows()))
+	wins = h.a.root.windows()
+	if len(wins) != 3 || wins[1] != pane || wins[2] != h.a.cur || h.a.cur.Buf.Thread != "api-tests" || pane.Buf.Kind != KindThreads {
+		t.Fatalf("<C-v> in a picker should split the pane on the right; got %d windows", len(wins))
 	}
+	// A second <C-v> splits again: it does not replace the thread on the right.
+	h.press("<C-w>h", "gg", "j", "<C-v>")
+	wins = h.a.root.windows()
+	if len(wins) != 4 || wins[1] != pane || wins[2].Buf.Thread != "auth-refactor" || wins[3].Buf.Thread != "api-tests" {
+		t.Fatalf("<C-v> in the list should open a new split; got %d windows", len(wins))
+	}
+	h.press("<C-w>c", "<C-w>l", "<C-w>c")
+	if len(h.a.root.windows()) != 2 || h.a.cur != pane {
+		t.Fatalf("closing the splits should leave the pane; got %d windows", len(h.a.root.windows()))
+	}
+	h.press("G", "<CR>")
 
 	h.press("<Space>", "p", "c")
 	if h.a.cur != coord || pane.Buf.Thread != "api-tests" {

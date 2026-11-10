@@ -117,11 +117,7 @@ func (a *App) pickerKey(k string, ev *tcell.EventKey) {
 		if p.sel < len(p.items) && p.items[p.sel].thread != "" {
 			name := p.items[p.sel].thread
 			a.closePicker()
-			if k == "<C-v>" {
-				a.paneThread(name)
-			} else {
-				a.splitThread(name)
-			}
+			a.splitThread(name, k == "<C-v>")
 		}
 	case "<Down>", "<C-n>", "<C-j>", "<Tab>":
 		if len(p.items) > 0 {

@@ -703,10 +703,11 @@ func (a *App) paneThread(name string) {
 	}
 }
 
-// splitThread opens a thread in a new split above the current window.
-func (a *App) splitThread(name string) {
+// splitThread opens a thread in a new split of the current window: right
+// of it (vert) or above it.
+func (a *App) splitThread(name string, vert bool) {
 	if a.knownThread(name) {
-		a.splitCur(false, a.chat(name))
+		a.splitCur(vert, a.chat(name))
 	}
 }
 

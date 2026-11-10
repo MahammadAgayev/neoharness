@@ -207,19 +207,28 @@ func (n *node) splitWindow(w, nw *Window, vert bool) {
 	}
 }
 
-// closeWindow removes w. It reports false for the last window.
-func (n *node) closeWindow(w *Window) bool {
+// closeWindow removes w and gives its space to one neighbor, as Neovim does
+// with splitright and nosplitbelow: the window on the left, or the one
+// below. It returns the window that got the space, nil for the last window.
+func (n *node) closeWindow(w *Window) *Window {
 	l := n.find(w)
 	if l == nil || l.parent == nil {
-		return false
+		return nil
 	}
 	p := l.parent
+	var to *node
 	for i, k := range p.kids {
 		if k == l {
+			if i+1 < len(p.kids) && (!p.vert || i == 0) {
+				to = p.kids[i+1]
+			} else {
+				to = p.kids[i-1]
+			}
 			p.kids = append(p.kids[:i], p.kids[i+1:]...)
 			break
 		}
 	}
+	to.weight += l.weight
 	if len(p.kids) == 1 {
 		// Collapse: the parent becomes its only kid.
 		only := p.kids[0]
@@ -227,8 +236,9 @@ func (n *node) closeWindow(w *Window) bool {
 		for _, k := range p.kids {
 			k.parent = p
 		}
+		to = p
 	}
-	return true
+	return to.windows()[0]
 }
 
 func (n *node) equalize() {

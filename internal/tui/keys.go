@@ -847,11 +847,12 @@ func (a *App) closeCur(force bool) {
 	if e := a.cur.Buf.Edit; e != nil {
 		a.closeDiff(e)
 	}
-	if !a.root.closeWindow(a.cur) {
+	to := a.root.closeWindow(a.cur)
+	if to == nil {
 		a.quitAll(force)
 		return
 	}
-	a.cur = a.root.windows()[0]
+	a.cur = to
 }
 
 // quitAll quits, unless that stops running turns and force is not set. The
@@ -960,7 +961,7 @@ func (a *App) enter() {
 }
 
 // splitFromList opens the thread under the cursor of the threads list in the
-// pane (<C-v>) or a split above (<C-x>), as in a picker.
+// split on the right (<C-v>) or above (<C-x>), as in a picker.
 func (a *App) splitFromList(vert bool) {
 	if a.cur.Buf.Kind != KindThreads {
 		return
@@ -968,10 +969,8 @@ func (a *App) splitFromList(vert bool) {
 	l := a.line(a.cur)
 	switch {
 	case l.Item == "" || l.Item == resolvedRow:
-	case vert:
-		a.paneThread(l.Item)
 	default:
-		a.splitThread(l.Item)
+		a.splitThread(l.Item, vert)
 	}
 }
 

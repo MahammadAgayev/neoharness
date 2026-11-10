@@ -6,7 +6,8 @@ are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
-Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in the commit after it.
+Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
+52 in the commit after it.
 
 ## 1. What neoharness is
 
@@ -362,7 +363,8 @@ chroma (code colors, style `rose-pine-moon`).
   coordinator is not listed); resolved threads fold into `▸ N resolved`, and
   `<CR>` on that row unfolds it. `<CR>` on a thread shows it in the pane; the
   next one replaces it; `<C-^>` goes back to the list. `<C-v>` (list or
-  picker) and `:open` also use the pane. `<C-x>` splits above. `<leader>pc`
+  picker) splits on the right and `<C-x>` splits above, so threads sit side by
+  side. `:open` uses the pane. `<leader>pc`
   focuses the coordinator and leaves the pane as it is.
 - **Artifacts**: see section 3, Artifacts.
 - **Modes**: Normal, Insert (write in the prompt at the end of a chat buffer),
@@ -469,7 +471,7 @@ are `<leader>p…` (`pf`, `pb`, `ps`), and `<leader>f` formats code.
 | `<leader>pv` / `<leader>pc` | workspaces screen / coordinator |
 | `<leader>a` `<leader>A` `<leader>x` | allow / allow always / deny a permission |
 | `<leader>nc` / `<leader>nh` | dismiss toasts / their history |
-| in pickers: `<CR>` `<C-v>` `<C-x>` `<C-d>` | open, open in the pane, split above, delete (after `y`) |
+| in pickers: `<CR>` `<C-v>` `<C-x>` `<C-d>` | open, split on the right, split above, delete (after `y`) |
 | in the completion popup: `<C-n>` `<C-p>` `<Tab>` `<CR>` `<Esc>` | move, take, close |
 
 Commands: `:new <name> [folder]`, `:folder [folder]`, `:open <name>
@@ -1055,6 +1057,15 @@ Not committed:
     `timeoutLen`, as Neovim's timeoutlen: whole, the map runs; else the
     held keys go in as typed (`insertMap`, `flushInsert`). A held key
     does not show until then.
+52. **Splits** (user's report, 2026-11-10: "vertical split replaces right
+    screen everytime, not nice"). `<C-v>` in the threads list and pickers
+    showed the thread in the pane, so it replaced the thread there. Now it
+    splits the current window on the right, as Telescope's `<C-v>`, and
+    `<C-x>` splits above; threads sit side by side. `:open` still uses the
+    pane. `<C-w>c` and `:q` gave the cursor to the first window (the
+    coordinator) and the space to all windows. Now `closeWindow` gives the
+    space and the cursor to one neighbor, as Neovim with splitright and
+    nosplitbelow: the window on the left, or the one below.
 
 
 Things found on the user's machine:

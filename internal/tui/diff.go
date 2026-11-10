@@ -149,8 +149,8 @@ func (a *App) closeDiff(e *Editor) {
 	tw := e.diff.win
 	e.diff = nil
 	e.cacheW = 0
-	if a.root.closeWindow(tw) && a.cur == tw {
-		a.cur = a.root.windows()[0]
+	if to := a.root.closeWindow(tw); to != nil && a.cur == tw {
+		a.cur = to
 	}
 	for _, w := range a.root.windows() {
 		if w.Buf.Edit == e {
