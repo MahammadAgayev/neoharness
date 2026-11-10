@@ -370,10 +370,10 @@ func (r *mdRenderer) inline(n ast.Node, base tcell.Style) []Span {
 			switch c := c.(type) {
 			case *ast.Text:
 				out = append(out, Span{string(c.Segment.Value(r.src)), st})
-				if c.HardLineBreak() {
+				// A new line in a message is a new line, as in chat apps,
+				// not a space as CommonMark has it.
+				if c.HardLineBreak() || c.SoftLineBreak() {
 					out = append(out, Span{"\n", st})
-				} else if c.SoftLineBreak() {
-					out = append(out, Span{" ", st})
 				}
 			case *ast.String:
 				out = append(out, Span{string(c.Value), st})

@@ -1,11 +1,12 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 182 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 185 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
-commit after it. Item 47 (diff mode) is not committed yet.
+commit after it, item 47 (diff mode) in the next. Item 48 is not committed
+yet.
 
 ## 1. What neoharness is
 
@@ -693,7 +694,9 @@ Pitfalls seen in this work:
     progress`), from `ThreadView.Since`.
 15. The workspace `e2e` (pinned to `/tmp/nh-e2e-proj`) is left from an old
     test. Delete it with `<C-d>` in `<leader>w` when the user agrees.
-16. `/` matches across one row break (a wrapped line), not more.
+16. `/` matches across one row break (a wrapped line), not more. It is
+    Vim's magic syntax goes through Go's regexp (`vimPattern`): no `\v`,
+    `\zs`, `~` or offsets, and `\{n}` is Go's `{n}`.
 17. **Artifact editing limits**: `j`/`k` move by screen row in the source
     (like `gj`/`gk`); operators take `w e b $ 0 ^ iw aw ip ap`, quote
     objects on one line, bracket objects over lines, `f F t T` and `%`.
@@ -982,6 +985,17 @@ Not committed:
     it too. The line diff moved to `internal/linediff` (a leaf), which the
     TUI may now import (architecture test). Checked in a real run: notes2
     rewrote the line being edited, `:w` opened the diff, `]c do :w`.
+48. **Second real-use pass** (permission refusal, a 300-line answer).
+    A chat keeps the agent's line breaks, as chat apps do (CommonMark
+    joins them with a space, so 300 lines showed as one paragraph); an
+    artifact shows its source lines one by one anyway. A failed call's
+    reason wraps, at most three rows, instead of being cut at the window
+    edge (Claude's own safety check refuses some commands in auto mode
+    without asking; the reason says so). A search clears the last
+    message, as in Vim ("pattern not found" stayed after a later match).
+    `/` and `?` take Vim patterns (magic): `. * [ ] ^ $` keep their
+    meaning, `( ) | + ? { }` are plain text unless after `\`, `\< \>` are
+    word edges, smart case stays (`vimPattern` in `text.go`).
 
 
 Things found on the user's machine:

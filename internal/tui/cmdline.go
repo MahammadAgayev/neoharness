@@ -430,12 +430,14 @@ func (a *App) findNext(d int) {
 	if a.search == "" {
 		return
 	}
+	// A search writes over the last message, as in Vim.
+	a.notice = ""
 	w := a.cur
 	q := a.search
-	fold := strings.ToLower(q) == q
+	re := vimPattern(q, strings.ToLower(q) == q)
 	if e := w.Buf.Edit; e != nil {
 		a.fromWindow(w)
-		p, ok := e.find(q, fold, d)
+		p, ok := e.find(re, d)
 		if !ok {
 			a.notify("pattern not found: "+q, a.th.Love)
 			return
@@ -455,14 +457,9 @@ func (a *App) findNext(d int) {
 			next := lines[i+1].Text()
 			joins = []string{text + next, text + " " + next}
 		}
-		if fold {
-			text = strings.ToLower(text)
-			for k := range joins {
-				joins[k] = strings.ToLower(joins[k])
-			}
-		}
 		for _, s := range append([]string{text}, joins...) {
-			if j := strings.Index(s, q); j >= 0 && j < len(text) {
+			if m := re.FindStringIndex(s); m != nil && m[0] < len(text) {
+				j := m[0]
 				a.moveTo(w, i)
 				w.Col = lines[i].prefixWidth() + width(text[:j])
 				w.Follow = false

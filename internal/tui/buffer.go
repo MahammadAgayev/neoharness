@@ -489,9 +489,9 @@ func (bl *block) renderTools(w int, th *Theme, spin int) []Line {
 				{"  " + truncate(shortTools(t.detail), max(w-24, 10)), th.Muted},
 			}})
 			if t.failed != "" {
-				lines = append(lines, Line{Prefix: []Span{{"        ✗ ", th.Love}}, Spans: []Span{
-					{truncate(t.failed, max(w-12, 10)), th.Love},
-				}})
+				// The reason wraps, at most three rows: it says why.
+				why := truncate(strings.Join(strings.Fields(t.failed), " "), 3*max(w-12, 10))
+				lines = append(lines, wrap([]Span{{why, th.Love}}, w, []Span{{"        ✗ ", th.Love}}, []Span{{"          ", th.Love}})...)
 			}
 		}
 	}

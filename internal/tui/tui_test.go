@@ -2210,7 +2210,7 @@ func TestFailedToolCallsShowOnTheFold(t *testing.T) {
 	for _, e := range []model.Event{
 		{Kind: model.EventTool, Tool: "Bash", Detail: "git push --force", ID: "tu1"},
 		{Kind: model.EventTool, Tool: "Read", Detail: "a.go", ID: "tu2"},
-		{Kind: model.EventTool, ID: "tu1", Exit: 1, Text: "Permission to use Bash was denied."},
+		{Kind: model.EventTool, ID: "tu1", Exit: 1, Text: "Permission to use Bash was denied by a built-in safety check, because it rewrites the remote history and only you can approve that."},
 		{Kind: model.EventTurnEnd},
 	} {
 		h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &e})
@@ -2222,7 +2222,61 @@ func TestFailedToolCallsShowOnTheFold(t *testing.T) {
 	}
 	h.press("<Esc>", "/2 tool calls", "<CR>", "za")
 	h.a.draw()
-	h.see("✗ Permission to use Bash was denied.")
+	h.see("✗ Permission to use Bash was denied")
+	h.see("only you can approve that.")
+}
+
+func TestSearchUsesVimPatterns(t *testing.T) {
+	for _, c := range []struct {
+		q, s string
+		want bool
+	}{
+		{"line 15$", "line 150", false},
+		{"line 150$", "line 150", true},
+		{"^line", "a line", false},
+		{"f(x)", "call f(x) now", true},
+		{"a+b", "a+b", true},
+		{"a\\+b", "aaab", true},
+		{"\\<cat\\>", "concat", false},
+		{"\\<cat\\>", "a cat", true},
+		{"\\(red\\|blue\\) car", "a blue car", true},
+		{"col.r", "color", true},
+		{"[0-9]\\{3}", "ab12c", false},
+		{"[(", "x[(y", true},
+	} {
+		if got := vimPattern(c.q, false).MatchString(c.s); got != c.want {
+			t.Errorf("%q on %q = %v, want %v", c.q, c.s, got, c.want)
+		}
+	}
+	if !vimPattern("red", true).MatchString("RED") {
+		t.Error("a lower-case pattern ignores case")
+	}
+	h := editDemo(t, "# D\n\nline 15\nline 150\n")
+	h.press("/line 150$", "<CR>")
+	if e := h.a.cur.Buf.Edit; e.Line != 3 {
+		t.Fatalf("/line 150$ should find line 3, on %d", e.Line)
+	}
+}
+
+func TestASearchClearsTheLastMessage(t *testing.T) {
+	h := editDemo(t, "# D\n\nred\n")
+	h.press("/blue", "<CR>")
+	if !strings.Contains(h.a.notice, "pattern not found") {
+		t.Fatalf("notice %q", h.a.notice)
+	}
+	h.press("/red", "<CR>")
+	if h.a.notice != "" {
+		t.Fatalf("a search that finds should clear the message, notice %q", h.a.notice)
+	}
+}
+
+func TestChatKeepsLineBreaks(t *testing.T) {
+	b := newChat("demo", "api")
+	b.AddEvent(model.Event{Kind: model.EventText, Text: "line 1\nline 2\n\npara"})
+	all := strings.Join(texts(b.Lines(80, newTheme(), 0)), "\n")
+	if !strings.Contains(all, "line 1\n") || strings.Contains(all, "line 1 line 2") {
+		t.Fatalf("a chat should keep the agent's line breaks:\n%s", all)
+	}
 }
 
 func TestLineBreaksAndImages(t *testing.T) {

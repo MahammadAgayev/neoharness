@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -274,4 +275,49 @@ func firstGrapheme(s string) (string, string) {
 	}
 	_, end := g.Positions()
 	return s[:end], s[end:]
+}
+
+// vimPattern turns a search in Vim's default (magic) syntax into a regexp:
+// . * [ ] ^ $ keep their meaning, ( ) | + ? { } are plain text unless after
+// a backslash, and \< \> are word edges. fold ignores case. A pattern that
+// does not compile matches as plain text.
+func vimPattern(q string, fold bool) *regexp.Regexp {
+	var b strings.Builder
+	if fold {
+		b.WriteString("(?i)")
+	}
+	rs := []rune(q)
+	for i := 0; i < len(rs); i++ {
+		r := rs[i]
+		switch {
+		case r == '\\' && i+1 < len(rs):
+			i++
+			switch c := rs[i]; c {
+			case '(', ')', '|', '+', '?', '{', '}':
+				b.WriteRune(c)
+			case '=':
+				b.WriteRune('?')
+			case '<', '>':
+				b.WriteString(`\b`)
+			case 'd', 'D', 's', 'S', 'w', 'W':
+				b.WriteRune('\\')
+				b.WriteRune(c)
+			default:
+				b.WriteString(regexp.QuoteMeta(string(c)))
+			}
+		case strings.ContainsRune("()|+?{}", r):
+			b.WriteString(regexp.QuoteMeta(string(r)))
+		default:
+			b.WriteRune(r)
+		}
+	}
+	re, err := regexp.Compile(b.String())
+	if err != nil {
+		prefix := ""
+		if fold {
+			prefix = "(?i)"
+		}
+		re = regexp.MustCompile(prefix + regexp.QuoteMeta(q))
+	}
+	return re
 }

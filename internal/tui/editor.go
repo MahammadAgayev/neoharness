@@ -667,21 +667,12 @@ func bracketed(l []rune, i int, open, close rune) (int, int, bool) {
 
 // find is the next match of q in the source after the cursor, or before it
 // when d is negative, going round the end. fold matches in any case.
-func (e *Editor) find(q string, fold bool, d int) (pos, bool) {
-	qr := []rune(q)
-	if fold {
-		qr = []rune(strings.ToLower(q))
-	}
+func (e *Editor) find(re *regexp.Regexp, d int) (pos, bool) {
 	matches := func(i int) []int {
-		l := e.Src[i]
-		if fold {
-			l = []rune(strings.ToLower(string(l)))
-		}
+		l := string(e.Src[i])
 		var out []int
-		for k := 0; k+len(qr) <= len(l); k++ {
-			if slices.Equal(l[k:k+len(qr)], qr) {
-				out = append(out, k)
-			}
+		for _, m := range re.FindAllStringIndex(l, -1) {
+			out = append(out, utf8.RuneCountInString(l[:m[0]]))
 		}
 		return out
 	}
