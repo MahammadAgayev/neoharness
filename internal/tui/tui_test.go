@@ -381,6 +381,24 @@ func TestPickerOpensInPlaceOrSplit(t *testing.T) {
 	}
 }
 
+func TestPickerSplitsArtifactsAndBuffers(t *testing.T) {
+	h := start(t)
+	h.hub.arts = []model.Artifact{{Name: "design", Title: "Session store design", Thread: "auth-refactor", Version: 1}}
+	h.hub.docs = map[string]string{"design": "# Session store design\n\nFirst draft."}
+	h.openDemo()
+	coord, n := h.a.cur, len(h.a.root.windows())
+	h.press("<Space>", "<Space>", "design", "<C-v>")
+	wins := h.a.root.windows()
+	if len(wins) != n+1 || wins[0] != coord || wins[1] != h.a.cur || h.a.cur.Buf.Kind != KindArtifact || coord.Buf.Thread != model.Coordinator {
+		t.Fatalf("<C-v> on an artifact should split it on the right; got %d windows, cur %q", len(wins), h.a.cur.Buf.Name)
+	}
+	h.press("<Space>", "<Space>", "messages", "<C-x>")
+	wins = h.a.root.windows()
+	if len(wins) != n+2 || wins[1] != h.a.cur || h.a.cur.Buf.Kind != KindMessages || wins[2].Buf.Kind != KindArtifact {
+		t.Fatalf("<C-x> on a buffer should split it above; got %d windows, cur %q", len(wins), h.a.cur.Buf.Name)
+	}
+}
+
 func TestEventsAppendLiveAndFold(t *testing.T) {
 	h := start(t)
 	h.openDemo()

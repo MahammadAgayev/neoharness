@@ -19,8 +19,10 @@ type pickItem struct {
 	label  string
 	detail string
 	run    func()
-	// thread is set on a row that is a thread, so <C-v> and <C-x> can open
-	// it in a split instead.
+	// split opens the row in a split, right of the window (vert) or above
+	// it: <C-v> and <C-x>, as in Telescope.
+	split func(vert bool)
+	// thread is set on a row that is a thread, so <C-d> can delete it.
 	thread string
 	// workspace is set on a row that is a workspace, so <C-d> can delete it.
 	workspace string
@@ -114,10 +116,10 @@ func (a *App) pickerKey(k string, ev *tcell.EventKey) {
 			a.askDeleteWorkspace(it.workspace)
 		}
 	case "<C-v>", "<C-x>":
-		if p.sel < len(p.items) && p.items[p.sel].thread != "" {
-			name := p.items[p.sel].thread
+		if p.sel < len(p.items) && p.items[p.sel].split != nil {
+			split := p.items[p.sel].split
 			a.closePicker()
-			a.splitThread(name, k == "<C-v>")
+			split(k == "<C-v>")
 		}
 	case "<Down>", "<C-n>", "<C-j>", "<Tab>":
 		if len(p.items) > 0 {
@@ -173,6 +175,7 @@ func (a *App) threadItems() []pickItem {
 			label:  n,
 			detail: detail,
 			run:    func() { a.showThread(name) },
+			split:  func(vert bool) { a.splitThread(name, vert) },
 			thread: name,
 		})
 	}
@@ -188,6 +191,10 @@ func (a *App) artifactItems() []pickItem {
 			label:  art.Name,
 			detail: fmt.Sprintf("%s · %s · v%d", art.Title, art.Thread, art.Version),
 			run:    func() { a.openArtifact(art.Name) },
+			split: func(vert bool) {
+				a.splitCur(vert, nil)
+				a.openArtifact(art.Name)
+			},
 		})
 	}
 	return items
@@ -294,13 +301,15 @@ func (a *App) pickBuffers() {
 		items = append(a.threadItems(), a.artifactItems()...)
 		if a.threadsBuf != nil {
 			b := a.threadsBuf
-			items = append(items, pickItem{glyph: Span{"≡", a.th.Muted}, label: "threads", detail: b.Name, run: func() { a.showBuf(a.cur, b) }})
+			items = append(items, pickItem{glyph: Span{"≡", a.th.Muted}, label: "threads", detail: b.Name, run: func() { a.showBuf(a.cur, b) },
+				split: func(vert bool) { a.splitCur(vert, b) }})
 		}
 	}
 	for _, b := range []*Buffer{a.workspacesBuf, a.messagesBuf, a.helpBuf()} {
 		b := b
 		label := strings.TrimPrefix(b.Name, "neoharness://")
-		items = append(items, pickItem{glyph: Span{"≡", a.th.Muted}, label: label, detail: b.Name, run: func() { a.showBuf(a.cur, b) }})
+		items = append(items, pickItem{glyph: Span{"≡", a.th.Muted}, label: label, detail: b.Name, run: func() { a.showBuf(a.cur, b) },
+			split: func(vert bool) { a.splitCur(vert, b) }})
 	}
 	a.openPicker("buffers", func(q string) []pickItem { return fuzzy(items, q) })
 }
@@ -348,6 +357,11 @@ func (a *App) pickGrep() {
 					detail: detail,
 					run: func() {
 						a.showThread(name)
+						a.moveTo(a.cur, line)
+						a.cur.Follow = false
+					},
+					split: func(vert bool) {
+						a.splitThread(name, vert)
 						a.moveTo(a.cur, line)
 						a.cur.Follow = false
 					},
