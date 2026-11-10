@@ -1,12 +1,12 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 185 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 187 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
-commit after it, item 47 (diff mode) in the next. Item 48 is not committed
-yet.
+commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
+Items 49 (init.lua) and 50 are in the commit after it.
 
 ## 1. What neoharness is
 
@@ -564,8 +564,23 @@ machine this was done on 2026-11-09; a backup is at
 | `NEOHARNESS_REMOTE_CLAUDE_COMMAND` | claude command on remote hosts (default `claude`) |
 
 The hub runs in the TUI's process, so it has the shell's full environment
-(PATH, `SSH_AUTH_SOCK`, credentials). Keymaps and theme cannot be configured
-yet. Per-thread model and effort are set with `/model` and `/effort`.
+(PATH, `SSH_AUTH_SOCK`, credentials). Per-thread model and effort are set
+with `/model` and `/effort`.
+
+Keymaps and colors: `$NEOHARNESS_HOME/init.lua` (default
+`~/.neoharness/init.lua`), read when the TUI starts, with a small part of
+Neovim's Lua API (item 49 in section 11.3):
+
+```lua
+vim.g.mapleader = ","                               -- default <Space>
+vim.keymap.set("n", "<leader>t", ":threads<CR>")    -- keys or an ex command
+vim.keymap.set("n", "gt", function() vim.cmd("threads") end)
+vim.keymap.set("n", "Q", "<leader>t", { remap = true })
+vim.keymap.del("n", "<C-d>")
+vim.api.nvim_set_hl(0, "Iris", { fg = "#c4a7e7", bold = true })
+vim.cmd("workspace demo")                           -- runs after start
+vim.notify("loaded")
+```
 
 ## 8. How it was tested
 
@@ -656,8 +671,9 @@ Pitfalls seen in this work:
 
 ## 9. Known limits and open items
 
-1. Cancelling a remote turn kills the local ssh process. The remote claude
-   should stop when its output pipe closes (SIGPIPE). Not verified.
+1. Cancelling a remote turn kills the local ssh process; the remote claude
+   and its running command stop within seconds (checked 2026-11-10 on the
+   remote host with send now during a 60 s Python run).
 2. Shift+Enter is the same as Enter in most terminals; use `<C-j>` for a new
    line. `<Esc>` followed very fast by another key reads as Alt+key (tcell);
    Insert, Command and Visual take it as the two keys, Normal does not.
@@ -686,7 +702,7 @@ Pitfalls seen in this work:
 11. **Artifacts**: an agent's update sends the whole document (no partial
     edit); no delete or rename; a name that is one plain word (`plan`) is a
     link only in code (backticks), not in prose.
-12. Not built yet: configurable keymaps and theme, a picker for "allow always"
+12. Not built yet: Insert-mode maps, a picker for "allow always"
     rules, other agent backends (the agent interface is ready for them), more
     than one folder per workspace (Claude has `--add-dir`).
 13. The threads list has no fuzzy search; use `/` in it, or `<leader><leader>`.
@@ -996,6 +1012,29 @@ Not committed:
     `/` and `?` take Vim patterns (magic): `. * [ ] ^ $` keep their
     meaning, `( ) | + ? { }` are plain text unless after `\`, `\< \>` are
     word edges, smart case stays (`vimPattern` in `text.go`).
+49. **init.lua** (user's choice, 2026-11-10: Lua, as their Neovim config,
+    not Vimscript). `config.go` runs `$NEOHARNESS_HOME/init.lua` with
+    gopher-lua (pure Go, Lua 5.1) when the TUI starts (`Run`, not
+    `newApp`, so tests never read a real config). The `vim` table has
+    `g.mapleader`, `keymap.set`/`keymap.del` (modes `n`, `v`, `x`; other
+    modes give a notice), `api.nvim_set_hl` (theme fields, plus Neovim's
+    `Normal`, `Comment`, `Visual`, `CursorLine`, `WinSeparator`, `Error`),
+    `cmd` (during the load it waits until the maps are in place) and
+    `notify`. As in Neovim, `<leader>` takes `mapleader` at the time of the
+    map, maps are noremap unless `{ remap = true }`, and the default
+    `<leader>` maps move to the new leader. A map's keys go through `key`
+    (`feed`) with `playing` and `replaying` set, so `q` and `.` record only
+    the key that started it; noremap looks only in the defaults
+    (`baseBinds`). A Lua error is one notice; the defaults stay.
+50. **Remote pass** (2026-11-10, a haiku thread on the user's remote host
+    `remote-ssh:~`): Bash and `workspace_status` through the
+    tunnel, `!hostname && pwd`, an artifact written remotely, edited here
+    with `:w` (the writer named the line without reading it), send now
+    during a long remote command (the remote claude and the command
+    stopped). Fix: your own messages show as typed, not as markdown
+    (`i*i … 3*10` had lost its `*`, read as italics). Claude refuses a
+    foreground `sleep`, even through Python; use real work to test a long
+    turn.
 
 
 Things found on the user's machine:

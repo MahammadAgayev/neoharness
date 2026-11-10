@@ -2155,6 +2155,69 @@ func TestBracketObjectsOverLines(t *testing.T) {
 	}
 }
 
+func TestInitLuaMapsAndColors(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.a.runConfig(`
+-- as in a Neovim config
+vim.g.mapleader = ","
+vim.keymap.set("n", "<leader>t", ":help<CR>")
+vim.keymap.set("n", "gz", function() vim.cmd("threads") end)
+vim.keymap.set("n", "Q", "<leader>t", { remap = true })
+vim.keymap.set("n", "R", "<leader>t")
+vim.keymap.del("n", "<C-d>")
+vim.api.nvim_set_hl(0, "Iris", { fg = "#ff0000", bold = true })
+vim.keymap.set("i", "jk", "<Esc>")
+`, "init.lua")
+	if _, ok := h.a.binds[",w"]; !ok {
+		t.Fatal("the default <leader> maps should move to the new leader")
+	}
+	if _, ok := h.a.binds["<Space>w"]; ok {
+		t.Fatal("<Space>w should be gone with leader ,")
+	}
+	if _, ok := h.a.binds["<C-d>"]; ok {
+		t.Fatal("vim.keymap.del should remove a default map")
+	}
+	if fg, _, attrs := h.a.th.Iris.Decompose(); fg != tcell.GetColor("#ff0000") || attrs&tcell.AttrBold == 0 {
+		t.Fatal("nvim_set_hl should set the theme color")
+	}
+	if !strings.Contains(h.a.notice, "only Normal mode maps") {
+		t.Fatalf("an Insert map should give a notice, got %q", h.a.notice)
+	}
+	coord := h.a.cur
+	h.press(",", "t")
+	if h.a.cur.Buf.Kind != KindHelp {
+		t.Fatal(",t should run :help<CR>")
+	}
+	h.press(":q", "<CR>")
+	h.a.cur = coord
+	h.press("Q")
+	if h.a.cur.Buf.Kind != KindHelp {
+		t.Fatal("a remap map should reach the user's ,t")
+	}
+	h.press(":q", "<CR>")
+	h.a.cur = coord
+	h.press("R")
+	if h.a.cur.Buf.Kind != KindThreads {
+		t.Fatalf("a map that is not remap should reach the default ,t (threads), got %v", h.a.cur.Buf.Kind)
+	}
+	h.a.pane.show(h.a.chat(model.Coordinator))
+	h.a.cur = coord
+	h.press("g", "z")
+	if h.a.cur.Buf.Kind != KindThreads {
+		t.Fatal("a Lua function map should run vim.cmd")
+	}
+
+	h2 := start(t)
+	h2.a.runConfig("vim.keymap.set(", "init.lua")
+	if !strings.Contains(h2.a.notice, "init.lua") {
+		t.Fatalf("a Lua error should give a notice, got %q", h2.a.notice)
+	}
+	if _, ok := h2.a.binds["<Space>w"]; !ok {
+		t.Fatal("a broken config keeps the default maps")
+	}
+}
+
 func TestHelpOpensAtTheTop(t *testing.T) {
 	h := start(t)
 	h.openDemo()
@@ -2267,6 +2330,15 @@ func TestASearchClearsTheLastMessage(t *testing.T) {
 	h.press("/red", "<CR>")
 	if h.a.notice != "" {
 		t.Fatalf("a search that finds should clear the message, notice %q", h.a.notice)
+	}
+}
+
+func TestYourMessagesShowAsTyped(t *testing.T) {
+	b := newChat("demo", "api")
+	b.AddEvent(model.Event{Kind: model.EventMessage, From: model.User, Text: "run sum(i*i for i in range(3*10))\n\n# not a heading"})
+	all := strings.Join(texts(b.Lines(80, newTheme(), 0)), "\n")
+	if !strings.Contains(all, "sum(i*i for i in range(3*10))") || !strings.Contains(all, "# not a heading") {
+		t.Fatalf("your message should show as typed:\n%s", all)
 	}
 }
 

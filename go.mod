@@ -8,6 +8,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/rivo/uniseg v0.4.7
 	github.com/yuin/goldmark v1.8.7
+	github.com/yuin/gopher-lua v1.1.2
 )
 
 require (

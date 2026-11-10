@@ -339,8 +339,17 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 	switch bl.kind {
 	case bMessage:
 		if bl.from == model.User {
+			// What you typed shows as you typed it: a * is a *.
 			bar := []Span{{"▎ ", th.Iris}}
-			return renderMarkdown(bl.text, w, th, bar)
+			var lines []Line
+			for _, l := range strings.Split(bl.text, "\n") {
+				rows := wrap([]Span{{l, th.Text}}, w, bar, bar)
+				if len(rows) == 0 {
+					rows = []Line{{Prefix: bar}}
+				}
+				lines = append(lines, rows...)
+			}
+			return lines
 		}
 		bar := []Span{{"▎ ", th.Rose}}
 		label := Line{Prefix: bar, Spans: []Span{{"from " + bl.from, th.Rose.Italic(true)}}}

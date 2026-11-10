@@ -398,7 +398,7 @@ func (a *App) normalKey(k string) {
 	}
 	a.pending = append(a.pending, k)
 	seq := strings.Join(a.pending, "")
-	binds := a.binds
+	binds := a.bindings()
 	fn, exact := binds[seq]
 	longer := false
 	for s := range binds {
@@ -428,7 +428,7 @@ func (a *App) normalKey(k string) {
 func (a *App) flushPending() {
 	seq := strings.Join(a.pending, "")
 	a.pending = nil
-	if fn, ok := a.binds[seq]; ok {
+	if fn, ok := a.bindings()[seq]; ok {
 		n := a.count
 		a.count = 0
 		fn(n)

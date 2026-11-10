@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	lua "github.com/yuin/gopher-lua"
 
 	"github.com/MahammadAgayev/neoharness/internal/hubapi"
 	"github.com/MahammadAgayev/neoharness/internal/model"
@@ -115,17 +116,23 @@ type App struct {
 	messagesBuf *Buffer
 	messages    []Line
 
-	mode     mode
-	binds    map[string]func(int)
-	pending  []string
-	pendSeq  int
-	count    int
-	cmd      *cmdline
-	picker   *picker
-	menu     *menu
-	toasts   []*toast
-	menuShut int // the word whose menu <Esc> closed, or -1
-	ctrlX    bool
+	mode  mode
+	binds map[string]func(int)
+	// baseBinds are the default bindings, which a map that is not remap
+	// reaches; noremap counts such maps that run now. lua is init.lua's
+	// state, which its maps call.
+	baseBinds map[string]func(int)
+	noremap   int
+	lua       *lua.LState
+	pending   []string
+	pendSeq   int
+	count     int
+	cmd       *cmdline
+	picker    *picker
+	menu      *menu
+	toasts    []*toast
+	menuShut  int // the word whose menu <Esc> closed, or -1
+	ctrlX     bool
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key
@@ -192,6 +199,7 @@ func Run(c Client, restart func() error) error {
 	s.EnablePaste()
 	a := newApp(s, c)
 	a.restart = restart
+	a.loadConfig(filepath.Join(filepath.Dir(hubapi.SocketPath()), "init.lua"))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go a.listen(ctx)
