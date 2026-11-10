@@ -381,7 +381,7 @@ chroma (code colors, style `rose-pine-moon`).
   `<CR>` on that row unfolds it. `<CR>` on a thread shows it in the pane; the
   next one replaces it; `<C-^>` goes back to the list. `<C-v>` (list or
   picker) splits on the right and `<C-x>` splits above, so threads sit side by
-  side. `:open` uses the pane. `<leader>pc`
+  side. `:open` uses the pane. `<leader>c`
   focuses the coordinator and leaves the pane as it is.
 - **Artifacts**: see section 3, Artifacts.
 - **Modes**: Normal, Insert (write in the prompt at the end of a chat buffer;
@@ -503,10 +503,9 @@ are `<leader>p…` (`pf`, `pb`, `ps`), and `<leader>f` formats code.
 | `v V y yy` `<leader>y` `<leader>Y` | select and yank to the system clipboard (OSC 52) |
 | `<C-w>h/j/k/l` `<C-h/j/k/l>` `<Tab>` | move between windows |
 | `<C-w>v` `<C-w>s` `<C-w>c` `<C-w>o` `<C-w>=` | split right / above, close, only, equal |
-| `<leader><leader>` / `<leader>w` / `<leader>/` | pickers: buffers (threads and artifacts included) / workspaces / search all transcripts |
+| `<leader><leader>` `<leader>pb` / `<leader>pt` / `<leader>pa` / `<leader>ps` / `<leader>w` | pickers: buffers (threads and artifacts included) / threads / artifacts / search all transcripts / workspaces |
 | `<leader>t` | threads pane on the right |
-| `<leader>pa` | artifacts picker |
-| `<leader>pv` / `<leader>pc` | workspaces screen / coordinator |
+| `<leader>pv` / `<leader>c` | workspaces screen / coordinator |
 | `<leader>a` `<leader>A` `<leader>x` | allow / allow always / deny a permission |
 | `<leader>nc` / `<leader>nh` | dismiss toasts / their history |
 | in pickers: `<CR>` `<C-v>` `<C-x>` `<C-d>` | open, split on the right, split above, delete (after `y`) |
