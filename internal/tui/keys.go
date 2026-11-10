@@ -77,6 +77,13 @@ func (a *App) key(ev *tcell.EventKey) {
 		a.key(tcell.NewEventKey(tcell.KeyRune, ev.Rune(), tcell.ModNone))
 		return
 	}
+	// The same for a control key: <Esc><C-o> leaves Visual, then goes back.
+	// Alt+<CR> is not split; it is a new line in Insert.
+	if c := ev.Key(); ev.Modifiers()&tcell.ModAlt != 0 && (c >= tcell.KeyCtrlA && c <= tcell.KeyCtrlZ && c != tcell.KeyEnter || c == tcell.KeyCtrlCarat) {
+		a.key(tcell.NewEventKey(tcell.KeyEscape, 0, tcell.ModNone))
+		a.key(tcell.NewEventKey(c, ev.Rune(), ev.Modifiers()&^tcell.ModAlt))
+		return
+	}
 	k := keyName(ev)
 	if k == "" {
 		return
@@ -92,7 +99,7 @@ func (a *App) key(ev *tcell.EventKey) {
 	// Changes are recorded in an artifact's source and on its document,
 	// where Insert starts in the source and ends back on the document.
 	b := a.cur.Buf
-	ed := b.edit()
+	ed := b.Edit
 	recording := (b.Edit != nil || b.Kind == KindArtifact) && !a.replaying
 	idle := func() bool {
 		return a.mode == modeNormal && len(a.pending) == 0 && a.count == 0 && !a.replacing && a.finding == "" && a.selecting == "" && a.marking == "" && a.macroKey == ""
@@ -114,9 +121,14 @@ func (a *App) key(ev *tcell.EventKey) {
 		a.rec = append(a.rec, ev)
 	}
 	a.dispatch(k, ev)
+	// A window that shows another buffer drops its selection.
+	if a.mode == modeVisual && a.cur.vmode == 0 {
+		a.mode = modeNormal
+	}
+	a.settle(a.cur)
 	// A change ends back in Normal; its keys are what `.` types again.
 	if recording && idle() && a.cur.Buf == b {
-		if e := b.edit(); e != nil && (e != ed && e.Dirty || e == ed && e.rev != a.recRev) && !a.noRepeat {
+		if e := b.Edit; e != nil && (e != ed && e.Dirty || e == ed && e.rev != a.recRev) && !a.noRepeat {
 			a.lastChange = slices.Clone(a.rec)
 		}
 		a.noRepeat = false
@@ -208,6 +220,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"]b":             func(n int) { a.cycleThread(max(n, 1)) },
 		"[b":             func(n int) { a.cycleThread(-max(n, 1)) },
 		"<C-^>":          func(int) { a.alternate() },
+		"<C-o>":          func(int) { a.jumpBack() },
 		"/":              func(int) { a.startCmd('/') },
 		":":              func(int) { a.startCmd(':') },
 		"n":              func(int) { a.findNext(1); center(w()) },
@@ -525,6 +538,35 @@ func (a *App) mark(m string, r rune) {
 	if b.marks == nil {
 		b.marks = map[rune][2]int{}
 	}
+	// An artifact's rows move as its lines show raw or rendered, so its
+	// marks are places in the source.
+	if e := b.Edit; e != nil {
+		a.fromWindow(w)
+		p, ok := b.marks[r]
+		switch {
+		case m == "m" && r >= 'a' && r <= 'z':
+			b.marks[r] = [2]int{e.Line, e.Off}
+		case m == "m":
+		case r != '`' && r != '\'' && !ok:
+			a.notify("mark not set", a.th.Muted)
+		default:
+			if r == '`' || r == '\'' {
+				p, ok = b.marks['\'']
+				if !ok {
+					return
+				}
+			}
+			b.marks['\''] = [2]int{e.Line, e.Off}
+			e.Line, e.Off = p[0], p[1]
+			if m == "'" {
+				e.Off = firstNonBlank(e.Src[min(p[0], len(e.Src)-1)])
+			}
+			e.shown = min(p[0], len(e.Src)-1)
+			e.shownTo = e.shown
+			a.toWindow(w)
+		}
+		return
+	}
 	if m == "m" {
 		if r >= 'a' && r <= 'z' {
 			b.marks[r] = [2]int{w.Cur, w.Col}
@@ -695,7 +737,6 @@ func (a *App) goCoordinator() {
 		a.notify("open a workspace first · <leader>w", a.th.Muted)
 		return
 	}
-	a.closePopup()
 	if w := a.windowOf(model.Coordinator); w != nil {
 		a.cur = w
 		return
@@ -794,31 +835,17 @@ func (a *App) splitCur(vert bool, b *Buffer) {
 	a.cur = nw
 }
 
-// escape leaves Visual; in Normal it closes the artifact popup, as in a
-// Neovim float.
+// escape leaves Visual.
 func (a *App) escape() {
 	if a.mode == modeVisual {
 		a.cur.vmode = 0
 		a.mode = modeNormal
-		return
 	}
-	a.q()
-}
-
-// q leaves an artifact's source, else closes the artifact popup.
-func (a *App) q() {
-	if a.cur.Buf.Edit != nil {
-		a.stopEdit(a.cur)
-		return
-	}
-	a.closePopup()
 }
 
 func (a *App) closeCur(force bool) {
 	if !a.root.closeWindow(a.cur) {
-		if !a.closePopup() {
-			a.quitAll(force)
-		}
+		a.quitAll(force)
 		return
 	}
 	a.cur = a.root.windows()[0]
@@ -845,7 +872,7 @@ func (a *App) quitAll(force bool) {
 		return
 	}
 	for _, b := range a.bufs {
-		if e := b.edit(); e != nil && e.Dirty && !force {
+		if e := b.Edit; e != nil && e.Dirty && !force {
 			a.notify("unsaved changes in "+b.Artifact+" · :w saves, :qa! drops them", a.th.Gold)
 			return
 		}
@@ -860,7 +887,18 @@ func (a *App) only() {
 
 func (a *App) alternate() {
 	if a.cur.Alt != nil {
-		a.cur.show(a.cur.Alt)
+		a.showBuf(a.cur, a.cur.Alt)
+	}
+}
+
+// jumpBack is <C-o>: the window goes back to the buffer it showed before.
+func (a *App) jumpBack() {
+	w := a.cur
+	if !w.back() {
+		return
+	}
+	if w.Buf.Edit != nil {
+		a.toWindow(w)
 	}
 }
 
@@ -883,6 +921,10 @@ func (a *App) cycleThread(d int) {
 
 func (a *App) enter() {
 	if a.cur.Buf.Edit != nil {
+		if name := a.artifactAt(a.line(a.cur), a.cur.Col); name != "" && a.mode == modeNormal {
+			a.openArtifact(name)
+			return
+		}
 		a.move(a.cur, 1)
 		return
 	}

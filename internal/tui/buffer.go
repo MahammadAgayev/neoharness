@@ -38,7 +38,6 @@ const (
 	bNote
 	bShell
 	bArtifact
-	bDoc
 )
 
 // toolCall is one tool call; failed holds why it failed or was denied.
@@ -77,10 +76,8 @@ type Buffer struct {
 	Thread    string
 	Artifact  string
 	Prompt    *Prompt
-	// Edit is the artifact's source while the person edits it.
+	// Edit is an artifact's source.
 	Edit *Editor
-	// Held is an unsaved edit while the document shows, with the edit in it.
-	Held *Editor
 	// marks are m's places, a line and a column; ' is the place before the
 	// last jump.
 	marks map[rune][2]int
@@ -114,9 +111,26 @@ func artifactName(workspace, name string) string {
 	return "neoharness://" + workspace + "/artifacts/" + name
 }
 
-// SetDoc replaces an artifact buffer's document.
+// SetDoc gives an artifact buffer the hub's newest version. Unsaved changes
+// stay; :w merges them with it.
 func (b *Buffer) SetDoc(a model.Artifact, text string) {
-	b.blocks = []*block{{kind: bDoc, art: a, text: text}}
+	e := b.Edit
+	switch {
+	case e == nil:
+		b.Edit = newEditor(a.Name, text, a.Version)
+	case !e.Dirty:
+		if text != e.Text() {
+			e.Src = nil
+			for _, l := range strings.Split(text, "\n") {
+				e.Src = append(e.Src, []rune(l))
+			}
+			e.rev++
+		}
+		e.Base, e.saved = a.Version, text
+	}
+	b.Edit.art = a
+	// The meta line changes; it is not a change of the text.
+	b.Edit.cacheW = 0
 	b.dirty = true
 }
 
@@ -127,14 +141,6 @@ func headingLevel(s string) int {
 		return 0
 	}
 	return n
-}
-
-// edit is the person's edit, shown or held, or nil.
-func (b *Buffer) edit() *Editor {
-	if b.Edit != nil {
-		return b.Edit
-	}
-	return b.Held
 }
 
 // SetLines replaces the buffer's content with fixed lines.
@@ -160,12 +166,7 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 		if i > 0 && bl.kind != bRaw && !b.joins(i) {
 			out = append(out, Line{Block: i})
 		}
-		var rendered []Line
-		if bl.kind == bDoc && b.Held != nil {
-			rendered = renderDocument(bl.art, b.Held.Text(), w, th)
-		} else {
-			rendered = bl.render(w, th, spin)
-		}
+		rendered := bl.render(w, th, spin)
 		for _, l := range rendered {
 			l.Block = i
 			out = append(out, l)
@@ -388,8 +389,6 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 			spans = append(spans, Span{" · edited by you", th.Muted})
 		}
 		return wrap(spans, w, []Span{{"  ◇ ", th.Foam}}, []Span{{"    ", th.Text}})
-	case bDoc:
-		return renderDocument(bl.art, bl.text, w, th)
 	}
 	return nil
 }

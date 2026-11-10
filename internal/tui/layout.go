@@ -1,5 +1,7 @@
 package tui
 
+import "slices"
+
 // Rect is a screen area.
 type Rect struct{ X, Y, W, H int }
 
@@ -21,22 +23,70 @@ type Window struct {
 	vLine, vCol   int
 	rect          Rect
 	textH, linesN int
+	// jumps are the buffers the window showed before, the newest last, for
+	// <C-o>; views are where the window was in each.
+	jumps []*Buffer
+	views map[*Buffer]view
 }
+
+type view struct {
+	top, cur, col int
+	follow        bool
+}
+
+const maxJumps = 50
 
 func newWindow(b *Buffer) *Window { return &Window{Buf: b, Follow: true} }
 
 // show switches the window to another buffer, remembering the old one for
-// <C-^>.
+// <C-^> and <C-o>.
 func (w *Window) show(b *Buffer) {
 	if b == w.Buf {
 		return
 	}
+	w.jumps = append(slices.DeleteFunc(w.jumps, func(j *Buffer) bool { return j == w.Buf || j == b }), w.Buf)
+	if len(w.jumps) > maxJumps {
+		w.jumps = w.jumps[1:]
+	}
+	w.swap(b)
+}
+
+// back is <C-o>: the window shows the buffer it showed before.
+func (w *Window) back() bool {
+	if len(w.jumps) == 0 {
+		return false
+	}
+	b := w.jumps[len(w.jumps)-1]
+	w.jumps = w.jumps[:len(w.jumps)-1]
+	w.swap(b)
+	return true
+}
+
+// swap shows b where the window last was in it.
+func (w *Window) swap(b *Buffer) {
+	if w.views == nil {
+		w.views = map[*Buffer]view{}
+	}
+	w.views[w.Buf] = view{w.Top, w.Cur, w.Col, w.Follow}
 	w.Alt = w.Buf
 	w.Buf = b
-	w.Top, w.Cur, w.Col = 0, 0, 0
-	// A chat follows its end; help reads from the top.
-	w.Follow = b.Kind != KindHelp
 	w.vmode = 0
+	if v, ok := w.views[b]; ok {
+		w.Top, w.Cur, w.Col, w.Follow = v.top, v.cur, v.col, v.follow
+		return
+	}
+	w.Top, w.Cur, w.Col = 0, 0, 0
+	// A chat follows its end; help and artifacts read from the top.
+	w.Follow = b.Kind != KindHelp && b.Kind != KindArtifact
+}
+
+// forget drops a buffer that is gone from the window's history.
+func (w *Window) forget(b *Buffer) {
+	if w.Alt == b {
+		w.Alt = nil
+	}
+	w.jumps = slices.DeleteFunc(w.jumps, func(j *Buffer) bool { return j == b })
+	delete(w.views, b)
 }
 
 // node is a split tree: a leaf holds a window; an inner node lays its kids

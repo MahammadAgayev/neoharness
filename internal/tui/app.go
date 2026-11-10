@@ -95,12 +95,7 @@ type App struct {
 
 	root *node
 	cur  *Window
-	// under is the layout below the artifact popup while it is open; root
-	// is then the popup, so window commands work inside it. back is the
-	// window that had the focus before it opened.
-	under *node
-	back  *Window
-	bufs  map[string]*Buffer
+	bufs map[string]*Buffer
 
 	workspaces []model.WorkspaceView
 	workspace  string
@@ -247,6 +242,7 @@ func (a *App) handle(ev tcell.Event) {
 		a.pasting = ev.Start()
 		if !a.pasting && a.mode == modeInsert && a.cur.Buf.Edit != nil {
 			a.toWindow(a.cur)
+			a.settle(a.cur)
 		}
 	case *tcell.EventResize:
 		a.s.Sync()
@@ -405,8 +401,8 @@ func (a *App) apply(u model.Update) {
 		a.artifacts = append([]model.Artifact{*u.Artifact}, a.artifacts...)
 		if b, ok := a.bufs[artifactName(a.workspace, u.Artifact.Name)]; ok {
 			a.loadArtifact(b)
-			if e := b.edit(); e != nil && u.Artifact.Version != e.Base {
-				a.notify(fmt.Sprintf("%s wrote v%d while you edit · :w merges it", u.Artifact.Thread, u.Artifact.Version), a.th.Gold)
+			if e := b.Edit; e != nil && e.Dirty && u.Artifact.Version != e.Base {
+				a.notify(fmt.Sprintf("%s wrote v%d while you edit · :w merges it, :e! takes it", u.Artifact.Thread, u.Artifact.Version), a.th.Gold)
 			}
 		}
 	case model.UpdateDeleted:
@@ -434,9 +430,7 @@ func (a *App) dropThread(name string) {
 		if w.Buf == b {
 			w.show(a.chat(model.Coordinator))
 		}
-		if w.Alt == b {
-			w.Alt = nil
-		}
+		w.forget(b)
 	}
 	a.renderThreads()
 	a.notify(name+" deleted", a.th.Muted)
@@ -565,16 +559,13 @@ type layout struct {
 	threads   *Buffer
 }
 
-// saveLayout keeps the open workspace's windows, below the popup if one is
-// open, before another screen takes their place.
+// saveLayout keeps the open workspace's windows before another screen takes
+// their place.
 func (a *App) saveLayout() {
 	if a.workspace == "" || a.threadsBuf == nil {
 		return
 	}
 	root, cur := a.root, a.cur
-	if a.under != nil {
-		root, cur = a.under, a.back
-	}
 	if root == nil || cur == nil || cur.Buf == a.workspacesBuf {
 		return
 	}
@@ -595,7 +586,6 @@ func (a *App) showWorkspaces() {
 			w.Cur = i
 		}
 	}
-	a.under = nil
 	a.root = leaf(w, 1)
 	a.cur = w
 	a.mode = modeNormal
@@ -612,7 +602,7 @@ func (a *App) openWorkspace(name string) {
 		a.threadsBuf = l.threads
 		a.bufs[a.threadsBuf.Name] = a.threadsBuf
 		a.resync()
-		a.under, a.root, a.cur, a.pane = nil, l.root, l.cur, l.pane
+		a.root, a.cur, a.pane = l.root, l.cur, l.pane
 		for _, w := range a.root.windows() {
 			if _, known := a.threads[w.Buf.Thread]; w.Buf.Kind == KindChat && !known {
 				w.show(a.chat(model.Coordinator))
@@ -631,7 +621,6 @@ func (a *App) openWorkspace(name string) {
 	coord := newWindow(a.chat(model.Coordinator))
 	a.pane = newWindow(a.threadsBuf)
 	a.pane.Follow = false
-	a.under = nil
 	a.root = split(true, leaf(coord, 1), leaf(a.pane, 1))
 	a.cur = coord
 	a.mode = modeNormal
@@ -660,7 +649,6 @@ func (a *App) knownThread(name string) bool {
 // toPane shows a buffer in the threads pane on the right and focuses it. If
 // the pane was closed, it opens again at full height.
 func (a *App) toPane(b *Buffer) {
-	a.closePopup()
 	if a.pane == nil || a.root.find(a.pane) == nil {
 		a.pane = newWindow(b)
 		a.root.weight = 1
@@ -708,46 +696,28 @@ func (a *App) showThread(name string) {
 	a.cur.show(a.chat(name))
 }
 
-// openArtifact shows an artifact in a popup over the layout: the document on
-// the left, the chat of the thread that wrote it on the right, narrower.
+// openArtifact shows an artifact in the current window, as gf opens a file;
+// <C-o> goes back.
 func (a *App) openArtifact(name string) {
 	b, ok := a.bufs[artifactName(a.workspace, name)]
 	if !ok {
 		b = newArtifact(a.workspace, name)
 	}
-	art, ok := a.loadArtifact(b)
-	if !ok {
+	if _, ok := a.loadArtifact(b); !ok {
 		return
 	}
 	a.bufs[b.Name] = b
-	doc := newWindow(b)
-	doc.Follow = false
-	if b.Edit != nil {
-		a.toWindow(doc)
-	}
-	popup := leaf(doc, 1)
-	if _, known := a.threads[art.Thread]; known {
-		popup = split(true, leaf(doc, 3), leaf(newWindow(a.chat(art.Thread)), 2))
-	}
-	if a.under == nil {
-		a.under, a.back = a.root, a.cur
-	}
-	a.root, a.cur = popup, doc
+	a.showBuf(a.cur, b)
 	a.mode = modeNormal
 }
 
-// closePopup closes the artifact popup, if open, and gives the focus back.
-func (a *App) closePopup() bool {
-	if a.under == nil {
-		return false
+// showBuf shows a buffer in a window. An artifact's cursor is its place in
+// the source, so the window takes it from there.
+func (a *App) showBuf(w *Window, b *Buffer) {
+	w.show(b)
+	if b.Edit != nil {
+		a.toWindow(w)
 	}
-	a.root, a.under = a.under, nil
-	a.cur = a.root.windows()[0]
-	if a.back != nil && a.root.find(a.back) != nil {
-		a.cur = a.back
-	}
-	a.mode = modeNormal
-	return true
 }
 
 // mention is an artifact name in a text, from byte start to end.
@@ -831,6 +801,33 @@ func (a *App) artifactAt(l Line, col int) string {
 // mdLink finds markdown links and bare URLs: [label](url), <url>, url.
 var mdLink = regexp.MustCompile(`\[([^\]]*)\]\(<?([^)\s>]+)>?[^)]*\)|<?(https?://[^\s>)\]]+)`)
 
+// mdRefLink finds reference links, [label][id] and [label][], and refURL
+// the definitions they point to, [id]: url.
+var (
+	mdRefLink = regexp.MustCompile(`\[([^\]]+)\]\[([^\]]*)\]`)
+	refURL    = regexp.MustCompile(`^ {0,3}\[([^\]]+)\]:\s*<?([^\s>]+)`)
+)
+
+// refURLs are an artifact's reference definitions by their lower-case id.
+func refURLs(src [][]rune) map[string]string {
+	out := map[string]string{}
+	for _, l := range src {
+		if m := refURL.FindStringSubmatch(string(l)); m != nil {
+			out[strings.ToLower(m[1])] = m[2]
+		}
+	}
+	return out
+}
+
+// refTarget is the URL of a reference link match in s, or "".
+func refTarget(s string, m []int, refs map[string]string) string {
+	id := s[m[4]:m[5]]
+	if id == "" {
+		id = s[m[2]:m[3]]
+	}
+	return refs[strings.ToLower(id)]
+}
+
 // linkAt is the URL of the link under the window's cursor, or "". The text
 // shows no URL, so it comes from the source line, matched by the link
 // style, which carries it.
@@ -848,20 +845,27 @@ func (a *App) linkAt(w *Window) string {
 	src := l.Text()
 	b := w.Buf
 	switch {
-	case b.Edit != nil:
-		src = string(b.Edit.Src[b.Edit.Line])
-	case l.Src > 0 && len(b.blocks) > 0 && b.blocks[0].kind == bDoc:
-		text := b.blocks[0].text
-		if b.Held != nil {
-			text = b.Held.Text()
+	case b.Edit != nil && l.Src > 0:
+		src = string(b.Edit.Src[l.Src-1])
+		// A raw line shows the link itself: the one around the cursor.
+		if b.Edit.isRaw(l.Src - 1) {
+			off := len(string([]rune(src)[:a.posAt(w, w.Cur, w.Col).off]))
+			for _, m := range mdLink.FindAllStringSubmatchIndex(src, -1) {
+				if off < m[0] || off >= m[1] {
+					continue
+				}
+				if m[6] >= 0 {
+					return src[m[6]:m[7]]
+				}
+				return src[m[4]:m[5]]
+			}
+			for _, m := range mdRefLink.FindAllStringSubmatchIndex(src, -1) {
+				if off >= m[0] && off < m[1] {
+					return refTarget(src, m, refURLs(b.Edit.Src))
+				}
+			}
+			return ""
 		}
-		// The block starts at Src and ends at a blank line.
-		lines := strings.Split(text, "\n")
-		end := l.Src
-		for end < len(lines) && strings.TrimSpace(lines[end]) != "" {
-			end++
-		}
-		src = strings.Join(lines[min(l.Src-1, len(lines)):end], "\n")
 	case l.Block < len(b.blocks) && b.blocks[l.Block].text != "":
 		src = b.blocks[l.Block].text
 	}
@@ -875,6 +879,7 @@ func (a *App) linkAt(w *Window) string {
 		}
 		urls, labels = append(urls, m[2]), append(labels, m[1])
 	}
+
 	for i, label := range labels {
 		if t := strings.TrimSpace(under.Text); t != "" && strings.Contains(label, t) {
 			return urls[i]

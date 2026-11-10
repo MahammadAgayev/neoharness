@@ -44,23 +44,6 @@ func (a *App) draw() {
 	}
 	live := false
 	area := Rect{0, 0, W, H - 1}
-	if a.under != nil {
-		// The layout stays live under the popup.
-		a.under.layout(area, sep)
-		for _, w := range a.under.windows() {
-			a.drawWindow(w, false)
-			live = live || w.Buf.Live()
-		}
-		area = Rect{2, 1, W - 4, H - 3}
-		// The side margins are too narrow to show the layout, only cut
-		// pieces of it; they stay blank.
-		for y := area.Y; y < area.Y+area.H; y++ {
-			a.fill(0, y, area.X, a.th.Base)
-			a.fill(area.X+area.W, y, W, a.th.Base)
-		}
-		a.box(area.X, area.Y, area.W, area.H, "", a.th.Iris)
-		area = Rect{area.X + 1, area.Y + 1, area.W - 2, area.H - 2}
-	}
 	a.root.layout(area, sep)
 	for _, w := range a.root.windows() {
 		a.drawWindow(w, w == a.cur)
@@ -401,7 +384,7 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 		x = a.put(x, y, right, label, dim) + 2
 	}
 	name, nameSt := bufTitle(b), a.th.Subtle
-	if e := b.edit(); e != nil && e.Dirty {
+	if e := b.Edit; e != nil && e.Dirty {
 		name += " [+]"
 	}
 	if focused {

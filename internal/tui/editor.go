@@ -7,23 +7,35 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
+
+	"github.com/MahammadAgayev/neoharness/internal/model"
 )
 
-// Editor holds the markdown source of an artifact while the person edits
-// it. The cursor is a source line and a rune offset in it; the window shows
-// the lines soft-wrapped and keeps its own row and column, so motions work
-// as in any buffer. Edits read the window's position first and set it after.
+// Editor holds the markdown source of an artifact: the buffer is the source,
+// as in Neovim. The cursor is a source line and a rune offset in it; the
+// window shows the lines soft-wrapped and keeps its own row and column, so
+// motions work as in any buffer. Edits read the window's position first and
+// set it after.
+//
+// The lines show rendered, and the cursor's line raw, as in Obsidian's live
+// preview; in Visual every selected line shows raw.
 type Editor struct {
 	Name string
 	Src  [][]rune
-	// Base is the version the edit started from, or the last one saved.
+	// art is the newest version the hub has; Base is the version the text
+	// is from, or the last one saved.
+	art       model.Artifact
 	Base      int
 	Line, Off int
 	Dirty     bool
-	// fromDoc says Insert started on the document: <Esc> shows it again.
-	fromDoc bool
 	// saved is the text as last loaded or saved: undo back to it is clean.
 	saved string
+	// The lines from shown to shownTo show raw.
+	shown, shownTo int
+	// want is the offset <Up> and <Down> keep over shorter lines in Insert,
+	// or -1.
+	want int
 
 	undo, redo []snapshot
 	// reg is what the last delete or yank took, for p and P. lines says it
@@ -31,10 +43,17 @@ type Editor struct {
 	reg   string
 	lines bool
 
-	rev    int
-	cache  []Line
-	cacheW int
-	cacheR int
+	rev        int
+	cache      []Line
+	cacheW     int
+	cacheR     int
+	cacheShown [2]int
+	// deco are the rendered rows of each line at decoW, memo those of
+	// plain lines by their text.
+	deco  [][]Line
+	decoW int
+	decoR int
+	memo  map[string][]Line
 }
 
 type snapshot struct {
@@ -52,7 +71,7 @@ type pos struct{ line, off int }
 func (p pos) before(q pos) bool { return p.line < q.line || p.line == q.line && p.off < q.off }
 
 func newEditor(name, text string, base int) *Editor {
-	e := &Editor{Name: name, Base: base, rev: 1, saved: text}
+	e := &Editor{Name: name, Base: base, rev: 1, saved: text, shown: -1, shownTo: -1, want: -1}
 	for _, l := range strings.Split(text, "\n") {
 		e.Src = append(e.Src, []rune(l))
 	}
@@ -644,17 +663,60 @@ func bracketed(l []rune, i int, open, close rune) (int, int, bool) {
 	return 0, 0, false
 }
 
-// render shows the source soft-wrapped to w cells, headings in their colors
-// and marked for the outline rail. A meta line on top keeps the text where
-// the document had it.
+// find is the next match of q in the source after the cursor, or before it
+// when d is negative, going round the end. fold matches in any case.
+func (e *Editor) find(q string, fold bool, d int) (pos, bool) {
+	qr := []rune(q)
+	if fold {
+		qr = []rune(strings.ToLower(q))
+	}
+	matches := func(i int) []int {
+		l := e.Src[i]
+		if fold {
+			l = []rune(strings.ToLower(string(l)))
+		}
+		var out []int
+		for k := 0; k+len(qr) <= len(l); k++ {
+			if slices.Equal(l[k:k+len(qr)], qr) {
+				out = append(out, k)
+			}
+		}
+		return out
+	}
+	n := len(e.Src)
+	for step := 0; step <= n; step++ {
+		i := ((e.Line+d*step)%n + n) % n
+		ms := matches(i)
+		if d < 0 {
+			slices.Reverse(ms)
+		}
+		for _, k := range ms {
+			after := d > 0 && k > e.Off || d < 0 && k < e.Off
+			if step > 0 && step < n || after || step == n {
+				return pos{i, k}, true
+			}
+		}
+	}
+	return pos{}, false
+}
+
+// render shows the lines soft-wrapped to w cells, at most docWidth wide:
+// rendered, or raw with headings in their colors. Headings are marked for
+// the outline rail. A meta line about the artifact is on top.
 func (e *Editor) render(w int, th *Theme) []Line {
-	if e.cacheW == w && e.cacheR == e.rev {
+	margin := []Span{{"  ", th.Text}}
+	w = min(w, docWidth+width(spansText(margin)))
+	if e.cacheW == w && e.cacheR == e.rev && e.cacheShown == [2]int{e.shown, e.shownTo} {
 		return e.cache
 	}
-	margin := []Span{{"  ", th.Text}}
 	avail := max(w-width(spansText(margin)), 4)
-	meta := fmt.Sprintf("◇ %s · editing v%d", e.Name, e.Base)
-	out := []Line{{}, {Prefix: margin, Spans: []Span{{meta, th.Muted}}}, {}}
+	if e.decoW != w || e.decoR != e.rev {
+		if e.decoW != w || e.memo == nil {
+			e.memo = map[string][]Line{}
+		}
+		e.deco, e.decoW, e.decoR = decorate(e.Src, w, th, e.memo), w, e.rev
+	}
+	out := []Line{{}, {Prefix: margin, Spans: []Span{{e.meta(), th.Muted}}}, {}}
 	fence := false
 	for i, l := range e.Src {
 		st, head := th.Text, 0
@@ -667,6 +729,13 @@ func (e *Editor) render(w int, th *Theme) []Line {
 			head = headingLevel(s)
 			st = headingStyle(th, head)
 		}
+		if !e.isRaw(i) {
+			for _, row := range e.deco[i] {
+				row.Src = i + 1
+				out = append(out, row)
+			}
+			continue
+		}
 		starts := wrapRunes(l, avail)
 		for j, at := range starts {
 			end := len(l)
@@ -678,13 +747,32 @@ func (e *Editor) render(w int, th *Theme) []Line {
 				ln.Spans = []Span{{strings.ReplaceAll(string(l[at:end]), "\t", " "), st}}
 			}
 			if j == 0 {
-				ln.Head = head
+				ln.Head, ln.Msg = head, head > 0
 			}
 			out = append(out, ln)
 		}
 	}
-	e.cache, e.cacheW, e.cacheR = out, w, e.rev
+	e.cache, e.cacheW, e.cacheR, e.cacheShown = out, w, e.rev, [2]int{e.shown, e.shownTo}
 	return out
+}
+
+// meta is the line about the artifact above its text.
+func (e *Editor) meta() string {
+	m := fmt.Sprintf("◇ %s", e.Name)
+	if e.art.Thread != "" {
+		m += " · by " + e.art.Thread
+	}
+	m += fmt.Sprintf(" · v%d", e.Base)
+	if e.art.UserEdit && e.art.Version == e.Base {
+		m += " · edited by you"
+	}
+	if !e.art.UpdatedAt.IsZero() {
+		m += " · " + e.art.UpdatedAt.Local().Format("Jan 2 15:04")
+	}
+	if e.art.Version > e.Base {
+		m += fmt.Sprintf(" · v%d is newer", e.art.Version)
+	}
+	return m
 }
 
 // wrapRunes gives the start of each row of l wrapped to w cells, breaking
@@ -735,6 +823,9 @@ func (a *App) posAt(w *Window, row, col int) pos {
 	}
 	l := lines[row]
 	src := e.Src[l.Src-1]
+	if !e.isRaw(l.Src - 1) {
+		return pos{l.Src - 1, renderedOff(lines, row, col, src)}
+	}
 	end := len(src)
 	if row+1 < len(lines) && lines[row+1].Src == l.Src {
 		end = lines[row+1].Off
@@ -745,6 +836,80 @@ func (a *App) posAt(w *Window, row, col int) pos {
 		off++
 	}
 	return pos{l.Src - 1, off}
+}
+
+// renderedOff is the source offset under a column of a rendered row. The
+// rows show the line's text without its markers, so their runes are matched
+// to the source in order; a link's (url) never shows. The space at a wrap and a
+// table's padding are not in the source: they match only across signs. A
+// table's │ is the source's |.
+func renderedOff(lines []Line, row, col int, src []rune) int {
+	first := row
+	for first > 0 && lines[first-1].Src == lines[row].Src {
+		first--
+	}
+	var text []rune
+	var added []bool
+	v := -1
+	for k := first; k < len(lines) && lines[k].Src == lines[row].Src; k++ {
+		l := lines[k]
+		if l.Off < 0 {
+			continue
+		}
+		if len(text) > 0 {
+			text, added = append(text, ' '), append(added, true)
+		}
+		t := []rune(l.Text())
+		if k == row {
+			v = len(text) + runeAt(t, max(col-l.prefixWidth(), 0))
+		}
+		text = append(text, t...)
+		added = append(added, make([]bool, len(t))...)
+	}
+	table := strings.HasPrefix(strings.TrimSpace(string(src)), "|")
+	hidden := make([]bool, len(src))
+	line := string(src)
+	for _, m := range mdLink.FindAllStringSubmatchIndex(line, -1) {
+		if m[4] < 0 {
+			continue
+		}
+		from := utf8.RuneCountInString(line[:m[3]])
+		for k := from; k < from+utf8.RuneCountInString(line[m[3]:m[1]]); k++ {
+			hidden[k] = true
+		}
+	}
+	n := len(src)
+	if v < 0 || v >= len(text) {
+		return n
+	}
+	word := func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
+	j := 0
+	for i, r := range text {
+		if r == '│' {
+			r = '|'
+		}
+		k := j
+		if !added[i] && (word(r) || !table) {
+			for k < n && (src[k] != r || hidden[k]) {
+				k++
+			}
+			if k == n {
+				return max(min(n-len(text)+v, n), 0)
+			}
+		} else {
+			for k < n && src[k] != r && !word(src[k]) {
+				k++
+			}
+			if k == n || src[k] != r {
+				k = j - 1
+			}
+		}
+		if i == v {
+			return max(min(k, n), 0)
+		}
+		j = k + 1
+	}
+	return n
 }
 
 // fromWindow moves the editor's cursor to the window's.
@@ -758,58 +923,74 @@ func (a *App) toWindow(w *Window) {
 	e := w.Buf.Edit
 	e.Line = max(min(e.Line, len(e.Src)-1), 0)
 	e.Off = max(min(e.Off, len(e.Src[e.Line])), 0)
+	w.Cur, w.Col = a.rowCol(w, e.cursor())
+	w.Follow = false
+}
+
+// rowCol is the window row and column of a place in the source. A line that
+// shows rendered has its first row.
+func (a *App) rowCol(w *Window, p pos) (int, int) {
+	e := w.Buf.Edit
 	lines := e.render(a.textWidth(w), a.th)
 	for i, l := range lines {
-		if l.Src != e.Line+1 || l.Off > e.Off {
+		if l.Src != p.line+1 || l.Off > p.off {
 			continue
 		}
-		if i+1 < len(lines) && lines[i+1].Src == l.Src && lines[i+1].Off <= e.Off {
+		if i+1 < len(lines) && lines[i+1].Src == l.Src && lines[i+1].Off > l.Off && lines[i+1].Off <= p.off {
 			continue
 		}
 		col := l.prefixWidth()
-		for _, r := range e.Src[e.Line][l.Off:e.Off] {
-			col += runeCells(r)
+		if e.isRaw(p.line) {
+			for _, r := range e.Src[p.line][l.Off:p.off] {
+				col += runeCells(r)
+			}
 		}
-		w.Cur, w.Col, w.Follow = i, col, false
+		return i, col
+	}
+	return metaRows, 0
+}
+
+// isRaw says line i shows raw.
+func (e *Editor) isRaw(i int) bool { return i >= e.shown && i <= e.shownTo }
+
+// settle keeps an artifact window's cursor on its place in the source after
+// a key. The rows change when another line turns raw; the Visual start moves
+// with them. In Insert the editor's cursor is the true place, as the keys
+// move it in the source.
+func (a *App) settle(w *Window) {
+	e := w.Buf.Edit
+	if e == nil || a.pasting {
 		return
+	}
+	p := e.cursor()
+	if a.mode != modeInsert {
+		p = a.posAt(w, w.Cur, w.Col)
+	}
+	from, to := p.line, p.line
+	var v pos
+	if w.vmode != 0 {
+		v = a.posAt(w, w.vLine, w.vCol)
+		from, to = min(from, v.line), max(to, v.line)
+	}
+	if from == e.shown && to == e.shownTo {
+		return
+	}
+	e.shown, e.shownTo = from, to
+	e.Line, e.Off = p.line, p.off
+	a.toWindow(w)
+	if w.vmode != 0 {
+		w.vLine, w.vCol = a.rowCol(w, v)
 	}
 }
 
-// startEdit shows the source of the artifact in the window, at the line the
-// cursor was reading, and runs an insert key there: i a I A o O, or 0 for
-// none (:e).
+// startEdit runs an insert key at the cursor in the artifact's source:
+// i a I A o O.
 func (a *App) startEdit(k rune) {
-	w, b := a.cur, a.cur.Buf
-	if b.Edit == nil {
-		bl := b.blocks
-		if len(bl) == 0 || bl[0].kind != bDoc {
-			return
-		}
-		lines := b.Lines(a.textWidth(w), a.th, a.spin)
-		src := 0
-		for i := min(w.Cur, len(lines)-1); i >= 0 && src == 0; i-- {
-			src = lines[i].Src
-		}
-		if b.Held != nil {
-			b.Edit, b.Held = b.Held, nil
-		} else {
-			b.Edit = newEditor(b.Artifact, bl[0].text, bl[0].art.Version)
-		}
-		b.Edit.Line = min(max(src-1, 0), len(b.Edit.Src)-1)
-		b.Edit.fromDoc = k != 0
-		b.dirty = true
-		// The rendered column says nothing about the source one.
-		if k == 'a' {
-			k = 'i'
-		}
-	} else {
-		a.fromWindow(w)
-	}
-	e := b.Edit
-	if k == 0 {
-		a.toWindow(w)
+	w, e := a.cur, a.cur.Buf.Edit
+	if e == nil {
 		return
 	}
+	a.fromWindow(w)
 	e.save()
 	switch k {
 	case 'a':
@@ -833,46 +1014,18 @@ func (a *App) startEdit(k rune) {
 func (a *App) toInsert(w *Window) {
 	a.mode = modeInsert
 	w.vmode = 0
+	e := w.Buf.Edit
+	e.shown, e.shownTo = e.Line, e.Line
 	a.toWindow(w)
 }
 
-// stopEdit shows the document again, at the section the cursor was in. An
-// unsaved edit is held and shows in the document.
-func (a *App) stopEdit(w *Window) {
-	b := w.Buf
-	target := b.Edit.Line + 1
-	if b.Edit.Dirty {
-		b.Held = b.Edit
-	}
-	b.Edit = nil
-	b.dirty = true
-	a.mode = modeNormal
-	best, bestSrc := 0, 0
-	for i, l := range b.Lines(a.textWidth(w), a.th, a.spin) {
-		if l.Src > bestSrc && l.Src <= target {
-			best, bestSrc = i, l.Src
-		}
-	}
-	w.Cur, w.Col = best, 0
-}
-
-// dropEdit is :q!: the saved document again, without the edit.
+// dropEdit is :q! and :e!: the changes go, and the newest version shows.
 func (a *App) dropEdit() {
 	b := a.cur.Buf
-	if b.Edit != nil {
-		b.Edit.Dirty = false
-		a.stopEdit(a.cur)
+	b.Edit.Dirty = false
+	if _, ok := a.loadArtifact(b); ok {
+		a.toWindow(a.cur)
 	}
-	b.Held = nil
-	b.dirty = true
-}
-
-// writeHeld is :w on the document: it saves the held edit and shows the
-// document again, with the edit still held if the save failed.
-func (a *App) writeHeld(force bool) {
-	a.startEdit(0)
-	a.saveEdit(force)
-	a.stopEdit(a.cur)
 }
 
 // yankMotion is y with a motion or text object where there is no source
@@ -944,10 +1097,6 @@ func (a *App) editNormal(k string, n int) {
 	if e == nil {
 		if k[0] == 'y' {
 			a.yankMotion(k[1:], n)
-			return
-		}
-		if w.Buf.Kind == KindArtifact {
-			a.notify("i or :e edits the markdown", a.th.Muted)
 		}
 		return
 	}
@@ -1128,10 +1277,6 @@ func (a *App) editInsert(k string, r rune, isRune bool) {
 	e := w.Buf.Edit
 	switch k {
 	case "<Esc>":
-		if e.fromDoc {
-			a.stopEdit(w)
-			return
-		}
 		a.mode = modeNormal
 		e.Off = max(e.Off-1, 0)
 	case "<CR>", "<S-CR>", "<C-j>", "<M-\r>":
@@ -1148,10 +1293,16 @@ func (a *App) editInsert(k string, r rune, isRune bool) {
 		e.Off = max(e.Off-1, 0)
 	case "<Right>":
 		e.Off = min(e.Off+1, len(e.Src[e.Line]))
-	case "<Up>":
-		e.Line = max(e.Line-1, 0)
-	case "<Down>":
-		e.Line = min(e.Line+1, len(e.Src)-1)
+	case "<Up>", "<Down>":
+		if e.want < 0 {
+			e.want = e.Off
+		}
+		if k == "<Up>" {
+			e.Line = max(e.Line-1, 0)
+		} else {
+			e.Line = min(e.Line+1, len(e.Src)-1)
+		}
+		e.Off = min(e.want, len(e.Src[e.Line]))
 	case "<Home>":
 		e.Off = 0
 	case "<End>":
@@ -1174,6 +1325,9 @@ func (a *App) editInsert(k string, r rune, isRune bool) {
 		if isRune {
 			e.insertText(string(r))
 		}
+	}
+	if k != "<Up>" && k != "<Down>" {
+		e.want = -1
 	}
 	// A paste comes as one key per rune; the cursor follows once it ends.
 	if !a.pasting {

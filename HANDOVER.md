@@ -1,9 +1,10 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 172 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 179 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
-Next: the single-buffer artifact view (user's choice, 2026-11-10).
+Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
+reference links, exact columns) are not committed yet.
 
 ## 1. What neoharness is
 
@@ -187,12 +188,10 @@ only recorded.
   `cache-design`.
 - Opening: `<CR>` on a `◇` line, or on a line with a link (the name under the
   cursor, else the first), or `<leader>pa` / `:artifacts` / `<leader><leader>`.
-  It opens a **popup**: a bordered float over the layout, the document on the
-  left (60%), the writer's chat on the right (40%), where you can write to it.
-  While it is open, the popup is `App.root` and the layout is `App.under`
-  (still drawn and live), so window commands work inside it. `q` or `<Esc>`
-  in Normal, or `:q` on its last window, closes it and gives the focus back;
-  `<leader>pc` and `<leader>t` close it first.
+  It opens in the **current window**, as `gf` opens a file (`showBuf`).
+  `<C-o>` goes back to the buffer the window showed before (`Window.jumps`),
+  `<C-^>` to the alternate; the window comes back to its place in each
+  buffer (`Window.views`). `:vsplit` shows it beside a chat.
 - The open document reloads when it is written again (`UpdateArtifact`).
   `y`, `/`, `]m`/`[m` (headings) work.
 - **Editing** (`editor.go`): `:e` or `i a I A o O` in a document shows its
@@ -239,9 +238,9 @@ only recorded.
     result ("merged and saved"; `u` gives back the edit alone); changes to
     the same lines are refused: `:w!` saves over, `:e!` takes theirs. A write
     by the agent during an edit shows a Gold "… · :w merges it".
-  - `:wq`/`:x` save and show the document; `<Esc>`/`q`/`:q` show it and
-    hold unsaved changes; `:q!` drops them. Closing the popup keeps the edit
-    in the buffer; `:qa` refuses while one is unsaved.
+  - Item 42 in section 11.3 has the current commands: `:w`, `:wq`, `:q!`,
+    `:e!`. A buffer keeps an unsaved change when the window shows another
+    one; `:qa` refuses while one is unsaved.
 - **What the agent hears**: `Hub.EditArtifact` saves the person's version
   (`UserEdit`: "edited by you" in the meta line, "edited by the person" in
   `workspace_status`) and keeps, on the writer thread, the text it last saw
@@ -363,7 +362,7 @@ chroma (code colors, style `rose-pine-moon`).
   next one replaces it; `<C-^>` goes back to the list. `<C-v>` (list or
   picker) and `:open` also use the pane. `<C-x>` splits above. `<leader>pc`
   focuses the coordinator and leaves the pane as it is.
-- **Artifact popup**: see section 3, Artifacts.
+- **Artifacts**: see section 3, Artifacts.
 - **Modes**: Normal, Insert (write in the prompt at the end of a chat buffer),
   Visual (`v`, `V`), Command-line (`:` and `/`), Picker (`<leader>…`).
 - **Prompt**: at least 3 lines tall, grows to 12 lines before it scrolls.
@@ -432,7 +431,7 @@ chroma (code colors, style `rose-pine-moon`).
   90 ms, and only changed cells go to the terminal (one cell per spinner
   frame).
 
-Files: `app.go` (state, hub sync, screens, layout, pane, popup, artifacts,
+Files: `app.go` (state, hub sync, screens, layout, pane, artifacts,
 links), `keys.go` (modes, key sequences, motions, insert, yank), `cmdline.go`
 (`:` commands, completion, search, help text), `complete.go` (Insert
 completion), `picker.go` (fuzzy pickers), `toast.go` (notifications),
@@ -455,8 +454,8 @@ are `<leader>p…` (`pf`, `pb`, `ps`), and `<leader>f` formats code.
 | `j k gg G h l w b 0 ^ $` | move |
 | `<C-d>` `<C-u>` `n` `N` | half page, search; all recenter like `zz` (scrolloff 8) |
 | `]m` `[m` / `]b` `[b` / `<C-^>` | next/previous message (heading in an artifact) / thread / alternate |
-| `<CR>` on `◇` or an artifact name | open the artifact popup |
-| `q` / `<Esc>` (Normal, popup open) | close the popup |
+| `<CR>` on `◇` or an artifact name, `gf` | open the artifact in the window |
+| `<C-o>` | back to the buffer the window showed before |
 | `/` `n` `N` | search in the buffer |
 | `za` `<leader>e` | open or close a turn's tool calls, or a long `!` output |
 | `v V y yy` `<leader>y` `<leader>Y` | select and yank to the system clipboard (OSC 52) |
@@ -486,7 +485,7 @@ Commands: `:new <name> [folder]`, `:folder [folder]`, `:open <name>
    Neovim config are fine.
 3. Start simple and unfold: a workspace opens as the threads list and the
    coordinator; a thread comes on screen only when you open it; an artifact
-   opens in a popup and goes away with `q`.
+   opens in the window, and `<C-o>` goes back.
 4. A thing shows its own state. No mode labels: the Iris `›` shows Insert,
    the `:` line shows Command, the picker box shows Pick. Only a muted
    `visual` / `v-line` (to tell `v` from `V`). The cursor shape never
@@ -632,8 +631,9 @@ Pitfalls seen in this work:
   Always check the scratch socket exists before you type.
 - A fast `Escape` and key arrive as Alt+key. In Insert, Command and Visual
   the TUI reads them as the two keys (`key`), so `Escape :w Enter` in one
-  `send-keys` works there. In Normal, `Escape` closes the popup, so wait
-  about 0.5 s after it there.
+  `send-keys` works there, and in Normal too. Alt with a control key is
+  split the same way (`Escape C-o`). tmux `C-6` does not send `<C-^>`; use
+  `send-keys -H 1e`.
 - After typing a `/` or `@` word in Insert, `<Esc>` closes the popup and stays
   in Insert. Do not send `i` after it.
 - `:new` leaves you in Insert mode.
@@ -683,8 +683,7 @@ Pitfalls seen in this work:
     have asked about.
 11. **Artifacts**: an agent's update sends the whole document (no partial
     edit); no delete or rename; a name that is one plain word (`plan`) is a
-    link only in code (backticks), not in prose. The popup's side margins
-    are blank; its top row shows the layout's first row.
+    link only in code (backticks), not in prose.
 12. Not built yet: configurable keymaps and theme, a picker for "allow always"
     rules, other agent backends (the agent interface is ready for them), more
     than one folder per workspace (Claude has `--add-dir`).
@@ -698,8 +697,7 @@ Pitfalls seen in this work:
     (like `gj`/`gk`); operators take `w e b $ 0 ^ iw aw ip ap`, quote
     objects on one line, bracket objects over lines, `f F t T` and `%`.
     Macro registers are `a`-`z` only (no `A`-`Z` append, no `@:`).
-    Marks are rows of
-    the window's view, so the source and the document do not share them. The line merge refuses when both sides add
+    The line merge refuses when both sides add
     different lines at the same place (git would write conflict markers).
 
 ## 10. Repository
@@ -909,6 +907,55 @@ Not committed:
     artifact named under the cursor, as `<CR>` does, and says so when there
     is none. A picker whose rows have no detail gives the label the whole
     row.
+42. **One buffer per artifact** (user's choice, 2026-11-10), as
+    render-markdown.nvim does. The buffer is the markdown source
+    (`Buffer.Edit` always set, made by `SetDoc`); there is no document view
+    and no held edit any more (`Held`, `stopEdit`, `writeHeld`,
+    `renderDocument`, `fromDoc` are gone). In Normal mode every line shows
+    rendered (`decorate` in `doc.go`: line by line, markers hidden, headings
+    with a rule, bullets, task boxes, numbers lined up, tables in columns,
+    code highlighted, quotes and alerts) and the cursor's line shows raw
+    (`Editor.shown`); Insert and Visual show every line raw (`Editor.raw`).
+    `settle` runs after each key: it turns the window's row into a source
+    place and back, so the cursor stays put when rows move. `/` searches
+    the source, marks are source places, `gx` on a raw line takes the link
+    around the cursor. Commands mean what they mean in Vim: `:q` closes the
+    window (the buffer keeps an unsaved change, `[+]`), `:q!` drops it,
+    `:e` refuses on a change and `:e!` takes the newest version; a new
+    version from the agent reloads an unchanged buffer. 5,000 lines: first
+    render 6 ms, cursor move 0.4 ms. Checked in a real run: rows render,
+    the raw line follows `j`, `A`/`<Esc>` renders the edit, `:w` saves v2,
+    `V` shows raw.
+43. **Raw only where you work, artifacts in the window** (user's request,
+    2026-11-10). Insert shows only the cursor's line raw, as Obsidian's
+    live preview does; Visual shows the selected lines raw, so `y d c` take
+    what you see. `Editor.raw` is gone; the lines from `shown` to `shownTo`
+    show raw (`isRaw`). In Insert `settle` takes the editor's cursor as the
+    place, as the keys move it in the source. The artifact popup is gone
+    (`App.under`, `App.back`, `closePopup`, the popup frame): an artifact
+    opens in the current window. `<C-o>` goes back through the buffers the
+    window showed (`Window.jumps`, at most 50), and a window comes back to
+    its place in a buffer (`Window.views`). `<C-i>` is the same key as
+    `<Tab>` (next window) in a terminal, so there is no forward jump;
+    `<C-^>` goes to the alternate. `<Esc>` in Normal does nothing now.
+    A fast `<Esc>` and a control key are two keys (`<Esc><C-o>` came as
+    Alt+`<C-o>` and left Visual on); Visual ends when the window has no
+    selection. In Insert, `<Up>`/`<Down>` keep the column over shorter
+    lines (`Editor.want`), as Vim does. Checked in a real run.
+44. **Reference links** render: `decorate` collects the document's
+    definitions (`[1]: url`, out of code blocks) and `inlineOf` parses each
+    line with them below it (`mdRenderer.refs`; goldmark keeps them as
+    `LinkReferenceDefinition` nodes after the paragraph). Definition lines
+    show muted. `gx` on `[text][id]` or `[text][]` opens the defined URL
+    (`mdRefLink`, `refURLs`). Checked in a real run.
+45. **Exact columns on rendered lines**: `renderedOff` matches the rendered
+    runes to the source in order (markers are only taken out), so `j`/`k`
+    onto a line with `**`, links or code land on the same character in the
+    source. A link's `(url)` never matches; the space added at a wrap and
+    a table's padding and `│` match only across signs (`│` is `|`). A rune
+    that is not found falls back to the old estimate. Checked in a real
+    run: `x` after `j` deleted the `l` of `[link]`, and in a table the `o`
+    of `none`.
 
 
 Things found on the user's machine:

@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"bytes"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -16,8 +15,6 @@ import (
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
-
-	"github.com/MahammadAgayev/neoharness/internal/model"
 )
 
 var md = goldmark.New(goldmark.WithExtensions(extension.GFM))
@@ -41,22 +38,6 @@ func renderMarkdown(src string, w int, th *Theme, prefix []Span) []Line {
 // read.
 const docWidth = 96
 
-// renderDocument renders an artifact as a document: a line about it, then
-// the markdown with headings, rules, labels and links spelled out.
-func renderDocument(a model.Artifact, src string, w int, th *Theme) []Line {
-	margin := []Span{{"  ", th.Text}}
-	meta := fmt.Sprintf("◇ %s · by %s · v%d", a.Name, a.Thread, a.Version)
-	if a.UserEdit {
-		meta += " · edited by you"
-	}
-	meta += " · " + a.UpdatedAt.Local().Format("Jan 2 15:04")
-	out := []Line{{}, {Prefix: margin, Spans: []Span{{meta, th.Muted}}}, {}}
-	source := []byte(src)
-	r := &mdRenderer{src: source, th: th, w: min(w, docWidth+width(spansText(margin))), doc: true}
-	r.blocks(md.Parser().Parse(text.NewReader(source)), margin, margin)
-	return append(out, r.out...)
-}
-
 type mdRenderer struct {
 	src   []byte
 	th    *Theme
@@ -67,6 +48,9 @@ type mdRenderer struct {
 	// strip is an alert marker, like [!NOTE], to drop from the next
 	// paragraph.
 	strip string
+	// refs are a document's link reference definitions, [1]: url, given to
+	// each line it parses alone.
+	refs string
 }
 
 // alerts are GitHub's blockquote alerts: > [!NOTE] and the like.
@@ -99,16 +83,6 @@ func headingStyle(th *Theme, level int) tcell.Style {
 	return th.Subtle.Bold(true)
 }
 
-// srcLine is the 1-based source line where block n starts, 0 if unknown.
-func (r *mdRenderer) srcLine(n ast.Node) int {
-	for c := n; c != nil; c = c.FirstChild() {
-		if c.Type() == ast.TypeBlock && c.Lines().Len() > 0 {
-			return bytes.Count(r.src[:c.Lines().At(0).Start], []byte("\n")) + 1
-		}
-	}
-	return 0
-}
-
 func (r *mdRenderer) blank(prefix []Span) {
 	if len(r.out) > 0 {
 		r.out = append(r.out, Line{Prefix: prefix})
@@ -130,19 +104,6 @@ func (r *mdRenderer) blocks(n ast.Node, first, rest []Span) {
 }
 
 func (r *mdRenderer) block(n ast.Node, first, rest []Span) {
-	// A document line knows its source line, so editing opens where the
-	// person was reading.
-	if r.doc {
-		from := len(r.out)
-		defer func() {
-			src := r.srcLine(n)
-			for i := from; i < len(r.out) && src > 0; i++ {
-				if r.out[i].Src == 0 {
-					r.out[i].Src = src
-				}
-			}
-		}()
-	}
 	switch n := n.(type) {
 	case *ast.Paragraph, *ast.TextBlock:
 		spans := r.inline(n, r.th.Text)
@@ -152,20 +113,7 @@ func (r *mdRenderer) block(n ast.Node, first, rest []Span) {
 		}
 		r.out = append(r.out, wrap(spans, r.w, first, rest)...)
 	case *ast.Heading:
-		if !r.doc {
-			r.out = append(r.out, wrap(r.inline(n, r.th.Bold), r.w, first, rest)...)
-			break
-		}
-		lines := wrap(r.inline(n, headingStyle(r.th, n.Level)), r.w, first, rest)
-		lines[0].Msg, lines[0].Head = true, n.Level
-		r.out = append(r.out, lines...)
-		if n.Level <= 2 {
-			rule := "─"
-			if n.Level == 1 {
-				rule = "━"
-			}
-			r.out = append(r.out, Line{Prefix: rest, Spans: []Span{{strings.Repeat(rule, max(r.w-width(spansText(rest)), 1)), r.th.Muted}}})
-		}
+		r.out = append(r.out, wrap(r.inline(n, r.th.Bold), r.w, first, rest)...)
 	case *ast.FencedCodeBlock:
 		lang := string(n.Language(r.src))
 		r.code(r.lines(n), lang, first, rest)
@@ -198,10 +146,6 @@ func (r *mdRenderer) block(n ast.Node, first, rest []Span) {
 				i++
 			}
 			indent := strings.Repeat(" ", width(bullet))
-			// A task's box is its bullet, as on GitHub.
-			if r.doc && isTask(item) {
-				bullet, indent = "", "  "
-			}
 			if item != n.FirstChild() {
 				first = rest
 				if !n.IsTight {
@@ -214,9 +158,6 @@ func (r *mdRenderer) block(n ast.Node, first, rest []Span) {
 		}
 	case *ast.ThematicBreak:
 		rule := min(r.w-width(spansText(first)), 40)
-		if r.doc {
-			rule = r.w - width(spansText(first))
-		}
 		r.out = append(r.out, Line{Prefix: first, Spans: []Span{{strings.Repeat("─", max(rule, 1)), r.th.Muted}}})
 	case *east.Table:
 		r.table(n, first, rest)
@@ -260,7 +201,14 @@ func (r *mdRenderer) table(n ast.Node, first, rest []Span) {
 			}
 		}
 	}
-	avail := r.w - width(spansText(first)) - 3*(len(widths)-1)
+	fitColumns(widths, r.w-width(spansText(first)))
+	r.wrappedRows(rows, widths, aligns, first, rest)
+}
+
+// fitColumns shrinks the widest column until the table fits in avail cells
+// with its separators.
+func fitColumns(widths []int, avail int) {
+	avail -= 3 * (len(widths) - 1)
 	for {
 		total, widest := 0, 0
 		for i, w := range widths {
@@ -270,65 +218,68 @@ func (r *mdRenderer) table(n ast.Node, first, rest []Span) {
 			}
 		}
 		if total <= avail || widths[widest] <= 3 {
-			break
+			return
 		}
 		widths[widest]--
 	}
-	r.wrappedRows(rows, widths, aligns, first, rest)
 }
 
 // wrappedRows draws table rows with long cells wrapped onto more lines, so
 // every word shows: a chat cannot scroll sideways.
 func (r *mdRenderer) wrappedRows(rows [][][]Span, widths []int, aligns []east.Alignment, first, rest []Span) {
 	for ri, cells := range rows {
-		cols := make([][]Line, len(widths))
-		height := 1
-		for i, w := range widths {
-			if i < len(cells) {
-				cols[i] = wrap(cells[i], w, nil, nil)
-			}
-			height = max(height, len(cols[i]))
-		}
-		for k := 0; k < height; k++ {
-			var spans []Span
-			for i, w := range widths {
-				if i > 0 {
-					spans = append(spans, Span{" │ ", r.th.Muted})
-				}
-				var c []Span
-				if k < len(cols[i]) {
-					c = cols[i][k].Spans
-				}
-				gap := Span{strings.Repeat(" ", max(w-width(spansText(c)), 0)), r.th.Text}
-				switch {
-				case aligns[i] == east.AlignRight:
-					spans = append(append(spans, gap), c...)
-				case i == len(widths)-1:
-					spans = append(spans, c...)
-				default:
-					spans = append(append(spans, c...), gap)
-				}
-			}
-			r.out = append(r.out, Line{Prefix: first, Spans: spans})
-			first = rest
-		}
-		rule := make([]string, len(widths))
-		for i, w := range widths {
-			rule[i] = strings.Repeat("─", w)
-		}
+		r.out = append(r.out, r.tableRow(cells, widths, aligns, first, rest)...)
+		first = rest
 		if ri == 0 {
-			r.out = append(r.out, Line{Prefix: first, Spans: []Span{{strings.Join(rule, "─┼─"), r.th.Muted}}})
+			r.out = append(r.out, tableRule(r.th, widths, rest))
 		}
 	}
 }
 
-// isTask reports whether a list item starts with a [ ] or [x] box.
-func isTask(item ast.Node) bool {
-	if p := item.FirstChild(); p != nil {
-		_, ok := p.FirstChild().(*east.TaskCheckBox)
-		return ok
+// tableRow is one table row, its long cells wrapped onto more lines.
+func (r *mdRenderer) tableRow(cells [][]Span, widths []int, aligns []east.Alignment, first, rest []Span) []Line {
+	cols := make([][]Line, len(widths))
+	height := 1
+	for i, w := range widths {
+		if i < len(cells) {
+			cols[i] = wrap(cells[i], w, nil, nil)
+		}
+		height = max(height, len(cols[i]))
 	}
-	return false
+	var out []Line
+	for k := 0; k < height; k++ {
+		var spans []Span
+		for i, w := range widths {
+			if i > 0 {
+				spans = append(spans, Span{" │ ", r.th.Muted})
+			}
+			var c []Span
+			if k < len(cols[i]) {
+				c = cols[i][k].Spans
+			}
+			gap := Span{strings.Repeat(" ", max(w-width(spansText(c)), 0)), r.th.Text}
+			switch {
+			case aligns[i] == east.AlignRight:
+				spans = append(append(spans, gap), c...)
+			case i == len(widths)-1:
+				spans = append(spans, c...)
+			default:
+				spans = append(append(spans, c...), gap)
+			}
+		}
+		out = append(out, Line{Prefix: first, Spans: spans})
+		first = rest
+	}
+	return out
+}
+
+// tableRule is the line under a table's header.
+func tableRule(th *Theme, widths []int, prefix []Span) Line {
+	rule := make([]string, len(widths))
+	for i, w := range widths {
+		rule[i] = strings.Repeat("─", w)
+	}
+	return Line{Prefix: prefix, Spans: []Span{{strings.Join(rule, "─┼─"), th.Muted}}}
 }
 
 func (r *mdRenderer) lines(n ast.Node) []string {

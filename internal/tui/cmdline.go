@@ -239,48 +239,40 @@ func (a *App) exec(line string) {
 		return true
 	}
 
-	edit, held := a.cur.Buf.Edit, a.cur.Buf.Held
+	edit := a.cur.Buf.Edit
 	switch cmd {
 	case "q", "quit", "close":
-		if edit != nil {
-			a.stopEdit(a.cur)
-			return
-		}
 		a.closeCur(false)
 	case "q!", "quit!":
-		if edit != nil || held != nil {
+		if edit != nil && edit.Dirty {
 			a.dropEdit()
-			return
 		}
 		a.closeCur(true)
 	case "e", "edit":
-		if a.cur.Buf.Kind != KindArtifact {
+		switch {
+		case edit == nil:
 			a.notify("only an artifact can be edited", a.th.Muted)
-			return
-		}
-		a.startEdit(0)
-	case "e!", "edit!":
-		if edit != nil || held != nil {
+		case edit.Dirty:
+			a.notify("no write since the last change · :w saves, :e! drops it", a.th.Gold)
+		default:
 			a.dropEdit()
-			a.startEdit(0)
+		}
+	case "e!", "edit!":
+		if edit != nil {
+			a.dropEdit()
 		}
 	case "w", "write", "w!", "write!":
-		switch {
-		case held != nil:
-			a.writeHeld(strings.HasSuffix(cmd, "!"))
-		case edit == nil:
+		if edit == nil {
 			a.notify("nothing to write here", a.th.Muted)
-		default:
-			a.saveEdit(strings.HasSuffix(cmd, "!"))
+			return
 		}
+		a.saveEdit(strings.HasSuffix(cmd, "!"))
 	case "wq", "x", "xit":
 		switch {
-		case held != nil:
-			a.writeHeld(false)
 		case edit == nil:
 			a.notify("nothing to write here", a.th.Muted)
 		case a.saveEdit(false):
-			a.stopEdit(a.cur)
+			a.closeCur(false)
 		}
 	case "qa", "qall", "quitall":
 		a.quitAll(false)
@@ -427,9 +419,20 @@ func (a *App) findNext(d int) {
 		return
 	}
 	w := a.cur
-	lines := w.Buf.Lines(a.textWidth(w), a.th, a.spin)
 	q := a.search
 	fold := strings.ToLower(q) == q
+	if e := w.Buf.Edit; e != nil {
+		a.fromWindow(w)
+		p, ok := e.find(q, fold, d)
+		if !ok {
+			a.notify("pattern not found: "+q, a.th.Love)
+			return
+		}
+		e.Line, e.Off, e.shown, e.shownTo = p.line, p.off, p.line, p.line
+		a.toWindow(w)
+		return
+	}
+	lines := w.Buf.Lines(a.textWidth(w), a.th, a.spin)
 	for step := 1; step <= len(lines); step++ {
 		i := ((w.Cur+d*step)%len(lines) + len(lines)) % len(lines)
 		text := lines[i].Text()
@@ -499,8 +502,8 @@ func (a *App) helpBuf() *Buffer {
 		row("<C-w>h j k l  <C-h>…", "window in a direction"),
 		row("<C-w>v  <C-w>s", "split vertically / horizontally"),
 		row("<C-w>c  <C-w>o  <C-w>=", "close, only, equal sizes"),
-		row("<Esc>  :q", "close the artifact popup (in Normal)"),
 		row("]b [b  <C-^>", "next / previous thread, alternate"),
+		row("<C-o>", "back to the buffer the window showed before"),
 		row("<CR>", "open the workspace, or switch to the thread"),
 		row("<C-v>  <C-x>", "thread in the pane / a split above (pickers, threads list)"),
 		row("<C-d>", "delete the thread or workspace, after y (pickers)"),
@@ -524,7 +527,7 @@ func (a *App) helpBuf() *Buffer {
 		row(":b <name>  :ls", "switch buffer"),
 		row(":vsplit :split [name]", "split with a buffer"),
 		row(":threads", "threads pane, as <leader>t"),
-		row(":artifacts", "pick an artifact; <CR> on ◇ in a chat opens one beside it"),
+		row(":artifacts", "pick an artifact; <CR> on ◇ in a chat opens it too"),
 		row(":messages", "notice history"),
 		row(":workspaces  :workspace <n>", "workspace list, switch workspace"),
 		row(":restore [name]", "bring back a deleted workspace; no name lists them"),
@@ -532,10 +535,10 @@ func (a *App) helpBuf() *Buffer {
 		row(":q!  :qa!", "quit even if threads are running (stops them)"),
 		{},
 		sec("edit an artifact"),
-		row(":e  i a o", "edit its markdown, where you are reading"),
+		row("i a o", "write in the markdown; only the cursor's line shows raw"),
 		row(":w", "save, merged with a newer version; the writer gets the diff"),
-		row("<Esc>", "back to the document; an unsaved edit stays, [+]"),
-		row(":wq  :q!", "save and go back, drop the changes"),
+		row("<Esc>", "back to Normal, rendered; an unsaved change shows [+]"),
+		row(":wq  :q!", "save and close, drop the changes and close"),
 		row("<CR>", "in a list item, the next item (Insert)"),
 		row(":w!  :e!", "save over a newer version, take the newer version"),
 		row("x s r J  dd cc D C", "change in Normal"),

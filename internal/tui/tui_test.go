@@ -198,6 +198,12 @@ func (h *neoharness) press(keys ...string) {
 			ev = tcell.NewEventKey(tcell.KeyCtrlN, 0, 0)
 		case "<BS>":
 			ev = tcell.NewEventKey(tcell.KeyBackspace2, 0, 0)
+		case "<Up>":
+			ev = tcell.NewEventKey(tcell.KeyUp, 0, 0)
+		case "<Down>":
+			ev = tcell.NewEventKey(tcell.KeyDown, 0, 0)
+		case "<End>":
+			ev = tcell.NewEventKey(tcell.KeyEnd, 0, 0)
 		default:
 			for _, r := range k {
 				h.a.handle(tcell.NewEventKey(tcell.KeyRune, r, 0))
@@ -326,7 +332,7 @@ func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
 	if len(h.a.root.windows()) != 2 || h.a.cur != pane || pane.Buf.Thread != "api-tests" {
 		t.Fatalf("<CR> should show api-tests in the pane; got %q", pane.Buf.Name)
 	}
-	h.press("<Space>", "t", "j", "<CR>")
+	h.press("<Space>", "t", "gg", "j", "<CR>")
 	if len(h.a.root.windows()) != 2 || pane.Buf.Thread != "auth-refactor" {
 		t.Fatalf("the next thread should open in the same pane; got %q", pane.Buf.Name)
 	}
@@ -1066,7 +1072,7 @@ func TestShellCommandShowsAndFolds(t *testing.T) {
 	}
 }
 
-func TestArtifactOpensInAPopupBesideItsWriter(t *testing.T) {
+func TestArtifactOpensInTheWindowAndCtrlOGoesBack(t *testing.T) {
 	h := start(t)
 	h.hub.arts = []model.Artifact{{Name: "design", Title: "Session store design", Thread: "auth-refactor", Version: 1}}
 	h.hub.docs = map[string]string{"design": "# Session store design\n\nFirst draft."}
@@ -1081,17 +1087,13 @@ func TestArtifactOpensInAPopupBesideItsWriter(t *testing.T) {
 	for !strings.Contains(h.a.line(coord).Text(), "artifact") {
 		h.press("k")
 	}
+	chatRow := coord.Cur
 	h.press("<CR>")
-	wins := h.a.root.windows()
-	if h.a.under != layout || len(wins) != 2 || wins[0] != h.a.cur || h.a.cur.Buf.Kind != KindArtifact || wins[1].Buf.Thread != "auth-refactor" {
-		t.Fatalf("<CR> should open a popup: the artifact left, its writer right; %d windows, cur %q", len(wins), h.a.cur.Buf.Name)
-	}
-	if wins[0].rect.W <= wins[1].rect.W {
-		t.Errorf("the chat should be narrower than the document: %d vs %d", wins[0].rect.W, wins[1].rect.W)
+	if h.a.root != layout || h.a.cur != coord || coord.Buf.Kind != KindArtifact {
+		t.Fatalf("<CR> should show the artifact in the same window; cur %q", h.a.cur.Buf.Name)
 	}
 	h.see("by auth-refactor · v1")
 	h.see("First draft.")
-	h.see("╭")
 
 	h.hub.arts[0].Version = 2
 	h.hub.docs["design"] = "# Session store design\n\nSecond draft."
@@ -1100,23 +1102,36 @@ func TestArtifactOpensInAPopupBesideItsWriter(t *testing.T) {
 	h.a.draw()
 	h.see("Second draft.")
 
-	h.press("<C-l>", "i", "looks good", "<CR>", "<Esc>")
-	if h.hub.sent[len(h.hub.sent)-1] != "auth-refactor: looks good" {
-		t.Fatalf("the popup chat should write to the writer; sent = %q", h.hub.sent)
-	}
 	h.press("<Esc>")
-	if h.a.under != nil || h.a.root != layout || h.a.cur != coord {
-		t.Fatal("<Esc> in Normal should close the popup and give the focus back")
+	if coord.Buf.Kind != KindArtifact {
+		t.Fatal("<Esc> in Normal keeps the artifact")
+	}
+	h.press("<C-o>")
+	if coord.Buf.Thread != model.Coordinator || coord.Cur != chatRow {
+		t.Fatalf("<C-o> should go back to the chat, on its line: %q row %d, want %d", coord.Buf.Name, coord.Cur, chatRow)
+	}
+	h.press("<C-^>")
+	if coord.Buf.Artifact != "design" {
+		t.Fatal("<C-^> should show the artifact again")
+	}
+	h.press("V")
+	// A fast <Esc><C-o> reaches the app as one Alt+<C-o>.
+	h.a.handle(tcell.NewEventKey(tcell.KeyCtrlO, 0, tcell.ModAlt))
+	if h.a.mode != modeNormal || coord.Buf.Thread != model.Coordinator {
+		t.Fatalf("<Esc><C-o> should leave Visual and go back: mode %v, %q", h.a.mode, coord.Buf.Name)
 	}
 	h.press("<Space>", "p", "a", "<CR>")
-	if h.a.under == nil || h.a.cur.Buf.Artifact != "design" {
-		t.Fatal("<leader>pa should open the popup too")
+	if h.a.cur.Buf.Artifact != "design" || h.a.root != layout {
+		t.Fatal("<leader>pa should open the artifact in the window too")
 	}
-	h.press("<Esc>")
-	h.press("<Space>", "p", "a", "<CR>", ":q", "<CR>", ":q", "<CR>")
-	if h.a.under != nil || h.a.quit {
-		t.Fatal(":q on the last popup window should close the popup, not neoharness")
-	}
+}
+
+// docRows renders an artifact as its window shows it in Normal mode, with
+// no line under the cursor.
+func docRows(a model.Artifact, src string, w int, th *Theme) []Line {
+	e := newEditor(a.Name, src, a.Version)
+	e.art = a
+	return e.render(w, th)
 }
 
 func TestDocumentRendering(t *testing.T) {
@@ -1124,7 +1139,7 @@ func TestDocumentRendering(t *testing.T) {
 	src := "# Title\n\nSee [the docs](https://x.dev).\n\n## Steps\n\n- [x] done\n- [ ] todo\n  - nested\n\n" +
 		"1. a\n2. b\n3. c\n4. d\n5. e\n6. f\n7. g\n8. h\n9. i\n10. j\n\n> [!WARNING]\n> Careful here.\n\n```go\nfmt.Println(1)\n```\n\n" +
 		"| Option | Cost |\n|---|---|\n| shared cache | one more service to run, and a network hop on every read of the hot path |\n"
-	lines := renderDocument(model.Artifact{Name: "doc", Thread: "api", Version: 3}, src, 80, th)
+	lines := docRows(model.Artifact{Name: "doc", Thread: "api", Version: 3}, src, 80, th)
 	var text []string
 	var heads []string
 	for _, l := range lines {
@@ -1293,6 +1308,7 @@ func TestArtifactRailFollowsTheCursor(t *testing.T) {
 	h.hub.docs = map[string]string{"design": body}
 	h.openDemo()
 	h.a.openArtifact("design")
+	h.press("<C-w>", "o")
 	h.a.draw()
 	h.see("━━━")
 	h.see("──")
@@ -1370,8 +1386,8 @@ func TestMacrosRecordAndPlay(t *testing.T) {
 	h.a.draw()
 	h.see("recording @y")
 	h.press("q")
-	if h.a.recordInto != 0 || h.a.under == nil {
-		t.Fatal("q stops recording and leaves the popup open")
+	if h.a.recordInto != 0 || h.a.cur.Buf.Edit == nil {
+		t.Fatal("q stops recording and keeps the artifact")
 	}
 }
 
@@ -1398,65 +1414,210 @@ func TestMotionsCountWideCharactersAsTwoColumns(t *testing.T) {
 	}
 }
 
-func TestArtifactEditOpensWhereYouReadAndSaves(t *testing.T) {
+func TestArtifactEditsInPlaceAndSaves(t *testing.T) {
 	h := editDemo(t, "# Design\n\nIntro.\n\n## Store\n\nKeep it in redis.\n")
 	for !strings.Contains(h.a.line(h.a.cur).Text(), "Keep it") {
 		h.press("j")
 	}
-	h.press("A", " Or sqlite.", "<Esc>")
+	h.a.draw()
+	if strings.Contains(h.screen(), "## Store") || !strings.Contains(h.screen(), "Store") {
+		t.Fatal("Normal mode shows the headings rendered, away from the cursor")
+	}
+	h.press("A", " Or sqlite.")
+	h.a.draw()
+	if strings.Contains(h.screen(), "## Store") {
+		t.Fatal("Insert shows only the cursor's line raw")
+	}
+	h.press("<Up>", "<Up>")
+	h.a.draw()
+	h.see("## Store")
+	h.press("<Down>", "<Down>", "<End>", "<Esc>")
 	b := h.a.cur.Buf
-	if h.a.mode != modeNormal || b.Edit != nil || b.Held == nil {
-		t.Fatal("<Esc> from Insert started on the document should show it, the edit held")
+	if h.a.mode != modeNormal || !b.Edit.Dirty {
+		t.Fatal("<Esc> goes back to Normal with the change in the buffer")
 	}
 	h.a.draw()
 	h.see("Keep it in redis. Or sqlite.")
 	h.see("design [+]")
-	if l := h.a.line(h.a.cur).Text(); !strings.Contains(l, "Keep it in redis. Or sqlite.") {
-		t.Fatalf("the document should show the edited paragraph, cursor on %q", l)
+	if strings.Contains(h.screen(), "## Store") {
+		t.Fatal("Normal mode shows the document rendered again")
 	}
 	h.press(":qa", "<CR>")
 	if h.a.quit {
-		t.Fatal(":qa should not drop a held edit")
+		t.Fatal(":qa should not drop an unsaved change")
 	}
 	h.press(":w", "<CR>")
 	if h.hub.docs["design"] != "# Design\n\nIntro.\n\n## Store\n\nKeep it in redis. Or sqlite.\n" || h.hub.arts[0].Version != 2 {
 		t.Fatalf("saved %q v%d", h.hub.docs["design"], h.hub.arts[0].Version)
 	}
-	if b.Edit != nil || b.Held != nil || h.a.under == nil {
-		t.Fatal(":w on the document should save and keep showing it, still in the popup")
+	if b.Edit.Dirty || h.a.cur.Buf != b {
+		t.Fatal(":w should save and keep the artifact in the window")
 	}
 	h.a.draw()
 	if l := h.a.line(h.a.cur).Text(); !strings.Contains(l, "Keep it in redis. Or sqlite.") {
-		t.Fatalf("the cursor should stay on the edited paragraph, got %q", l)
+		t.Fatalf("the cursor should stay on the edited line, got %q", l)
 	}
 	h.see("v2 · edited by you")
 }
 
-func TestHeldEditResumesAndDrops(t *testing.T) {
-	h := editDemo(t, "# D\n\none\n")
-	h.press("G", "A", "!", "<Esc>")
-	b := h.a.cur.Buf
-	ed := b.Held
-	h.press("A", "?", "<Esc>")
-	if b.Held != ed || ed.Text() != "# D\n\none!?\n" {
-		t.Fatalf("Insert on a held edit should go on with it: %q", b.Held.Text())
+const richDoc = "# Title\n\nSome **bold** text that is long enough to wrap when the window is narrow, " +
+	"with more words after it.\n\n## List\n\n- one\n- [ ] two\n\n| a | b |\n|---|---|\n| x | y |\n\n```go\nfmt.Println(1)\n```\n\n> [!NOTE]\n> Careful.\n\nEnd.\n"
+
+func TestJAndKVisitEverySourceLine(t *testing.T) {
+	h := editDemo(t, richDoc)
+	e := h.a.cur.Buf.Edit
+	h.press("gg")
+	seen := []int{e.Line}
+	for range 60 {
+		h.press("j")
+		if e.Line != seen[len(seen)-1] {
+			seen = append(seen, e.Line)
+		}
 	}
-	h.press(":e", "<CR>", "u")
-	if b.Edit != ed || ed.Text() != "# D\n\none!\n" {
-		t.Fatalf("the held edit keeps its undo: %q", ed.Text())
+	for i := range len(e.Src) - 1 {
+		if i >= len(seen) || seen[i] != i {
+			t.Fatalf("j should visit each line once, in order: %v", seen)
+		}
 	}
-	h.press("i", "x", "<Esc>")
-	if b.Edit == nil {
-		t.Fatal("Insert started in the source should end in the source")
+	for range 60 {
+		h.press("k")
 	}
-	h.press(":q", "<CR>", ":q!", "<CR>")
-	if b.Edit != nil || b.Held != nil || h.hub.docs["design"] != "# D\n\none\n" {
-		t.Fatal(":q! should drop the held edit")
+	if e.Line != 0 {
+		t.Fatalf("k should go back to the first line, on %d", e.Line)
 	}
+}
+
+func TestTheCursorLineShowsRaw(t *testing.T) {
+	h := editDemo(t, richDoc)
+	h.press("/List", "<CR>")
 	h.a.draw()
-	h.see("one")
-	if strings.Contains(h.screen(), "one!") || strings.Contains(h.screen(), "[+]") {
-		t.Fatal("the document should show the saved text again")
+	h.see("## List")
+	if strings.Contains(h.screen(), "**bold**") || strings.Contains(h.screen(), "# Title") {
+		t.Fatal("lines away from the cursor show rendered")
+	}
+	h.press("V")
+	h.a.draw()
+	if strings.Contains(h.screen(), "**bold**") {
+		t.Fatal("Visual shows only the selected lines raw")
+	}
+	h.press("k", "k", "k")
+	h.a.draw()
+	h.see("**bold**")
+	h.see("## List")
+	if strings.Contains(h.screen(), "# Title") {
+		t.Fatal("lines out of the selection show rendered")
+	}
+	h.press("<Esc>")
+	h.a.draw()
+	h.see("**bold**")
+	if strings.Contains(h.screen(), "## List") {
+		t.Fatal("after Visual only the cursor's line shows raw")
+	}
+	h.press("/bold", "<CR>")
+	if e := h.a.cur.Buf.Edit; e.Line != 2 || e.Off != 7 {
+		t.Fatalf("/ finds the place in the source, at %d:%d", e.Line, e.Off)
+	}
+	h.press("ma", "G", "`", "a")
+	if e := h.a.cur.Buf.Edit; e.Line != 2 || e.Off != 7 {
+		t.Fatalf("a mark keeps its place in the source, at %d:%d", e.Line, e.Off)
+	}
+}
+
+func TestReferenceLinksRenderAndOpen(t *testing.T) {
+	h := editDemo(t, "# D\n\nRead [the docs][1] and [Spec][].\n\n[1]: https://docs.example.com\n[spec]: https://spec.example.com\n")
+	var opened string
+	h.a.openURL = func(_, url string) error { opened = url; return nil }
+	h.press("G")
+	h.a.draw()
+	h.see("Read the docs and Spec.")
+	h.see("[1]: https://docs.example.com")
+	h.press("gg", "j", "j", "f", "S", "gx")
+	if opened != "https://spec.example.com" {
+		t.Fatalf("gx on [Spec][] opened %q", opened)
+	}
+	h.press("0", "f", "t", "gx")
+	if opened != "https://docs.example.com" {
+		t.Fatalf("gx on [the docs][1] opened %q", opened)
+	}
+}
+
+func TestRenderedColumnsMapToTheSource(t *testing.T) {
+	src := "Some **bold** text, a [link](https://example.com). And `code` here, then more words to wrap the line twice over."
+	lines := docRows(model.Artifact{Name: "d"}, src, 40, newTheme())
+	rs := []rune(src)
+	for _, word := range []string{"Some", "bold", "text", "link", ". And", "code", "here", "wrap", "over"} {
+		want := strings.Index(src, word)
+		found := false
+		for row, l := range lines {
+			if l.Src != 1 {
+				continue
+			}
+			if i := strings.Index(l.Text(), word); i >= 0 {
+				col := l.prefixWidth() + width(l.Text()[:i])
+				if got := renderedOff(lines, row, col, rs); got != want {
+					t.Errorf("%q maps to %d, want %d", word, got, want)
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("%q is not on a row", word)
+		}
+	}
+	table := docRows(model.Artifact{Name: "d"}, "| Option | Cost |\n|---|---|\n| sqlite | none at all |", 60, newTheme())
+	src2 := []rune("| sqlite | none at all |")
+	for row, l := range table {
+		if l.Src != 3 {
+			continue
+		}
+		for _, word := range []string{"sqlite", "none", "all"} {
+			i := strings.Index(l.Text(), word)
+			col := l.prefixWidth() + width(l.Text()[:i])
+			if got, want := renderedOff(table, row, col, src2), strings.Index(string(src2), word); got != want {
+				t.Errorf("table %q maps to %d, want %d", word, got, want)
+			}
+		}
+	}
+}
+
+func TestInsertUpDownKeepTheColumn(t *testing.T) {
+	h := editDemo(t, "# D\n\nabcdef\n\nabcdef\n")
+	e := h.a.cur.Buf.Edit
+	h.press("/cd", "<CR>", "a")
+	h.press("<Down>")
+	if e.Line != 3 || e.Off != 0 {
+		t.Fatalf("on the blank line: %d:%d", e.Line, e.Off)
+	}
+	h.press("<Down>", "X")
+	if got := string(e.Src[4]); got != "abcXdef" {
+		t.Fatalf("<Down> over a blank line should keep the column: %q", got)
+	}
+}
+
+func TestUnsavedChangesStayAndDrop(t *testing.T) {
+	h := editDemo(t, "# D\n\none\n")
+	h.press("G", "k", "A", "!", "<Esc>")
+	b := h.a.cur.Buf
+	h.press(":e", "<CR>")
+	if !strings.Contains(h.a.notice, "no write since") {
+		t.Fatalf(":e on a changed buffer should refuse, notice %q", h.a.notice)
+	}
+	h.press("<C-o>")
+	if h.a.cur.Buf == b {
+		t.Fatal("<C-o> goes back from the artifact")
+	}
+	h.a.openArtifact("design")
+	h.a.draw()
+	h.see("one!")
+	h.see("design [+]")
+	h.press("u")
+	if b.Edit.Text() != "# D\n\none\n" || b.Edit.Dirty {
+		t.Fatalf("u goes back to the saved text: %q", b.Edit.Text())
+	}
+	h.press("<C-r>", ":q!", "<CR>")
+	if b.Edit.Dirty || b.Edit.Text() != "# D\n\none\n" || h.hub.docs["design"] != "# D\n\none\n" {
+		t.Fatalf(":q! should drop the change: %q", b.Edit.Text())
 	}
 }
 
@@ -1526,6 +1687,20 @@ func TestArtifactEditRefusesToSaveOverANewerVersion(t *testing.T) {
 	if h.hub.docs["design"] != "# D\n\nmine!\n" || h.hub.arts[0].Version != 3 {
 		t.Fatalf(":w! = %q v%d", h.hub.docs["design"], h.hub.arts[0].Version)
 	}
+}
+
+func TestANewVersionReloadsAnUnchangedBuffer(t *testing.T) {
+	h := editDemo(t, "# D\n\nold\n")
+	h.hub.arts[0].Version = 2
+	h.hub.docs["design"] = "# D\n\nnew\n"
+	a := h.hub.arts[0]
+	h.a.apply(model.Update{Kind: model.UpdateArtifact, Workspace: "demo", Thread: "auth-refactor", Artifact: &a})
+	e := h.a.cur.Buf.Edit
+	if e.Text() != "# D\n\nnew\n" || e.Base != 2 || e.Dirty {
+		t.Fatalf("an unchanged buffer should show the new version: %q v%d", e.Text(), e.Base)
+	}
+	h.a.draw()
+	h.see("◇ design · by auth-refactor · v2")
 }
 
 // srcEdit opens the source of a one-line document on that line.
@@ -1621,18 +1796,7 @@ func TestArtifactEditLinesAndYank(t *testing.T) {
 		t.Fatal("gg should stop on the first source line, not the meta line")
 	}
 	h.a.draw()
-	h.see("◇ design · editing v1")
-}
-
-func TestRenderedArtifactPointsToEditing(t *testing.T) {
-	h := editDemo(t, "# D\n\nText.\n")
-	h.press("dd")
-	h.see("i or :e edits the markdown")
-	h.a.notice = ""
-	h.press("yiw")
-	if strings.Contains(h.a.notice, "edits the markdown") {
-		t.Error("a yank on the document is not an edit")
-	}
+	h.see("◇ design · by auth-refactor · v1")
 }
 
 func TestEditedArtifactShowsInTheWritersChat(t *testing.T) {
@@ -1676,11 +1840,9 @@ func TestHeadingLevel(t *testing.T) {
 
 func TestRepeatOnTheDocument(t *testing.T) {
 	h := editDemo(t, "# D\n\none\n\ntwo\n")
-	h.press(":e", "<CR>", ":q", "<CR>")
 	h.press("/one", "<CR>", "A", "!", "<Esc>", "/two", "<CR>", ".")
-	b := h.a.cur.Buf
-	if b.Held == nil || b.Held.Text() != "# D\n\none!\n\ntwo!\n" {
-		t.Fatalf(". on the document should type the change again: %v", b.Held)
+	if got := h.a.cur.Buf.Edit.Text(); got != "# D\n\none!\n\ntwo!\n" {
+		t.Fatalf(". on the document should type the change again: %q", got)
 	}
 }
 
@@ -1880,8 +2042,9 @@ func TestYankMotionsWithoutASource(t *testing.T) {
 	if clip() != "the cache" {
 		t.Fatalf("yi( on the document = %q", clip())
 	}
+	// yi( leaves the cursor at the start of what it took, as in Vim.
 	h.press("yt,")
-	if clip() != "cache) warm" {
+	if clip() != "the cache) warm" {
 		t.Fatalf("yt, on the document = %q", clip())
 	}
 	h.press("yip")
@@ -1974,7 +2137,7 @@ func TestFailedToolCallsShowOnTheFold(t *testing.T) {
 func TestLineBreaksAndImages(t *testing.T) {
 	th := newTheme()
 	src := "one<br>two<BR/>three\n\n| a | b |\n|---|---|\n| x<br>y | z |\n\n![diagram](https://x.dev/a.png)\n"
-	lines := renderDocument(model.Artifact{Name: "d"}, src, 80, th)
+	lines := docRows(model.Artifact{Name: "d"}, src, 80, th)
 	all := strings.Join(texts(lines), "\n")
 	for _, want := range []string{"one\n", "two\n", "three", "x", "y", "image diagram"} {
 		if !strings.Contains(all, want) {
