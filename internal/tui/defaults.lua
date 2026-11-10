@@ -10,6 +10,7 @@
 -- { remap = true }.
 
 vim.g.mapleader = " "
+vim.o.equalalways = true -- after a split or a close, windows get the same size
 
 local map = vim.keymap.set
 local hl = function(group, opts) vim.api.nvim_set_hl(0, group, opts) end

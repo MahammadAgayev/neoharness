@@ -65,8 +65,10 @@ func (a *App) runConfig(src, name string, defaults bool) {
 func (a *App) luaAPI() {
 	L := lua.NewState()
 	a.lua = L
-	vim, g, keymap, api := L.NewTable(), L.NewTable(), L.NewTable(), L.NewTable()
+	vim, g, o, keymap, api := L.NewTable(), L.NewTable(), L.NewTable(), L.NewTable(), L.NewTable()
 	L.SetField(vim, "g", g)
+	L.SetField(vim, "o", o)
+	L.SetField(vim, "opt", o)
 	L.SetField(vim, "keymap", keymap)
 	L.SetField(vim, "api", api)
 	L.SetGlobal("vim", vim)
@@ -154,6 +156,23 @@ func (a *App) luaAPI() {
 		a.notify(l.CheckString(1), a.th.Subtle)
 		return 0
 	}))
+}
+
+// option is a vim.o option that is on or off.
+func (a *App) option(name string) bool {
+	if a.lua == nil {
+		return false
+	}
+	o, _ := a.lua.GetField(a.lua.GetGlobal("vim"), "o").(*lua.LTable)
+	return o != nil && lua.LVAsBool(o.RawGetString(name))
+}
+
+// equalAlways is Neovim's equalalways: after a split or a close, the windows
+// get the same width (vert) or height.
+func (a *App) equalAlways(vert bool) {
+	if a.option("equalalways") {
+		a.root.equalize(vert)
+	}
 }
 
 // leader is vim.g.mapleader as a key name, <Space> when it is not set.

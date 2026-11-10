@@ -2225,6 +2225,40 @@ func TestDefaultsLuaIsTheDefault(t *testing.T) {
 	}
 }
 
+func TestSplitsAreEqualAsInNeovim(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	widths := func() []int {
+		h.a.draw()
+		var out []int
+		for _, w := range h.a.root.windows() {
+			out = append(out, w.rect.W)
+		}
+		return out
+	}
+	equal := func(ws []int) bool { return slices.Max(ws)-slices.Min(ws) <= 1 }
+	n := len(h.a.root.windows())
+	h.press("<C-w>v")
+	if ws := widths(); len(ws) != n+1 || !equal(ws) {
+		t.Fatalf("with equalalways a split should make the widths equal; got %v", ws)
+	}
+	h.press("<C-w>s")
+	if ws := widths(); len(ws) != n+2 || !equal(ws) {
+		t.Fatalf("a split above should leave the widths; got %v", ws)
+	}
+	h.press("<C-w>c", "<C-w>c")
+	if ws := widths(); len(ws) != n || !equal(ws) {
+		t.Fatalf("a close should make the widths equal again; got %v", ws)
+	}
+
+	h.a.runConfig(`vim.o.equalalways = false`, "init.lua", false)
+	before := widths()
+	h.press("<C-w>v")
+	if ws := widths(); ws[0]+ws[1]+1 != before[0] || ws[2] != before[1] {
+		t.Fatalf("without equalalways a split should halve only the window; %v, then %v", before, ws)
+	}
+}
+
 func TestInitLuaMapsAndColors(t *testing.T) {
 	h := start(t)
 	h.openDemo()

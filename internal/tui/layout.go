@@ -209,13 +209,15 @@ func (n *node) splitWindow(w, nw *Window, vert bool) {
 
 // closeWindow removes w and gives its space to one neighbor, as Neovim does
 // with splitright and nosplitbelow: the window on the left, or the one
-// below. It returns the window that got the space, nil for the last window.
-func (n *node) closeWindow(w *Window) *Window {
+// below. It returns the window that got the space, nil for the last window,
+// and whether the space was a width.
+func (n *node) closeWindow(w *Window) (*Window, bool) {
 	l := n.find(w)
 	if l == nil || l.parent == nil {
-		return nil
+		return nil, false
 	}
 	p := l.parent
+	vert := p.vert
 	var to *node
 	for i, k := range p.kids {
 		if k == l {
@@ -238,13 +240,34 @@ func (n *node) closeWindow(w *Window) *Window {
 		}
 		to = p
 	}
-	return to.windows()[0]
+	return to.windows()[0], vert
 }
 
-func (n *node) equalize() {
-	n.weight = 1
+// count is how many windows are side by side in n (vert) or one above the
+// other.
+func (n *node) count(vert bool) int {
+	if n.win != nil {
+		return 1
+	}
+	c := 0
 	for _, k := range n.kids {
-		k.equalize()
+		if n.vert == vert {
+			c += k.count(vert)
+		} else {
+			c = max(c, k.count(vert))
+		}
+	}
+	return c
+}
+
+// equalize gives every window the same width (vert) or height. As in
+// Neovim, a kid's share is its count of windows, not one share per kid.
+func (n *node) equalize(vert bool) {
+	for _, k := range n.kids {
+		if n.vert == vert {
+			k.weight = float64(k.count(vert))
+		}
+		k.equalize(vert)
 	}
 }
 

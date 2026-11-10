@@ -560,6 +560,7 @@ func (a *App) helpBuf() *Buffer {
 		sec("config  ~/.neoharness/init.lua, as in Neovim, after the built-in defaults.lua"),
 		row("defaults.lua", "every default map and color; copy a line to init.lua and edit it"),
 		row("vim.g.mapleader", "the leader, <Space> by default; it moves the default maps"),
+		row("vim.o.equalalways", "on: a split or a close makes the windows the same size"),
 		row("vim.keymap.set / del", "n x i maps: keys, an ex command (:threads<CR>), a function"),
 		row("<Plug>(neoharness-…)", "grep yank dismiss coordinator: actions with no ex command"),
 		row("vim.api.nvim_set_hl", "a color: Iris Foam Gold Love Text Muted Normal Visual …"),

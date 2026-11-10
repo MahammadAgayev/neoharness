@@ -278,7 +278,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<C-w>c":     func(int) { a.closeCur(false) },
 		"<C-w>q":     func(int) { a.closeCur(false) },
 		"<C-w>o":     func(int) { a.only() },
-		"<C-w>=":     func(int) { a.root.equalize() },
+		"<C-w>=":     func(int) { a.root.equalize(true); a.root.equalize(false) },
 		"<Esc>":      func(int) { a.escape() },
 		"q":          func(int) { a.macroKey = "q" },
 		"@":          func(n int) { a.macroKey, a.macroN = "@", n },
@@ -824,6 +824,7 @@ func (a *App) splitCur(vert bool, b *Buffer) {
 	}
 	nw := newWindow(b)
 	a.root.splitWindow(a.cur, nw, vert)
+	a.equalAlways(vert)
 	a.cur = nw
 	if b.Edit != nil {
 		nw.Follow = false
@@ -847,11 +848,12 @@ func (a *App) closeCur(force bool) {
 	if e := a.cur.Buf.Edit; e != nil {
 		a.closeDiff(e)
 	}
-	to := a.root.closeWindow(a.cur)
+	to, vert := a.root.closeWindow(a.cur)
 	if to == nil {
 		a.quitAll(force)
 		return
 	}
+	a.equalAlways(vert)
 	a.cur = to
 }
 

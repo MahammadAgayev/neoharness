@@ -680,6 +680,7 @@ func (a *App) toPane(b *Buffer) {
 		a.pane = newWindow(b)
 		a.root.weight = 1
 		a.root = split(true, a.root, leaf(a.pane, 1))
+		a.equalAlways(true)
 	} else {
 		a.pane.show(b)
 	}

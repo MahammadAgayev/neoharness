@@ -136,6 +136,7 @@ func (a *App) openDiff(w *Window, refused error) {
 	e.art, e.Base, e.saved = art, art.Version, text
 	e.cacheW = 0
 	a.root.splitWindow(w, tw, true)
+	a.equalAlways(true)
 	a.cur = w
 	a.toWindow(w)
 	a.notify(fmt.Sprintf("v%d changed the lines you edited · do takes its change, ]c [c move, :w saves yours", art.Version), a.th.Gold)
@@ -149,8 +150,12 @@ func (a *App) closeDiff(e *Editor) {
 	tw := e.diff.win
 	e.diff = nil
 	e.cacheW = 0
-	if to := a.root.closeWindow(tw); to != nil && a.cur == tw {
-		a.cur = to
+	to, vert := a.root.closeWindow(tw)
+	if to != nil {
+		a.equalAlways(vert)
+		if a.cur == tw {
+			a.cur = to
+		}
 	}
 	for _, w := range a.root.windows() {
 		if w.Buf.Edit == e {

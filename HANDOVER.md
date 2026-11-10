@@ -1,13 +1,13 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 190 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 191 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
 Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
-52 and 53 in the two commits after it.
+52 to 54 in the three commits after it.
 
 ## 1. What neoharness is
 
@@ -577,6 +577,7 @@ color; copy a line from it and edit it:
 
 ```lua
 vim.g.mapleader = ","                               -- default <Space>
+vim.o.equalalways = false                           -- default true
 vim.keymap.set("n", "<leader>t", ":threads<CR>")    -- keys or an ex command
 vim.keymap.set("n", "gt", function() vim.cmd("threads") end)
 vim.keymap.set("n", "Q", "<leader>t", { remap = true })
@@ -1070,6 +1071,16 @@ Not committed:
     artifact or a buffer row they did nothing. Now every row that opens a
     buffer has `split` (threads, artifacts, buffers, grep matches), as in
     Telescope.
+54. **equalalways** (user's choice, 2026-11-10: "Match equalalways"; their
+    Neovim has it on, the default). After a split, the windows side by
+    side get the same width (`<C-w>v`) or the windows stacked the same
+    height (`<C-w>s`); after a close, again in that direction. As in
+    Neovim, a share is a count of windows (`node.count`), not one per
+    split, and `<C-w>=` uses the same. The threads pane and the diff
+    window count as splits. `vim.o.equalalways = false` (`vim.opt` too)
+    in init.lua turns it off; then a split halves only its window and a
+    close gives the space to one neighbor (item 52). defaults.lua sets it
+    true. `vim.o` holds only this option for now.
 
 
 Things found on the user's machine:
