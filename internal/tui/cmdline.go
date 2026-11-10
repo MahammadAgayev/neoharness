@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -442,6 +444,13 @@ func (a *App) findNext(d int) {
 			a.notify("pattern not found: "+q, a.th.Love)
 			return
 		}
+		wrapped := d > 0 && (p.line < e.Line || p.line == e.Line && p.off <= e.Off) ||
+			d < 0 && (p.line > e.Line || p.line == e.Line && p.off >= e.Off)
+		rows := make([]string, len(e.Src))
+		for i, l := range e.Src {
+			rows[i] = string(l)
+		}
+		a.searchCount(re, rows, p.line, len(string(e.Src[p.line][:p.off])), wrapped)
 		e.Line, e.Off, e.shown, e.shownTo = p.line, p.off, p.line, p.line
 		a.toWindow(w)
 		return
@@ -460,6 +469,11 @@ func (a *App) findNext(d int) {
 		for _, s := range append([]string{text}, joins...) {
 			if m := re.FindStringIndex(s); m != nil && m[0] < len(text) {
 				j := m[0]
+				rows := make([]string, len(lines))
+				for k, l := range lines {
+					rows[k] = l.Text()
+				}
+				a.searchCount(re, rows, i, j, d > 0 && i <= w.Cur || d < 0 && i >= w.Cur)
 				a.moveTo(w, i)
 				w.Col = lines[i].prefixWidth() + width(text[:j])
 				w.Follow = false
@@ -468,6 +482,31 @@ func (a *App) findNext(d int) {
 		}
 	}
 	a.notify("pattern not found: "+q, a.th.Love)
+}
+
+// searchCount shows the search with which match the cursor is on and how
+// many there are, and W when it went past the end, as Neovim does when
+// shortmess has no S: "/thread  W [1/7]". at is the match's byte in its row.
+func (a *App) searchCount(re *regexp.Regexp, rows []string, row, at int, wrapped bool) {
+	n, total := 0, 0
+	for i, r := range rows {
+		for _, m := range re.FindAllStringIndex(r, -1) {
+			total++
+			if i < row || i == row && m[0] <= at {
+				n++
+			}
+		}
+	}
+	// A match over a wrapped row's break is in no single row.
+	n, total = max(n, 1), max(total, n, 1)
+	dir, w := "/", ""
+	if a.searchBack {
+		dir = "?"
+	}
+	if wrapped {
+		w = "W "
+	}
+	a.notify(fmt.Sprintf("%s%s  %s[%d/%d]", dir, a.search, w, n, total), a.th.Subtle)
 }
 
 // showHelp opens help in a split above, as Neovim's :help does, so :q

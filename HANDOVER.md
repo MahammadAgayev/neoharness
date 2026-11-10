@@ -7,7 +7,7 @@ Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
 Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
-52 to 60 in the nine commits after it.
+52 to 61 in the ten commits after it.
 
 ## 1. What neoharness is
 
@@ -1122,6 +1122,13 @@ Not committed:
     are in. A thread's message showed as "from lint", and a question as
     "question"; they now show the sender and the first line under the
     label ("lint: count.py is clean.").
+61. **Search count** (chat navigation pass). `]m` `[m`, `n` `N`, `zt` `zz`
+    `zb` work; `zt` keeps 8 lines, as the user's `scrolloff = 8`. A search
+    showed nothing, and a wrap went by unseen. Now `/` `?` `n` `N` show
+    what Neovim shows when shortmess has no `S`: `/thread  [2/23]`, with
+    `W` after a wrap (`/thread  W [1/23]`), in chats and artifacts
+    (`searchCount`). A chat counts matches per screen row, so a match
+    over a wrapped break is not counted.
 
 
 Things found on the user's machine:

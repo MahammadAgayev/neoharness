@@ -2488,15 +2488,27 @@ func TestSearchUsesVimPatterns(t *testing.T) {
 	}
 }
 
-func TestASearchClearsTheLastMessage(t *testing.T) {
-	h := editDemo(t, "# D\n\nred\n")
+func TestASearchShowsItsCountOverTheLastMessage(t *testing.T) {
+	h := editDemo(t, "# D\n\nred\n\nred and red\n")
 	h.press("/blue", "<CR>")
 	if !strings.Contains(h.a.notice, "pattern not found") {
 		t.Fatalf("notice %q", h.a.notice)
 	}
 	h.press("/red", "<CR>")
-	if h.a.notice != "" {
-		t.Fatalf("a search that finds should clear the message, notice %q", h.a.notice)
+	if h.a.notice != "/red  [1/3]" {
+		t.Fatalf("a search that finds should show its count, as Neovim; notice %q", h.a.notice)
+	}
+	h.press("n", "n")
+	if h.a.notice != "/red  [3/3]" {
+		t.Fatalf("notice %q, want /red  [3/3]", h.a.notice)
+	}
+	h.press("n")
+	if h.a.notice != "/red  W [1/3]" {
+		t.Fatalf("past the end the count should show W; notice %q", h.a.notice)
+	}
+	h.press("?red", "<CR>")
+	if h.a.notice != "?red  W [3/3]" {
+		t.Fatalf("notice %q, want ?red  W [3/3]", h.a.notice)
 	}
 }
 
