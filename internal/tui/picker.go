@@ -298,13 +298,13 @@ func (a *App) pickBuffers() {
 		items = append(a.threadItems(), a.artifactItems()...)
 		if a.threadsBuf != nil {
 			b := a.threadsBuf
-			items = append(items, pickItem{glyph: Span{"≡", a.th.Muted}, label: "threads", detail: b.Name, run: func() { a.cur.show(b) }})
+			items = append(items, pickItem{glyph: Span{"≡", a.th.Muted}, label: "threads", detail: b.Name, run: func() { a.showBuf(a.cur, b) }})
 		}
 	}
 	for _, b := range []*Buffer{a.workspacesBuf, a.messagesBuf, a.helpBuf()} {
 		b := b
 		label := strings.TrimPrefix(b.Name, "neoharness://")
-		items = append(items, pickItem{glyph: Span{"≡", a.th.Muted}, label: label, detail: b.Name, run: func() { a.cur.show(b) }})
+		items = append(items, pickItem{glyph: Span{"≡", a.th.Muted}, label: label, detail: b.Name, run: func() { a.showBuf(a.cur, b) }})
 	}
 	a.openPicker("buffers", func(q string) []pickItem { return fuzzy(items, q) })
 }

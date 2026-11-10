@@ -153,12 +153,14 @@ type App struct {
 	lastMacro  rune
 	playing    int
 	// confirm runs on y; any other key drops it.
-	confirm  func()
-	comps    map[string]model.Completions
-	search   string
-	notice   string
-	noticeSt tcell.Style
-	offline  bool
+	confirm func()
+	comps   map[string]model.Completions
+	search  string
+	// searchBack says the last search was ?, so n goes up.
+	searchBack bool
+	notice     string
+	noticeSt   tcell.Style
+	offline    bool
 
 	cursorX int
 	cursorY int

@@ -222,9 +222,10 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<C-^>":          func(int) { a.alternate() },
 		"<C-o>":          func(int) { a.jumpBack() },
 		"/":              func(int) { a.startCmd('/') },
+		"?":              func(int) { a.startCmd('?') },
 		":":              func(int) { a.startCmd(':') },
-		"n":              func(int) { a.findNext(1); center(w()) },
-		"N":              func(int) { a.findNext(-1); center(w()) },
+		"n":              func(int) { a.findNext(a.searchDir()); center(w()) },
+		"N":              func(int) { a.findNext(-a.searchDir()); center(w()) },
 		"yy":             func(n int) { a.yy(n) },
 		"y":              func(int) { a.yankVisual() },
 		"v":              func(int) { a.visual('v') },
@@ -833,6 +834,10 @@ func (a *App) splitCur(vert bool, b *Buffer) {
 	nw := newWindow(b)
 	a.root.splitWindow(a.cur, nw, vert)
 	a.cur = nw
+	if b.Edit != nil {
+		nw.Follow = false
+		a.toWindow(nw)
+	}
 }
 
 // escape leaves Visual.

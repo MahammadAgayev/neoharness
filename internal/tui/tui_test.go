@@ -1581,6 +1581,37 @@ func TestRenderedColumnsMapToTheSource(t *testing.T) {
 	}
 }
 
+func TestArtifactKeepsItsCursorInEveryWindow(t *testing.T) {
+	h := editDemo(t, "# D\n\none\n\ntwo\n\nthree\n")
+	e := h.a.cur.Buf.Edit
+	h.press("/three", "<CR>")
+	h.press(":b coordinator", "<CR>", ":b design", "<CR>")
+	if e.Line != 6 || !strings.Contains(h.a.line(h.a.cur).Text(), "three") {
+		t.Fatalf(":b should come back to the artifact's cursor, on line %d", e.Line)
+	}
+	h.press(":vsplit", "<CR>")
+	if e.Line != 6 || !strings.Contains(h.a.line(h.a.cur).Text(), "three") {
+		t.Fatalf(":vsplit should show the artifact at its cursor, on line %d", e.Line)
+	}
+}
+
+func TestQuestionMarkSearchesUp(t *testing.T) {
+	h := editDemo(t, "# D\n\nred one\n\nred two\n\nred three\n")
+	e := h.a.cur.Buf.Edit
+	h.press("G", "?red", "<CR>")
+	if e.Line != 6 {
+		t.Fatalf("? from the end should find the last red, on %d", e.Line)
+	}
+	h.press("n")
+	if e.Line != 4 {
+		t.Fatalf("n after ? goes up, on %d", e.Line)
+	}
+	h.press("N")
+	if e.Line != 6 {
+		t.Fatalf("N after ? goes down, on %d", e.Line)
+	}
+}
+
 func TestInsertUpDownKeepTheColumn(t *testing.T) {
 	h := editDemo(t, "# D\n\nabcdef\n\nabcdef\n")
 	e := h.a.cur.Buf.Edit
@@ -2079,9 +2110,21 @@ func TestBracketObjectsOverLines(t *testing.T) {
 func TestHelpOpensAtTheTop(t *testing.T) {
 	h := start(t)
 	h.openDemo()
+	coord := h.a.cur
 	h.press(":help", "<CR>")
 	h.a.draw()
 	h.see("neoharness  keys")
+	if h.a.cur == coord || coord.Buf.Thread != model.Coordinator {
+		t.Fatal(":help should open in a split, not over the coordinator")
+	}
+	h.press(":help", "<CR>")
+	if len(h.a.root.windows()) != 3 {
+		t.Fatalf(":help again should focus the help window, %d windows", len(h.a.root.windows()))
+	}
+	h.press(":q", "<CR>")
+	if h.a.cur.Buf.Kind == KindHelp || len(h.a.root.windows()) != 2 || h.a.root.find(coord) == nil {
+		t.Fatal(":q in help should close only the help window")
+	}
 }
 
 func TestEmptyMessagesSaySo(t *testing.T) {

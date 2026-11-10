@@ -60,9 +60,9 @@ func (a *App) cmdKey(k string, ev *tcell.EventKey) {
 		}
 		h := c.history[c.prefix]
 		c.history[c.prefix] = append(slices.DeleteFunc(h, func(s string) bool { return s == line }), line)
-		if c.prefix == '/' {
-			a.search = line
-			a.findNext(1)
+		if c.prefix == '/' || c.prefix == '?' {
+			a.search, a.searchBack = line, c.prefix == '?'
+			a.findNext(a.searchDir())
 			return
 		}
 		a.exec(line)
@@ -356,7 +356,7 @@ func (a *App) exec(line string) {
 			return
 		}
 		if b := a.findBuffer(arg(0)); b != nil {
-			a.cur.show(b)
+			a.showBuf(a.cur, b)
 		} else {
 			a.notify("no buffer "+arg(0), a.th.Love)
 		}
@@ -383,7 +383,7 @@ func (a *App) exec(line string) {
 	case "artifacts":
 		a.pickArtifacts()
 	case "help", "h":
-		a.cur.show(a.helpBuf())
+		a.showHelp()
 	default:
 		a.notify("not a command: "+cmd, a.th.Love)
 	}
@@ -410,6 +410,14 @@ func (a *App) findBuffer(name string) *Buffer {
 		}
 	}
 	return match
+}
+
+// searchDir is the way n goes: down after /, up after ?.
+func (a *App) searchDir() int {
+	if a.searchBack {
+		return -1
+	}
+	return 1
 }
 
 // findNext moves to the next match of the last search. Smart case: a query
@@ -461,6 +469,20 @@ func (a *App) findNext(d int) {
 	a.notify("pattern not found: "+q, a.th.Love)
 }
 
+// showHelp opens help in a split above, as Neovim's :help does, so :q
+// closes it; a window that shows it already takes the focus.
+func (a *App) showHelp() {
+	b := a.helpBuf()
+	for _, w := range a.root.windows() {
+		if w.Buf == b {
+			a.cur = w
+			return
+		}
+	}
+	a.splitCur(false, b)
+	a.cur.Follow = false
+}
+
 func (a *App) helpBuf() *Buffer {
 	if b, ok := a.bufs["neoharness://help"]; ok {
 		return b
@@ -491,7 +513,7 @@ func (a *App) helpBuf() *Buffer {
 		row("]m [m", "next / previous message, or heading in an artifact"),
 		row("gO", "outline: pick a heading, or a message in a chat"),
 		row("ma  'a  `a  ''", "set a mark, go to its line, its place, back"),
-		row("/ n N", "search"),
+		row("/ ? n N", "search down, up, again, back"),
 		row("za  <leader>e", "open or close a turn's tool calls"),
 		row("v V  y  yy  <leader>y", "select and yank to the clipboard"),
 		row("v then iw a( i\" ip", "select a word, brackets, quotes, a paragraph"),

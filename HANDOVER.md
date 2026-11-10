@@ -1,10 +1,11 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 179 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 181 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
-reference links, exact columns) are not committed yet.
+reference links, exact columns) are in commit `557e7b1`. Item 46 is not
+committed yet.
 
 ## 1. What neoharness is
 
@@ -956,6 +957,16 @@ Not committed:
     that is not found falls back to the old estimate. Checked in a real
     run: `x` after `j` deleted the `l` of `[link]`, and in a table the `o`
     of `none`.
+46. **Real-use pass** (2026-11-10, haiku on the scratch hub: two threads
+    from the coordinator, a pane thread, its artifact, `<C-o>`, a Bash
+    run, `:resolve`, `gf` from prose). Fixes: `?` searches up, and `n`/`N`
+    follow the last search's direction (`?artifact` had started Insert and
+    sent "rtifact" to the thread); `:vsplit` of an artifact, `:b` and the
+    buffers picker show it at its cursor (a new window had put the shared
+    cursor on line 0); `:help` opens in a split above, or focuses the help
+    window, so `:q` closes only the help (it had closed the coordinator's
+    window). Also checked: `:new`, editing a thread's artifact with `:w`
+    (the writer named the added line without reading it).
 
 
 Things found on the user's machine:
