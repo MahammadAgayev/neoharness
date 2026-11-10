@@ -39,8 +39,8 @@ inside the TUI process. There is no daemon and no tmux.
 ## 2. Quick start
 
 ```sh
-go build -o neoharness ./cmd/neoharness
-./neoharness            # opens the TUI; the hub runs inside it
+./install.sh            # builds to ~/.local/bin (BIN=... to change)
+neoharness              # opens the TUI; the hub runs inside it
 ```
 
 In the TUI:
