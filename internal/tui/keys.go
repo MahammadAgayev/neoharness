@@ -386,7 +386,7 @@ func (a *App) normalKey(k string) {
 		a.yankVisual()
 		return
 	}
-	if a.mode == modeVisual && len(a.pending) == 0 && a.cur.Buf.Edit != nil && (k == "d" || k == "x" || k == "c") {
+	if a.mode == modeVisual && len(a.pending) == 0 && (a.cur.Buf.Edit != nil || a.cur.inPrompt) && (k == "d" || k == "x" || k == "c") {
 		a.editVisual(k)
 		return
 	}
@@ -432,7 +432,7 @@ func (a *App) flushPending() {
 // run calls a binding. A key that reads or moves in the transcript takes
 // the cursor out of the prompt first.
 func (a *App) run(seq string, fn func(int), n int) {
-	if a.cur.inPrompt && transcriptKeys[seq] {
+	if a.cur.inPrompt && transcriptKeys[seq] && a.mode != modeVisual {
 		a.leavePrompt(a.cur)
 	}
 	fn(n)
@@ -465,6 +465,10 @@ func (a *App) moveTo(w *Window, i int) {
 	// k above the prompt goes back to the transcript; j below the
 	// transcript goes into the prompt, as the prompt ends the buffer.
 	if w.inPrompt {
+		// A selection in the prompt stays in it.
+		if i < 0 && a.mode == modeVisual {
+			i = 0
+		}
 		if i < 0 {
 			a.leavePrompt(w)
 			a.moveTo(w, a.lineCount(w)+i)
@@ -1238,6 +1242,10 @@ func (a *App) visual(m rune) {
 
 func (a *App) yankVisual() {
 	w := a.cur
+	if w.inPrompt {
+		a.editVisual("y")
+		return
+	}
 	if a.mode != modeVisual {
 		return
 	}

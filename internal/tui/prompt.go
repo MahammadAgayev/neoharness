@@ -190,5 +190,5 @@ var transcriptKeys = map[string]bool{
 	"/": true, "?": true, "n": true, "N": true, "]m": true, "[m": true, "gO": true, "gg": true,
 	"za": true, "zt": true, "zz": true, "zb": true, "<C-d>": true, "<C-u>": true, "<C-f>": true,
 	"<C-b>": true, "<PageUp>": true, "<PageDown>": true, "m": true, "'": true, "`": true,
-	"%": true, "v": true, "V": true, "gx": true, "gf": true,
+	"%": true, "gx": true, "gf": true,
 }

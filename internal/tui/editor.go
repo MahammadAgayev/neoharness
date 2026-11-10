@@ -1258,14 +1258,37 @@ func (e *Editor) replaceRunes(c rune, n int) bool {
 // editVisual runs d, x, c or y on the Visual selection in the source.
 func (a *App) editVisual(k string) {
 	w := a.cur
+	linewise := w.vmode == 'V'
+	if w.inPrompt {
+		rows := a.promptRows(w)
+		l1, o1 := promptPos(rows, w.vLine, w.vCol)
+		l2, o2 := promptPos(rows, w.Cur, w.Col)
+		w.vmode = 0
+		a.mode = modeNormal
+		a.onPrompt(func(e *Editor) (bool, bool) { return a.visualOp(e, pos{l1, o1}, pos{l2, o2}, linewise, k), true })
+		return
+	}
 	e := w.Buf.Edit
 	p1, p2 := a.posAt(w, w.vLine, w.vCol), a.posAt(w, w.Cur, w.Col)
+	w.vmode = 0
+	a.mode = modeNormal
+	if a.visualOp(e, p1, p2, linewise, k) {
+		a.toInsert(w)
+		return
+	}
+	if len(e.Src[e.Line]) > 0 {
+		e.Off = min(e.Off, len(e.Src[e.Line])-1)
+	}
+	a.toWindow(w)
+}
+
+// visualOp runs d, x, c or y on the text from p1 to p2, whole lines when
+// linewise, in an artifact's source or a prompt. It reports whether Insert
+// follows.
+func (a *App) visualOp(e *Editor, p1, p2 pos, linewise bool, k string) bool {
 	if p2.before(p1) {
 		p1, p2 = p2, p1
 	}
-	linewise := w.vmode == 'V'
-	w.vmode = 0
-	a.mode = modeNormal
 	if linewise {
 		e.Line, e.Off = p1.line, 0
 		switch k {
@@ -1276,14 +1299,12 @@ func (a *App) editVisual(k string) {
 			e.save()
 			e.yankLines(p1.line, p2.line)
 			e.remove(pos{p1.line, 0}, pos{p2.line, len(e.Src[p2.line])})
-			a.toInsert(w)
-			return
+			return true
 		default:
 			e.save()
 			e.cutLines(p1.line, p2.line)
 		}
-		a.toWindow(w)
-		return
+		return false
 	}
 	// The selection takes the rune under its end too.
 	end := pos{p2.line, p2.off + 1}
@@ -1297,19 +1318,11 @@ func (a *App) editVisual(k string) {
 		e.reg.text, e.reg.lines = e.text(p1, end), false
 		e.Line, e.Off = p1.line, p1.off
 		a.clip(e.reg.text, p2.line-p1.line+1)
-		a.toWindow(w)
-		return
+		return false
 	}
 	e.save()
 	e.reg.text, e.reg.lines = e.remove(p1, end), false
-	if k == "c" {
-		a.toInsert(w)
-		return
-	}
-	if len(e.Src[e.Line]) > 0 {
-		e.Off = min(e.Off, len(e.Src[e.Line])-1)
-	}
-	a.toWindow(w)
+	return k == "c"
 }
 
 // editInsert is a key in Insert mode in the source.

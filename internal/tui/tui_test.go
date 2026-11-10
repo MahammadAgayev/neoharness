@@ -2282,6 +2282,28 @@ func TestNormalModeEditsThePrompt(t *testing.T) {
 	}
 }
 
+func TestVisualModeInThePrompt(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	w := h.a.cur
+	h.press("i", "hello big world", "<Esc>", "0", "v", "e", "d")
+	if h.prompt() != " big world" || h.a.mode != modeNormal || !w.inPrompt {
+		t.Fatalf("v e d: prompt %q, mode %v", h.prompt(), h.a.mode)
+	}
+	h.press("w", "v", "i", "w", "c", "small", "<Esc>")
+	if h.prompt() != " small world" {
+		t.Fatalf("viw c: prompt %q", h.prompt())
+	}
+	h.press("V", "k", "y")
+	if !w.inPrompt || h.a.reg.text != " small world" || !h.a.reg.lines {
+		t.Fatalf("V k y should stay in the prompt and yank its line; in prompt %v, register %q", w.inPrompt, h.a.reg.text)
+	}
+	h.press("p")
+	if h.prompt() != " small world\n small world" {
+		t.Fatalf("p after V y: prompt %q", h.prompt())
+	}
+}
+
 func TestPromptMotionsFollowItsWrappedRows(t *testing.T) {
 	h := start(t)
 	h.openDemo()

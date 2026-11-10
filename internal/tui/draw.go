@@ -111,9 +111,9 @@ func (a *App) drawWindow(w *Window, focused bool) {
 
 	// The prompt sits at the bottom of a chat window, above the statusline.
 	var promptLines []Line
-	promptTop, promptCur := status, -1
+	promptTop, promptCur, promptFirst := status, -1, 0
 	if b.Prompt != nil {
-		promptLines, promptCur = a.promptLines(w, focused)
+		promptLines, promptCur, promptFirst = a.promptLines(w, focused)
 		promptTop = status - len(promptLines)
 	}
 	textBottom := promptTop
@@ -235,6 +235,13 @@ func (a *App) drawWindow(w *Window, focused bool) {
 					l.Spans[k].Style = overlay(l.Spans[k].Style, a.th.CursorLine)
 				}
 			}
+			if w.inPrompt && w.vmode != 0 && focused {
+				row := promptFirst + i
+				a.drawCells(r.X, promptTop+i, right, l, func(col int) bool {
+					return row >= min(w.vLine, w.Cur) && row <= max(w.vLine, w.Cur) && a.selected(w, row, col, l)
+				})
+				continue
+			}
 			a.drawLine(r.X, promptTop+i, right, l)
 		}
 	}
@@ -345,9 +352,10 @@ func (a *App) drawLine(x, y, maxX int, l Line) int {
 	return x
 }
 
-// promptLines renders the prompt and places the cursor in it. The row it
-// returns has the Normal cursor, -1 when there is none.
-func (a *App) promptLines(w *Window, focused bool) ([]Line, int) {
+// promptLines renders the prompt and places the cursor in it. It returns
+// the row of the Normal cursor, -1 when there is none, and the prompt row
+// the first line shows, as long prompts scroll.
+func (a *App) promptLines(w *Window, focused bool) ([]Line, int, int) {
 	p := w.Buf.Prompt
 	writing := focused && a.mode == modeInsert
 	rest := []Span{{"   ", a.th.Text}}
@@ -362,7 +370,7 @@ func (a *App) promptLines(w *Window, focused bool) ([]Line, int) {
 	if len(p.Text) == 0 && writing {
 		a.cursorX, a.cursorY = w.rect.X+3, statusY-minPromptLines
 		rows[0].Spans = []Span{{"Message " + w.Buf.Thread + "…", a.th.Muted}}
-		return pad(rows), -1
+		return pad(rows), -1, 0
 	}
 	// The cursor's row: where you type, or the Normal cursor in the prompt.
 	row, col := -1, 0
@@ -370,7 +378,7 @@ func (a *App) promptLines(w *Window, focused bool) ([]Line, int) {
 	case writing:
 		line, off := lineOff(p.Text, p.Cur)
 		row, col = promptAt(rows, line, off)
-	case focused && w.inPrompt && a.mode == modeNormal:
+	case focused && w.inPrompt && (a.mode == modeNormal || a.mode == modeVisual):
 		row, col = min(w.Cur, len(rows)-1), w.Col
 	}
 	hidden := max(len(rows)-maxPromptLines, 0)
@@ -379,14 +387,40 @@ func (a *App) promptLines(w *Window, focused bool) ([]Line, int) {
 	}
 	lines := pad(rows[hidden:min(hidden+maxPromptLines, len(rows))])
 	if row < 0 {
-		return lines, -1
+		return lines, -1, hidden
 	}
 	a.cursorX = w.rect.X + min(col, w.rect.W-1)
 	a.cursorY = statusY - len(lines) + row - hidden
-	if writing {
-		return lines, -1
+	if a.mode != modeNormal {
+		return lines, -1, hidden
 	}
-	return lines, row - hidden
+	return lines, row - hidden, hidden
+}
+
+// drawCells draws a line cell by cell, with the selection color where sel
+// says so.
+func (a *App) drawCells(x, y, maxX int, l Line, sel func(col int) bool) {
+	col := 0
+	for _, sp := range append(clone(l.Prefix), l.Spans...) {
+		g := uniseg.NewGraphemes(sp.Text)
+		for g.Next() {
+			gw := g.Width()
+			if gw == 0 {
+				continue
+			}
+			if x+gw > maxX {
+				return
+			}
+			st := sp.Style
+			if sel(col) {
+				st = overlay(st, a.th.Selection)
+			}
+			rs := g.Runes()
+			a.s.SetContent(x, y, rs[0], rs[1:], st)
+			x += gw
+			col += gw
+		}
+	}
 }
 
 func (a *App) drawStatus(w *Window, y int, focused bool) {
