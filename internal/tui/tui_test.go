@@ -381,6 +381,28 @@ func TestPickerOpensInPlaceOrSplit(t *testing.T) {
 	}
 }
 
+func TestPickerBoxFitsItsRows(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("<Space>", "<Space>")
+	h.a.draw()
+	top, bottom := -1, -1
+	for y, row := range strings.Split(h.screen(), "\n") {
+		if strings.Contains(row, "╭─ buffers") {
+			top = y
+		}
+		if strings.Contains(row, "╰") {
+			bottom = y
+		}
+	}
+	if want := h.a.picker.all + 3; bottom-top != want {
+		t.Fatalf("the box should fit %d rows: got %d lines from top to bottom, want %d", h.a.picker.all, bottom-top, want)
+	}
+	h.press("auth")
+	h.a.draw()
+	h.see("╰")
+}
+
 func TestPickerSplitsArtifactsAndBuffers(t *testing.T) {
 	h := start(t)
 	h.hub.arts = []model.Artifact{{Name: "design", Title: "Session store design", Thread: "auth-refactor", Version: 1}}

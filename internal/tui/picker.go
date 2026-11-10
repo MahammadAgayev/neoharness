@@ -35,11 +35,14 @@ type picker struct {
 	sel    int
 	items  []pickItem
 	source func(q string) []pickItem
+	// all is how many rows the picker has before a query; its box fits them.
+	all int
 }
 
 func (a *App) openPicker(title string, source func(q string) []pickItem) {
 	a.picker = &picker{title: title, source: source}
 	a.picker.items = source("")
+	a.picker.all = len(a.picker.items)
 	a.mode = modePicker
 }
 

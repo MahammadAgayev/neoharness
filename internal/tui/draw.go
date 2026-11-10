@@ -586,6 +586,9 @@ func (a *App) drawPicker(W, H int) {
 	p := a.picker
 	bw := min(W-8, 84)
 	bh := min(H-6, 22)
+	if p.all > 0 {
+		bh = min(bh, p.all+4)
+	}
 	x0, y0 := (W-bw)/2, (H-bh)/3
 	th := a.th
 	a.box(x0, y0, bw, bh, p.title, th.Iris)
