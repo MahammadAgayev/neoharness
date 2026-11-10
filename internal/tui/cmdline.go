@@ -489,13 +489,16 @@ func (a *App) helpBuf() *Buffer {
 		return b
 	}
 	th := a.th
-	sec := func(s string) Line { return Line{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{s, th.Muted}}} }
-	row := func(k, d string) Line {
-		return Line{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{pad(k, 29), th.Iris}, {d, th.Subtle}}}
+	// Key rows and headings wrap to the window; the other lines are fixed.
+	type helpLine struct {
+		key, what string
+		l         Line
 	}
-	lines := []Line{
+	sec := func(s string) helpLine { return helpLine{what: s} }
+	row := func(k, d string) helpLine { return helpLine{key: k, what: d} }
+	lines := []helpLine{
 		{},
-		{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{"neoharness", th.Iris.Bold(true)}, {"  keys", th.Subtle}}},
+		{l: Line{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{"neoharness", th.Iris.Bold(true)}, {"  keys", th.Subtle}}}},
 		{},
 		sec("write"),
 		row("i a o", "write to the thread in this window"),
@@ -583,7 +586,15 @@ func (a *App) helpBuf() *Buffer {
 		row("gx  gf", "open the link, or the artifact named, under the cursor"),
 	}
 	b := newBuffer("neoharness://help", KindHelp)
-	b.SetLines(lines)
+	for _, hl := range lines {
+		if hl.what != "" {
+			b.push(&block{kind: bKey, text: hl.key, text2: hl.what})
+		} else if l := b.last(); l != nil && l.kind == bRaw {
+			l.raw = append(l.raw, hl.l)
+		} else {
+			b.push(&block{kind: bRaw, raw: []Line{hl.l}})
+		}
+	}
 	a.bufs[b.Name] = b
 	return b
 }

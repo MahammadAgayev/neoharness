@@ -114,10 +114,10 @@ type thread struct {
 	cancel  context.CancelFunc
 	// interrupted marks a turn that SendNow stopped.
 	interrupted bool
-	// reply is the final text of its last turn, for the coordinator's note.
-	reply string
 	perms       []*pending
 	state       model.State
+	// reply is the final text of its last turn, for the coordinator's note.
+	reply string
 	// deleted stops a turn that is still unwinding from writing the thread
 	// back to disk.
 	deleted bool

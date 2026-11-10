@@ -1,13 +1,13 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 193 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 194 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
 Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
-52 to 57 in the six commits after it.
+52 to 58 in the seven commits after it.
 
 ## 1. What neoharness is
 
@@ -1105,6 +1105,12 @@ Not committed:
     `prompts.ThreadEnded`). Checked in a real run: a thread whose only
     report was "starting" answered in its reply, and the coordinator gave
     the right count (70 bytes) with no tool call.
+58. **:help wraps** (a real run at 80×24). Help was fixed lines with the
+    keys padded to 29 columns, so in a 39-column window every text was
+    cut to a few letters ("write t…"). Now each key row and heading is a
+    `bKey` block that wraps to the window: with room (`keyCol`+30), the
+    keys keep their column and the text wraps under itself; else the
+    keys go on one line and the text under them, indented.
 
 
 Things found on the user's machine:

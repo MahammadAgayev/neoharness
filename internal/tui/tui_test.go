@@ -2364,6 +2364,29 @@ func TestHelpOpensAtTheTop(t *testing.T) {
 	}
 }
 
+func TestHelpWrapsInANarrowWindow(t *testing.T) {
+	h := start(t)
+	b := h.a.helpBuf()
+	text := func(w int) string {
+		var out []string
+		for _, l := range b.Lines(w, h.a.th, 0) {
+			out = append(out, strings.TrimSpace(l.Text()))
+		}
+		return strings.Join(out, " ")
+	}
+	want := "send now: stop the running turn (in Insert)"
+	for _, w := range []int{36, 100} {
+		if got := text(w); !strings.Contains(got, want) {
+			t.Errorf("at width %d help should show %q whole; got %q", w, want, got)
+		}
+	}
+	for _, l := range b.Lines(36, h.a.th, 0) {
+		if n := width(l.Text()) + width(spansText(l.Prefix)); n > 36 {
+			t.Fatalf("a help line is wider than its window: %q", l.Text())
+		}
+	}
+}
+
 func TestEmptyMessagesSaySo(t *testing.T) {
 	h := start(t)
 	h.openDemo()

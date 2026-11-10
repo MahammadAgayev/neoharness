@@ -41,6 +41,9 @@ const (
 	bNote
 	bShell
 	bArtifact
+	// bKey is a row of :help: a key and what it does, or a heading when
+	// there is no key.
+	bKey
 )
 
 // toolCall is one tool call; failed holds why it failed or was denied.
@@ -185,7 +188,7 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 // without a blank line: a run of permission lines reads as one list.
 func (b *Buffer) joins(i int) bool {
 	k := b.blocks[i].kind
-	return (k == bPermission || k == bAnswer) && b.blocks[i-1].kind == bPermission
+	return (k == bPermission || k == bAnswer) && b.blocks[i-1].kind == bPermission || k == bKey
 }
 
 // Live reports whether something in the buffer animates.
@@ -394,6 +397,18 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 		return wrap([]Span{{bl.text, th.Muted.Italic(true)}}, w, []Span{{"  — ", th.Muted}}, []Span{{"    ", th.Text}})
 	case bShell:
 		return bl.renderShell(w, th, spin)
+	case bKey:
+		if bl.text == "" {
+			return wrap([]Span{{bl.text2, th.Muted}}, w, pad, pad)
+		}
+		// The keys take a column when the window has room for it; else the
+		// text goes on the next line.
+		if w >= keyCol+30 {
+			return wrap([]Span{{bl.text2, th.Subtle}}, w, []Span{{"  ", th.Text}, {bl.text + strings.Repeat(" ", max(keyCol-2-width(bl.text), 1)), th.Iris}},
+				[]Span{{strings.Repeat(" ", keyCol), th.Text}})
+		}
+		in := []Span{{"      ", th.Text}}
+		return append(wrap([]Span{{bl.text, th.Iris}}, w, pad, pad), wrap([]Span{{bl.text2, th.Subtle}}, w, in, in)...)
 	case bArtifact:
 		spans := []Span{{bl.art.Title, th.Text}, {"  · artifact", th.Muted}}
 		if bl.art.Version > 1 {
@@ -406,6 +421,9 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 	}
 	return nil
 }
+
+// keyCol is where the text of a :help row starts.
+const keyCol = 31
 
 // shellLines is how many lines of a `!` command's output show before za.
 const shellLines = 10
