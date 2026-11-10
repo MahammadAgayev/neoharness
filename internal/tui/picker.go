@@ -216,6 +216,15 @@ func (a *App) pickArtifacts() {
 	a.openPicker("artifacts", func(q string) []pickItem { return fuzzy(items, q) })
 }
 
+func (a *App) pickThreads() {
+	if a.workspace == "" {
+		a.notify("open a workspace first", a.th.Muted)
+		return
+	}
+	items := a.threadItems()
+	a.openPicker("threads", func(q string) []pickItem { return fuzzy(items, q) })
+}
+
 func (a *App) pickWorkspaces() {
 	var items []pickItem
 	for _, p := range a.workspaces {

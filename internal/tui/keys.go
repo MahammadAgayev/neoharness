@@ -291,6 +291,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"@":          func(n int) { a.macroKey, a.macroN = "@", n },
 		// Actions with no ex command, for maps in defaults.lua and init.lua.
 		"<Plug>(neoharness-grep)":        func(int) { a.pickGrep() },
+		"<Plug>(neoharness-threads)":     func(int) { a.pickThreads() },
 		"<Plug>(neoharness-yank)":        func(int) { a.yank() },
 		"<Plug>(neoharness-dismiss)":     func(int) { a.toasts = nil },
 		"<Plug>(neoharness-coordinator)": func(int) { a.goCoordinator() },
@@ -772,7 +773,7 @@ func findRune(l []rune, i int, kind byte, r rune, n int, again bool) (int, bool)
 	return i, false
 }
 
-// goCoordinator focuses the coordinator of the open workspace, as <leader>pc.
+// goCoordinator focuses the coordinator of the open workspace, as <leader>c.
 // The pane stays as it is.
 func (a *App) goCoordinator() {
 	if a.workspace == "" {

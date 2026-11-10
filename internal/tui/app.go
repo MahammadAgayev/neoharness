@@ -1017,7 +1017,7 @@ func (a *App) renderThreads() {
 		return
 	}
 	th := a.th
-	// The coordinator is not a thread; <leader>pc goes to it.
+	// The coordinator is not a thread; <leader>c goes to it.
 	names := a.listOrder()
 	nameW := 0
 	for _, n := range names {

@@ -359,13 +359,13 @@ func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
 	}
 	h.press("G", "<CR>")
 
-	h.press("<Space>", "p", "c")
+	h.press("<Space>", "c")
 	if h.a.cur != coord || pane.Buf.Thread != "api-tests" {
-		t.Fatal("<leader>pc should focus the coordinator and leave the pane")
+		t.Fatal("<leader>c should focus the coordinator and leave the pane")
 	}
-	h.press(":b auth-refactor", "<CR>", "<C-l>", "<Space>", "p", "c")
+	h.press(":b auth-refactor", "<CR>", "<C-l>", "<Space>", "c")
 	if h.a.cur != coord || coord.Buf.Thread != model.Coordinator || pane.Buf.Thread != "api-tests" {
-		t.Fatalf("<leader>pc from the pane should show the coordinator on the left; cur %q", h.a.cur.Buf.Name)
+		t.Fatalf("<leader>c from the pane should show the coordinator on the left; cur %q", h.a.cur.Buf.Name)
 	}
 }
 
@@ -1017,12 +1017,25 @@ func TestSendNowWithCtrlXCtrlS(t *testing.T) {
 func TestGoToWorkspacesAndCoordinator(t *testing.T) {
 	h := start(t)
 	h.openDemo()
-	h.press(":b auth-refactor", "<CR>", "<Space>pc")
+	h.press(":b auth-refactor", "<CR>", "<Space>c")
 	if h.a.cur.Buf.Thread != model.Coordinator {
-		t.Fatalf("<leader>pc showed %q", h.a.cur.Buf.Thread)
+		t.Fatalf("<leader>c showed %q", h.a.cur.Buf.Thread)
 	}
 	h.press("<Space>pv")
 	h.see("workspaces")
+}
+
+func TestThreadsPicker(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("<Space>pt")
+	if h.a.picker == nil || h.a.picker.title != "threads" {
+		t.Fatal("<leader>pt should open the threads picker")
+	}
+	h.press("auth", "<CR>")
+	if h.a.cur.Buf.Thread != "auth-refactor" {
+		t.Fatalf("<CR> in the threads picker showed %q", h.a.cur.Buf.Thread)
+	}
 }
 
 func TestToastsForThreadsOffScreen(t *testing.T) {
@@ -2369,7 +2382,7 @@ func TestDefaultsLuaIsTheDefault(t *testing.T) {
 	if h.a.notice != "" {
 		t.Fatalf("defaults.lua should load without a notice, got %q", h.a.notice)
 	}
-	for _, k := range []string{"<Space>t", "<Space>pc", "<Space>/", "<Tab>", "<C-h>"} {
+	for _, k := range []string{"<Space>t", "<Space>c", "<Space>ps", "<Space>pt", "<Space>pb", "<Tab>", "<C-h>"} {
 		if h.a.binds[k] == nil {
 			t.Errorf("defaults.lua should map %s", k)
 		}
@@ -2544,7 +2557,7 @@ func TestTranscriptSearchShowsTheMatch(t *testing.T) {
 	h.openDemo()
 	e := model.Event{Kind: model.EventText, Text: "Some opening words that come first, then the needle word."}
 	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &e})
-	h.press("<Esc>", "<Space>", "/", "needle")
+	h.press("<Esc>", "<Space>", "p", "s", "needle")
 	items := h.a.picker.items
 	if len(items) != 1 || !strings.HasPrefix(items[0].detail, "…") || !strings.Contains(items[0].detail, "needle") || strings.Contains(items[0].detail, "Some") {
 		t.Fatalf("items = %+v", items)

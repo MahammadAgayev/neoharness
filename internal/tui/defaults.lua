@@ -15,14 +15,18 @@ vim.o.equalalways = true -- after a split or a close, windows get the same size
 local map = vim.keymap.set
 local hl = function(group, opts) vim.api.nvim_set_hl(0, group, opts) end
 
--- Buffers, threads, workspaces, artifacts.
+-- Pickers.
 map("n", "<leader><leader>", ":ls<CR>")                -- buffers
-map("n", "<leader>t", ":threads<CR>")                  -- threads pane
-map("n", "<leader>w", ":workspace<CR>")                -- pick a workspace
-map("n", "<leader>pv", ":workspaces<CR>")              -- workspaces screen
-map("n", "<leader>pc", "<Plug>(neoharness-coordinator)")
+map("n", "<leader>pb", ":ls<CR>")
+map("n", "<leader>pt", "<Plug>(neoharness-threads)")
 map("n", "<leader>pa", ":artifacts<CR>")
-map("n", "<leader>/", "<Plug>(neoharness-grep)")       -- search every transcript
+map("n", "<leader>ps", "<Plug>(neoharness-grep)")      -- search every transcript
+map("n", "<leader>w", ":workspace<CR>")
+
+-- Windows that are not pickers.
+map("n", "<leader>pv", ":workspaces<CR>")              -- workspaces screen
+map("n", "<leader>t", ":threads<CR>")                  -- threads pane
+map("n", "<leader>c", "<Plug>(neoharness-coordinator)")
 
 -- Permissions: the card of the thread in this window.
 map("n", "<leader>a", ":allow<CR>")
