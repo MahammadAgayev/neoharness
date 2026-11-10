@@ -89,23 +89,26 @@ func TestHubKnowsNoTransport(t *testing.T) {
 // into state it does not own.
 func TestTUIGoesThroughTheAPI(t *testing.T) {
 	allowed := map[string]bool{
-		module + "/internal/hubapi": true,
-		module + "/internal/model":  true,
+		module + "/internal/hubapi":   true,
+		module + "/internal/model":    true,
+		module + "/internal/linediff": true,
 	}
 	for _, imp := range imports(t, repoRoot(t), "internal/tui") {
 		if strings.HasPrefix(imp, module+"/") && !allowed[imp] {
-			t.Errorf("internal/tui imports %s — it may use only hubapi and model", imp)
+			t.Errorf("internal/tui imports %s — it may use only hubapi, model and linediff", imp)
 		}
 	}
 }
 
-// TestDataPackagesStayLeaves: model depends on nothing internal, and workspace
-// only on model.
+// TestDataPackagesStayLeaves: model and linediff depend on nothing internal,
+// and workspace only on model.
 func TestDataPackagesStayLeaves(t *testing.T) {
 	root := repoRoot(t)
-	for _, imp := range imports(t, root, "internal/model") {
-		if strings.HasPrefix(imp, module+"/") {
-			t.Errorf("internal/model should be a leaf but imports %s", imp)
+	for _, pkg := range []string{"internal/model", "internal/linediff"} {
+		for _, imp := range imports(t, root, pkg) {
+			if strings.HasPrefix(imp, module+"/") {
+				t.Errorf("%s should be a leaf but imports %s", pkg, imp)
+			}
 		}
 	}
 	for _, pkg := range []string{"internal/workspace", "internal/hubapi"} {

@@ -28,7 +28,7 @@ type cmdline struct {
 }
 
 var commands = []string{
-	"allow", "always", "artifacts", "b", "buffer", "deny", "edit", "folder", "help", "ls", "messages", "new",
+	"allow", "always", "artifacts", "b", "buffer", "deny", "diffoff", "edit", "folder", "help", "ls", "messages", "new",
 	"only", "open", "q", "qa", "quit", "reopen", "resolve", "restore", "split", "threads",
 	"vsplit", "workspace", "workspaces", "wq",
 }
@@ -260,6 +260,10 @@ func (a *App) exec(line string) {
 	case "e!", "edit!":
 		if edit != nil {
 			a.dropEdit()
+		}
+	case "diffoff", "diffo":
+		if e := diffOf(a.cur); e != nil {
+			a.closeDiff(e)
 		}
 	case "w", "write", "w!", "write!":
 		if edit == nil {
@@ -563,6 +567,8 @@ func (a *App) helpBuf() *Buffer {
 		row(":wq  :q!", "save and close, drop the changes and close"),
 		row("<CR>", "in a list item, the next item (Insert)"),
 		row(":w!  :e!", "save over a newer version, take the newer version"),
+		row("]c [c  do dp", "after a :w that a newer version refused: next / previous change, take it"),
+		row(":diffoff  :q", "end the diff (:q in the newer version's window)"),
 		row("x s r J  dd cc D C", "change in Normal"),
 		row("d c y  w e b $ 0 iw aw", "operators and motions; v V then d c y"),
 		row("i( a[ i\" a` ib iB ip", "text objects after d c y: ci( da\" yap"),

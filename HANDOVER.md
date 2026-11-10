@@ -1,11 +1,11 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 181 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 182 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
-reference links, exact columns) are in commit `557e7b1`. Item 46 is not
-committed yet.
+reference links, exact columns) are in commit `557e7b1`, item 46 in the
+commit after it. Item 47 (diff mode) is not committed yet.
 
 ## 1. What neoharness is
 
@@ -967,6 +967,21 @@ Not committed:
     window, so `:q` closes only the help (it had closed the coordinator's
     window). Also checked: `:new`, editing a thread's artifact with `:w`
     (the writer named the added line without reading it).
+47. **Diff mode on a conflict** (user's choice, 2026-11-10), as Neovim's
+    `:diffsplit`. When `:w` is refused because a newer version changed the
+    same lines, the newer version opens read-only in a split on the right
+    (`KindDiff`, `diff.go`). Both sides show raw lines; a pair of lines
+    takes the rows of the longer one and the shorter is padded with `╱`
+    filler rows (Off -1), so the rows match one to one; changed lines are
+    Gold (yours) and Foam (theirs). The focused window leads, the other
+    follows its top and cursor row (`bindDiff`, scrollbind and cursorbind).
+    `]c`/`[c` go to the next/previous change; `do` in the source and `dp`
+    in the newer version take the change at the cursor. The source's base
+    becomes the newer version, so `:w` saves the result over it and ends
+    the diff; `:q` in the newer version's window, `:diffoff` or `:e!` end
+    it too. The line diff moved to `internal/linediff` (a leaf), which the
+    TUI may now import (architecture test). Checked in a real run: notes2
+    rewrote the line being edited, `:w` opened the diff, `]c do :w`.
 
 
 Things found on the user's machine:

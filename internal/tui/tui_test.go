@@ -1720,6 +1720,54 @@ func TestArtifactEditRefusesToSaveOverANewerVersion(t *testing.T) {
 	}
 }
 
+func TestAConflictOpensADiff(t *testing.T) {
+	h := editDemo(t, "# D\n\nkeep\nmine\nend\n")
+	e := h.a.cur.Buf.Edit
+	h.press("/mine", "<CR>", "A", "!", "<Esc>")
+	h.hub.arts[0].Version = 2
+	h.hub.docs["design"] = "# D\n\nkeep\ntheirs\nend\nadded\n"
+	a := h.hub.arts[0]
+	h.a.apply(model.Update{Kind: model.UpdateArtifact, Workspace: "demo", Thread: "auth-refactor", Artifact: &a})
+	mine := h.a.cur
+	h.press(":w", "<CR>")
+	if e.diff == nil || h.a.cur != mine || h.a.root.find(e.diff.win) == nil || e.diff.win.Buf.Kind != KindDiff {
+		t.Fatal("a refused :w should open the newer version beside the source")
+	}
+	h.a.draw()
+	h.see("◇ v2 · by auth-refactor")
+	h.see("theirs")
+	h.see("mine!")
+	h.press("gg", "]c", "do")
+	if got := e.Text(); got != "# D\n\nkeep\ntheirs\nend\n" {
+		t.Fatalf("do should take the change: %q", got)
+	}
+	h.press("]c")
+	if l := h.a.line(mine); l.Off >= 0 || e.diff.win.Cur != mine.Cur {
+		t.Fatalf("]c should go to the added line's filler row, beside it: %+v", l)
+	}
+	h.press("do")
+	if got := e.Text(); got != h.hub.docs["design"] {
+		t.Fatalf("do on an added line should add it: %q", got)
+	}
+	h.press("gg", "A", " v3", "<Esc>", ":w", "<CR>")
+	if h.hub.docs["design"] != "# D v3\n\nkeep\ntheirs\nend\nadded\n" || h.hub.arts[0].Version != 3 {
+		t.Fatalf(":w in the diff should save over the newer version: %q v%d", h.hub.docs["design"], h.hub.arts[0].Version)
+	}
+	if e.diff != nil || len(h.a.root.windows()) != 2 {
+		t.Fatal(":w should end the diff")
+	}
+
+	h.press("A", "!", "<Esc>")
+	h.hub.arts[0].Version = 4
+	h.hub.docs["design"] = "# D v4\n"
+	a = h.hub.arts[0]
+	h.a.apply(model.Update{Kind: model.UpdateArtifact, Workspace: "demo", Thread: "auth-refactor", Artifact: &a})
+	h.press(":w", "<CR>", "<C-w>", "l", ":q", "<CR>")
+	if e.diff != nil || h.a.cur.Buf.Edit != e || len(h.a.root.windows()) != 2 {
+		t.Fatal(":q in the newer version's window should end the diff")
+	}
+}
+
 func TestANewVersionReloadsAnUnchangedBuffer(t *testing.T) {
 	h := editDemo(t, "# D\n\nold\n")
 	h.hub.arts[0].Version = 2

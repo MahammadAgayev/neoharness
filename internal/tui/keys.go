@@ -221,6 +221,10 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"[b":             func(n int) { a.cycleThread(-max(n, 1)) },
 		"<C-^>":          func(int) { a.alternate() },
 		"<C-o>":          func(int) { a.jumpBack() },
+		"]c":             func(n int) { a.diffJump(max(n, 1)) },
+		"[c":             func(n int) { a.diffJump(-max(n, 1)) },
+		"do":             func(int) { a.diffTake() },
+		"dp":             func(int) { a.diffTake() },
 		"/":              func(int) { a.startCmd('/') },
 		"?":              func(int) { a.startCmd('?') },
 		":":              func(int) { a.startCmd(':') },
@@ -849,6 +853,13 @@ func (a *App) escape() {
 }
 
 func (a *App) closeCur(force bool) {
+	if e := a.cur.Buf.diffOf; e != nil && e.diff != nil && e.diff.win == a.cur {
+		a.closeDiff(e)
+		return
+	}
+	if e := a.cur.Buf.Edit; e != nil {
+		a.closeDiff(e)
+	}
 	if !a.root.closeWindow(a.cur) {
 		a.quitAll(force)
 		return

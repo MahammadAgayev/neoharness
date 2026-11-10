@@ -21,6 +21,9 @@ const (
 	KindMessages
 	KindHelp
 	KindArtifact
+	// KindDiff is the newer version of an artifact beside its source in
+	// diff mode.
+	KindDiff
 )
 
 type blockKind int
@@ -78,6 +81,8 @@ type Buffer struct {
 	Prompt    *Prompt
 	// Edit is an artifact's source.
 	Edit *Editor
+	// diffOf is the source a KindDiff buffer is beside.
+	diffOf *Editor
 	// marks are m's places, a line and a column; ' is the place before the
 	// last jump.
 	marks map[rune][2]int

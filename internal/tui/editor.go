@@ -36,6 +36,8 @@ type Editor struct {
 	// want is the offset <Up> and <Down> keep over shorter lines in Insert,
 	// or -1.
 	want int
+	// diff is set in diff mode, after a :w that a newer version refused.
+	diff *diffMode
 
 	undo, redo []snapshot
 	// reg is what the last delete or yank took, for p and P. lines says it
@@ -710,6 +712,14 @@ func (e *Editor) render(w int, th *Theme) []Line {
 		return e.cache
 	}
 	avail := max(w-width(spansText(margin)), 4)
+	if e.diff != nil {
+		if e.diff.w > 0 {
+			avail = max(min(avail, e.diff.w-width(spansText(margin))), 4)
+		}
+		out := e.renderDiff(avail, th, margin)
+		e.cache, e.cacheW, e.cacheR, e.cacheShown = out, w, e.rev, [2]int{e.shown, e.shownTo}
+		return out
+	}
 	if e.decoW != w || e.decoR != e.rev {
 		if e.decoW != w || e.memo == nil {
 			e.memo = map[string][]Line{}
@@ -951,7 +961,7 @@ func (a *App) rowCol(w *Window, p pos) (int, int) {
 }
 
 // isRaw says line i shows raw.
-func (e *Editor) isRaw(i int) bool { return i >= e.shown && i <= e.shownTo }
+func (e *Editor) isRaw(i int) bool { return e.diff != nil || i >= e.shown && i <= e.shownTo }
 
 // settle keeps an artifact window's cursor on its place in the source after
 // a key. The rows change when another line turns raw; the Visual start moves
@@ -959,7 +969,7 @@ func (e *Editor) isRaw(i int) bool { return i >= e.shown && i <= e.shownTo }
 // move it in the source.
 func (a *App) settle(w *Window) {
 	e := w.Buf.Edit
-	if e == nil || a.pasting {
+	if e == nil || e.diff != nil || a.pasting {
 		return
 	}
 	p := e.cursor()
@@ -1023,6 +1033,7 @@ func (a *App) toInsert(w *Window) {
 func (a *App) dropEdit() {
 	b := a.cur.Buf
 	b.Edit.Dirty = false
+	a.closeDiff(b.Edit)
 	if _, ok := a.loadArtifact(b); ok {
 		a.toWindow(a.cur)
 	}
@@ -1057,10 +1068,15 @@ func (a *App) saveEdit(force bool) bool {
 	b := a.cur.Buf
 	e := b.Edit
 	art, text, err := a.c.EditArtifact(b.Workspace, b.Artifact, e.Text(), e.saved, e.Base, force)
+	if err != nil && e.art.Version > e.Base && !force && e.diff == nil {
+		a.openDiff(a.cur, err)
+		return false
+	}
 	if err != nil {
 		a.notify(err.Error(), a.th.Love)
 		return false
 	}
+	a.closeDiff(e)
 	saved := art.Version != e.Base
 	merged := text != e.Text()
 	if merged {

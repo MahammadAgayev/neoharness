@@ -45,9 +45,14 @@ func (a *App) draw() {
 	live := false
 	area := Rect{0, 0, W, H - 1}
 	a.root.layout(area, sep)
+	a.bindDiff()
 	for _, w := range a.root.windows() {
 		a.drawWindow(w, w == a.cur)
 		live = live || w.Buf.Live()
+	}
+	// The lead window may have scrolled while it was drawn.
+	for _, w := range a.bindDiff() {
+		a.drawWindow(w, false)
 	}
 	a.drawToasts(W, H)
 	if a.picker != nil {
@@ -230,7 +235,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 // railWidth is the left gutter of an artifact window, where the outline rail
 // goes. Narrow windows keep their columns for the text.
 func railWidth(w *Window) int {
-	if w.Buf.Kind != KindArtifact || w.rect.W < 60 {
+	if w.Buf.Kind != KindArtifact || w.rect.W < 60 || w.Buf.Edit != nil && w.Buf.Edit.diff != nil {
 		return 0
 	}
 	return 5
