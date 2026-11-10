@@ -16,7 +16,8 @@ import (
 // not ignore, or else a walk with a depth limit. The same script runs locally
 // and over ssh, so `@` completes the files Claude sees where it runs.
 const listScript = `{ git ls-files --cached --others --exclude-standard 2>/dev/null ||
-  find . -maxdepth 6 -type f -not -path '*/.*' -not -path '*/node_modules/*' | sed 's,^\./,,'; } | head -n 20000`
+  find . -maxdepth 6 -type f -not -path '*/.*' -not -path '*/node_modules/*' \
+  -not -path '*/__pycache__/*' -not -path '*/venv/*' | sed 's,^\./,,'; } | head -n 20000`
 
 func listFiles(ctx context.Context, l model.Location) ([]string, error) {
 	out, err := runIn(ctx, l, listScript)

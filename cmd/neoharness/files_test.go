@@ -13,7 +13,7 @@ import (
 
 func TestListFilesUsesGitElseWalks(t *testing.T) {
 	dir := t.TempDir()
-	for _, f := range []string{"a b.go", "sub/c.go", ".hidden/d.go", "skip.log"} {
+	for _, f := range []string{"a b.go", "sub/c.go", ".hidden/d.go", "skip.log", "__pycache__/c.pyc", "venv/bin/python"} {
 		p := filepath.Join(dir, f)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
@@ -31,7 +31,7 @@ func TestListFilesUsesGitElseWalks(t *testing.T) {
 		t.Errorf("walk = %q, want %q", got, want)
 	}
 
-	os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.log\n.hidden/\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.log\n.hidden/\n__pycache__/\nvenv/\n"), 0o644)
 	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
 		t.Skip("no git")
 	}

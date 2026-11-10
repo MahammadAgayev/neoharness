@@ -7,7 +7,7 @@ Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
 Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
-52 to 58 in the seven commits after it.
+52 to 59 in the eight commits after it.
 
 ## 1. What neoharness is
 
@@ -1111,6 +1111,11 @@ Not committed:
     `bKey` block that wraps to the window: with room (`keyCol`+30), the
     keys keep their column and the text wraps under itself; else the
     keys go on one line and the text under them, indented.
+59. **`@` skips caches**. In a folder that is not a git repository, `@c`
+    offered `__pycache__/count.cpython-314.pyc`. The walk in
+    `listScript` (used only when `git ls-files` fails) now also skips
+    `__pycache__/` and `venv/`, as it skips `node_modules/` and hidden
+    folders.
 
 
 Things found on the user's machine:
