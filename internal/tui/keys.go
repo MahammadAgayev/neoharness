@@ -455,6 +455,7 @@ func (a *App) lineCount(w *Window) int { return len(a.rows(w)) }
 // rows are the rows the cursor moves over: the prompt's while it is there.
 func (a *App) rows(w *Window) []Line {
 	if w.inPrompt {
+		a.fitPrompt(w)
 		return a.promptRows(w)
 	}
 	return w.Buf.Lines(a.textWidth(w), a.th, a.spin)

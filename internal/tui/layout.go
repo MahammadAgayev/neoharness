@@ -30,6 +30,8 @@ type Window struct {
 	// inPrompt says the Normal cursor is in a chat's prompt (prompt.go).
 	inPrompt         bool
 	chatCur, chatCol int
+	// promptW is the width the prompt's Cur and Col are for.
+	promptW int
 }
 
 // outOfPrompt puts Cur and Col back on the transcript.

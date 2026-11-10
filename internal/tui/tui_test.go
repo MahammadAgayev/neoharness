@@ -2308,6 +2308,21 @@ func TestVisualModeInThePrompt(t *testing.T) {
 	}
 }
 
+func TestPromptCursorKeepsItsRuneOnResize(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("<C-w>o")
+	long := strings.Repeat("word ", 40) + "end"
+	h.press("i", long, "<Esc>")
+	h.a.draw()
+	h.s.SetSize(60, 30)
+	h.a.draw()
+	h.press("x")
+	if got := h.prompt(); got != strings.TrimSuffix(long, "d") {
+		t.Fatalf("after a resize x should take the d under the cursor; prompt ends %q", got[max(len(got)-12, 0):])
+	}
+}
+
 func TestPromptMotionsFollowItsWrappedRows(t *testing.T) {
 	h := start(t)
 	h.openDemo()

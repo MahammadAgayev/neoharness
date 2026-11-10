@@ -10,7 +10,9 @@ package tui
 // to the window. Src is the line, 1-based, and Off the rune where the row
 // starts, as in an artifact's rows. A wrapped row keeps its trailing space,
 // so a column maps to one rune.
-func (a *App) promptRows(w *Window) []Line {
+func (a *App) promptRows(w *Window) []Line { return a.promptRowsAt(w, a.textWidth(w)) }
+
+func (a *App) promptRowsAt(w *Window, textW int) []Line {
 	p := w.Buf.Prompt
 	caret := a.th.Muted
 	if w == a.cur && a.mode == modeInsert {
@@ -18,7 +20,7 @@ func (a *App) promptRows(w *Window) []Line {
 	}
 	first := []Span{{" › ", caret}}
 	rest := []Span{{"   ", a.th.Text}}
-	tw := max(a.textWidth(w)-width(" › "), 8)
+	tw := max(textW-width(" › "), 8)
 	var rows []Line
 	for li, l := range splitRunes(p.Text) {
 		starts := wrapRunes(l, tw)
@@ -101,9 +103,21 @@ func (a *App) enterPrompt(w *Window) {
 	}
 	w.chatCur, w.chatCol = w.Cur, w.Col
 	w.inPrompt = true
+	w.promptW = a.textWidth(w)
 	line, off := lineOff(p.Text, p.Cur)
 	w.Cur, w.Col = promptAt(a.promptRows(w), line, off)
 	a.clampCol(w)
+}
+
+// fitPrompt keeps the cursor on its rune when the window's width changes:
+// the rows wrap again, and the same row and column would be another rune.
+func (a *App) fitPrompt(w *Window) {
+	tw := a.textWidth(w)
+	if w.inPrompt && w.promptW > 0 && w.promptW != tw {
+		line, off := promptPos(a.promptRowsAt(w, w.promptW), w.Cur, w.Col)
+		w.Cur, w.Col = promptAt(a.promptRowsAt(w, tw), line, off)
+	}
+	w.promptW = tw
 }
 
 // leavePrompt puts the Normal cursor back in the transcript.

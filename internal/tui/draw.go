@@ -366,6 +366,7 @@ func (a *App) promptLines(w *Window, focused bool) ([]Line, int, int) {
 		}
 		return lines
 	}
+	a.fitPrompt(w)
 	rows := a.promptRows(w)
 	if len(p.Text) == 0 && writing {
 		a.cursorX, a.cursorY = w.rect.X+3, statusY-minPromptLines
