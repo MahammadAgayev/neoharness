@@ -71,13 +71,24 @@ func ArtifactEdited(name string, from, to int, diff string, sections []string, a
 	return head + " The change, as a unified diff:\n\n```diff\n" + diff + "\n```\n\nKeep their changes when you write it again."
 }
 
-// ThreadEnded is one line of ThreadsEnded: a thread, its state, and its
-// last progress report.
-func ThreadEnded(name, state, progress string) string {
-	if progress == "" {
-		return fmt.Sprintf("- %s: %s.", name, state)
+// replyLimit is how much of a thread's last reply ThreadEnded keeps.
+const replyLimit = 300
+
+// ThreadEnded is one line of ThreadsEnded: a thread, its state, its last
+// progress report, and the start of its last reply. A report can be older
+// than the reply, so both go in.
+func ThreadEnded(name, state, progress, reply string) string {
+	s := fmt.Sprintf("- %s: %s.", name, state)
+	if progress != "" {
+		s += " Last report: " + strings.TrimRight(progress, ".") + "."
 	}
-	return fmt.Sprintf("- %s: %s. Last report: %s", name, state, progress)
+	if reply = strings.Join(strings.Fields(reply), " "); reply != "" {
+		if r := []rune(reply); len(r) > replyLimit {
+			reply = string(r[:replyLimit]) + "…"
+		}
+		s += " Last reply: " + reply
+	}
+	return s
 }
 
 // ThreadsEnded tells the coordinator which threads ended a turn since its

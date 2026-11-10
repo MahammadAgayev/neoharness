@@ -232,7 +232,7 @@ func TestCoordinatorHearsWhichThreadsEnded(t *testing.T) {
 	if len(coord) != 2 {
 		t.Fatalf("%d coordinator turns, want 2", len(coord))
 	}
-	if !strings.HasPrefix(coord[0], "Since your last turn, these threads ended a turn:\n- docs: idle. Last report: Done: usage written\n\n---\n\n") {
+	if !strings.HasPrefix(coord[0], "Since your last turn, these threads ended a turn:\n- docs: idle. Last report: Done: usage written. Last reply: ok\n\n---\n\n") {
 		t.Errorf("the coordinator should hear that docs ended; got %q", coord[0])
 	}
 	if strings.Contains(coord[0], "- lint:") {

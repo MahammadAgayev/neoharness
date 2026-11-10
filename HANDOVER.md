@@ -7,7 +7,7 @@ Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
 Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
-52 to 56 in the five commits after it.
+52 to 57 in the six commits after it.
 
 ## 1. What neoharness is
 
@@ -1098,6 +1098,13 @@ Not committed:
     `report_progress`, and the coordinator gave both results with no tool
     call. `space.ended` is in memory only; after a restart the coordinator
     reads `workspace_status`.
+57. **The note has the last reply**. A report can be old or wrong (haiku
+    once sent "placeholder" before it had the count), and the reply is
+    the result. Each line of the item 56 note now also has the thread's
+    last reply on one line, at most 300 characters (`thread.reply`,
+    `prompts.ThreadEnded`). Checked in a real run: a thread whose only
+    report was "starting" answered in its reply, and the coordinator gave
+    the right count (70 bytes) with no tool call.
 
 
 Things found on the user's machine:

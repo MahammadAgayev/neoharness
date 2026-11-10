@@ -114,6 +114,8 @@ type thread struct {
 	cancel  context.CancelFunc
 	// interrupted marks a turn that SendNow stopped.
 	interrupted bool
+	// reply is the final text of its last turn, for the coordinator's note.
+	reply string
 	perms       []*pending
 	state       model.State
 	// deleted stops a turn that is still unwinding from writing the thread
@@ -1242,8 +1244,14 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	defer h.mu.Unlock()
 	t := th.t
 	compact := len(t.InFlight) > 0 && t.InFlight[0].Compact
-	if t.Role != model.RoleCoordinator && !compact && !slices.Contains(ws.ended, t.Name) {
-		ws.ended = append(ws.ended, t.Name)
+	if t.Role != model.RoleCoordinator && !compact {
+		if !slices.Contains(ws.ended, t.Name) {
+			ws.ended = append(ws.ended, t.Name)
+		}
+		th.reply = ""
+		if err == nil && res.ExitCode == 0 {
+			th.reply = res.Text
+		}
 	}
 	batch := t.InFlight
 	th.busy = false
@@ -1395,7 +1403,7 @@ func compose(batch []workspace.Message, threads map[string]*thread) string {
 }
 
 // endedNote tells the coordinator which threads ended a turn since its last
-// turn, with their state and last report, and forgets them. A thread whose
+// turn, with their state, last report and last reply, and forgets them. A thread whose
 // message is in the batch says it there. Callers hold h.mu.
 func (h *Hub) endedNote(ws *space, batch []workspace.Message) string {
 	var lines []string
@@ -1404,7 +1412,7 @@ func (h *Hub) endedNote(ws *space, batch []workspace.Message) string {
 		if !ok || slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From == n }) {
 			continue
 		}
-		lines = append(lines, prompts.ThreadEnded(n, string(th.state), th.t.Progress))
+		lines = append(lines, prompts.ThreadEnded(n, string(th.state), th.t.Progress, th.reply))
 	}
 	ws.ended = nil
 	if len(lines) == 0 {
