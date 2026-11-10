@@ -1,25 +1,34 @@
 package tui
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	lua "github.com/yuin/gopher-lua"
 )
 
-// loadConfig runs the user's init.lua, if there is one. It takes a small part
-// of Neovim's Lua API, so maps copy over from a Neovim config:
-//
-//	vim.g.mapleader = ","
-//	vim.keymap.set("n", "<leader>t", ":threads<CR>")
-//	vim.keymap.set("n", "gt", function() vim.cmd("threads") end)
-//	vim.keymap.del("n", "<C-d>")
-//	vim.api.nvim_set_hl(0, "Iris", { fg = "#c4a7e7", bold = true })
-//	vim.cmd("workspace demo")
-//	vim.notify("loaded")
+//go:embed defaults.lua
+var defaultsLua string
+
+// mapOp is one vim.keymap.set or vim.keymap.del. leader is the leader when
+// it was made, as Neovim takes it then; "" in defaults.lua, whose maps take
+// the leader the user's init.lua sets.
+type mapOp struct {
+	lhs, rhs, leader string
+	fn               func(int)
+	remap, del       bool
+	insert           bool
+}
+
+// loadConfig runs the user's init.lua, if there is one, after defaults.lua.
+// It takes a small part of Neovim's Lua API, so maps copy over from a Neovim
+// config; defaults.lua shows all of it.
 func (a *App) loadConfig(path string) {
 	src, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -29,87 +38,103 @@ func (a *App) loadConfig(path string) {
 		a.notify(err.Error(), a.th.Love)
 		return
 	}
-	a.runConfig(string(src), path)
+	a.runConfig(string(src), path, false)
 }
 
-// runConfig runs a config's text. The Lua state stays, as maps may call its
-// functions later.
-func (a *App) runConfig(src, name string) {
+// runConfig runs a config's text: defaults.lua, or the user's init.lua. The
+// Lua state stays, as maps may call its functions later. The maps are built
+// again after each: the Go bindings, then defaults.lua's, then the user's.
+func (a *App) runConfig(src, name string, defaults bool) {
+	if a.lua == nil {
+		a.luaAPI()
+	}
+	a.cfgName, a.cfgDefaults, a.cfgLoading, a.cfgCmds = name, defaults, true, nil
+	if err := a.lua.DoString(src); err != nil {
+		a.notify(fmt.Sprintf("%s: %v", name, err), a.th.Love)
+	}
+	a.cfgLoading = false
+	a.buildMaps()
+	// The commands run once the maps are in place, as Neovim runs init.lua
+	// before the first screen.
+	for _, c := range a.cfgCmds {
+		a.exec(c)
+	}
+}
+
+// luaAPI makes the vim table that configs see.
+func (a *App) luaAPI() {
 	L := lua.NewState()
 	a.lua = L
-	leader := "<Space>"
-	// The maps and deletes apply in order once the leader is known, over the
-	// default bindings moved to that leader.
-	var ops []func(map[string]func(int))
-	var cmds []string
-	loading := true
-
 	vim, g, keymap, api := L.NewTable(), L.NewTable(), L.NewTable(), L.NewTable()
 	L.SetField(vim, "g", g)
 	L.SetField(vim, "keymap", keymap)
 	L.SetField(vim, "api", api)
 	L.SetGlobal("vim", vim)
-	leaderNow := func() string {
-		if s, ok := L.GetField(g, "mapleader").(lua.LString); ok && s != "" {
-			if s == " " {
-				return "<Space>"
-			}
-			return strings.Join(parseKeys(string(s), "<Space>"), "")
+	// modes says which of Normal (with Visual) and Insert a map is for.
+	modes := func(l *lua.LState) (normal, insert bool) {
+		check := func(m string) {
+			normal = normal || m == "n" || m == "v" || m == "x" || m == ""
+			insert = insert || m == "i"
 		}
-		return "<Space>"
-	}
-	normal := func(l *lua.LState) bool {
-		ok := false
-		check := func(m string) { ok = ok || m == "n" || m == "v" || m == "x" || m == "" }
 		switch m := l.Get(1).(type) {
 		case lua.LString:
 			check(string(m))
 		case *lua.LTable:
 			m.ForEach(func(_, v lua.LValue) { check(v.String()) })
 		}
-		if !ok {
-			a.notify(fmt.Sprintf("%s: only Normal mode maps work, not %q", name, l.Get(1).String()), a.th.Gold)
+		if !normal && !insert {
+			a.notify(fmt.Sprintf("%s: only Normal, Visual and Insert maps work, not %q", a.cfgName, l.Get(1).String()), a.th.Gold)
 		}
-		return ok
+		return normal, insert
+	}
+	add := func(op mapOp, normal, insert bool) {
+		if !a.cfgDefaults {
+			op.leader = a.leader()
+		}
+		for _, in := range []bool{false, true} {
+			if in && !insert || !in && !normal {
+				continue
+			}
+			op.insert = in
+			if a.cfgDefaults {
+				a.defaultMaps = append(a.defaultMaps, op)
+			} else {
+				a.userMaps = append(a.userMaps, op)
+			}
+		}
 	}
 	L.SetField(keymap, "set", L.NewFunction(func(l *lua.LState) int {
-		if !normal(l) {
+		normal, insert := modes(l)
+		if !normal && !insert {
 			return 0
 		}
-		leader = leaderNow()
-		lhs := strings.Join(parseKeys(l.CheckString(2), leader), "")
-		remap := false
+		op := mapOp{lhs: l.CheckString(2)}
 		if opts, ok := l.Get(4).(*lua.LTable); ok {
-			remap = lua.LVAsBool(l.GetField(opts, "remap"))
+			op.remap = lua.LVAsBool(l.GetField(opts, "remap"))
 		}
-		var fn func(int)
 		switch rhs := l.Get(3).(type) {
 		case *lua.LFunction:
-			fn = func(int) {
+			op.fn = func(int) {
 				if err := L.CallByParam(lua.P{Fn: rhs, NRet: 0, Protect: true}); err != nil {
 					a.notify(err.Error(), a.th.Love)
 				}
 			}
 		case lua.LString:
-			keys := parseKeys(string(rhs), leader)
-			fn = func(int) { a.feed(keys, remap) }
+			op.rhs = string(rhs)
 		default:
 			l.ArgError(3, "a string of keys or a function")
 		}
-		ops = append(ops, func(b map[string]func(int)) { b[lhs] = fn })
+		add(op, normal, insert)
 		return 0
 	}))
 	L.SetField(keymap, "del", L.NewFunction(func(l *lua.LState) int {
-		if !normal(l) {
-			return 0
-		}
-		lhs := strings.Join(parseKeys(l.CheckString(2), leaderNow()), "")
-		ops = append(ops, func(b map[string]func(int)) { delete(b, lhs) })
+		normal, insert := modes(l)
+		add(mapOp{lhs: l.CheckString(2), del: true}, normal, insert)
 		return 0
 	}))
 	L.SetField(api, "nvim_set_hl", L.NewFunction(func(l *lua.LState) int {
 		if err := a.setHighlight(l.CheckString(2), l.CheckTable(3)); err != nil {
-			a.notify(fmt.Sprintf("%s: %v", name, err), a.th.Gold)
+			a.notify(fmt.Sprintf("%s: %v", a.cfgName, err), a.th.Gold)
 		}
 		return 0
 	}))
@@ -118,8 +143,8 @@ func (a *App) runConfig(src, name string) {
 		if line == "" {
 			return 0
 		}
-		if loading {
-			cmds = append(cmds, line)
+		if a.cfgLoading {
+			a.cfgCmds = append(a.cfgCmds, line)
 		} else {
 			a.exec(line)
 		}
@@ -129,32 +154,118 @@ func (a *App) runConfig(src, name string) {
 		a.notify(l.CheckString(1), a.th.Subtle)
 		return 0
 	}))
+}
 
-	if err := L.DoString(src); err != nil {
-		a.notify(fmt.Sprintf("%s: %v", name, err), a.th.Love)
+// leader is vim.g.mapleader as a key name, <Space> when it is not set.
+func (a *App) leader() string {
+	if a.lua == nil {
+		return "<Space>"
 	}
-	loading = false
-	leader = leaderNow()
-	base := map[string]func(int){}
-	for k, fn := range a.binds {
-		if rest, ok := strings.CutPrefix(k, "<Space>"); ok {
-			k = leader + rest
+	g, _ := a.lua.GetField(a.lua.GetGlobal("vim"), "g").(*lua.LTable)
+	if g == nil {
+		return "<Space>"
+	}
+	if s, ok := a.lua.GetField(g, "mapleader").(lua.LString); ok && s != "" && s != " " {
+		return strings.Join(parseKeys(string(s), "<Space>"), "")
+	}
+	return "<Space>"
+}
+
+// buildMaps makes the bindings: the Go ones, defaults.lua's maps with the
+// leader the user set, and the user's maps over them. A map that is not
+// remap reaches the first two only (baseBinds).
+func (a *App) buildMaps() {
+	leader := a.leader()
+	apply := func(b map[string]func(int), op mapOp) {
+		ld := op.leader
+		if ld == "" {
+			ld = leader
 		}
-		base[k] = fn
+		lhs := strings.Join(parseKeys(op.lhs, ld), "")
+		if op.del {
+			delete(b, lhs)
+			return
+		}
+		fn := op.fn
+		if fn == nil {
+			keys := parseKeys(op.rhs, ld)
+			if len(keys) == 1 && strings.HasPrefix(keys[0], "<Plug>") {
+				if fn = a.builtin[keys[0]]; fn == nil {
+					a.notify(fmt.Sprintf("no %s", keys[0]), a.th.Gold)
+					return
+				}
+			} else {
+				fn = func(int) { a.feed(keys, op.remap) }
+			}
+		}
+		b[lhs] = fn
+	}
+	base := maps.Clone(a.builtin)
+	a.imaps = map[string]func(int){}
+	for _, op := range a.defaultMaps {
+		if op.insert {
+			apply(a.imaps, op)
+		} else {
+			apply(base, op)
+		}
 	}
 	a.baseBinds = base
-	a.binds = map[string]func(int){}
-	for k, fn := range base {
-		a.binds[k] = fn
+	a.binds = maps.Clone(base)
+	for _, op := range a.userMaps {
+		if op.insert {
+			apply(a.imaps, op)
+		} else {
+			apply(a.binds, op)
+		}
 	}
-	for _, op := range ops {
-		op(a.binds)
+}
+
+// insertMap holds keys in Insert that start an Insert map, as Neovim does
+// for timeoutlen: the map runs when they make its keys, else they go in as
+// typed. It reports that it took the key.
+func (a *App) insertMap(ev *tcell.EventKey, k string) bool {
+	if a.mode != modeInsert || len(a.imaps) == 0 || a.noremap > 0 || a.iflush {
+		return false
 	}
-	// The commands run once the maps are in place, as Neovim runs init.lua
-	// before the first screen.
-	for _, c := range cmds {
-		a.exec(c)
+	a.iheld = append(a.iheld, ev)
+	a.ikeys = append(a.ikeys, k)
+	seq := strings.Join(a.ikeys, "")
+	fn, exact := a.imaps[seq]
+	longer := false
+	for s := range a.imaps {
+		if len(s) > len(seq) && strings.HasPrefix(s, seq) {
+			longer = true
+			break
+		}
 	}
+	switch {
+	case exact && !longer:
+		a.iheld, a.ikeys = nil, nil
+		fn(0)
+	case longer:
+		a.pendSeq++
+		seqID := a.pendSeq
+		time.AfterFunc(timeoutLen, func() { _ = a.s.PostEvent(evKeyTimeout{seqID}) })
+	default:
+		a.flushInsert(false)
+	}
+	return true
+}
+
+// flushInsert ends a wait for an Insert map: a whole map runs, after a
+// timeout, else the held keys go in as typed.
+func (a *App) flushInsert(timeout bool) {
+	held, seq := a.iheld, strings.Join(a.ikeys, "")
+	a.iheld, a.ikeys = nil, nil
+	if fn, ok := a.imaps[seq]; ok && timeout {
+		fn(0)
+		return
+	}
+	a.iflush = true
+	for _, ev := range held {
+		a.key(ev)
+	}
+	a.iflush = false
 }
 
 // feed types a map's keys. A map that is not remap reaches only the default
@@ -203,6 +314,10 @@ func (a *App) setHighlight(group string, opts *lua.LTable) error {
 	if !ok {
 		return fmt.Errorf("no highlight group %q", group)
 	}
+	// NO_COLOR asks for no colors, from any config.
+	if th.NoColor {
+		return nil
+	}
 	out := tcell.StyleDefault
 	for _, key := range []string{"fg", "bg"} {
 		v, ok := opts.RawGetString(key).(lua.LString)
@@ -232,6 +347,13 @@ func (a *App) setHighlight(group string, opts *lua.LTable) error {
 func parseKeys(s, leader string) []string {
 	var out []string
 	for len(s) > 0 {
+		if strings.HasPrefix(s, "<Plug>(") {
+			if end := strings.IndexByte(s, ')'); end > 0 {
+				out = append(out, s[:end+1])
+				s = s[end+1:]
+				continue
+			}
+		}
 		if s[0] == '<' {
 			if end := strings.IndexByte(s, '>'); end > 1 {
 				if k, ok := keyNotation(s[1:end], leader); ok {

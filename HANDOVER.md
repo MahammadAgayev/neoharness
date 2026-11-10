@@ -1,12 +1,12 @@
 # neoharness — handover
 
 Date: 2026-11-10. State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 187 tests). Section 11.3 items 18 to 41
+vet ./...`, `go test -race ./...`: 189 tests). Section 11.3 items 18 to 41
 are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
 Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
-Items 49 (init.lua) and 50 are in the commit after it.
+Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in the commit after it.
 
 ## 1. What neoharness is
 
@@ -569,7 +569,9 @@ with `/model` and `/effort`.
 
 Keymaps and colors: `$NEOHARNESS_HOME/init.lua` (default
 `~/.neoharness/init.lua`), read when the TUI starts, with a small part of
-Neovim's Lua API (item 49 in section 11.3):
+Neovim's Lua API (items 49 and 51 in section 11.3). It runs after the
+built-in `internal/tui/defaults.lua`, which lists every default map and
+color; copy a line from it and edit it:
 
 ```lua
 vim.g.mapleader = ","                               -- default <Space>
@@ -702,7 +704,7 @@ Pitfalls seen in this work:
 11. **Artifacts**: an agent's update sends the whole document (no partial
     edit); no delete or rename; a name that is one plain word (`plan`) is a
     link only in code (backticks), not in prose.
-12. Not built yet: Insert-mode maps, a picker for "allow always"
+12. Not built yet: a picker for "allow always"
     rules, other agent backends (the agent interface is ready for them), more
     than one folder per workspace (Claude has `--add-dir`).
 13. The threads list has no fuzzy search; use `/` in it, or `<leader><leader>`.
@@ -1035,6 +1037,24 @@ Not committed:
     (`i*i … 3*10` had lost its `*`, read as italics). Claude refuses a
     foreground `sleep`, even through Python; use real work to test a long
     turn.
+51. **defaults.lua** (user's request, 2026-11-10: "write up my example
+    defaults.lua, it also exposes all default configs, and use it"), as
+    Neovim's `_defaults.lua`. `internal/tui/defaults.lua` is embedded and
+    runs in `newApp` (so tests use it too); `init.lua` runs after it in
+    `Run`. It holds what is neoharness's choice, not Vim's: the leader,
+    every `<leader>` map, `<Tab>`/`<S-Tab>`, `<C-h/j/k/l>`, and every theme
+    color. Its maps run ex commands (`:threads<CR>`) or
+    `<Plug>(neoharness-grep|yank|dismiss|coordinator)`, the Go actions with
+    no ex command. Go keeps Vim's keys (`builtin`), plus `<C-w>W`.
+    `buildMaps` makes the bindings after each config: `builtin`, then
+    defaults.lua's maps with the leader init.lua set (so a new leader moves
+    them), then the user's maps with the leader at the time of the map.
+    nnoremap reaches `builtin` and defaults.lua (`baseBinds`). Under
+    `NO_COLOR` no config sets a color. Insert maps (`"i"`, as
+    `vim.keymap.set("i", "jk", "<Esc>")`) wait for the next key up to
+    `timeoutLen`, as Neovim's timeoutlen: whole, the map runs; else the
+    held keys go in as typed (`insertMap`, `flushInsert`). A held key
+    does not show until then.
 
 
 Things found on the user's machine:

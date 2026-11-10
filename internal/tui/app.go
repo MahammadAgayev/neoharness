@@ -118,21 +118,35 @@ type App struct {
 
 	mode  mode
 	binds map[string]func(int)
-	// baseBinds are the default bindings, which a map that is not remap
-	// reaches; noremap counts such maps that run now. lua is init.lua's
-	// state, which its maps call.
-	baseBinds map[string]func(int)
-	noremap   int
-	lua       *lua.LState
-	pending   []string
-	pendSeq   int
-	count     int
-	cmd       *cmdline
-	picker    *picker
-	menu      *menu
-	toasts    []*toast
-	menuShut  int // the word whose menu <Esc> closed, or -1
-	ctrlX     bool
+	// builtin are the Go bindings: Vim's keys and the <Plug> actions.
+	// baseBinds add defaults.lua's maps; a map that is not remap reaches
+	// only those, and noremap counts such maps that run now. lua is the
+	// configs' state, which their maps call.
+	builtin     map[string]func(int)
+	baseBinds   map[string]func(int)
+	noremap     int
+	lua         *lua.LState
+	defaultMaps []mapOp
+	userMaps    []mapOp
+	cfgName     string
+	cfgDefaults bool
+	cfgLoading  bool
+	cfgCmds     []string
+	// imaps are the Insert maps; iheld and ikeys are the keys that wait for
+	// one, iflush is set while they go in as typed.
+	imaps    map[string]func(int)
+	iheld    []*tcell.EventKey
+	ikeys    []string
+	iflush   bool
+	pending  []string
+	pendSeq  int
+	count    int
+	cmd      *cmdline
+	picker   *picker
+	menu     *menu
+	toasts   []*toast
+	menuShut int // the word whose menu <Esc> closed, or -1
+	ctrlX    bool
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key
@@ -224,7 +238,8 @@ func newApp(s tcell.Screen, c Client) *App {
 	a.bufs[a.workspacesBuf.Name] = a.workspacesBuf
 	a.bufs[a.messagesBuf.Name] = a.messagesBuf
 	a.cmd = &cmdline{}
-	a.binds = a.normalBindings()
+	a.builtin = a.normalBindings()
+	a.runConfig(defaultsLua, "defaults.lua", true)
 	a.loadWorkspaces()
 	a.showWorkspaces()
 	return a
@@ -274,7 +289,9 @@ func (a *App) handle(ev tcell.Event) {
 		a.ticking = false
 		a.spin++
 	case evKeyTimeout:
-		if ev.seq == a.pendSeq && len(a.pending) > 0 {
+		if ev.seq == a.pendSeq && len(a.ikeys) > 0 {
+			a.flushInsert(true)
+		} else if ev.seq == a.pendSeq && len(a.pending) > 0 {
 			a.flushPending()
 		}
 	case evComplete:

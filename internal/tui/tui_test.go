@@ -2155,6 +2155,46 @@ func TestBracketObjectsOverLines(t *testing.T) {
 	}
 }
 
+func TestInsertMaps(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.a.runConfig(`vim.keymap.set("i", "jk", "<Esc>")`, "init.lua", false)
+	h.press("i", "hi", "j", "k")
+	if h.a.mode != modeNormal || h.prompt() != "hi" {
+		t.Fatalf("jk should leave Insert without typing: mode %v, prompt %q", h.a.mode, h.prompt())
+	}
+	h.press("i", "j", "x")
+	if h.a.mode != modeInsert || h.prompt() != "hijx" {
+		t.Fatalf("j then x should go in as typed: mode %v, prompt %q", h.a.mode, h.prompt())
+	}
+	h.press("j")
+	h.a.handle(evKeyTimeout{h.a.pendSeq})
+	if h.prompt() != "hijxj" {
+		t.Fatalf("a lone j should go in after the timeout, prompt %q", h.prompt())
+	}
+}
+
+func TestDefaultsLuaIsTheDefault(t *testing.T) {
+	h := start(t)
+	if h.a.notice != "" {
+		t.Fatalf("defaults.lua should load without a notice, got %q", h.a.notice)
+	}
+	for _, k := range []string{"<Space>t", "<Space>pc", "<Space>/", "<Tab>", "<C-h>"} {
+		if h.a.binds[k] == nil {
+			t.Errorf("defaults.lua should map %s", k)
+		}
+	}
+	if fg, _, _ := h.a.th.Iris.Decompose(); fg != rpIris {
+		t.Fatal("defaults.lua's colors should be the theme's")
+	}
+	h.openDemo()
+	first := h.a.cur
+	h.press("<Tab>")
+	if h.a.cur == first {
+		t.Fatal("<Tab> from defaults.lua should go to the next window")
+	}
+}
+
 func TestInitLuaMapsAndColors(t *testing.T) {
 	h := start(t)
 	h.openDemo()
@@ -2167,8 +2207,8 @@ vim.keymap.set("n", "Q", "<leader>t", { remap = true })
 vim.keymap.set("n", "R", "<leader>t")
 vim.keymap.del("n", "<C-d>")
 vim.api.nvim_set_hl(0, "Iris", { fg = "#ff0000", bold = true })
-vim.keymap.set("i", "jk", "<Esc>")
-`, "init.lua")
+vim.keymap.set("c", "jk", "<Esc>")
+`, "init.lua", false)
 	if _, ok := h.a.binds[",w"]; !ok {
 		t.Fatal("the default <leader> maps should move to the new leader")
 	}
@@ -2181,8 +2221,8 @@ vim.keymap.set("i", "jk", "<Esc>")
 	if fg, _, attrs := h.a.th.Iris.Decompose(); fg != tcell.GetColor("#ff0000") || attrs&tcell.AttrBold == 0 {
 		t.Fatal("nvim_set_hl should set the theme color")
 	}
-	if !strings.Contains(h.a.notice, "only Normal mode maps") {
-		t.Fatalf("an Insert map should give a notice, got %q", h.a.notice)
+	if !strings.Contains(h.a.notice, "only Normal, Visual and Insert maps") {
+		t.Fatalf("a Command-line map should give a notice, got %q", h.a.notice)
 	}
 	coord := h.a.cur
 	h.press(",", "t")
@@ -2209,7 +2249,7 @@ vim.keymap.set("i", "jk", "<Esc>")
 	}
 
 	h2 := start(t)
-	h2.a.runConfig("vim.keymap.set(", "init.lua")
+	h2.a.runConfig("vim.keymap.set(", "init.lua", false)
 	if !strings.Contains(h2.a.notice, "init.lua") {
 		t.Fatalf("a Lua error should give a notice, got %q", h2.a.notice)
 	}
