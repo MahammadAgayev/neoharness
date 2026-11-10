@@ -7,7 +7,7 @@ Items 42 to 45 (the single-buffer artifact view, artifacts in the window,
 reference links, exact columns) are in commit `557e7b1`, item 46 in the
 commit after it, item 47 (diff mode) in the next, item 48 in `4149998`.
 Items 49 (init.lua) and 50 are in `02f8a2b`, item 51 in `3ec7a9b`, item
-52 to 64 in the thirteen commits after it.
+52 to 64 in the fourteen commits after it.
 
 ## 1. What neoharness is
 
@@ -1161,7 +1161,7 @@ Not committed:
     `visualOp`, the core of `editVisual` that the artifact source uses
     too. The prompt draws the selection (`drawCells`). A selection stays
     in the prompt: `k` on its top row and keys like `gg` do not leave it.
-    `vip` in the prompt still picks a transcript paragraph.
+    `vip` takes the prompt's paragraph (`selectObject` reads `a.rows`).
 
 
 Things found on the user's machine:

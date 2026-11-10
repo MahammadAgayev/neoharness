@@ -656,7 +656,7 @@ func (a *App) selectObject(ia, k string) {
 	var from, to int
 	ok := true
 	if k == "p" {
-		lines := w.Buf.Lines(a.textWidth(w), a.th, a.spin)
+		lines := a.rows(w)
 		blank := func(i int) bool { return strings.TrimSpace(lines[i].Text()) == "" }
 		if len(lines) == 0 {
 			return

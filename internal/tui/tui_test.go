@@ -2302,6 +2302,10 @@ func TestVisualModeInThePrompt(t *testing.T) {
 	if h.prompt() != " small world\n small world" {
 		t.Fatalf("p after V y: prompt %q", h.prompt())
 	}
+	h.press("o", "<Esc>", "o", "last", "<Esc>", "v", "i", "p", "d")
+	if h.prompt() != " small world\n small world\n" {
+		t.Fatalf("vip d should take the prompt's paragraph; prompt %q", h.prompt())
+	}
 }
 
 func TestPromptMotionsFollowItsWrappedRows(t *testing.T) {
