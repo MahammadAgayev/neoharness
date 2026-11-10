@@ -448,7 +448,7 @@ chroma (code colors, style `rose-pine-moon`).
   it (no folder: the same picker as `:new`). The coordinator moves there and
   keeps its conversation. Open threads stay where they are; new ones open in
   the new folder.
-- **Delete a workspace**: `<C-d>` on a workspace in the workspaces picker,
+- **Delete a workspace**: `x` on it in the workspaces screen, or `<C-d>` in the workspaces picker,
   then `y`. Soft delete: it stops its turns, hides it, and sets
   `"deleted": true` in `workspace.json`. Data stays. To restore, set it back
   to `false` and restart.

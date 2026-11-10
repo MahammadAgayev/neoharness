@@ -16,8 +16,8 @@
   folder up to 6 levels below it. Dot folders, `Library` and `node_modules`
   are skipped.
 - `<Tab>` completes folder paths in `:new`, `:folder` and `:open`.
-- To delete a workspace, press `<C-d>` on it in the workspaces picker, then
-  `y`. This stops its turns and hides it. The data stays on disk, so
+- To delete a workspace, press `x` on it in the workspaces screen, or
+  `<C-d>` on it in the workspaces picker, then `y`. This stops its turns and hides it. The data stays on disk, so
   `:restore` brings it back.
 
 ## Threads

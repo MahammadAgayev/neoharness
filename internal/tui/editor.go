@@ -1114,6 +1114,12 @@ func (a *App) editNormal(k string, n int) {
 		return
 	}
 	if e == nil {
+		if k == "x" && w.Buf.Kind == KindWorkspaces {
+			if item := a.line(w).Item; item != "" {
+				a.askDeleteWorkspace(item)
+			}
+			return
+		}
 		if k[0] == 'y' {
 			a.yankMotion(k[1:], n)
 		}

@@ -574,6 +574,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<CR>", "open the workspace, or switch to the thread"),
 		row("<C-v>  <C-x>", "thread in a split on the right / above (pickers, threads list)"),
 		row("<C-d>", "delete the thread or workspace, after y (pickers)"),
+		row("x", "delete the workspace, after y (workspaces screen)"),
 		{},
 		sec("leader  <Space>"),
 		row("<leader><leader>  <leader>pb", "pick a buffer"),

@@ -955,6 +955,25 @@ func TestChangeFolderAndDeleteWorkspace(t *testing.T) {
 	h.see("demo deleted · :restore demo brings it back")
 }
 
+func TestXDeletesWorkspaceOnScreen(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("<Space>pv", "gg", "x")
+	if h.a.notice != "" {
+		t.Fatalf("x on a header row asked %q", h.a.notice)
+	}
+	h.press("G", "x")
+	h.see("delete the workspace demo and stop its threads? y/n")
+	h.press("n")
+	if len(h.hub.gone) != 0 {
+		t.Fatalf("n should keep the workspace; gone = %q", h.hub.gone)
+	}
+	h.press("x", "y")
+	if strings.Join(h.hub.gone, " ") != "demo" {
+		t.Fatalf("gone = %q", h.hub.gone)
+	}
+}
+
 func TestRestoreWorkspace(t *testing.T) {
 	h := start(t)
 	h.press(":restore", "<CR>")
