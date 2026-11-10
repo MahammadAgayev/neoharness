@@ -3,6 +3,7 @@ package claude
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -285,11 +286,9 @@ func TestArgsAppendsRatherThanReplacesTheSystemPrompt(t *testing.T) {
 // it must never skip permission checks. Prompts go to the MCP tool instead.
 func TestHubTurnsKeepPermissionChecks(t *testing.T) {
 	got := strings.Join(New().args(agent.Request{
-		Prompt:               "hi",
-		Conversation:         "11111111-1111-4111-8111-111111111111",
-		MCPConfig:            `{"mcpServers":{}}`,
-		PermissionPromptTool: "mcp__neoharness__permission_prompt",
-		PermissionMode:       "auto",
+		Prompt:       "hi",
+		Conversation: "11111111-1111-4111-8111-111111111111",
+		Harness:      agent.Harness{URL: "http://127.0.0.1:4242/mcp", Token: "tok"},
 	}), " ")
 	if strings.Contains(got, "bypassPermissions") {
 		t.Errorf("args = %q, want permission checks kept", got)
@@ -298,7 +297,7 @@ func TestHubTurnsKeepPermissionChecks(t *testing.T) {
 		"--session-id 11111111-1111-4111-8111-111111111111",
 		"--permission-prompt-tool mcp__neoharness__permission_prompt",
 		"--permission-mode auto",
-		`--mcp-config {"mcpServers":{}}`,
+		`--mcp-config {"mcpServers":{"neoharness":{"headers":{"Authorization":"Bearer tok"},"type":"http","url":"http://127.0.0.1:4242/mcp"}}}`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("args missing %q, got %q", want, got)
@@ -327,6 +326,20 @@ esac
 	}
 	if res.ExitCode != 0 || res.Text != "resumed" {
 		t.Fatalf("result = %+v, want the turn continued with --resume", res)
+	}
+}
+
+func TestUnknownConversationIsLost(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "claude")
+	body := "#!/bin/sh\necho 'No conversation found with session ID: abc' >&2; exit 1\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, resume := range []bool{true, false} {
+		res, err := New(script).Run(context.Background(), agent.Request{Prompt: "hi", Conversation: "abc", Resume: resume})
+		if err != nil || res.Lost != resume {
+			t.Fatalf("resume %v: lost = %v, err = %v", resume, res.Lost, err)
+		}
 	}
 }
 
@@ -397,5 +410,42 @@ func TestModelAndEffortFlags(t *testing.T) {
 	args := strings.Join(New().args(agent.Request{Prompt: "hi", Model: "sonnet", Effort: "high"}), " ")
 	if !strings.Contains(args, "--model sonnet") || !strings.Contains(args, "--effort high") || !strings.HasSuffix(args, "-p hi") {
 		t.Fatalf("args = %s", args)
+	}
+}
+
+func TestFailedToolResultIsReported(t *testing.T) {
+	_, got := feed(t, []string{
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"git push --force"}}]}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"Permission to use Bash was denied.\nmore"}]}}`,
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu2","name":"Read","input":{"file_path":"a"}}]}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu2","content":[{"type":"text","text":"ok"}]}]}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu3","is_error":true,"content":[{"type":"text","text":"no such file"}]}]}}`,
+	})
+	if len(got) != 4 || got[0].ID != "tu1" {
+		t.Fatalf("events = %+v", got)
+	}
+	if f := got[1]; f.Kind != agent.KindToolFailed || f.ID != "tu1" || f.Text != "Permission to use Bash was denied." {
+		t.Fatalf("a denied call = %+v", f)
+	}
+	if f := got[3]; f.Kind != agent.KindToolFailed || f.Text != "no such file" {
+		t.Fatalf("a failed call with text blocks = %+v", f)
+	}
+}
+
+func TestPermissionPromptsInTheHubsTerms(t *testing.T) {
+	for _, c := range []struct {
+		tool, input string
+		want        agent.Permission
+	}{
+		{"Bash", `{"command":"go  test ./..."}`, agent.Permission{Tool: "Bash", Detail: "go test ./...", Prefix: "go"}},
+		{"Bash", `{"command":"go test ./... && rm -rf /"}`, agent.Permission{Tool: "Bash", Detail: "go test ./... && rm -rf /", Prefix: "go", Compound: true}},
+		{"Write", `{"file_path":"x"}`, agent.Permission{Tool: "Write", Detail: "x"}},
+	} {
+		if got := Ask(c.tool, json.RawMessage(c.input)); got != c.want {
+			t.Errorf("Ask(%s, %s) = %+v, want %+v", c.tool, c.input, got, c.want)
+		}
+	}
+	if !HarnessTool("mcp__neoharness__whoami") || HarnessTool("mcp__slack__read") {
+		t.Error("only the neoharness tools skip the person")
 	}
 }

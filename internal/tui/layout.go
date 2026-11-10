@@ -34,7 +34,8 @@ func (w *Window) show(b *Buffer) {
 	w.Alt = w.Buf
 	w.Buf = b
 	w.Top, w.Cur, w.Col = 0, 0, 0
-	w.Follow = true
+	// A chat follows its end; help reads from the top.
+	w.Follow = b.Kind != KindHelp
 	w.vmode = 0
 }
 

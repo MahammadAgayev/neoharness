@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -40,7 +41,8 @@ const (
 	bDoc
 )
 
-type toolCall struct{ tool, detail string }
+// toolCall is one tool call; failed holds why it failed or was denied.
+type toolCall struct{ tool, detail, id, failed string }
 
 // block is one logical piece of a transcript. It renders itself to lines and
 // caches them per width, so appending to a long transcript only renders the
@@ -77,6 +79,11 @@ type Buffer struct {
 	Prompt    *Prompt
 	// Edit is the artifact's source while the person edits it.
 	Edit *Editor
+	// Held is an unsaved edit while the document shows, with the edit in it.
+	Held *Editor
+	// marks are m's places, a line and a column; ' is the place before the
+	// last jump.
+	marks map[rune][2]int
 
 	blocks []*block
 	lines  []Line
@@ -113,6 +120,23 @@ func (b *Buffer) SetDoc(a model.Artifact, text string) {
 	b.dirty = true
 }
 
+// headingLevel is the level of a markdown heading line, 0 if it is not one.
+func headingLevel(s string) int {
+	n := len(s) - len(strings.TrimLeft(s, "#"))
+	if n < 1 || n > 6 || len(s) > n && s[n] != ' ' && s[n] != '\t' {
+		return 0
+	}
+	return n
+}
+
+// edit is the person's edit, shown or held, or nil.
+func (b *Buffer) edit() *Editor {
+	if b.Edit != nil {
+		return b.Edit
+	}
+	return b.Held
+}
+
 // SetLines replaces the buffer's content with fixed lines.
 func (b *Buffer) SetLines(lines []Line) {
 	b.blocks = []*block{{kind: bRaw, raw: lines}}
@@ -136,7 +160,13 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 		if i > 0 && bl.kind != bRaw && !b.joins(i) {
 			out = append(out, Line{Block: i})
 		}
-		for _, l := range bl.render(w, th, spin) {
+		var rendered []Line
+		if bl.kind == bDoc && b.Held != nil {
+			rendered = renderDocument(bl.art, b.Held.Text(), w, th)
+		} else {
+			rendered = bl.render(w, th, spin)
+		}
+		for _, l := range rendered {
 			l.Block = i
 			out = append(out, l)
 		}
@@ -221,8 +251,12 @@ func (b *Buffer) AddEvent(e model.Event) {
 		b.endLive()
 		b.push(&block{kind: bText, text: e.Text})
 	case model.EventTool:
+		if e.Exit != 0 {
+			b.failTool(e.ID, e.Text)
+			return
+		}
 		if l := b.last(); l != nil && l.kind == bTools && l.live {
-			l.tools = append(l.tools, toolCall{e.Tool, e.Detail})
+			l.tools = append(l.tools, toolCall{tool: e.Tool, detail: e.Detail, id: e.ID})
 			l.cache = nil
 			b.dirty = true
 			return
@@ -234,7 +268,7 @@ func (b *Buffer) AddEvent(e model.Event) {
 				bl.live, bl.cache = false, nil
 			}
 		}
-		b.push(&block{kind: bTools, live: true, tools: []toolCall{{e.Tool, e.Detail}}})
+		b.push(&block{kind: bTools, live: true, tools: []toolCall{{tool: e.Tool, detail: e.Detail, id: e.ID}}})
 	case model.EventTurnEnd:
 		// A question or permission card after the tool calls is the last
 		// block, so ending only the last one left the tools spinning.
@@ -306,6 +340,9 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 		label := Line{Prefix: bar, Spans: []Span{{"from " + bl.from, th.Rose.Italic(true)}}}
 		return append([]Line{label}, renderMarkdown(bl.text, w, th, bar)...)
 	case bText:
+		if lines, ok := renderJSON(bl.text, w, th, pad); ok {
+			return lines
+		}
 		return renderMarkdown(bl.text, w, th, pad)
 	case bTools:
 		return bl.renderTools(w, th, spin)
@@ -395,6 +432,21 @@ func (bl *block) renderShell(w int, th *Theme, spin int) []Line {
 	return lines
 }
 
+// failTool marks the tool call with this ID as failed, newest first.
+func (b *Buffer) failTool(id, why string) {
+	for i := len(b.blocks) - 1; i >= 0 && id != ""; i-- {
+		bl := b.blocks[i]
+		for k := range bl.tools {
+			if bl.tools[k].id == id {
+				bl.tools[k].failed = cmp.Or(why, "failed")
+				bl.cache = nil
+				b.dirty = true
+				return
+			}
+		}
+	}
+}
+
 func (bl *block) renderTools(w int, th *Theme, spin int) []Line {
 	n := len(bl.tools)
 	last := bl.tools[n-1]
@@ -402,32 +454,54 @@ func (bl *block) renderTools(w int, th *Theme, spin int) []Line {
 	if n == 1 {
 		count = "1 tool call"
 	}
+	failed := 0
+	for _, t := range bl.tools {
+		if t.failed != "" {
+			failed++
+		}
+	}
+	var mark []Span
+	if failed > 0 {
+		mark = []Span{{fmt.Sprintf(" · %d failed", failed), th.Love}}
+	}
 	var head Line
 	switch {
 	case bl.live:
 		head = Line{Prefix: []Span{{"  " + spinner[spin%len(spinner)] + " ", th.Foam}}, Spans: []Span{
 			{shortTool(last.tool), th.Subtle},
-			{"  " + truncate(last.detail, max(w-30, 10)), th.Muted},
+			{"  " + truncate(shortTools(last.detail), max(w-30, 10)), th.Muted},
 			{"  · " + count, th.Muted},
 		}}
 	case bl.open:
-		head = Line{Prefix: []Span{{"  ▾ ", th.Muted}}, Spans: []Span{{count, th.Muted}}}
+		head = Line{Prefix: []Span{{"  ▾ ", th.Muted}}, Spans: append([]Span{{count, th.Muted}}, mark...)}
 	default:
-		head = Line{Prefix: []Span{{"  ▸ ", th.Muted}}, Spans: []Span{{count, th.Muted}}}
+		head = Line{Prefix: []Span{{"  ▸ ", th.Muted}}, Spans: append([]Span{{count, th.Muted}}, mark...)}
 	}
 	lines := []Line{head}
 	if bl.open {
 		for _, t := range bl.tools {
 			lines = append(lines, Line{Prefix: []Span{{"      ", th.Text}}, Spans: []Span{
 				{shortTool(t.tool), th.Subtle},
-				{"  " + truncate(t.detail, max(w-24, 10)), th.Muted},
+				{"  " + truncate(shortTools(t.detail), max(w-24, 10)), th.Muted},
 			}})
+			if t.failed != "" {
+				lines = append(lines, Line{Prefix: []Span{{"        ✗ ", th.Love}}, Spans: []Span{
+					{truncate(t.failed, max(w-12, 10)), th.Love},
+				}})
+			}
 		}
 	}
 	return lines
 }
 
 // shortTool shows an MCP tool as server·tool instead of mcp__server__tool.
+// mcpName is an MCP tool's full name inside a text.
+var mcpName = regexp.MustCompile(`mcp__([A-Za-z0-9_-]+?)__([A-Za-z0-9_-]+)`)
+
+// shortTools writes the MCP tool names in a tool call's detail as
+// shortTool does: ToolSearch's select:mcp__neoharness__x.
+func shortTools(s string) string { return mcpName.ReplaceAllString(s, "$1·$2") }
+
 func shortTool(name string) string {
 	if rest, ok := strings.CutPrefix(name, "mcp__"); ok {
 		if server, tool, ok := strings.Cut(rest, "__"); ok {

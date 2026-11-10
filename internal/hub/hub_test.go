@@ -2,7 +2,6 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"slices"
@@ -25,6 +24,8 @@ type fake struct {
 }
 
 func (f *fake) Name() string { return "fake" }
+
+func (f *fake) Efforts() []string { return []string{"low", "high"} }
 
 func (f *fake) Run(ctx context.Context, req agent.Request) (agent.Result, error) {
 	f.mu.Lock()
@@ -147,7 +148,7 @@ func TestTurnLifecycleAndResume(t *testing.T) {
 	if reqs[0].Resume || !reqs[1].Resume || reqs[0].Conversation != reqs[1].Conversation {
 		t.Errorf("first turn must create the session and the second resume it: %+v / %+v", reqs[0], reqs[1])
 	}
-	if reqs[0].PermissionPromptTool != PermissionTool || !strings.Contains(reqs[0].MCPConfig, "127.0.0.1:4242") {
+	if reqs[0].Harness.URL != "http://127.0.0.1:4242/mcp" || reqs[0].Harness.Token == "" {
 		t.Errorf("turn not wired to the MCP server: %+v", reqs[0])
 	}
 	if !strings.Contains(reqs[0].SystemPrompt, "coordinator") {
@@ -191,8 +192,8 @@ func TestMessagesQueueWhileBusyAndBatch(t *testing.T) {
 	if len(reqs) != 2 {
 		t.Fatalf("%d turns, want 2 (queued messages go in one turn)", len(reqs))
 	}
-	if reqs[0].PermissionMode != "auto" {
-		t.Errorf("permission mode = %q, want auto on every turn", reqs[0].PermissionMode)
+	if reqs[0].Harness.URL == "" {
+		t.Errorf("every turn reaches the harness: %+v", reqs[0])
 	}
 	if !strings.HasPrefix(reqs[0].Prompt, "Message from coordinator:\nwrite tests") {
 		t.Errorf("first prompt = %q", reqs[0].Prompt)
@@ -234,9 +235,12 @@ func TestPermissionWaitsForTheUser(t *testing.T) {
 	f := &fake{}
 	h := newHub(t, f)
 	f.script = func(ctx context.Context, req agent.Request) agent.Result {
-		for _, cmd := range []string{"go test ./...", "go vet ./...", "go test ./... && rm -rf /"} {
-			in, _ := json.Marshal(map[string]string{"command": cmd})
-			ok, msg := h.Permission(ctx, "demo", model.Coordinator, "Bash", in)
+		for _, q := range []agent.Permission{
+			{Tool: "Bash", Detail: "go test ./...", Prefix: "go"},
+			{Tool: "Bash", Detail: "go vet ./...", Prefix: "go"},
+			{Tool: "Bash", Detail: "go test ./... && rm -rf /", Prefix: "go", Compound: true},
+		} {
+			ok, msg := h.Permission(ctx, "demo", model.Coordinator, q)
 			results <- outcome{ok, msg}
 		}
 		return agent.Result{Text: "ok"}
@@ -276,7 +280,7 @@ func TestPendingPermissionIsDeniedWhenTheTurnEnds(t *testing.T) {
 	done := make(chan bool)
 	f.script = func(ctx context.Context, req agent.Request) agent.Result {
 		go func() {
-			ok, _ := h.Permission(context.Background(), "demo", model.Coordinator, "Write", json.RawMessage(`{"file_path":"x"}`))
+			ok, _ := h.Permission(context.Background(), "demo", model.Coordinator, agent.Permission{Tool: "Write", Detail: "x"})
 			done <- ok
 		}()
 		eventually(t, "permission to be pending", func() bool { return view(t, h, "demo", model.Coordinator).Permission != nil })
@@ -438,18 +442,6 @@ func TestSubscribersSeeUpdates(t *testing.T) {
 		case <-timeout:
 			t.Fatal("no updates")
 		}
-	}
-}
-
-func TestHarnessToolsNeverAsk(t *testing.T) {
-	h := newHub(t, &fake{})
-	pinned(t, h, "demo")
-	ok, _ := h.Permission(context.Background(), "demo", model.Coordinator, "mcp__neoharness__whoami", json.RawMessage(`{}`))
-	if !ok {
-		t.Fatal("the hub's own tools must be allowed without asking")
-	}
-	if v := view(t, h, "demo", model.Coordinator); v.Permission != nil {
-		t.Fatal("no permission request should be left pending")
 	}
 }
 
@@ -1048,5 +1040,165 @@ func TestMerge3(t *testing.T) {
 		if ok != c.ok || got != c.want {
 			t.Errorf("merge3(%q, %q) = %q, %v; want %q, %v", c.mine, c.theirs, got, ok, c.want, c.ok)
 		}
+	}
+}
+
+func TestFailedToolCallIsRecordedOnItsID(t *testing.T) {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Tool: "Bash", Detail: "git push", ID: "tu1"})
+		req.OnEvent(agent.Event{Kind: agent.KindToolFailed, ID: "tu1", Text: "denied"})
+		return agent.Result{Text: "done", Tools: 1}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.Send("demo", model.User, model.Coordinator, "push"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	evs, _ := h.Events("demo", model.Coordinator, 0)
+	var tools []model.Event
+	for _, e := range evs {
+		if e.Kind == model.EventTool {
+			tools = append(tools, e)
+		}
+	}
+	if len(tools) != 2 || tools[0].ID != "tu1" || tools[1].ID != "tu1" || tools[1].Exit != 1 || tools[1].Text != "denied" {
+		t.Fatalf("tool events = %+v", tools)
+	}
+}
+
+func TestContextFollowsTheTurn(t *testing.T) {
+	gate, seen := make(chan struct{}), make(chan struct{})
+	f := &fake{}
+	turns := 0
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		turns++
+		// The first turn tells the window; only then does the context
+		// follow a turn.
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Tool: "Read", Tokens: 5000})
+		if turns == 1 {
+			return agent.Result{Text: "done", Context: 1000, ContextWindow: 200000}
+		}
+		seen <- struct{}{}
+		<-gate
+		return agent.Result{Text: "done", Context: 6000, ContextWindow: 200000}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.Send("demo", model.User, model.Coordinator, "go"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if err := h.Send("demo", model.User, model.Coordinator, "again"); err != nil {
+		t.Fatal(err)
+	}
+	<-seen
+	coordinator := func() model.ThreadView {
+		vs, _ := h.Threads("demo")
+		for _, v := range vs {
+			if v.Name == model.Coordinator {
+				return v
+			}
+		}
+		return model.ThreadView{}
+	}
+	if c := coordinator().Context; c != 5000 {
+		t.Fatalf("context during the turn = %d, want 5000", c)
+	}
+	gate <- struct{}{}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if c := coordinator().Context; c != 6000 {
+		t.Fatalf("context after the turn = %d, want 6000", c)
+	}
+}
+
+func TestRestoreWorkspaceBringsItsThreadsBack(t *testing.T) {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result { return agent.Result{Text: "ok"} }
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.Send("demo", model.User, model.Coordinator, "remember this"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if err := h.DeleteWorkspace("demo"); err != nil {
+		t.Fatal(err)
+	}
+	if names, _ := h.DeletedWorkspaces(); strings.Join(names, ",") != "demo" {
+		t.Fatalf("deleted = %q", names)
+	}
+	if err := h.RestoreWorkspace("nope"); err == nil {
+		t.Fatal("restoring a name that was never deleted should fail")
+	}
+	if err := h.RestoreWorkspace("demo"); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.Workspaces()) != 1 {
+		t.Fatal("the restored workspace should be listed")
+	}
+	evs, err := h.Events("demo", model.Coordinator, 0)
+	if err != nil || len(evs) == 0 || evs[0].Text != "remember this" {
+		t.Fatalf("the transcript should come back: %v %+v", err, evs)
+	}
+	if err := h.RestoreWorkspace("demo"); err == nil {
+		t.Fatal("restoring a live workspace should fail")
+	}
+	if names, _ := h.DeletedWorkspaces(); len(names) != 0 {
+		t.Fatalf("nothing is deleted now, got %q", names)
+	}
+}
+
+func TestALostConversationStartsANewOne(t *testing.T) {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if req.Resume {
+			return agent.Result{ExitCode: 1, Lost: true}
+		}
+		req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "ok"})
+		return agent.Result{Text: "ok"}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	for _, msg := range []string{"first", "second"} {
+		if err := h.Send("demo", model.User, model.Coordinator, msg); err != nil {
+			t.Fatal(err)
+		}
+		stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	}
+	reqs := f.requests()
+	if len(reqs) != 3 {
+		t.Fatalf("requests = %d, want 3", len(reqs))
+	}
+	last := reqs[2]
+	if last.Resume || last.Conversation == reqs[0].Conversation || !strings.Contains(last.Prompt, "second") {
+		t.Fatalf("the message should go again in a new conversation: %+v", last)
+	}
+}
+
+func TestRestoreSaysATurnWasStoppedByTheDelete(t *testing.T) {
+	seen := make(chan struct{}, 1)
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		seen <- struct{}{}
+		<-ctx.Done()
+		return agent.Result{ExitCode: -1}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.Send("demo", model.User, model.Coordinator, "go"); err != nil {
+		t.Fatal(err)
+	}
+	<-seen
+	if err := h.DeleteWorkspace("demo"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.RestoreWorkspace("demo"); err != nil {
+		t.Fatal(err)
+	}
+	evs, _ := h.Events("demo", model.Coordinator, 0)
+	last := evs[len(evs)-1]
+	if last.Kind != model.EventError || !strings.Contains(last.Text, "workspace was deleted") {
+		t.Fatalf("last event = %+v", last)
 	}
 }

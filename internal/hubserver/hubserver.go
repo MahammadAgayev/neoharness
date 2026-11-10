@@ -38,6 +38,13 @@ func Handler(h *hub.Hub) http.Handler {
 	mux.HandleFunc("DELETE /workspaces/{p}", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, nil, h.DeleteWorkspace(r.PathValue("p")))
 	})
+	mux.HandleFunc("GET /deleted", func(w http.ResponseWriter, r *http.Request) {
+		names, err := h.DeletedWorkspaces()
+		reply(w, names, err)
+	})
+	mux.HandleFunc("POST /workspaces/{p}/restore", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, nil, h.RestoreWorkspace(r.PathValue("p")))
+	})
 	mux.HandleFunc("GET /workspaces/{p}/artifacts", func(w http.ResponseWriter, r *http.Request) {
 		as, err := h.Artifacts(r.PathValue("p"))
 		reply(w, as, err)

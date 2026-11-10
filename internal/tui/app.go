@@ -11,7 +11,10 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -29,6 +32,8 @@ type Client interface {
 	CreateWorkspace(name, pin string) error
 	SetFolder(name, pin string) error
 	DeleteWorkspace(name string) error
+	DeletedWorkspaces() ([]string, error)
+	RestoreWorkspace(name string) error
 	Threads(workspace string) ([]model.ThreadView, error)
 	Artifacts(workspace string) ([]model.Artifact, error)
 	Artifact(workspace, name string) (model.Artifact, string, error)
@@ -85,6 +90,8 @@ type App struct {
 	s  tcell.Screen
 	c  Client
 	th *Theme
+	// openURL runs the system opener on a URL; tests replace it.
+	openURL func(open, url string) error
 
 	root *node
 	cur  *Window
@@ -107,8 +114,11 @@ type App struct {
 	// threads list, and the threads opened from it.
 	pane         *Window
 	showResolved bool
-	messagesBuf  *Buffer
-	messages     []Line
+	// layouts are the windows of the workspaces left this session, so
+	// opening one again shows its splits as they were.
+	layouts     map[string]layout
+	messagesBuf *Buffer
+	messages    []Line
 
 	mode     mode
 	binds    map[string]func(int)
@@ -123,7 +133,15 @@ type App struct {
 	ctrlX    bool
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
-	replaceN  int
+	// finding is f F t T, after an operator if one came first: the next key
+	// is the rune to find. lastFind is the last one, for ; and ,.
+	finding, lastFind string
+	findN             int
+	// selecting is i or a typed in Visual: the next key is a text object.
+	selecting string
+	// marking is m, ' or `: the next key names the mark.
+	marking  string
+	replaceN int
 	// rec holds the keys of the change being typed in an artifact's source;
 	// lastChange the last finished one, for `.`.
 	rec        []*tcell.EventKey
@@ -131,6 +149,14 @@ type App struct {
 	lastChange []*tcell.EventKey
 	replaying  bool
 	noRepeat   bool
+	// macroKey is q or @ waiting for the register it names. recordInto is
+	// the register q is recording; macros holds each register's keys.
+	macroKey   string
+	macroN     int
+	recordInto rune
+	macros     map[rune][]*tcell.EventKey
+	lastMacro  rune
+	playing    int
 	// confirm runs on y; any other key drops it.
 	confirm  func()
 	comps    map[string]model.Completions
@@ -159,6 +185,13 @@ func Run(c Client, restart func() error) error {
 		return err
 	}
 	defer s.Fini()
+	// Grapheme cluster mode (2027): the terminal measures emoji and joined
+	// characters as one cluster, as uniseg does here, so columns line up. A
+	// terminal without it ignores the request. tcell does not send it.
+	if tty, ok := s.Tty(); ok {
+		_, _ = tty.Write([]byte("\x1b[?2027h"))
+		defer func() { _, _ = tty.Write([]byte("\x1b[?2027l")) }()
+	}
 	s.EnablePaste()
 	a := newApp(s, c)
 	a.restart = restart
@@ -174,6 +207,7 @@ func newApp(s tcell.Screen, c Client) *App {
 		s:        newCanvas(s),
 		c:        c,
 		th:       newTheme(),
+		openURL:  func(open, url string) error { return exec.Command(open, url).Start() },
 		bufs:     map[string]*Buffer{},
 		threads:  map[string]model.ThreadView{},
 		comps:    map[string]model.Completions{},
@@ -181,6 +215,7 @@ func newApp(s tcell.Screen, c Client) *App {
 	}
 	a.workspacesBuf = newBuffer("neoharness://workspaces", KindWorkspaces)
 	a.messagesBuf = newBuffer("neoharness://messages", KindMessages)
+	a.messagesBuf.SetLines([]Line{{Prefix: []Span{{" ", a.th.Text}}, Spans: []Span{{"no messages yet", a.th.Muted}}}})
 	a.bufs[a.workspacesBuf.Name] = a.workspacesBuf
 	a.bufs[a.messagesBuf.Name] = a.messagesBuf
 	a.cmd = &cmdline{}
@@ -370,7 +405,7 @@ func (a *App) apply(u model.Update) {
 		a.artifacts = append([]model.Artifact{*u.Artifact}, a.artifacts...)
 		if b, ok := a.bufs[artifactName(a.workspace, u.Artifact.Name)]; ok {
 			a.loadArtifact(b)
-			if b.Edit != nil && u.Artifact.Version != b.Edit.Base {
+			if e := b.edit(); e != nil && u.Artifact.Version != e.Base {
 				a.notify(fmt.Sprintf("%s wrote v%d while you edit · :w merges it", u.Artifact.Thread, u.Artifact.Version), a.th.Gold)
 			}
 		}
@@ -426,6 +461,7 @@ func (a *App) setFolder(dir string) {
 // workspaces screen if it was open.
 func (a *App) dropWorkspace(name string) {
 	a.workspaces = slices.DeleteFunc(a.workspaces, func(p model.WorkspaceView) bool { return p.Name == name })
+	delete(a.layouts, name)
 	a.renderWorkspaces()
 	if a.workspace == name {
 		a.workspace = ""
@@ -434,7 +470,29 @@ func (a *App) dropWorkspace(name string) {
 		a.threadsBuf = nil
 		a.showWorkspaces()
 	}
-	a.notify(name+" deleted", a.th.Muted)
+	a.notify(name+" deleted · :restore "+name+" brings it back", a.th.Muted)
+}
+
+// restoreWorkspace is :restore. Without a name it lists what can come back.
+func (a *App) restoreWorkspace(name string) {
+	if name == "" {
+		names, err := a.c.DeletedWorkspaces()
+		switch {
+		case err != nil:
+			a.notify(err.Error(), a.th.Love)
+		case len(names) == 0:
+			a.notify("no deleted workspaces", a.th.Muted)
+		default:
+			a.notify("deleted: "+strings.Join(names, ", ")+" · :restore <name>", a.th.Muted)
+		}
+		return
+	}
+	if err := a.c.RestoreWorkspace(name); err != nil {
+		a.notify(err.Error(), a.th.Love)
+		return
+	}
+	a.loadWorkspaces()
+	a.notify(name+" restored", a.th.Subtle)
 }
 
 // askDeleteWorkspace asks before hiding a workspace and stopping its turns.
@@ -499,10 +557,44 @@ func (a *App) chat(thread string) *Buffer {
 
 // --- screens ---
 
+// layout is a workspace's windows: the tree, the focus, the pane, and the
+// threads list the pane shows.
+type layout struct {
+	root      *node
+	cur, pane *Window
+	threads   *Buffer
+}
+
+// saveLayout keeps the open workspace's windows, below the popup if one is
+// open, before another screen takes their place.
+func (a *App) saveLayout() {
+	if a.workspace == "" || a.threadsBuf == nil {
+		return
+	}
+	root, cur := a.root, a.cur
+	if a.under != nil {
+		root, cur = a.under, a.back
+	}
+	if root == nil || cur == nil || cur.Buf == a.workspacesBuf {
+		return
+	}
+	if a.layouts == nil {
+		a.layouts = map[string]layout{}
+	}
+	a.layouts[a.workspace] = layout{root, cur, a.pane, a.threadsBuf}
+}
+
 func (a *App) showWorkspaces() {
+	a.saveLayout()
 	w := newWindow(a.workspacesBuf)
 	w.Follow = false
 	w.Cur = 4
+	// The cursor starts on the workspace you came from.
+	for i, l := range a.workspacesBuf.Lines(80, a.th, a.spin) {
+		if a.workspace != "" && l.Item == a.workspace {
+			w.Cur = i
+		}
+	}
 	a.under = nil
 	a.root = leaf(w, 1)
 	a.cur = w
@@ -514,7 +606,24 @@ func (a *App) openWorkspace(name string) {
 		a.notify("no workspace "+name, a.th.Love)
 		return
 	}
+	a.saveLayout()
 	a.workspace = name
+	if l, ok := a.layouts[name]; ok {
+		a.threadsBuf = l.threads
+		a.bufs[a.threadsBuf.Name] = a.threadsBuf
+		a.resync()
+		a.under, a.root, a.cur, a.pane = nil, l.root, l.cur, l.pane
+		for _, w := range a.root.windows() {
+			if _, known := a.threads[w.Buf.Thread]; w.Buf.Kind == KindChat && !known {
+				w.show(a.chat(model.Coordinator))
+			}
+		}
+		if !slices.Contains(a.root.windows(), a.cur) {
+			a.cur = a.root.windows()[0]
+		}
+		a.mode = modeNormal
+		return
+	}
 	a.threadsBuf = newBuffer("neoharness://"+name+"/threads", KindThreads)
 	a.bufs[a.threadsBuf.Name] = a.threadsBuf
 	a.resync()
@@ -647,10 +756,15 @@ type mention struct {
 	start, end int
 }
 
-// mentions finds the artifact names in s, as whole words.
-func (a *App) mentions(s string) []mention {
+// mentions finds the artifact names in s, as whole words. A name that is
+// one plain word (plan, notes) is a link only in code, where an agent quotes
+// it; in prose it is too often just the word.
+func (a *App) mentions(s string, code bool) []mention {
 	var out []mention
 	for _, art := range a.artifacts {
+		if !code && !strings.ContainsAny(art.Name, "-_0123456789") {
+			continue
+		}
 		for i := 0; ; {
 			j := strings.Index(s[i:], art.Name)
 			if j < 0 {
@@ -677,7 +791,7 @@ func (a *App) linkify(spans []Span) []Span {
 	var out []Span
 	for _, sp := range spans {
 		at := 0
-		for _, m := range a.mentions(sp.Text) {
+		for _, m := range a.mentions(sp.Text, sp.Style == a.th.Code) {
 			if m.start < at {
 				continue
 			}
@@ -693,7 +807,15 @@ func (a *App) linkify(spans []Span) []Span {
 // first one named in it.
 func (a *App) artifactAt(l Line, col int) string {
 	text := l.Text()
-	ms := a.mentions(text)
+	var ms []mention
+	at := 0
+	for _, sp := range l.Spans {
+		for _, m := range a.mentions(sp.Text, sp.Style == a.th.Code) {
+			m.start, m.end = m.start+at, m.end+at
+			ms = append(ms, m)
+		}
+		at += len(sp.Text)
+	}
 	if len(ms) == 0 {
 		return ""
 	}
@@ -704,6 +826,82 @@ func (a *App) artifactAt(l Line, col int) string {
 		}
 	}
 	return ms[0].name
+}
+
+// mdLink finds markdown links and bare URLs: [label](url), <url>, url.
+var mdLink = regexp.MustCompile(`\[([^\]]*)\]\(<?([^)\s>]+)>?[^)]*\)|<?(https?://[^\s>)\]]+)`)
+
+// linkAt is the URL of the link under the window's cursor, or "". The text
+// shows no URL, so it comes from the source line, matched by the link
+// style, which carries it.
+func (a *App) linkAt(w *Window) string {
+	l := a.line(w)
+	col := w.Col - l.prefixWidth()
+	var under Span
+	for _, sp := range l.Spans {
+		if col < width(sp.Text) {
+			under = sp
+			break
+		}
+		col -= width(sp.Text)
+	}
+	src := l.Text()
+	b := w.Buf
+	switch {
+	case b.Edit != nil:
+		src = string(b.Edit.Src[b.Edit.Line])
+	case l.Src > 0 && len(b.blocks) > 0 && b.blocks[0].kind == bDoc:
+		text := b.blocks[0].text
+		if b.Held != nil {
+			text = b.Held.Text()
+		}
+		// The block starts at Src and ends at a blank line.
+		lines := strings.Split(text, "\n")
+		end := l.Src
+		for end < len(lines) && strings.TrimSpace(lines[end]) != "" {
+			end++
+		}
+		src = strings.Join(lines[min(l.Src-1, len(lines)):end], "\n")
+	case l.Block < len(b.blocks) && b.blocks[l.Block].text != "":
+		src = b.blocks[l.Block].text
+	}
+	var urls, labels []string
+	for _, m := range mdLink.FindAllStringSubmatch(src, -1) {
+		if m[3] != "" {
+			m[1], m[2] = m[3], m[3]
+		}
+		if linkStyle(a.th, m[2]) == under.Style {
+			return m[2]
+		}
+		urls, labels = append(urls, m[2]), append(labels, m[1])
+	}
+	for i, label := range labels {
+		if t := strings.TrimSpace(under.Text); t != "" && strings.Contains(label, t) {
+			return urls[i]
+		}
+	}
+	if len(urls) == 1 {
+		return urls[0]
+	}
+	return ""
+}
+
+// openLink is gx: the link under the cursor opens in the browser.
+func (a *App) openLink() {
+	url := a.linkAt(a.cur)
+	if url == "" {
+		a.notify("no link under the cursor", a.th.Muted)
+		return
+	}
+	open := "xdg-open"
+	if runtime.GOOS == "darwin" {
+		open = "open"
+	}
+	if err := a.openURL(open, url); err != nil {
+		a.notify(err.Error(), a.th.Love)
+		return
+	}
+	a.notify("opened "+url, a.th.Subtle)
 }
 
 // loadArtifact reads an artifact's text into its buffer.
@@ -815,6 +1013,9 @@ func (a *App) renderThreads() {
 				info = "question"
 			}
 		}
+		if v.State == model.StateRunning && !v.Since.IsZero() {
+			info = strings.TrimSuffix(elapsed(time.Since(v.Since))+" · "+info, " · ")
+		}
 		if v.Queued > 0 {
 			info = fmt.Sprintf("+%d queued  %s", v.Queued, info)
 		}
@@ -823,7 +1024,7 @@ func (a *App) renderThreads() {
 			Spans: []Span{
 				{stateGlyph(v.State) + " ", th.state(v.State)},
 				{pad(n, nameW+2), nameSt},
-				{flatten(info), infoSt},
+				{plain(info), infoSt},
 			},
 			Item: n,
 		}

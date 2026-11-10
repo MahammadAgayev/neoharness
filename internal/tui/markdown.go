@@ -3,6 +3,7 @@ package tui
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -232,7 +233,7 @@ func (r *mdRenderer) block(n ast.Node, first, rest []Span) {
 }
 
 // table lines the cells up in columns. When the table is wider than the
-// window, the widest column shrinks first and its cells end in "…".
+// window, the widest column shrinks first and its cells wrap.
 func (r *mdRenderer) table(n ast.Node, first, rest []Span) {
 	var rows [][][]Span
 	var aligns []east.Alignment
@@ -273,44 +274,11 @@ func (r *mdRenderer) table(n ast.Node, first, rest []Span) {
 		}
 		widths[widest]--
 	}
-	if r.doc {
-		r.wrappedRows(rows, widths, aligns, first, rest)
-		return
-	}
-	for ri, cells := range rows {
-		var spans []Span
-		for i, w := range widths {
-			if i > 0 {
-				spans = append(spans, Span{" │ ", r.th.Muted})
-			}
-			var c []Span
-			if i < len(cells) {
-				c = fitSpans(cells[i], w)
-			}
-			gap := Span{strings.Repeat(" ", w-width(spansText(c))), r.th.Text}
-			switch {
-			case aligns[i] == east.AlignRight:
-				spans = append(append(spans, gap), c...)
-			case i == len(widths)-1:
-				spans = append(spans, c...)
-			default:
-				spans = append(append(spans, c...), gap)
-			}
-		}
-		r.out = append(r.out, Line{Prefix: first, Spans: spans})
-		first = rest
-		if ri == 0 {
-			rule := make([]string, len(widths))
-			for i, w := range widths {
-				rule[i] = strings.Repeat("─", w)
-			}
-			r.out = append(r.out, Line{Prefix: first, Spans: []Span{{strings.Join(rule, "─┼─"), r.th.Muted}}})
-		}
-	}
+	r.wrappedRows(rows, widths, aligns, first, rest)
 }
 
-// wrappedRows draws table rows with long cells wrapped onto more lines, so a
-// document shows every word.
+// wrappedRows draws table rows with long cells wrapped onto more lines, so
+// every word shows: a chat cannot scroll sideways.
 func (r *mdRenderer) wrappedRows(rows [][][]Span, widths []int, aligns []east.Alignment, first, rest []Span) {
 	for ri, cells := range rows {
 		cols := make([][]Line, len(widths))
@@ -361,25 +329,6 @@ func isTask(item ast.Node) bool {
 		return ok
 	}
 	return false
-}
-
-// fitSpans cuts spans to w cells, ending in "…" when it cuts.
-func fitSpans(spans []Span, w int) []Span {
-	if width(spansText(spans)) <= w {
-		return spans
-	}
-	var out []Span
-	left := w - 1
-	for _, sp := range spans {
-		head, _ := splitAt(sp.Text, left)
-		out = append(out, Span{head, sp.Style})
-		left -= width(head)
-		if left <= 0 || head != sp.Text {
-			out = append(out, Span{"…", sp.Style})
-			break
-		}
-	}
-	return out
 }
 
 func (r *mdRenderer) lines(n ast.Node) []string {
@@ -488,10 +437,7 @@ func (r *mdRenderer) inline(n ast.Node, base tcell.Style) []Span {
 			case *east.Strikethrough:
 				walk(c, st.StrikeThrough(true))
 			case *ast.Link:
-				walk(c, r.th.Foam.Underline(true))
-				if dest := string(c.Destination); r.doc && dest != "" && dest != spansText(r.inline(c, r.th.Text)) {
-					out = append(out, Span{" (" + dest + ")", r.th.Muted})
-				}
+				walk(c, linkStyle(r.th, string(c.Destination)))
 			case *east.TaskCheckBox:
 				if c.IsChecked {
 					out = append(out, Span{"☑ ", r.th.Pine})
@@ -499,14 +445,21 @@ func (r *mdRenderer) inline(n ast.Node, base tcell.Style) []Span {
 					out = append(out, Span{"☐ ", r.th.Muted})
 				}
 			case *ast.AutoLink:
-				out = append(out, Span{string(c.URL(r.src)), r.th.Foam.Underline(true)})
+				out = append(out, Span{string(c.URL(r.src)), linkStyle(r.th, string(c.URL(r.src)))})
 			case *ast.Image:
-				walk(c, r.th.Subtle)
+				out = append(out, Span{"image ", r.th.Muted})
+				walk(c, linkStyle(r.th, string(c.Destination)))
 			case *ast.RawHTML:
 				segs := c.Segments
 				for i := 0; i < segs.Len(); i++ {
-					seg := segs.At(i)
-					out = append(out, Span{string(seg.Value(r.src)), r.th.Subtle})
+					at := segs.At(i)
+					seg := string(at.Value(r.src))
+					// Agents break lines in table cells with <br>.
+					if lineBreak.MatchString(seg) {
+						out = append(out, Span{"\n", st})
+						continue
+					}
+					out = append(out, Span{seg, r.th.Subtle})
 				}
 			default:
 				walk(c, st)
@@ -515,6 +468,15 @@ func (r *mdRenderer) inline(n ast.Node, base tcell.Style) []Span {
 	}
 	walk(n, base)
 	return out
+}
+
+// lineBreak is an HTML line break: <br>, <br/>, <br />.
+var lineBreak = regexp.MustCompile(`(?i)^<br\s*/?>$`)
+
+// linkStyle is the style of a link's text. It carries the URL, so the
+// terminal opens it on a click and gx finds it.
+func linkStyle(th *Theme, url string) tcell.Style {
+	return th.Foam.Underline(true).Url(url)
 }
 
 // alert returns the kind of a GitHub alert quote, or "".

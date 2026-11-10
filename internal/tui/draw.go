@@ -52,6 +52,12 @@ func (a *App) draw() {
 			live = live || w.Buf.Live()
 		}
 		area = Rect{2, 1, W - 4, H - 3}
+		// The side margins are too narrow to show the layout, only cut
+		// pieces of it; they stay blank.
+		for y := area.Y; y < area.Y+area.H; y++ {
+			a.fill(0, y, area.X, a.th.Base)
+			a.fill(area.X+area.W, y, W, a.th.Base)
+		}
 		a.box(area.X, area.Y, area.W, area.H, "", a.th.Iris)
 		area = Rect{area.X + 1, area.Y + 1, area.W - 2, area.H - 2}
 	}
@@ -167,6 +173,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		}
 		x := r.X + rail
 		col := 0
+		cut := false
 		spans := l.Spans
 		if w.Buf.Kind == KindChat {
 			spans = a.linkify(spans)
@@ -179,6 +186,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 					continue
 				}
 				if x+gw > right {
+					cut = true
 					break
 				}
 				st := sp.Style
@@ -198,6 +206,14 @@ func (a *App) drawWindow(w *Window, focused bool) {
 			a.fill(x, y, right, a.th.CursorLine)
 		} else if li >= vl1 && li <= vl2 && w.vmode == 'V' {
 			a.fill(x, y, right, a.th.Selection)
+		}
+		// A row that does not fit says so, as Neovim's listchars extends.
+		if cut {
+			st := a.th.Muted
+			if hasBG {
+				st = overlay(st, bg)
+			}
+			a.put(right-1, y, right, "…", st)
 		}
 		if showCursor && li == w.Cur {
 			a.cursorX, a.cursorY = r.X+rail+min(w.Col, r.W-rail-1), y
@@ -258,7 +274,7 @@ func (a *App) drawRail(w *Window, lines []Line, top, h int) {
 	first := max(min(cur-rows/2, len(heads)-rows), 0)
 	y := top + (h-rows)/2
 	for i := first; i < first+rows; i++ {
-		dash, st := "─", a.th.Separator
+		dash, st := "─", a.th.Muted
 		if i == cur {
 			dash, st = "━", a.th.Subtle
 		}
@@ -385,7 +401,7 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 		x = a.put(x, y, right, label, dim) + 2
 	}
 	name, nameSt := bufTitle(b), a.th.Subtle
-	if b.Edit != nil && b.Edit.Dirty {
+	if e := b.edit(); e != nil && e.Dirty {
 		name += " [+]"
 	}
 	if focused {
@@ -599,11 +615,17 @@ func (a *App) drawPicker(W, H int) {
 	if p.sel >= rows {
 		start = p.sel - rows + 1
 	}
-	labelW := 0
+	labelW, details := 0, false
 	for _, it := range p.items {
 		labelW = max(labelW, width(it.label))
+		details = details || it.detail != ""
 	}
-	labelW = min(labelW, bw/3)
+	// Without details, as in an outline, the label has the whole row.
+	if details {
+		labelW = min(labelW, bw/3)
+	} else {
+		labelW = min(labelW, bw-6)
+	}
 	for i := 0; i < rows && start+i < len(p.items); i++ {
 		it := p.items[start+i]
 		y := y0 + 3 + i
@@ -646,6 +668,9 @@ func (a *App) drawGlobal(W, H int) {
 	// Right side: how many threads of the workspace run or wait for you, then
 	// keys typed so far, as Vim's showcmd.
 	var right []Span
+	if a.recordInto != 0 {
+		right = append(right, Span{"recording @" + string(a.recordInto) + "  ", th.Muted})
+	}
 	if len(a.pending) > 0 || a.count > 0 {
 		show := strings.Join(a.pending, "")
 		if a.count > 0 {

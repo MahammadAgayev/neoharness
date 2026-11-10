@@ -183,6 +183,21 @@ func TestPermissionPromptRoundTrip(t *testing.T) {
 	}
 }
 
+func TestHarnessToolsNeverAsk(t *testing.T) {
+	h, srv := setup(t)
+	coord := connect(t, srv, token(t, model.Coordinator))
+	out, _ := call(t, coord, "permission_prompt", map[string]any{
+		"tool_name": "mcp__neoharness__whoami",
+		"input":     map[string]any{},
+	})
+	if !strings.Contains(out, `"behavior":"allow"`) {
+		t.Fatalf("the hub's own tools must be allowed without asking: %s", out)
+	}
+	if vs, _ := h.Threads("demo"); vs[0].Permission != nil {
+		t.Fatal("no permission request should be left pending")
+	}
+}
+
 func TestPermissionReplyDeny(t *testing.T) {
 	got := permissionReply(false, "", nil)
 	if got != `{"behavior":"deny","message":"The person denied this."}` {
@@ -245,6 +260,17 @@ func TestTranscriptTellsThePersonsEditApart(t *testing.T) {
 		{Kind: model.EventArtifact, From: model.User, Detail: "plan", Text: "Plan", Version: 2},
 	})
 	if !strings.Contains(got, `wrote artifact plan ("Plan"), version 1`) || !strings.Contains(got, "the person edited artifact plan, version 2") {
+		t.Fatalf("transcript = %q", got)
+	}
+}
+
+func TestTranscriptNamesTheFailedTool(t *testing.T) {
+	got := Transcript([]model.Event{
+		{Kind: model.EventTool, Tool: "Bash", Detail: "rm x", ID: "t1"},
+		{Kind: model.EventTool, ID: "t1", Exit: 1, Text: "denied"},
+		{Kind: model.EventTool, ID: "t2", Exit: 1},
+	})
+	if !strings.Contains(got, "the tool call failed: Bash: denied") || !strings.HasSuffix(strings.TrimSpace(got), "the tool call failed") {
 		t.Fatalf("transcript = %q", got)
 	}
 }

@@ -116,6 +116,15 @@ func (c *Client) DeleteWorkspace(name string) error {
 	return c.do("DELETE", "/workspaces/"+esc(name), nil, nil)
 }
 
+func (c *Client) DeletedWorkspaces() ([]string, error) {
+	var out []string
+	return out, c.do("GET", "/deleted", nil, &out)
+}
+
+func (c *Client) RestoreWorkspace(name string) error {
+	return c.do("POST", "/workspaces/"+esc(name)+"/restore", nil, nil)
+}
+
 func (c *Client) Artifacts(workspace string) ([]model.Artifact, error) {
 	var out []model.Artifact
 	return out, c.do("GET", "/workspaces/"+esc(workspace)+"/artifacts", nil, &out)

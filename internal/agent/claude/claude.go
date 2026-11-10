@@ -43,6 +43,24 @@ func New(command ...string) *Agent {
 
 const maxStderr = 2000
 
+const (
+	// harnessTools is how Claude names the neoharness server's MCP tools.
+	harnessTools = "mcp__neoharness__"
+	// permissionTool is the harness tool Claude asks before a tool call it
+	// may not make on its own.
+	permissionTool = harnessTools + "permission_prompt"
+	// permissionMode is Claude's auto mode: it decides what is safe on its
+	// own, and asks permissionTool only for the rest.
+	permissionMode = "auto"
+)
+
+// env keeps Claude from giving up on a permission prompt while the person is
+// away from the keyboard.
+var env = []string{"MCP_TOOL_TIMEOUT=86400000"}
+
+// Efforts are the levels `claude --effort` takes.
+func (a *Agent) Efforts() []string { return []string{"low", "medium", "high", "xhigh", "max"} }
+
 // Run executes one turn.
 func (a *Agent) Run(ctx context.Context, req agent.Request) (agent.Result, error) {
 	res, err := a.run(ctx, req)
@@ -54,6 +72,10 @@ func (a *Agent) Run(ctx context.Context, req agent.Request) (agent.Result, error
 		req.Resume = true
 		return a.run(ctx, req)
 	}
+	// A turn that failed before claude made the session, such as one before
+	// login, can look started; claude's own files can also be gone.
+	res.Lost = err == nil && res.ExitCode != 0 && req.Resume &&
+		strings.Contains(res.Stderr+res.Text, "No conversation found with session ID")
 	return res, err
 }
 
@@ -62,14 +84,12 @@ func (a *Agent) run(ctx context.Context, req agent.Request) (agent.Result, error
 
 	var cmd *exec.Cmd
 	if a.Host != "" {
-		ssh := sshCommand(a.Host, a.Dir, req.Env, args)
+		ssh := sshCommand(a.Host, a.Dir, env, args)
 		cmd = exec.CommandContext(ctx, ssh[0], ssh[1:]...)
 	} else {
 		cmd = exec.CommandContext(ctx, args[0], args[1:]...)
 		cmd.Dir = req.Cwd
-		if len(req.Env) > 0 {
-			cmd.Env = append(os.Environ(), req.Env...)
-		}
+		cmd.Env = append(os.Environ(), env...)
 	}
 	// An inherited stdin pipe that nobody closes leaves a `--print` invocation
 	// waiting on it forever.
@@ -136,14 +156,14 @@ func (a *Agent) args(req agent.Request) []string {
 	// --verbose is required for stream-json to emit anything per-event; without
 	// it the stream carries only the final result.
 	args = append(args, "--output-format", "stream-json", "--verbose")
-	if req.PermissionPromptTool != "" {
-		args = append(args, "--permission-prompt-tool", req.PermissionPromptTool)
-	}
-	if req.PermissionMode != "" {
-		args = append(args, "--permission-mode", req.PermissionMode)
-	}
-	if req.MCPConfig != "" {
-		args = append(args, "--mcp-config", req.MCPConfig)
+	if h := req.Harness; h.URL != "" {
+		cfg, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"neoharness": map[string]any{
+			"type":    "http",
+			"url":     h.URL,
+			"headers": map[string]string{"Authorization": "Bearer " + h.Token},
+		}}})
+		args = append(args, "--permission-prompt-tool", permissionTool, "--permission-mode", permissionMode,
+			"--mcp-config", string(cfg))
 	}
 	if req.Conversation != "" {
 		if req.Resume {
@@ -195,6 +215,11 @@ type wire struct {
 			Text  string          `json:"text"`
 			Name  string          `json:"name"`
 			Input json.RawMessage `json:"input"`
+			ID    string          `json:"id"`
+			// A tool result, in a "user" record.
+			ToolUseID string          `json:"tool_use_id"`
+			IsError   bool            `json:"is_error"`
+			Result    json.RawMessage `json:"content"`
 		} `json:"content"`
 		Usage *usage `json:"usage"`
 	} `json:"message"`
@@ -272,6 +297,7 @@ func (a *accumulator) consume(line []byte) {
 				a.emit(agent.Event{
 					Kind:   agent.KindToolStart,
 					Tool:   c.Name,
+					ID:     c.ID,
 					Detail: detailOf(c.Input),
 					Tokens: a.tokens,
 				})
@@ -281,6 +307,18 @@ func (a *accumulator) consume(line []byte) {
 			a.said = true
 			a.text = strings.TrimSpace(strings.Join(prose, " "))
 			a.emit(agent.Event{Kind: agent.KindAssistantText, Text: a.text, Tokens: a.tokens})
+		}
+
+	case "user":
+		// Tool results come back here. Only a failed or denied one is shown,
+		// as a mark on its call; the rest stay off the screen.
+		if e.Message == nil {
+			return
+		}
+		for _, c := range e.Message.Content {
+			if c.Type == "tool_result" && c.IsError {
+				a.emit(agent.Event{Kind: agent.KindToolFailed, ID: c.ToolUseID, Text: firstLine(resultText(c.Result))})
+			}
 		}
 
 	case "result":
@@ -303,8 +341,31 @@ func (a *accumulator) consume(line []byte) {
 		a.emit(agent.Event{Kind: agent.KindTurnEnd, Tokens: a.tokens})
 	}
 	// Other "system" records are hooks and progress — machinery, not work.
-	// "user" records carry tool results back in; the neoharness does not display
-	// them, on the same principle that keeps the tool firehose off the screen.
+}
+
+// resultText is a tool result's content: a string, or text blocks.
+func resultText(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var blocks []struct {
+		Text string `json:"text"`
+	}
+	_ = json.Unmarshal(raw, &blocks)
+	var parts []string
+	for _, b := range blocks {
+		parts = append(parts, b.Text)
+	}
+	return strings.Join(parts, "\n")
+}
+
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return s
 }
 
 func (a *accumulator) emit(e agent.Event) {

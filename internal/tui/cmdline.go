@@ -29,7 +29,7 @@ type cmdline struct {
 
 var commands = []string{
 	"allow", "always", "artifacts", "b", "buffer", "deny", "edit", "folder", "help", "ls", "messages", "new",
-	"only", "open", "q", "qa", "quit", "reopen", "resolve", "split", "threads",
+	"only", "open", "q", "qa", "quit", "reopen", "resolve", "restore", "split", "threads",
 	"vsplit", "workspace", "workspaces", "wq",
 }
 
@@ -239,17 +239,17 @@ func (a *App) exec(line string) {
 		return true
 	}
 
-	edit := a.cur.Buf.Edit
+	edit, held := a.cur.Buf.Edit, a.cur.Buf.Held
 	switch cmd {
 	case "q", "quit", "close":
 		if edit != nil {
-			a.leaveEdit(false)
+			a.stopEdit(a.cur)
 			return
 		}
 		a.closeCur(false)
 	case "q!", "quit!":
-		if edit != nil {
-			a.leaveEdit(true)
+		if edit != nil || held != nil {
+			a.dropEdit()
 			return
 		}
 		a.closeCur(true)
@@ -260,22 +260,26 @@ func (a *App) exec(line string) {
 		}
 		a.startEdit(0)
 	case "e!", "edit!":
-		if edit != nil {
-			a.stopEdit(a.cur)
+		if edit != nil || held != nil {
+			a.dropEdit()
 			a.startEdit(0)
 		}
 	case "w", "write", "w!", "write!":
-		if edit == nil {
+		switch {
+		case held != nil:
+			a.writeHeld(strings.HasSuffix(cmd, "!"))
+		case edit == nil:
 			a.notify("nothing to write here", a.th.Muted)
-			return
+		default:
+			a.saveEdit(strings.HasSuffix(cmd, "!"))
 		}
-		a.saveEdit(strings.HasSuffix(cmd, "!"))
 	case "wq", "x", "xit":
-		if edit == nil {
+		switch {
+		case held != nil:
+			a.writeHeld(false)
+		case edit == nil:
 			a.notify("nothing to write here", a.th.Muted)
-			return
-		}
-		if a.saveEdit(false) {
+		case a.saveEdit(false):
 			a.stopEdit(a.cur)
 		}
 	case "qa", "qall", "quitall":
@@ -308,6 +312,8 @@ func (a *App) exec(line string) {
 			return
 		}
 		a.createWorkspace(arg(0), arg(1))
+	case "restore":
+		a.restoreWorkspace(arg(0))
 	case "folder":
 		if !needWorkspace() {
 			return
@@ -427,14 +433,26 @@ func (a *App) findNext(d int) {
 	for step := 1; step <= len(lines); step++ {
 		i := ((w.Cur+d*step)%len(lines) + len(lines)) % len(lines)
 		text := lines[i].Text()
+		// A match may go on in the next row of a wrapped line. A rendered
+		// wrap drops the space at the break, the source keeps it.
+		var joins []string
+		if i+1 < len(lines) && lines[i+1].Text() != "" {
+			next := lines[i+1].Text()
+			joins = []string{text + next, text + " " + next}
+		}
 		if fold {
 			text = strings.ToLower(text)
+			for k := range joins {
+				joins[k] = strings.ToLower(joins[k])
+			}
 		}
-		if j := strings.Index(text, q); j >= 0 {
-			a.moveTo(w, i)
-			w.Col = lines[i].prefixWidth() + width(text[:j])
-			w.Follow = false
-			return
+		for _, s := range append([]string{text}, joins...) {
+			if j := strings.Index(s, q); j >= 0 && j < len(text) {
+				a.moveTo(w, i)
+				w.Col = lines[i].prefixWidth() + width(text[:j])
+				w.Follow = false
+				return
+			}
 		}
 	}
 	a.notify("pattern not found: "+q, a.th.Love)
@@ -466,16 +484,22 @@ func (a *App) helpBuf() *Buffer {
 		sec("move"),
 		row("j k  gg G  <C-d> <C-u>", "lines, ends, half pages"),
 		row("h l  w b e  0 $", "within a line"),
+		row("f F t T  ; ,  %", "to a character in the line, again, back; matching bracket"),
 		row("]m [m", "next / previous message, or heading in an artifact"),
+		row("gO", "outline: pick a heading, or a message in a chat"),
+		row("ma  'a  `a  ''", "set a mark, go to its line, its place, back"),
 		row("/ n N", "search"),
 		row("za  <leader>e", "open or close a turn's tool calls"),
 		row("v V  y  yy  <leader>y", "select and yank to the clipboard"),
+		row("v then iw a( i\" ip", "select a word, brackets, quotes, a paragraph"),
+		row("qa … q  @a  @@", "record a macro, play it, play the last one again"),
 		{},
 		sec("windows and buffers"),
 		row("<Tab>  <C-w>w", "next window"),
 		row("<C-w>h j k l  <C-h>…", "window in a direction"),
 		row("<C-w>v  <C-w>s", "split vertically / horizontally"),
 		row("<C-w>c  <C-w>o  <C-w>=", "close, only, equal sizes"),
+		row("<Esc>  :q", "close the artifact popup (in Normal)"),
 		row("]b [b  <C-^>", "next / previous thread, alternate"),
 		row("<CR>", "open the workspace, or switch to the thread"),
 		row("<C-v>  <C-x>", "thread in the pane / a split above (pickers, threads list)"),
@@ -503,17 +527,23 @@ func (a *App) helpBuf() *Buffer {
 		row(":artifacts", "pick an artifact; <CR> on ◇ in a chat opens one beside it"),
 		row(":messages", "notice history"),
 		row(":workspaces  :workspace <n>", "workspace list, switch workspace"),
+		row(":restore [name]", "bring back a deleted workspace; no name lists them"),
 		row(":q  :qa", "close window, quit"),
 		row(":q!  :qa!", "quit even if threads are running (stops them)"),
 		{},
 		sec("edit an artifact"),
 		row(":e  i a o", "edit its markdown, where you are reading"),
 		row(":w", "save, merged with a newer version; the writer gets the diff"),
-		row(":wq  :q!  <Esc>", "save and go back, drop the changes, go back"),
+		row("<Esc>", "back to the document; an unsaved edit stays, [+]"),
+		row(":wq  :q!", "save and go back, drop the changes"),
+		row("<CR>", "in a list item, the next item (Insert)"),
 		row(":w!  :e!", "save over a newer version, take the newer version"),
 		row("x s r J  dd cc D C", "change in Normal"),
 		row("d c y  w e b $ 0 iw aw", "operators and motions; v V then d c y"),
+		row("i( a[ i\" a` ib iB ip", "text objects after d c y: ci( da\" yap"),
+		row("f t F T  %", "finds and brackets after d c y: dt, cf) d%"),
 		row("p P  u <C-r>  .", "paste, undo, redo, repeat"),
+		row("gx  gf", "open the link, or the artifact named, under the cursor"),
 	}
 	b := newBuffer("neoharness://help", KindHelp)
 	b.SetLines(lines)

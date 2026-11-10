@@ -1,8 +1,9 @@
 # neoharness — handover
 
-Date: 2026-11-09 (night). State: all code works and all tests pass (`go
-vet ./...`, `go test -race ./...`: 133 tests). Everything is committed
-(section 11.3 up to item 17). Ask the user before you commit.
+Date: 2026-11-10. State: all code works and all tests pass (`go
+vet ./...`, `go test -race ./...`: 172 tests). Section 11.3 items 18 to 41
+are in the commit after `6cabc42` (the user asked for it, 2026-11-10).
+Next: the single-buffer artifact view (user's choice, 2026-11-10).
 
 ## 1. What neoharness is
 
@@ -216,15 +217,30 @@ only recorded.
     when it ends idle with the source changed. On the rendered document,
     change keys show "i or :e edits the markdown".
   - Insert: the prompt's Iris `›` in the margin of the cursor row. The status
-    line shows `[+]` while unsaved.
+    line shows `[+]` while unsaved. `<Esc>` goes back to where Insert
+    started (`Editor.fromDoc`): `i a I A o O` on the document show the
+    rendered document again; Insert started in the `:e` source stays in the
+    source, so Normal edits (`dd`, `cw`, `.`) keep working there. The user
+    asked for this: "i changed to insert mode, then back to [normal] mode but
+    markdown didn't render".
+  - Held edit (`Buffer.Held`): leaving the source with unsaved changes
+    keeps the editor and renders its text, with `[+]`. `i`, `A`, `:e` go on
+    with it (undo too); `:w` on the document saves it (`writeHeld`); `:q!`
+    and `:e!` drop it (`dropEdit`). `Buffer.edit()` is the shown or held
+    edit, for `[+]`, `:qa` and the "… · :w merges it" notice.
+  - `.` works on the document too: Insert started there is recorded and
+    replays through the source (`key`, `repeat`).
+  - `<CR>` in a list item starts the next one (`newLine`: same indent and
+    marker, the number + 1, a new task box unchecked); on an empty item it
+    clears the marker. A paste keeps plain newlines.
   - `:w` saves (`EditArtifact` with the base version and text). If the agent
     wrote since, the hub merges by lines (`merge3`: changes to different
     lines both stay, even next to each other) and the editor loads the
     result ("merged and saved"; `u` gives back the edit alone); changes to
     the same lines are refused: `:w!` saves over, `:e!` takes theirs. A write
     by the agent during an edit shows a Gold "… · :w merges it".
-  - `:wq`/`:x` save and show the document; `<Esc>`/`q`/`:q` show it unless
-    changes would be lost; `:q!` drops them. Closing the popup keeps the edit
+  - `:wq`/`:x` save and show the document; `<Esc>`/`q`/`:q` show it and
+    hold unsaved changes; `:q!` drops them. Closing the popup keeps the edit
     in the buffer; `:qa` refuses while one is unsaved.
 - **What the agent hears**: `Hub.EditArtifact` saves the person's version
   (`UserEdit`: "edited by you" in the meta line, "edited by the person" in
@@ -246,13 +262,23 @@ only recorded.
   Rose, then Subtle; rules under levels 1 and 2), task boxes without bullets,
   bullets by depth (• ◦ ▪), numbers aligned on the dot, GitHub alerts
   (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`) with a
-  colored bar and label, code with a language label and a `│` gutter, link
-  URLs after the text, and table cells that wrap instead of being cut.
+  colored bar and label, code with a language label and a `│` gutter, and
+  table cells that wrap instead of being cut. Links show only their text:
+  the style carries the URL (`linkStyle`, OSC 8), so the terminal opens it
+  on a click, and `gx` opens the one under the cursor (`linkAt` finds the
+  URL in the block's source, matched by that style; `App.openURL`). The
+  user found the URLs after the text "super bad" (six rows of URL in a
+  table cell).
 - Outline rail (`drawRail` in `draw.go`): in a document window 60 or more
   columns wide, a 5-column gutter on the left shows one dash per heading
   (`───` level 1, `──` level 2, `─` deeper), centered in the height. The
-  cursor's section is a heavier `━` in Subtle, the others are in the
-  separator color. With fewer than 2 headings there is no rail.
+  cursor's section is a heavier `━` in Subtle, the others are in Muted
+  (Separator, `#393552`, was invisible on the user's translucent
+  terminal). With fewer than 2 headings there is no rail. No heading
+  names: the user rejected a permanent name column ("massive", "not a rail")
+  and names that fold out for a moment ("no need for names"). Keep it only
+  dashes, the current one heavy. The source view uses goldmark's heading rule
+  (`headingLevel`: 1–6 `#` and a space, not in a code fence).
 - ssh: the text arrives through MCP, so nothing is fetched from the host,
   and an artifact opens when the host is down.
 
@@ -299,7 +325,7 @@ you resets the count.
 | `internal/hubserver` | Server for the local API. Every route is one hub call |
 | `internal/tunnel` | ssh reverse tunnel per remote host: own process group, no ControlMaster, reopens after a drop |
 | `internal/tui` | The terminal UI (see section 5) |
-| `internal/agent` | Agent interface: one `Run` per turn. Request: `Prompt`, `SystemPrompt`, `Cwd`, `Conversation`, `Resume`, `MCPConfig`, `PermissionPromptTool`, `PermissionMode`, `Env`, `Model`, `Effort`, `OnEvent`. Result: `Text`, `Tools`, `Tokens`, `ExitCode`, `Stderr`, `Commands`, `Model`, `Context`, `ContextWindow`, `Cost` |
+| `internal/agent` | Agent interface: one `Run` per turn. Request: `Prompt`, `SystemPrompt`, `Cwd`, `Conversation`, `Resume`, `Harness` (MCP URL and token), `Model`, `Effort`, `OnEvent`. Result: `Text`, `Tools`, `Tokens`, `ExitCode`, `Stderr`, `Commands`, `Model`, `Context`, `ContextWindow`, `Cost`, `Lost`. `Permission` is a neutral permission question; an adapter may implement `Efforter` |
 | `internal/agent/claude` | Claude Code adapter. `remote.go` builds the ssh command and quoting (`SSHCommand` is exported for `files.go`) |
 | `internal/prompts` | Prompts: `coordinator.md`, `thread.md`, `compact.md`; `Shell` formats a `!` command for the next message |
 | `internal/architecture` | Tests that enforce the import rules below |
@@ -542,7 +568,7 @@ yet. Per-thread model and effort are set with `/model` and `/effort`.
 
 ## 8. How it was tested
 
-- `go vet ./...` and `go test -race ./...`: all pass (114 test functions).
+- `go vet ./...` and `go test -race ./...`: all pass (162 tests).
   Hub, MCP, API, and TUI tests need no model and no real terminal (fake
   agent, fake client, tcell simulation screen). TUI tests also check real
   cell colors, the drawn cursor, and the cells sent per frame.
@@ -571,7 +597,15 @@ yet. Per-thread model and effort are set with `/model` and `/effort`.
     - frames: bytes and cursor codes per spinner frame, before and after the
       fix;
     - auto mode: a file write and an explicit `rm -rf` of a missing folder ran
-      without a card.
+      without a card;
+    - artifact editing, at 160 and 200 columns: haiku wrote a document; an
+      edit in the TUI and `:w`; without a tool call, haiku said exactly what
+      changed; a later rewrite by haiku kept two edits of the person (an
+      added sentence, a deleted line); an unsaved edit while haiku wrote v7
+      showed the Gold notice and `:w` refused (before the merge); after the
+      merge, the same case saved v9 with both changes and the editor showed
+      them; `ciw` and `.` on two lines; undo back to the saved text cleared
+      `[+]`.
 
 ### How to test end to end without touching real data
 
@@ -596,13 +630,18 @@ first, and check that no thread has a queue (`jq '.queue|length'` on each
 Pitfalls seen in this work:
 - If a hub answers on the real socket, a TUI with the real home uses it.
   Always check the scratch socket exists before you type.
-- Wait about 0.5 s after `Escape` before the next key, or tcell reads
-  Alt+key and the next command is typed into the prompt and sent.
+- A fast `Escape` and key arrive as Alt+key. In Insert, Command and Visual
+  the TUI reads them as the two keys (`key`), so `Escape :w Enter` in one
+  `send-keys` works there. In Normal, `Escape` closes the popup, so wait
+  about 0.5 s after it there.
 - After typing a `/` or `@` word in Insert, `<Esc>` closes the popup and stays
   in Insert. Do not send `i` after it.
 - `:new` leaves you in Insert mode.
 - Use `send-keys -l` for text with special characters.
 - Without `remain-on-exit`, `:qa!` ends the tmux session.
+- After `respawn-pane`, wait for the socket (`until test -S …; do sleep
+  0.2; done`) before you type. A restart right after `:qa!` once started
+  before the old TUI let go, and the session was gone.
 - `claude -p` started by hand waits 3 s for stdin; use `< /dev/null`.
 - The user runs neoharness as `./neoharness` from the repo, on the real port
   47821. Before you stop a `neoharness` or `ssh` process, check its port and
@@ -618,34 +657,50 @@ Pitfalls seen in this work:
 1. Cancelling a remote turn kills the local ssh process. The remote claude
    should stop when its output pipe closes (SIGPIPE). Not verified.
 2. Shift+Enter is the same as Enter in most terminals; use `<C-j>` for a new
-   line. `<Esc>` followed very fast by another key reads as Alt+key (tcell).
-3. The quit guard counts only Running threads. A thread that waits on a
-   permission card also has a turn in flight, and `:qa` does not protect it.
+   line. `<Esc>` followed very fast by another key reads as Alt+key (tcell);
+   Insert, Command and Visual take it as the two keys, Normal does not.
+3. The quit guard counts, in the open workspace, every thread with a turn in
+   flight: running or at a permission card, the coordinator too. In other
+   workspaces it counts only Running threads (their `Counts` leave out the
+   coordinator and do not tell a permission from a question).
 4. Data in `~/.harness/` (from before the first rename) is not moved. Old
    `HARNESS_*` variables are not read.
-5. **The `/` list is empty in a folder where no thread has finished a turn.**
-   Offered, not done: start Claude briefly to read the init record.
-6. The status line updates at the end of a turn, not during it.
-7. **No restore for a deleted workspace** (edit `workspace.json`). Thread
-   delete is hard (no undo); workspace delete is soft ("for now").
-8. `<leader>pv` rebuilds the layout: opening the workspace again shows the
-   default layout; splits are not kept.
+5. The `/` list of a thread that has not finished a turn comes from a
+   thread in the same folder, else on the same host (`commandsNear`). It is
+   empty only before any thread on that host has finished a turn.
+6. The cost in the status line updates at the end of a turn; the context
+   follows the turn (`onAgentEvent`, in steps of 1% of the window).
+7. A deleted workspace comes back with `:restore <name>` (`:restore` alone
+   lists them; `Hub.RestoreWorkspace`, `GET /deleted`, `POST
+   /workspaces/{p}/restore`). Thread delete is hard (no undo).
+8. A workspace keeps its windows for the session (`App.layouts`,
+   `saveLayout`): after `<leader>pv` or a switch, opening it again shows its
+   splits. They are not saved across restarts.
 9. **Ask the user to confirm the cursor shiver is gone** with the frame buffer
    (section 5).
 10. **Auto mode**: the permission card path under auto mode was not seen in
     tests. Agents may run commands without asking that the default mode would
     have asked about.
-11. **Artifacts**: an update sends the whole document (no partial edit); no
-    delete or rename; a name that is a common word (`plan`) makes that word a
-    link in every chat; the popup's margins show the layout behind it.
+11. **Artifacts**: an agent's update sends the whole document (no partial
+    edit); no delete or rename; a name that is one plain word (`plan`) is a
+    link only in code (backticks), not in prose. The popup's side margins
+    are blank; its top row shows the layout's first row.
 12. Not built yet: configurable keymaps and theme, a picker for "allow always"
     rules, other agent backends (the agent interface is ready for them), more
     than one folder per workspace (Claude has `--add-dir`).
 13. The threads list has no fuzzy search; use `/` in it, or `<leader><leader>`.
-14. The threads list does not show how long a thread has run. Offered, not
-    done.
+14. The threads list shows how long a running thread has run (`4m05s ·
+    progress`), from `ThreadView.Since`.
 15. The workspace `e2e` (pinned to `/tmp/nh-e2e-proj`) is left from an old
     test. Delete it with `<C-d>` in `<leader>w` when the user agrees.
+16. `/` matches across one row break (a wrapped line), not more.
+17. **Artifact editing limits**: `j`/`k` move by screen row in the source
+    (like `gj`/`gk`); operators take `w e b $ 0 ^ iw aw ip ap`, quote
+    objects on one line, bracket objects over lines, `f F t T` and `%`.
+    Macro registers are `a`-`z` only (no `A`-`Z` append, no `@:`).
+    Marks are rows of
+    the window's view, so the source and the document do not share them. The line merge refuses when both sides add
+    different lines at the same place (git would write conflict markers).
 
 ## 10. Repository
 
@@ -659,7 +714,14 @@ Pitfalls seen in this work:
 - Commit `4b5e448`: second session and the first part of the third (11.2 and
   11.3 items 1–6).
 - Commit `f2b8e90`: 11.3 items 7–16 (artifacts, editing, rail, layout).
-- The next commit: 11.3 item 17 (editing polish after a real run).
+- Commit `6cabc42`: 11.3 item 17 (editing polish after a real run).
+- Commit after `6cabc42`: 11.3 items 18 (rail without names, held edit) and 19
+  (links, lists, search, `.`, `…`, `plain`, chat tables, JSON) and 20 (f/t, %, text objects, Visual objects, marks, paragraphs) and 21 (fast Esc), 22 (y motions anywhere), 23 (brackets over lines), 24 (help, messages), 25 (tool names, transcript search), 26 (failed tool calls), 27 (<br>, images), 28 (quit guard), 29 (live context), 30 (run time in the list), 31 (layouts kept), 32 (plain-word links), 33 (popup margins), 34 (:restore), 35 (mode 2027), 36 (review fixes, wide characters), 37 (lost conversation), 38 (no Claude in the hub), 39 (macros), 40 (fast Esc in Normal), 41 (gO, gf): `agent/claude/permission.go`, `cmd/neoharness/hub.go`, `draw.go`, `buffer.go`,
+  `editor.go`, `keys.go`, `cmdline.go`, `app.go`, `markdown.go`, `text.go`,
+  `toast.go`, `json.go`, `picker.go`, `layout.go`, `agent/agent.go`,
+  `agent/claude/claude.go`, `hub/hub.go`, `mcpserver/mcpserver.go`,
+  `hubserver/hubserver.go`, `hubapi/hubapi.go`, tests,
+  this file.
 - The approved design plan is at
   `~/.claude/plans/this-was-already-kinda-lively-hanrahan.md`. Changes made
   after it: no pets or emojis, the coordinator names threads, a more minimal
@@ -725,6 +787,129 @@ Not committed:
     when the agent wrote meanwhile, the writer's `read_artifact` counts as
     seeing the edit, `[+]` clears on undo to the saved text, "no threads
     yet" in an empty pane.
+18. The rail is only dashes, no heading names; the current section's dash
+    is the heavier `━`, the others Muted. `<Esc>` from Insert started on a
+    document shows the rendered document, the unsaved edit held.
+19. Links show only their text (OSC 8 hyperlinks, `gx`); `<CR>` continues
+    lists; `/` matches across a wrap; `.` on the document; a row cut at the
+    window edge ends in a Muted `…`; toasts and thread rows drop markdown
+    marks (`plain`); chat tables wrap their cells like document tables
+    (`fitSpans` is gone: a chat cannot scroll sideways); `gx` also works in
+    a chat (the block's markdown); `:help` lists `gx`, `<CR>` in lists and
+    the held edit; a text that is one JSON value (a slash command's reply)
+    shows as indented `key: value` lines in its order, strings with line
+    breaks on their own lines (`renderJSON` in `json.go`).
+20. Vim motions and objects: `f F t T` with `;` `,` (on the screen row,
+    anywhere; `findRune`, `App.finding`), and after `d c y` in the source
+    (`span`); text objects `i a` + `" ' \` ( ) b [ ] { } B < >` on the
+    source line (`textObjects`, `quoted`, `bracketed`): `ci(` changes a
+    link's URL. `t` skips an adjacent match only on `;` `,`, as in Vim.
+    `%` (`matchBracket`) on the row, and `d%` `c%` `y%`. In Visual, `i`/`a`
+    then an object selects it on the screen row (`App.selecting`,
+    `selectObject`), in chats too; it is not a key sequence, so a plain `i`
+    does not wait.
+    Marks: `m{a-z}`, `'` to the line, `` ` `` to the place, `''` back
+    (`Buffer.marks`, `App.marking`).
+    Paragraphs: `ip`/`ap` after `d c y` in the source, line-wise
+    (`paragraph`), and `vip`/`vap` select rows in any buffer.
+21. A fast `<Esc>` and key (tcell reads Alt+key) count as the two keys in
+    Insert, Command and Visual: `<Esc>:w` typed fast saves instead of
+    typing `:w` into the text.
+22. `y` with a motion or text object (`yiw`, `yi(`, `yt,`, `yap`) yanks
+    from the screen row on a document or in a chat (`yankMotion`); it was
+    a silent no-op there.
+23. Bracket objects over lines in the source (`bracketLines`): `di{`
+    around a block deletes the lines between the brackets, as in Vim;
+    `da{`, `ci{`, `yi{` too.
+24. `:help` opens at the top (`Window.show`: only help does not follow
+    the end); an empty `:messages` says "no messages yet".
+25. Tool call details write MCP names short (`shortTools`:
+    `select:neoharness·workspace_status`); `<leader>/` results show the
+    thread's state glyph, not `›`, and start a little before the match.
+26. A failed or denied tool call shows: the fold reads `▸ 2 tool calls ·
+    1 failed` (Love) and, open, a `✗ why` row under the call. Claude's
+    `tool_result` with `is_error` becomes `agent.KindToolFailed` (ID of
+    the `tool_use`, first line of the result); the hub records it as an
+    `EventTool` with `Exit: 1` and that ID; the TUI marks the call
+    (`failTool`), and `thread_events` says "the tool call failed". Other
+    results stay off the screen. Auto mode denies `git push --force`
+    without a card, so this is how a denial shows now.
+27. Markdown: `<br>` (any case, `<br/>`, `<br />`) breaks the line, in
+    table cells too (`lineBreak`); an image reads `image <alt>`, the alt
+    text a link to the file (`gx`, a click).
+28. `:qa` also refuses while the coordinator runs or a thread waits on a
+    permission card (both have a turn in flight), in the open workspace.
+29. The context in the status line follows a running turn: each agent
+    event's tokens raise it in steps of 1% of the window (each step saves
+    the thread and publishes); the turn's end sets the exact number.
+30. A running thread's row in the threads list starts with how long it has
+    run (`13s · f2.go …`); the time goes when it stops.
+31. Workspaces keep their splits when you leave and come back in a session
+    (`<leader>pv`, `:workspace`); a window on a thread deleted meanwhile
+    shows the coordinator. The workspaces screen starts on the workspace you
+    left, so `<CR>` goes back.
+32. An artifact name that is one plain word (`plan`, `notes`) links in a
+    chat only in code (`` `plan` ``); a name with `-`, `_` or a digit links
+    anywhere (`mentions`, `artifactAt`).
+33. The popup's side margins are blank: two columns showed only cut pieces
+    of the layout (`r…`, a stray `›`), most visible at 80 columns.
+34. `:restore [name]` brings back a deleted workspace with its threads and
+    transcripts; the delete notice says so. The hub's startup load is now
+    `load` + `start`, shared with restore.
+35. Grapheme cluster mode (DEC 2027) is on while the TUI runs (`Run`,
+    written to the tty; tcell does not send it): the terminal measures
+    emoji and joined characters as one cluster, as uniseg does. A terminal
+    without it ignores it. A review of Bubble Tea v2, go-tui
+    (grindlemire) and glyph (kungfusheep) found that tcell already sends
+    synchronized output (2026) and Kitty keys, and the canvas already sends
+    only changed cells; switching was not worth a rewrite. Not done:
+    scroll by moving lines (Ultraviolet's hardscroll), which tcell does not
+    expose.
+36. Fixes from a review of items 18 to 35: a failed `dt)` or `df]` no longer
+    acts as a bracket object (`bracketLines`); `<CR>` after `- - -` or
+    `* * *` does not start a bullet (`rule`); a held edit renders its
+    document once, not twice; the live context step waits until the first
+    turn tells the window; restore loads the threads before it clears the
+    deleted flag; a delete during a turn says so in the transcript, so
+    restore does not say "the hub stopped"; a failed call in the MCP
+    transcript names its tool. Row motions (`w b e f t %`, Visual objects,
+    `y` with a motion) now change a screen column to a rune index
+    (`runeAt`), so they land right after a wide character (emoji, CJK), and
+    the cursor never sits on a wide character's second column. Not fixed: a
+    failure whose tool line is before the loaded history tail shows no mark.
+37. A lost conversation recovers. Found in a real run: a turn that failed
+    with "Not logged in" still marked the thread started, so every later
+    turn failed on resume with "No conversation found", for ever. Lost
+    Claude files cause the same. The Claude adapter now sets the neutral
+    `agent.Result.Lost`; the hub then starts a new conversation and sends
+    the messages again, with a note. The hub does not read Claude's text.
+38. The hub knows no Claude (user, 2026-11-10: other harnesses will come).
+    `agent.Request.Harness` replaces `MCPConfig`, `PermissionPromptTool`,
+    `PermissionMode` and `Env`; the Claude adapter builds `--mcp-config`,
+    the `mcp__neoharness__permission_prompt` tool, auto mode and
+    `MCP_TOOL_TIMEOUT` itself. `Hub.Permission` takes a neutral
+    `agent.Permission` (tool, detail, rule prefix, compound); `claude.Ask`
+    makes it from Claude's tool input, and `claude.HarnessTool` lets the
+    MCP server's `permission_prompt` (Claude's protocol) skip the person for
+    neoharness tools. `/effort` levels come from the adapter
+    (`agent.Efforter`); `tunneled` embeds `*claude.Agent` so they pass
+    through. Still Claude-shaped but harmless for another agent:
+    `shortTools` and `shortModel` in the TUI (no-ops on other names), and
+    the shell tags in prompts.
+39. Macros (user chose "q records macros", 2026-11-10): `q{a-z}` records
+    every key that follows, in any mode and window, until `q` in Normal;
+    `@{a-z}` plays it, with a count; `@@` plays the last one. The right of
+    the bottom line shows `recording @a`. `<Esc>` and `:q` close the
+    artifact popup and leave the source, as before; `q` no longer does.
+40. A fast `<Esc>` and key in Normal are two keys too: `<Esc>:` started
+    nothing (an unbound `<M-:>`), so the next `a` went to Insert and the
+    command went to the coordinator as a message. Found in a real run.
+41. `gO` is an outline picker of the window's headings (the `Msg` rows that
+    `]m` uses), or a chat's messages; `<CR>` jumps there. `gf` opens the
+    artifact named under the cursor, as `<CR>` does, and says so when there
+    is none. A picker whose rows have no detail gives the label the whole
+    row.
+
 
 Things found on the user's machine:
 - An old-style hub from before the hub moved into the TUI was still running

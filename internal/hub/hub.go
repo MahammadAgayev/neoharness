@@ -11,7 +11,6 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -37,16 +36,6 @@ const (
 	MaxAgentTurns = 20
 	// TurnTimeout catches a wedged turn, not a slow one.
 	TurnTimeout = 4 * time.Hour
-	// PermissionTool is the MCP tool Claude asks before a tool call it may not
-	// make on its own.
-	PermissionTool = harnessTools + "permission_prompt"
-	// PermissionMode is Claude's auto mode: it decides what is safe on its
-	// own, and asks through PermissionTool only for the rest.
-	PermissionMode = "auto"
-	harnessTools   = "mcp__neoharness__"
-	// mcpToolTimeout keeps Claude from giving up on a permission prompt
-	// while the user is away from the keyboard.
-	mcpToolTimeout = "MCP_TOOL_TIMEOUT=86400000"
 	// filesTTL is how long a folder's file list is reused. Listing a remote
 	// folder costs an ssh round trip, and the prompt asks on every Insert.
 	filesTTL = 30 * time.Second
@@ -176,34 +165,48 @@ func New(cfg Config) (*Hub, error) {
 		if p.Deleted {
 			continue
 		}
-		ws := &space{p: p, threads: map[string]*thread{}}
-		h.workspaces[p.Name] = ws
-		ts, err := workspace.Threads(p.Name)
-		if err != nil {
+		if _, err := h.load(p); err != nil {
 			return nil, err
-		}
-		for _, t := range ts {
-			th := &thread{t: t}
-			ws.threads[t.Name] = th
-			h.tokens[t.Token] = ident{p.Name, t.Name}
-			if len(t.InFlight) > 0 {
-				// The hub died with this turn running, and its claude process
-				// died with it. Say so instead of pretending it finished.
-				t.InFlight = nil
-				h.event(ws, th, model.Event{Kind: model.EventError,
-					Text: "The hub stopped during this turn, so it was lost. Send the message again to retry."})
-			}
-			th.state = th.derive()
-			_ = workspace.SaveThread(p.Name, t)
 		}
 	}
 	for _, ws := range h.workspaces {
-		for _, th := range ws.threads {
-			h.kick(ws, th)
-			h.readBranch(ws, th)
-		}
+		h.start(ws)
 	}
 	return h, nil
+}
+
+// load reads a workspace and its threads into the hub. Callers hold h.mu.
+func (h *Hub) load(p workspace.Workspace) (*space, error) {
+	ts, err := workspace.Threads(p.Name)
+	if err != nil {
+		return nil, err
+	}
+	ws := &space{p: p, threads: map[string]*thread{}}
+	h.workspaces[p.Name] = ws
+	for _, t := range ts {
+		th := &thread{t: t}
+		ws.threads[t.Name] = th
+		h.tokens[t.Token] = ident{p.Name, t.Name}
+		if len(t.InFlight) > 0 {
+			// The hub died with this turn running, and its claude process
+			// died with it. Say so instead of pretending it finished.
+			t.InFlight = nil
+			h.event(ws, th, model.Event{Kind: model.EventError,
+				Text: "The hub stopped during this turn, so it was lost. Send the message again to retry."})
+		}
+		th.state = th.derive()
+		_ = workspace.SaveThread(p.Name, t)
+	}
+	return ws, nil
+}
+
+// start runs a loaded workspace's queued messages and reads its branches.
+// Callers hold h.mu.
+func (h *Hub) start(ws *space) {
+	for _, th := range ws.threads {
+		h.kick(ws, th)
+		h.readBranch(ws, th)
+	}
 }
 
 // Close cancels every running turn and waits for them to unwind.
@@ -258,6 +261,48 @@ func (h *Hub) CreateWorkspace(name, pin string) error {
 	return nil
 }
 
+// DeletedWorkspaces names the deleted workspaces whose data is still there.
+func (h *Hub) DeletedWorkspaces() ([]string, error) {
+	ps, err := workspace.List()
+	var out []string
+	for _, p := range ps {
+		if p.Deleted {
+			out = append(out, p.Name)
+		}
+	}
+	return out, err
+}
+
+// RestoreWorkspace brings a deleted workspace back, with its threads.
+func (h *Hub) RestoreWorkspace(name string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, ok := h.workspaces[name]; ok {
+		return fmt.Errorf("workspace %q is not deleted", name)
+	}
+	ps, err := workspace.List()
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(ps, func(p workspace.Workspace) bool { return p.Name == name && p.Deleted })
+	if i < 0 {
+		return fmt.Errorf("no deleted workspace %q", name)
+	}
+	p := ps[i]
+	p.Deleted = false
+	ws, err := h.load(p)
+	if err != nil {
+		return err
+	}
+	if err := workspace.Save(p); err != nil {
+		delete(h.workspaces, name)
+		return err
+	}
+	h.start(ws)
+	h.publishWorkspace(ws)
+	return nil
+}
+
 // SetFolder changes the folder a workspace is pinned to. The coordinator
 // moves there and keeps its conversation: Claude finds a session from any
 // folder. Open threads stay where they are; new ones open in the new folder.
@@ -306,6 +351,12 @@ func (h *Hub) DeleteWorkspace(name string) error {
 		return err
 	}
 	for _, th := range ws.threads {
+		if len(th.t.InFlight) > 0 {
+			th.t.InFlight = nil
+			h.event(ws, th, model.Event{Kind: model.EventError,
+				Text: "The workspace was deleted during this turn, so it was lost. Send the message again to retry."})
+			_ = workspace.SaveThread(name, th.t)
+		}
 		// Stops a turn that is still unwinding from writing to a workspace
 		// that is gone.
 		th.deleted = true
@@ -567,9 +618,6 @@ func (h *Hub) send(workspaceName, from, to, text string) (*thread, error) {
 	return th, nil
 }
 
-// efforts are the levels `claude --effort` takes.
-var efforts = []string{"low", "medium", "high", "xhigh", "max"}
-
 // command runs the slash commands that do not work under --print: each turn
 // is a new process, so /model and /effort last one turn, and /clear and
 // /compact do nothing. It reports whether text was one of them.
@@ -589,8 +637,8 @@ func (h *Hub) command(ws *space, th *thread, text string) (bool, error) {
 		}
 		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Model " + f[1] + " from the next turn."})
 	case f[0] == "/effort" && len(f) == 2:
-		if f[1] != "default" && !slices.Contains(efforts, f[1]) {
-			return true, fmt.Errorf("effort is one of %s, or default", strings.Join(efforts, ", "))
+		if e, ok := h.cfg.Factory(ws.p, *t).(agent.Efforter); ok && f[1] != "default" && !slices.Contains(e.Efforts(), f[1]) {
+			return true, fmt.Errorf("effort is one of %s, or default", strings.Join(e.Efforts(), ", "))
 		}
 		t.Effort = f[1]
 		if f[1] == "default" {
@@ -1015,23 +1063,16 @@ func (h *Hub) Whoami(workspaceName, name string) (model.ThreadView, error) {
 // Permission blocks until the user answers a permission request, or a rule
 // answers it, or the turn ends. It returns whether the call may go ahead and,
 // for a denial, the user's reason.
-func (h *Hub) Permission(ctx context.Context, workspaceName, name, tool string, input json.RawMessage) (bool, string) {
+func (h *Hub) Permission(ctx context.Context, workspaceName, name string, q agent.Permission) (bool, string) {
 	h.mu.Lock()
 	ws, th, err := h.lookup(workspaceName, name)
 	if err != nil {
 		h.mu.Unlock()
 		return false, err.Error()
 	}
-	// The neoharness tools only reach this hub, and a session that had to ask
-	// before reporting progress would wait on the user for nothing.
-	if strings.HasPrefix(tool, harnessTools) {
-		h.mu.Unlock()
-		return true, ""
-	}
-	detail := inputDetail(tool, input)
-	prefix, chained := rulePrefix(tool, input)
+	tool, detail, prefix := q.Tool, q.Detail, q.Prefix
 	for _, r := range th.t.Rules {
-		if r.Tool == tool && !chained && (r.Prefix == "" || r.Prefix == prefix) {
+		if r.Tool == tool && !q.Compound && (r.Prefix == "" || r.Prefix == prefix) {
 			h.mu.Unlock()
 			return true, ""
 		}
@@ -1164,16 +1205,13 @@ func (h *Hub) kick(ws *space, th *thread) {
 		}
 	}
 	req := agent.Request{
-		Prompt:               prompt,
-		Model:                t.ModelChoice,
-		Effort:               t.Effort,
-		SystemPrompt:         h.systemPrompt(ws, th),
-		Conversation:         t.SessionID,
-		Resume:               t.Started,
-		MCPConfig:            h.mcpConfig(t.Token),
-		PermissionPromptTool: PermissionTool,
-		PermissionMode:       PermissionMode,
-		Env:                  []string{mcpToolTimeout},
+		Prompt:       prompt,
+		Model:        t.ModelChoice,
+		Effort:       t.Effort,
+		SystemPrompt: h.systemPrompt(ws, th),
+		Conversation: t.SessionID,
+		Resume:       t.Started,
+		Harness:      agent.Harness{URL: fmt.Sprintf("http://127.0.0.1:%d/mcp", h.cfg.MCPPort), Token: t.Token},
 	}
 	if !t.Location.Remote() {
 		req.Cwd = t.Location.Dir
@@ -1232,8 +1270,13 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		h.event(ws, th, model.Event{Kind: model.EventError, Text: fmt.Sprintf("the turn ran past %s and was stopped", h.cfg.TurnTimeout)})
 	case err != nil:
 		h.event(ws, th, model.Event{Kind: model.EventError, Text: err.Error()})
+	case res.Lost:
+		// The agent never saw these messages.
+		t.SessionID, t.Started = workspace.NewID(), false
+		t.Queue = append(batch, t.Queue...)
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "The agent has no record of this conversation, so a new one starts."})
 	case res.ExitCode != 0:
-		h.event(ws, th, model.Event{Kind: model.EventError, Text: "claude failed: " + lastLine(res.Stderr, res.Text)})
+		h.event(ws, th, model.Event{Kind: model.EventError, Text: "the agent failed: " + lastLine(res.Stderr, res.Text)})
 	default:
 		t.Started = true
 		h.event(ws, th, model.Event{Kind: model.EventTurnEnd, Tools: res.Tools, Tokens: res.Tokens})
@@ -1258,9 +1301,18 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	th.started = true
+	// The context grows during a turn; the status line follows it in steps of
+	// 1% of the window, and the turn's end sets the exact number. The window
+	// is known only after the first turn.
+	if step := th.t.ContextWindow / 100; step > 0 && e.Tokens >= th.t.Context+step {
+		th.t.Context = e.Tokens
+		h.changed(ws, th)
+	}
 	switch e.Kind {
 	case agent.KindToolStart:
-		h.event(ws, th, model.Event{Kind: model.EventTool, Tool: e.Tool, Detail: e.Detail})
+		h.event(ws, th, model.Event{Kind: model.EventTool, Tool: e.Tool, Detail: e.Detail, ID: e.ID})
+	case agent.KindToolFailed:
+		h.event(ws, th, model.Event{Kind: model.EventTool, ID: e.ID, Exit: 1, Text: e.Text})
 	case agent.KindAssistantText:
 		h.event(ws, th, model.Event{Kind: model.EventText, Text: e.Text})
 	case agent.KindError:
@@ -1299,16 +1351,6 @@ func (h *Hub) systemPrompt(ws *space, th *thread) string {
 		return prompts.Coordinator(in)
 	}
 	return prompts.Thread(in)
-}
-
-func (h *Hub) mcpConfig(token string) string {
-	cfg := map[string]any{"mcpServers": map[string]any{"neoharness": map[string]any{
-		"type":    "http",
-		"url":     fmt.Sprintf("http://127.0.0.1:%d/mcp", h.cfg.MCPPort),
-		"headers": map[string]string{"Authorization": "Bearer " + token},
-	}}}
-	data, _ := json.Marshal(cfg)
-	return string(data)
 }
 
 // compose turns a batch of queued messages into one prompt. Messages from
@@ -1516,47 +1558,6 @@ func (h *Hub) lookup(workspaceName, name string) (*space, *thread, error) {
 }
 
 // --- helpers ---
-
-// inputDetail picks the part of a tool's input worth showing in a permission
-// request: the command, the path, or else the first string argument.
-func inputDetail(tool string, input json.RawMessage) string {
-	var m map[string]any
-	if json.Unmarshal(input, &m) != nil {
-		return ""
-	}
-	for _, k := range []string{"command", "file_path", "path", "url", "pattern"} {
-		if s, ok := m[k].(string); ok && s != "" {
-			return strings.Join(strings.Fields(s), " ")
-		}
-	}
-	for _, v := range m {
-		if s, ok := v.(string); ok && s != "" {
-			return strings.Join(strings.Fields(s), " ")
-		}
-	}
-	return ""
-}
-
-// rulePrefix is what an "allow always" remembers. For Bash it is the
-// command's first word; for every other tool the whole tool is allowed.
-//
-// chained reports a Bash command that does more than one thing. Those are
-// always asked about: an allowed `go` must not let `go test; rm -rf ~` through
-// on the strength of its first word.
-func rulePrefix(tool string, input json.RawMessage) (prefix string, chained bool) {
-	if tool != "Bash" {
-		return "", false
-	}
-	var m struct {
-		Command string `json:"command"`
-	}
-	_ = json.Unmarshal(input, &m)
-	chained = strings.ContainsAny(m.Command, ";&|`<>\n") || strings.Contains(m.Command, "$(")
-	if f := strings.Fields(m.Command); len(f) > 0 {
-		return f[0], chained
-	}
-	return "", chained
-}
 
 func lastLine(texts ...string) string {
 	for _, s := range texts {

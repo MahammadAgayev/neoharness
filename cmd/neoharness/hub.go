@@ -126,7 +126,7 @@ func agentFactory(tunnels *tunnel.Manager) hub.AgentFactory {
 }
 
 type tunneled struct {
-	agent.Agent
+	*agentclaude.Agent
 	tunnels *tunnel.Manager
 	host    string
 }

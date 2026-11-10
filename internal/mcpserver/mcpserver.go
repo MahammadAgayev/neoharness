@@ -1,4 +1,4 @@
-// Package mcpserver exposes the hub to Claude sessions as the `neoharness` MCP
+// Package mcpserver exposes the hub to agent sessions as the `neoharness` MCP
 // server: status, messaging, progress, questions, permission prompts, and the
 // coordinator's thread tools.
 //
@@ -19,6 +19,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/MahammadAgayev/neoharness/internal/agent/claude"
 	"github.com/MahammadAgayev/neoharness/internal/hub"
 	"github.com/MahammadAgayev/neoharness/internal/model"
 )
@@ -183,7 +184,10 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{Name: "permission_prompt", Description: "Used by Claude Code to ask the person for permission. Do not call it yourself."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in permissionIn) (*mcp.CallToolResult, any, error) {
 			input, _ := json.Marshal(in.Input)
-			ok, msg := h.Permission(ctx, p, me, in.ToolName, input)
+			ok, msg := true, ""
+			if !claude.HarnessTool(in.ToolName) {
+				ok, msg = h.Permission(ctx, p, me, claude.Ask(in.ToolName, input))
+			}
 			return text(permissionReply(ok, msg, input)), nil, nil
 		})
 
@@ -191,7 +195,7 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 		return s
 	}
 
-	mcp.AddTool(s, &mcp.Tool{Name: "open_thread", Description: "Open a new thread: a separate Claude Code session that starts on the brief at once."},
+	mcp.AddTool(s, &mcp.Tool{Name: "open_thread", Description: "Open a new thread: a separate agent session that starts on the brief at once."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in openIn) (*mcp.CallToolResult, any, error) {
 			if err := h.OpenThread(p, me, in.Name, in.Brief, in.Location); err != nil {
 				return nil, nil, err
@@ -279,6 +283,7 @@ func Transcript(evs []model.Event) string {
 		return "No events."
 	}
 	var b strings.Builder
+	tools := map[string]string{}
 	for _, e := range evs {
 		fmt.Fprintf(&b, "%s ", e.At.Format("15:04"))
 		switch e.Kind {
@@ -287,6 +292,19 @@ func Transcript(evs []model.Event) string {
 		case model.EventText:
 			fmt.Fprintf(&b, "reply: %s", e.Text)
 		case model.EventTool:
+			if e.Exit != 0 {
+				b.WriteString("the tool call failed")
+				if t := tools[e.ID]; t != "" {
+					fmt.Fprintf(&b, ": %s", t)
+				}
+				if e.Text != "" {
+					fmt.Fprintf(&b, ": %s", e.Text)
+				}
+				break
+			}
+			if e.ID != "" {
+				tools[e.ID] = e.Tool
+			}
 			fmt.Fprintf(&b, "tool %s: %s", e.Tool, e.Detail)
 		case model.EventPermission:
 			fmt.Fprintf(&b, "permission asked for %s: %s", e.Tool, e.Detail)

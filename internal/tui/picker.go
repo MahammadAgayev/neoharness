@@ -333,14 +333,23 @@ func (a *App) pickGrep() {
 				if fold {
 					hay = strings.ToLower(text)
 				}
-				if !strings.Contains(hay, q) {
+				at := strings.Index(hay, q)
+				if at < 0 {
 					continue
 				}
+				// The row starts a little before the match, so the match
+				// shows even late in a long line.
+				detail := strings.TrimSpace(text)
+				if at > 24 && len(hay) == len(text) {
+					cut := strings.LastIndex(text[:at-12], " ")
+					detail = "…" + strings.TrimSpace(text[max(cut, 0):])
+				}
 				name, line := n, i
+				v := a.threads[n]
 				items = append(items, pickItem{
-					glyph:  Span{"›", a.th.Muted},
+					glyph:  Span{stateGlyph(v.State), a.th.state(v.State)},
 					label:  n,
-					detail: strings.TrimSpace(text),
+					detail: detail,
 					run: func() {
 						a.showThread(name)
 						a.moveTo(a.cur, line)

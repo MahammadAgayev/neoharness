@@ -32,6 +32,9 @@ const (
 	// KindError is the agent reporting a failure inside an otherwise live stream.
 	// A process that dies is a Result error instead.
 	KindError
+	// KindToolFailed is a tool call that failed or was denied: ID is the
+	// KindToolStart's, Text the first line of why.
+	KindToolFailed
 )
 
 func (k Kind) String() string {
@@ -44,6 +47,8 @@ func (k Kind) String() string {
 		return "turn"
 	case KindError:
 		return "error"
+	case KindToolFailed:
+		return "tool failed"
 	}
 	return "unknown"
 }
@@ -53,6 +58,8 @@ type Event struct {
 	Kind Kind
 	// Tool is the tool name, for KindToolStart.
 	Tool string
+	// ID ties a KindToolFailed to its KindToolStart.
+	ID string
 	// Detail is the interesting argument to that tool — a path, a command, a
 	// pattern — flattened to a single line. Which argument that is varies by
 	// tool and by CLI, so picking it is the adapter's job, not the display's.
@@ -79,17 +86,10 @@ type Request struct {
 	// thread is one long conversation across turns and restarts.
 	Conversation string
 	Resume       bool
-	// MCPConfig is MCP server configuration as a JSON string, added to the
-	// CLI's own servers.
-	MCPConfig string
-	// PermissionPromptTool names an MCP tool that answers permission prompts,
-	// so a human can approve tool calls without a terminal.
-	PermissionPromptTool string
-	// PermissionMode is the agent's own permission mode, like "auto"; empty
-	// is its default.
-	PermissionMode string
-	// Env is extra KEY=VALUE pairs for the agent process.
-	Env []string
+	// Harness is the neoharness MCP server for this thread. The adapter adds
+	// it to the CLI's servers and asks it before a tool call the CLI may not
+	// make on its own, so a person can answer without a terminal.
+	Harness Harness
 	// Model and Effort choose the model and effort level; empty leaves the
 	// CLI's default.
 	Model  string
@@ -97,6 +97,32 @@ type Request struct {
 	// OnEvent receives events as they arrive. Called from the adapter's read
 	// goroutine, one at a time, never concurrently. May be nil.
 	OnEvent func(Event)
+}
+
+// Harness is an MCP server over HTTP, reached with a bearer token.
+type Harness struct {
+	URL   string
+	Token string
+}
+
+// Permission is a question an agent asks before a tool call, in terms the hub
+// can show and remember. The adapter fills it from its own tool schema.
+type Permission struct {
+	Tool string
+	// Detail is the interesting argument, on one line.
+	Detail string
+	// Prefix is what an "allow always" remembers, as a command's first word;
+	// empty covers the whole tool.
+	Prefix string
+	// Compound is a call that does more than one thing, as a chained shell
+	// command. A rule never covers it.
+	Compound bool
+}
+
+// Efforter is an Agent that names the effort levels it takes. The hub checks
+// /effort against them; without it, any level goes to the agent.
+type Efforter interface {
+	Efforts() []string
 }
 
 // Result is what one invocation produced, and what it cost.
@@ -124,6 +150,9 @@ type Result struct {
 	ContextWindow int
 	// Cost is what this invocation cost in US dollars.
 	Cost float64
+	// Lost says the agent has no record of the conversation the request
+	// resumed. The caller starts a new conversation and sends the prompt again.
+	Lost bool
 }
 
 // Agent runs one turn and reports what happened.

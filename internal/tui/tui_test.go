@@ -47,6 +47,15 @@ func (f *fakeClient) DeleteWorkspace(name string) error {
 	f.gone = append(f.gone, name)
 	return nil
 }
+func (f *fakeClient) DeletedWorkspaces() ([]string, error) { return slices.Clone(f.gone), nil }
+func (f *fakeClient) RestoreWorkspace(name string) error {
+	if !slices.Contains(f.gone, name) {
+		return fmt.Errorf("no deleted workspace %q", name)
+	}
+	f.gone = slices.DeleteFunc(f.gone, func(n string) bool { return n == name })
+	f.workspaces = append(f.workspaces, model.WorkspaceView{Name: name})
+	return nil
+}
 func (f *fakeClient) Threads(p string) ([]model.ThreadView, error) { return f.threads[p], nil }
 func (f *fakeClient) Artifacts(p string) ([]model.Artifact, error) { return slices.Clone(f.arts), nil }
 func (f *fakeClient) Artifact(p, name string) (model.Artifact, string, error) {
@@ -607,10 +616,14 @@ func TestMarkdownTableAlignsColumns(t *testing.T) {
 	if !strings.Contains(got[3], "│   ~250 │") {
 		t.Errorf("a right-aligned column should pad on the left, got %q", got[3])
 	}
-	for _, l := range texts(renderMarkdown(src, 30, th, nil)) {
+	narrow := texts(renderMarkdown(src, 30, th, nil))
+	for _, l := range narrow {
 		if width(l) > 30 {
 			t.Errorf("a wide table should shrink to the window, got %q (%d)", l, width(l))
 		}
+	}
+	if all := strings.Join(narrow, " "); !strings.Contains(all, "proven") || strings.Contains(all, "…") {
+		t.Errorf("a narrow table should wrap its cells, not cut them:\n%s", strings.Join(narrow, "\n"))
 	}
 }
 
@@ -879,7 +892,23 @@ func TestChangeFolderAndDeleteWorkspace(t *testing.T) {
 		t.Fatalf("still in %q, list %+v", h.a.workspace, h.a.workspaces)
 	}
 	h.see("workspaces")
-	h.see("demo deleted")
+	h.see("demo deleted · :restore demo brings it back")
+}
+
+func TestRestoreWorkspace(t *testing.T) {
+	h := start(t)
+	h.press(":restore", "<CR>")
+	h.see("no deleted workspaces")
+	h.hub.gone = []string{"old"}
+	h.press(":restore", "<CR>")
+	h.see("deleted: old · :restore <name>")
+	h.press(":restore nope", "<CR>")
+	h.see("no deleted workspace \"nope\"")
+	h.press(":restore old", "<CR>")
+	h.see("old restored")
+	if !slices.ContainsFunc(h.a.workspaces, func(p model.WorkspaceView) bool { return p.Name == "old" }) {
+		t.Fatal("the restored workspace should be in the list")
+	}
 }
 
 func TestThreadsPaneGroupsByStateAndFoldsResolved(t *testing.T) {
@@ -1083,10 +1112,7 @@ func TestArtifactOpensInAPopupBesideItsWriter(t *testing.T) {
 	if h.a.under == nil || h.a.cur.Buf.Artifact != "design" {
 		t.Fatal("<leader>pa should open the popup too")
 	}
-	h.press("q")
-	if h.a.under != nil {
-		t.Fatal("q should close the popup")
-	}
+	h.press("<Esc>")
 	h.press("<Space>", "p", "a", "<CR>", ":q", "<CR>", ":q", "<CR>")
 	if h.a.under != nil || h.a.quit {
 		t.Fatal(":q on the last popup window should close the popup, not neoharness")
@@ -1112,7 +1138,7 @@ func TestDocumentRendering(t *testing.T) {
 		"◇ doc · by api · v3",
 		"  Title\n  ━━━━",
 		"  Steps\n  ────",
-		"the docs (https://x.dev)",
+		"See the docs.",
 		"  ☑ done", "  ☐ todo", "    ◦ nested",
 		"shared cache │ one more service to run, and a network hop on every read of the\n" + strings.Repeat(" ", 15) + "│ hot path",
 		"   9. i", "  10. j",
@@ -1125,6 +1151,13 @@ func TestDocumentRendering(t *testing.T) {
 	}
 	if strings.Contains(all, "[!WARNING]") {
 		t.Error("the alert marker should not show")
+	}
+	for _, l := range lines {
+		for _, sp := range l.Spans {
+			if sp.Text == "the docs" && sp.Style != linkStyle(th, "https://x.dev") {
+				t.Error("a link should carry its URL for the terminal, not show it")
+			}
+		}
 	}
 	if strings.Join(heads, "|") != "Title|Steps" {
 		t.Errorf("headings for ]m = %q", heads)
@@ -1269,6 +1302,9 @@ func TestArtifactRailFollowsTheCursor(t *testing.T) {
 		t.Fatalf("at the end the last section should be the heavy dash:\n%s", h.screen())
 	}
 	w := h.a.cur
+	if strings.Contains(h.screen(), "─ Tunnel") || strings.Contains(h.screen(), "─  Tunnel") {
+		t.Fatal("the rail shows no names")
+	}
 	if lines := w.Buf.Lines(h.a.textWidth(w), h.a.th, 0); !strings.Contains(lines[len(lines)-1].Text(), "End.") || h.a.textWidth(w) != w.rect.W-1-railWidth(w) {
 		t.Fatal("the text should start after the rail")
 	}
@@ -1284,36 +1320,144 @@ func editDemo(t *testing.T, body string) *neoharness {
 	return h
 }
 
+func TestOutlineJumpsToAHeading(t *testing.T) {
+	h := editDemo(t, "# Design\n\nIntro.\n\n## Store\n\nKeep it in redis.\n\n## Auth\n\nTokens.\n")
+	h.press("g", "O")
+	if h.a.mode != modePicker || len(h.a.picker.items) != 3 {
+		t.Fatalf("gO should list the 3 headings, mode %v", h.a.mode)
+	}
+	h.press("Auth", "<CR>")
+	if got := h.a.line(h.a.cur).Text(); !strings.Contains(got, "Auth") {
+		t.Fatalf("cursor on %q, want the Auth heading", got)
+	}
+}
+
+func TestGfOpensTheArtifactUnderTheCursor(t *testing.T) {
+	h := start(t)
+	h.hub.arts = []model.Artifact{
+		{Name: "design", Title: "Design", Thread: "auth-refactor", Version: 1},
+		{Name: "doc-notes", Title: "Notes", Thread: "auth-refactor", Version: 1},
+	}
+	h.hub.docs = map[string]string{"design": "# D\n\nSee doc-notes here.\n", "doc-notes": "# Notes\n"}
+	h.openDemo()
+	h.a.openArtifact("design")
+	h.a.draw()
+	h.press("g", "f")
+	if !strings.Contains(h.a.notice, "no artifact") {
+		t.Fatalf("gf off a name should say so, notice %q", h.a.notice)
+	}
+	h.press("/doc-notes", "<CR>", "g", "f")
+	if h.a.cur.Buf.Artifact != "doc-notes" {
+		t.Fatal("gf should open the artifact named under the cursor")
+	}
+}
+
+func TestMacrosRecordAndPlay(t *testing.T) {
+	h, ed := srcEdit(t, "a1\na2\na3\na4\na5")
+	h.press("q", "x", "A", "!", "<Esc>", "j", "q")
+	if h.a.recordInto != 0 {
+		t.Fatal("q should stop recording")
+	}
+	h.press("@", "x", "@", "@")
+	if got, want := ed.Text(), "# D\n\na1!\na2!\na3!\na4\na5\n"; got != want {
+		t.Fatalf("after @x @@: %q, want %q", got, want)
+	}
+	h.press("2", "@", "x")
+	if got, want := ed.Text(), "# D\n\na1!\na2!\na3!\na4!\na5!\n"; got != want {
+		t.Fatalf("after 2@x: %q, want %q", got, want)
+	}
+	h.press("q", "y")
+	h.a.draw()
+	h.see("recording @y")
+	h.press("q")
+	if h.a.recordInto != 0 || h.a.under == nil {
+		t.Fatal("q stops recording and leaves the popup open")
+	}
+}
+
+func TestMotionsCountWideCharactersAsTwoColumns(t *testing.T) {
+	h := editDemo(t, "# D\n\n中文 a(b) end\n")
+	w := h.a.cur
+	h.press("/中", "<CR>")
+	pre := w.Col
+	for _, c := range []struct {
+		keys []string
+		col  int
+	}{
+		{[]string{"f", "("}, 6},
+		{[]string{"%"}, 8},
+		{[]string{"w"}, 10},
+		{[]string{"F", "文"}, 2},
+		{[]string{"b"}, 0},
+		{[]string{"e"}, 2},
+	} {
+		h.press(c.keys...)
+		if w.Col-pre != c.col {
+			t.Fatalf("%v: column %d, want %d", c.keys, w.Col-pre, c.col)
+		}
+	}
+}
+
 func TestArtifactEditOpensWhereYouReadAndSaves(t *testing.T) {
 	h := editDemo(t, "# Design\n\nIntro.\n\n## Store\n\nKeep it in redis.\n")
 	for !strings.Contains(h.a.line(h.a.cur).Text(), "Keep it") {
 		h.press("j")
 	}
 	h.press("A", " Or sqlite.", "<Esc>")
-	if h.a.mode != modeNormal || h.a.cur.Buf.Edit == nil {
-		t.Fatal("<Esc> from Insert should stay in the source")
+	b := h.a.cur.Buf
+	if h.a.mode != modeNormal || b.Edit != nil || b.Held == nil {
+		t.Fatal("<Esc> from Insert started on the document should show it, the edit held")
 	}
 	h.a.draw()
 	h.see("Keep it in redis. Or sqlite.")
 	h.see("design [+]")
-	h.press("<Esc>")
-	if h.a.cur.Buf.Edit == nil {
-		t.Fatal("<Esc> should not drop unsaved changes")
+	if l := h.a.line(h.a.cur).Text(); !strings.Contains(l, "Keep it in redis. Or sqlite.") {
+		t.Fatalf("the document should show the edited paragraph, cursor on %q", l)
 	}
-	h.see("unsaved changes")
+	h.press(":qa", "<CR>")
+	if h.a.quit {
+		t.Fatal(":qa should not drop a held edit")
+	}
 	h.press(":w", "<CR>")
 	if h.hub.docs["design"] != "# Design\n\nIntro.\n\n## Store\n\nKeep it in redis. Or sqlite.\n" || h.hub.arts[0].Version != 2 {
 		t.Fatalf("saved %q v%d", h.hub.docs["design"], h.hub.arts[0].Version)
 	}
-	h.press("<Esc>")
-	if h.a.cur.Buf.Edit != nil || h.a.under == nil {
-		t.Fatal("<Esc> after a save should show the document, still in the popup")
+	if b.Edit != nil || b.Held != nil || h.a.under == nil {
+		t.Fatal(":w on the document should save and keep showing it, still in the popup")
 	}
 	h.a.draw()
 	if l := h.a.line(h.a.cur).Text(); !strings.Contains(l, "Keep it in redis. Or sqlite.") {
-		t.Fatalf("the document should open at the edited paragraph, cursor on %q", l)
+		t.Fatalf("the cursor should stay on the edited paragraph, got %q", l)
 	}
 	h.see("v2 · edited by you")
+}
+
+func TestHeldEditResumesAndDrops(t *testing.T) {
+	h := editDemo(t, "# D\n\none\n")
+	h.press("G", "A", "!", "<Esc>")
+	b := h.a.cur.Buf
+	ed := b.Held
+	h.press("A", "?", "<Esc>")
+	if b.Held != ed || ed.Text() != "# D\n\none!?\n" {
+		t.Fatalf("Insert on a held edit should go on with it: %q", b.Held.Text())
+	}
+	h.press(":e", "<CR>", "u")
+	if b.Edit != ed || ed.Text() != "# D\n\none!\n" {
+		t.Fatalf("the held edit keeps its undo: %q", ed.Text())
+	}
+	h.press("i", "x", "<Esc>")
+	if b.Edit == nil {
+		t.Fatal("Insert started in the source should end in the source")
+	}
+	h.press(":q", "<CR>", ":q!", "<CR>")
+	if b.Edit != nil || b.Held != nil || h.hub.docs["design"] != "# D\n\none\n" {
+		t.Fatal(":q! should drop the held edit")
+	}
+	h.a.draw()
+	h.see("one")
+	if strings.Contains(h.screen(), "one!") || strings.Contains(h.screen(), "[+]") {
+		t.Fatal("the document should show the saved text again")
+	}
 }
 
 func TestArtifactEditNormalCommandsAndUndo(t *testing.T) {
@@ -1419,6 +1563,30 @@ func TestArtifactEditOperators(t *testing.T) {
 		{"alpha beta gamma", []string{"cw", "one", "<Esc>", "w", "."}, "one one gamma"},
 		{"alpha beta gamma", []string{"v", "e", "d"}, " beta gamma"},
 		{"alpha beta gamma", []string{"w", "v", "e", "c", "B", "<Esc>"}, "alpha B gamma"},
+		{"see [docs](https://old.dev) now", []string{"f", "h", "ci(", "https://new.dev", "<Esc>"}, "see [docs](https://new.dev) now"},
+		{"see [docs](https://old.dev) now", []string{"w", "w", "di["}, "see [](https://old.dev) now"},
+		{"say \"hi there\" ok", []string{"ci\"", "yo", "<Esc>"}, "say \"yo\" ok"},
+		{"say \"hi there\" ok", []string{"$", "da\""}, "say \"hi there\" ok"},
+		{"f(a, g(b)) end", []string{"f", "b", "dib"}, "f(a, g()) end"},
+		{"f(a, g(b)) end", []string{"l", "l", "da("}, "f end"},
+		{"use `code` here", []string{"w", "w", "yi`", "$", "p"}, "use `code` herecode"},
+		{"a, b, c, d", []string{"df,"}, " b, c, d"},
+		{"a, b, c, d", []string{"2df,"}, " c, d"},
+		{"a, b, c, d", []string{"dt,"}, ", b, c, d"},
+		{"a, b, c, d", []string{"$", "dF,"}, "a, b, cd"},
+		{"a, b, c, d", []string{"$", "dT,"}, "a, b, c,d"},
+		{"f(x) end", []string{"ct)", "y", "<Esc>"}, "y) end"},
+		{"a, b, c, d", []string{"f,", ";", "x"}, "a, b c, d"},
+		{"a, b, c, d", []string{"f,", ";", ",", "x"}, "a b, c, d"},
+		{"a, b, c, d", []string{"t,", ";", "x"}, "a, , c, d"},
+		{"a, b, c, d", []string{"df,", "."}, " c, d"},
+		{"f(a, g(b)) end", []string{"f", "(", "d%"}, "f end"},
+		{"f(a, g(b)) end", []string{"d%"}, " end"},
+		{"f(a, g(b)) end", []string{"f", "(", "%", "x"}, "f(a, g(b) end"},
+		{"f(a, g(b)) end", []string{"f", "(", "%", "%", "x"}, "fa, g(b)) end"},
+		{"alpha beta gamma", []string{"w", "v", "i", "w", "d"}, "alpha  gamma"},
+		{"see [docs](https://x.dev) now", []string{"f", "x", "v", "i", "(", "c", "y", "<Esc>"}, "see [docs](y) now"},
+		{"say \"hi there\" ok", []string{"f", "h", "v", "a", "\"", "d"}, "say  ok"},
 	} {
 		h, ed := srcEdit(t, c.line)
 		h.press(c.keys...)
@@ -1495,5 +1663,439 @@ func TestArtifactEditMergesANewerVersion(t *testing.T) {
 	h.press("u")
 	if ed.Text() != "# D\n\n## A\none!\n" {
 		t.Fatalf("u after a merge should give back the edit alone: %q", ed.Text())
+	}
+}
+
+func TestHeadingLevel(t *testing.T) {
+	for s, want := range map[string]int{"# A": 1, "### A": 3, "#": 1, "#tag": 0, "####### A": 0, "text": 0, "#\tA": 1} {
+		if got := headingLevel(s); got != want {
+			t.Errorf("headingLevel(%q) = %d, want %d", s, got, want)
+		}
+	}
+}
+
+func TestRepeatOnTheDocument(t *testing.T) {
+	h := editDemo(t, "# D\n\none\n\ntwo\n")
+	h.press(":e", "<CR>", ":q", "<CR>")
+	h.press("/one", "<CR>", "A", "!", "<Esc>", "/two", "<CR>", ".")
+	b := h.a.cur.Buf
+	if b.Held == nil || b.Held.Text() != "# D\n\none!\n\ntwo!\n" {
+		t.Fatalf(". on the document should type the change again: %v", b.Held)
+	}
+}
+
+func TestEnterContinuesAList(t *testing.T) {
+	for _, c := range []struct{ line, typed, want string }{
+		{"- one", "<CR>two", "- one\n- two"},
+		{"  * one", "<CR>two", "  * one\n  * two"},
+		{"3. one", "<CR>two", "3. one\n4. two"},
+		{"- [x] done", "<CR>next", "- [x] done\n- [ ] next"},
+		{"- one", "<CR><CR>after", "- one\nafter"},
+		{"plain", "<CR>x", "plain\nx"},
+		{"- - -", "<CR>x", "- - -\nx"},
+		{"* * *", "<CR>x", "* * *\nx"},
+	} {
+		h, ed := srcEdit(t, c.line)
+		h.press("A")
+		for _, part := range strings.SplitAfter(c.typed, "<CR>") {
+			text, cr := strings.CutSuffix(part, "<CR>")
+			if text != "" {
+				h.press(text)
+			}
+			if cr {
+				h.press("<CR>")
+			}
+		}
+		if got := strings.TrimSuffix(strings.TrimPrefix(ed.Text(), "# D\n\n"), "\n"); got != c.want {
+			t.Errorf("%q + %q = %q, want %q", c.line, c.typed, got, c.want)
+		}
+	}
+}
+
+func TestSearchFindsTextAcrossAWrap(t *testing.T) {
+	for n := 1; n < 160; n += 3 {
+		h := editDemo(t, "# D\n\n"+strings.Repeat("x", n)+" Pick the store\n")
+		w := h.a.cur
+		split := false
+		for _, l := range w.Buf.Lines(h.a.textWidth(w), h.a.th, 0) {
+			split = split || strings.HasSuffix(l.Text(), "Pick") || strings.HasSuffix(l.Text(), "the")
+		}
+		if !split {
+			continue
+		}
+		h.press("gg", "/Pick the store", "<CR>")
+		if strings.Contains(h.a.notice, "not found") || !strings.Contains(h.a.line(w).Text(), "Pick") {
+			t.Fatalf("search should match across a wrapped row: %q", h.a.notice)
+		}
+		return
+	}
+	t.Fatal("no filler length split the words")
+}
+
+func TestGxOpensTheLinkUnderTheCursor(t *testing.T) {
+	h := editDemo(t, "# D\n\n| a | b |\n|---|---|\n| [one](https://one.dev) | [two](https://two.dev) |\n")
+	var opened []string
+	h.a.openURL = func(_, url string) error { opened = append(opened, url); return nil }
+	h.press("/two", "<CR>", "gx", "/one", "<CR>", "gx", "gg", "gx")
+	if strings.Join(opened, " ") != "https://two.dev https://one.dev" {
+		t.Fatalf("gx opened %q", opened)
+	}
+	h.see("no link under the cursor")
+}
+
+func TestACutRowEndsWithAnEllipsis(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads["auth-refactor"]
+	v.Progress = strings.Repeat("long progress ", 20) + "END"
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	for _, l := range strings.Split(h.screen(), "\n") {
+		if strings.Contains(l, "auth-refactor") && strings.Contains(l, "long progress") {
+			if strings.Contains(l, "END") || !strings.HasSuffix(strings.TrimRight(l, " "), "…") {
+				t.Fatalf("a cut row should end with …: %q", l)
+			}
+			return
+		}
+	}
+	t.Fatalf("no threads row:\n%s", h.screen())
+}
+
+func TestPlainDropsMarkdownMarks(t *testing.T) {
+	for in, want := range map[string]string{
+		"Done: the `notes` artifact is **written**.": "Done: the notes artifact is written.",
+		"see [docs](https://x.dev)\nnext line":       "see docs next line",
+		"- one\n- two":                               "• one • two",
+	} {
+		if got := plain(in); got != want {
+			t.Errorf("plain(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestGxInAChat(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	e := model.Event{Kind: model.EventText, Text: "See [the guide](https://guide.dev) and [other](https://other.dev)."}
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &e})
+	var opened string
+	h.a.openURL = func(_, url string) error { opened = url; return nil }
+	h.press("<Esc>", "/other", "<CR>", "gx")
+	if opened != "https://other.dev" {
+		t.Fatalf("gx in a chat opened %q", opened)
+	}
+}
+
+func TestJSONTextReadsAsKeysAndValues(t *testing.T) {
+	src := `{"ok": false, "code": "usage", "reason": "Usage:\n  /setup --wizard\n  /setup --apply", "n": 3, "list": ["a", {"b": 1}]}`
+	lines, ok := renderJSON(src, 60, newTheme(), nil)
+	if !ok {
+		t.Fatal("a JSON object should render as JSON")
+	}
+	want := "ok: false\ncode: usage\nreason:\n  Usage:\n    /setup --wizard\n    /setup --apply\nn: 3\nlist:\n  - a\n  -\n    b: 1"
+	var got []string
+	for _, l := range lines {
+		got = append(got, strings.TrimRight(spansText(l.Prefix)+l.Text(), " "))
+	}
+	if got := strings.Join(got, "\n"); got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+	if _, ok := renderJSON("{not json", 60, newTheme(), nil); ok {
+		t.Fatal("text that is not JSON should stay markdown")
+	}
+}
+
+func TestMarks(t *testing.T) {
+	h := editDemo(t, "# D\n\none\n\n"+strings.Repeat("filler\n\n", 20)+"two words\n")
+	w := h.a.cur
+	h.press("/one", "<CR>", "ma")
+	one := w.Cur
+	h.press("/words", "<CR>")
+	col := w.Col
+	h.press("mb", "'a")
+	if w.Cur != one {
+		t.Fatalf("'a should go to the line of mark a, at %d not %d", w.Cur, one)
+	}
+	h.press("`b")
+	if w.Col != col {
+		t.Fatalf("`b should go to the column of mark b, %d not %d", w.Col, col)
+	}
+	h.press("''")
+	if w.Cur != one {
+		t.Fatal("'' should go back to where the jump started")
+	}
+	h.press("'z")
+	h.see("mark not set")
+}
+
+func TestParagraphObjects(t *testing.T) {
+	for _, c := range []struct {
+		keys []string
+		want string
+	}{
+		{[]string{"dap"}, "# D\n\nthree\n"},
+		{[]string{"dip"}, "# D\n\n\nthree\n"},
+		{[]string{"cip", "new", "<Esc>"}, "# D\n\nnew\n\nthree\n"},
+		{[]string{"yap", "G", "p"}, "# D\n\none\ntwo\n\nthree\n\none\ntwo\n"},
+		{[]string{"V", "<Esc>", "v", "i", "p", "d"}, "# D\n\n\nthree\n"},
+	} {
+		h, ed := srcEdit(t, "one\ntwo\n\nthree")
+		h.press(c.keys...)
+		if got := ed.Text(); got != c.want {
+			t.Errorf("%v = %q, want %q", c.keys, got, c.want)
+		}
+	}
+}
+
+func TestFastEscapeThenKeyIsTwoKeys(t *testing.T) {
+	h := editDemo(t, "# D\n\none\n")
+	h.press(":e", "<CR>", "G", "k", "A", "!")
+	h.a.key(tcell.NewEventKey(tcell.KeyRune, ':', tcell.ModAlt))
+	h.press("w", "<CR>")
+	if h.hub.docs["design"] != "# D\n\none!\n" {
+		t.Fatalf("<Esc>:w typed fast should save, saved %q", h.hub.docs["design"])
+	}
+	if h.a.mode != modeNormal {
+		t.Fatal("<Esc> typed fast should leave Insert")
+	}
+}
+
+func TestFastEscapeInNormalKeepsTheKey(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.a.key(tcell.NewEventKey(tcell.KeyRune, ':', tcell.ModAlt))
+	if h.a.mode != modeCommand {
+		t.Fatal("<Esc>: typed fast in Normal should start a command, as in Vim")
+	}
+}
+
+func TestYankMotionsWithoutASource(t *testing.T) {
+	h := editDemo(t, "# D\n\nKeep (the cache) warm, said Ann.\n\nNext paragraph.\n")
+	clip := func() string { return string(h.s.GetClipboardData()) }
+	h.press("/cache", "<CR>", "yiw")
+	if clip() != "cache" {
+		t.Fatalf("yiw on the document = %q", clip())
+	}
+	h.press("yi(")
+	if clip() != "the cache" {
+		t.Fatalf("yi( on the document = %q", clip())
+	}
+	h.press("yt,")
+	if clip() != "cache) warm" {
+		t.Fatalf("yt, on the document = %q", clip())
+	}
+	h.press("yip")
+	if !strings.Contains(clip(), "Keep (the cache) warm, said Ann.") || strings.Contains(clip(), "Next") {
+		t.Fatalf("yip on the document = %q", clip())
+	}
+}
+
+func TestBracketObjectsOverLines(t *testing.T) {
+	for _, c := range []struct {
+		keys []string
+		want string
+	}{
+		{[]string{"di{"}, "f {\n}\n"},
+		{[]string{"da{"}, "f \n"},
+		{[]string{"ci{", "x", "<Esc>"}, "f {\nx\n}\n"},
+		{[]string{"yi{", "G", "p"}, "f {\n  a\n  b\n}\n\n  a\n  b"},
+		// A find that fails on the line is not a bracket object.
+		{[]string{"dt}"}, "f {\n  a\n  b\n}\n"},
+		{[]string{"df}"}, "f {\n  a\n  b\n}\n"},
+	} {
+		h := editDemo(t, "f {\n  a\n  b\n}\n")
+		h.press(":e", "<CR>", "/a", "<CR>")
+		ed := h.a.cur.Buf.Edit
+		h.press(c.keys...)
+		if got := ed.Text(); got != c.want {
+			t.Errorf("%v = %q, want %q", c.keys, got, c.want)
+		}
+	}
+}
+
+func TestHelpOpensAtTheTop(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press(":help", "<CR>")
+	h.a.draw()
+	h.see("neoharness  keys")
+}
+
+func TestEmptyMessagesSaySo(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press(":messages", "<CR>")
+	h.a.draw()
+	h.see("no messages yet")
+}
+
+func TestToolDetailsUseShortMCPNames(t *testing.T) {
+	if got := shortTools("select:mcp__neoharness__workspace_status,mcp__slack__read"); got != "select:neoharness·workspace_status,slack·read" {
+		t.Fatalf("shortTools = %q", got)
+	}
+}
+
+func TestTranscriptSearchShowsTheMatch(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	e := model.Event{Kind: model.EventText, Text: "Some opening words that come first, then the needle word."}
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &e})
+	h.press("<Esc>", "<Space>", "/", "needle")
+	items := h.a.picker.items
+	if len(items) != 1 || !strings.HasPrefix(items[0].detail, "…") || !strings.Contains(items[0].detail, "needle") || strings.Contains(items[0].detail, "Some") {
+		t.Fatalf("items = %+v", items)
+	}
+	if items[0].glyph.Text == "›" {
+		t.Fatal("a result should show its thread's state, not the prompt glyph")
+	}
+}
+
+func TestFailedToolCallsShowOnTheFold(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	for _, e := range []model.Event{
+		{Kind: model.EventTool, Tool: "Bash", Detail: "git push --force", ID: "tu1"},
+		{Kind: model.EventTool, Tool: "Read", Detail: "a.go", ID: "tu2"},
+		{Kind: model.EventTool, ID: "tu1", Exit: 1, Text: "Permission to use Bash was denied."},
+		{Kind: model.EventTurnEnd},
+	} {
+		h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &e})
+	}
+	h.a.draw()
+	h.see("2 tool calls · 1 failed")
+	if got := h.fgAt("· 1 failed"); got != rpLove {
+		t.Fatalf("the failed mark should be red, got %v", got)
+	}
+	h.press("<Esc>", "/2 tool calls", "<CR>", "za")
+	h.a.draw()
+	h.see("✗ Permission to use Bash was denied.")
+}
+
+func TestLineBreaksAndImages(t *testing.T) {
+	th := newTheme()
+	src := "one<br>two<BR/>three\n\n| a | b |\n|---|---|\n| x<br>y | z |\n\n![diagram](https://x.dev/a.png)\n"
+	lines := renderDocument(model.Artifact{Name: "d"}, src, 80, th)
+	all := strings.Join(texts(lines), "\n")
+	for _, want := range []string{"one\n", "two\n", "three", "x", "y", "image diagram"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("missing %q in:\n%s", want, all)
+		}
+	}
+	if strings.Contains(strings.ToLower(all), "<br") {
+		t.Errorf("<br> should break the line:\n%s", all)
+	}
+	for _, l := range texts(lines) {
+		if strings.Contains(l, "│ z") && (!strings.Contains(l, "x") || strings.Contains(l, "y")) {
+			t.Errorf("<br> in a cell should put y on the next row: %q", l)
+		}
+	}
+	for _, l := range lines {
+		for _, sp := range l.Spans {
+			if sp.Text == "diagram" && sp.Style != linkStyle(th, "https://x.dev/a.png") {
+				t.Error("an image should link to its file")
+			}
+		}
+	}
+}
+
+func TestQuitGuardsTheCoordinatorAndPermissionWaits(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	setState := func(name string, st model.State, perm *model.Permission) {
+		v := h.a.threads[name]
+		v.State, v.Permission = st, perm
+		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: name, View: &v})
+	}
+	for name := range h.a.threads {
+		setState(name, model.StateIdle, nil)
+	}
+	h.hub.workspaces[0].Counts = nil
+	h.a.loadWorkspaces()
+	setState(model.Coordinator, model.StateRunning, nil)
+	h.press(":qa", "<CR>")
+	if h.a.quit {
+		t.Fatal(":qa should not stop the coordinator's turn")
+	}
+	setState(model.Coordinator, model.StateIdle, nil)
+	setState("auth-refactor", model.StateWaiting, &model.Permission{Tool: "Bash"})
+	h.press(":qa", "<CR>")
+	if h.a.quit {
+		t.Fatal(":qa should not stop a turn that waits on a permission")
+	}
+	h.see("1 running · :qa! stops them")
+	setState("auth-refactor", model.StateIdle, nil)
+	h.press(":qa", "<CR>")
+	if !h.a.quit {
+		t.Fatal(":qa should quit when no turn is in flight")
+	}
+}
+
+func TestThreadsListShowsHowLongAThreadRuns(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads["auth-refactor"]
+	v.State, v.Since, v.Progress = model.StateRunning, time.Now().Add(-95*time.Second), "reading files"
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("1m35s · reading files")
+}
+
+func TestWorkspaceKeepsItsSplits(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("<C-w>", "v")
+	n := len(h.a.root.windows())
+	h.press("<Space>", "p", "v")
+	if len(h.a.root.windows()) != 1 {
+		t.Fatal("<leader>pv should show the workspaces screen")
+	}
+	if l := h.a.line(h.a.cur); l.Item != "demo" {
+		t.Fatalf("the workspaces screen should start on the workspace you left, on %q", l.Item)
+	}
+	h.openDemo()
+	if got := len(h.a.root.windows()); got != n {
+		t.Fatalf("opening the workspace again should keep its %d windows, got %d", n, got)
+	}
+	h.a.draw()
+}
+
+func TestPlainWordArtifactsLinkOnlyInCode(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.a.artifacts = []model.Artifact{{Name: "plan"}, {Name: "doc-notes"}}
+	link := h.a.th.Foam.Underline(true)
+	linked := func(spans []Span) []string {
+		var out []string
+		for _, sp := range h.a.linkify(spans) {
+			if sp.Style == link {
+				out = append(out, sp.Text)
+			}
+		}
+		return out
+	}
+	prose := []Span{{"the plan is in doc-notes", h.a.th.Text}}
+	if got := linked(prose); strings.Join(got, ",") != "doc-notes" {
+		t.Fatalf("prose links = %q, want only doc-notes", got)
+	}
+	code := []Span{{"see ", h.a.th.Text}, {"plan", h.a.th.Code}}
+	if got := linked(code); strings.Join(got, ",") != "plan" {
+		t.Fatalf("code links = %q, want plan", got)
+	}
+	if name := h.a.artifactAt(Line{Spans: prose}, 5); name != "doc-notes" {
+		t.Fatalf("<CR> on the word plan in prose opened %q", name)
+	}
+}
+
+func TestPopupMarginsAreBlank(t *testing.T) {
+	h := editDemo(t, "# D\n\ntext\n")
+	h.a.draw()
+	W, H := h.s.Size()
+	cells, _, _ := h.s.GetContents()
+	for y := 2; y < H-2; y++ {
+		for _, x := range []int{0, 1, W - 2, W - 1} {
+			if r := cells[y*W+x].Runes; len(r) > 0 && r[0] != ' ' {
+				t.Fatalf("margin cell (%d,%d) = %q, want blank", x, y, string(r))
+			}
+		}
 	}
 }

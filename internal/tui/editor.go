@@ -2,7 +2,9 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -18,6 +20,8 @@ type Editor struct {
 	Base      int
 	Line, Off int
 	Dirty     bool
+	// fromDoc says Insert started on the document: <Esc> shows it again.
+	fromDoc bool
 	// saved is the text as last loaded or saved: undo back to it is clean.
 	saved string
 
@@ -135,6 +139,41 @@ func (e *Editor) insertText(s string) {
 	e.Src = slices.Replace(e.Src, e.Line, e.Line+1, rows...)
 	e.Line, e.Off = e.Line+n, off
 	e.changed()
+}
+
+// listItem is the start of a markdown list item: indent, marker, task box.
+var listItem = regexp.MustCompile(`^(\s*)([-*+]|(\d+)([.)]))( \[[ xX]\])? `)
+
+// newLine is <CR> in Insert. After the marker of a list item it starts the
+// next item; on an empty item it ends the list, as Markdown editors do.
+func (e *Editor) newLine() {
+	l := string(e.Src[e.Line])
+	m := listItem.FindStringSubmatchIndex(l)
+	if m == nil || e.Off < len([]rune(l[:m[1]])) || rule(l) {
+		e.insertText("\n")
+		return
+	}
+	if strings.TrimSpace(l[m[1]:]) == "" {
+		e.remove(pos{e.Line, 0}, pos{e.Line, len(e.Src[e.Line])})
+		return
+	}
+	marker := l[m[4]:m[5]]
+	if m[6] >= 0 {
+		n, _ := strconv.Atoi(l[m[6]:m[7]])
+		marker = strconv.Itoa(n+1) + l[m[8]:m[9]]
+	}
+	box := ""
+	if m[10] >= 0 {
+		box = " [ ]"
+	}
+	e.insertText("\n" + l[m[2]:m[3]] + marker + box + " ")
+}
+
+// rule reports whether l is a thematic break written with list markers, as
+// "- - -" or "* * *".
+func rule(l string) bool {
+	t := strings.ReplaceAll(strings.TrimSpace(l), " ", "")
+	return len(t) >= 3 && strings.Count(t, t[:1]) == len(t)
 }
 
 func (e *Editor) backspace() {
@@ -388,6 +427,220 @@ func (e *Editor) span(op byte, motion string, n int) (int, int, bool) {
 		a, b := aroundWord(l, i)
 		return a, b, true
 	}
+	if motion == "%" {
+		j, ok := matchBracket(l, i)
+		if !ok {
+			return 0, 0, false
+		}
+		return min(i, j), max(i, j) + 1, true
+	}
+	if rs := []rune(motion); len(rs) == 2 && strings.ContainsRune("fFtT", rs[0]) {
+		j, ok := findRune(l, i, byte(rs[0]), rs[1], max(n, 1), false)
+		switch {
+		case !ok:
+			return 0, 0, false
+		case rs[0] == 'f' || rs[0] == 't':
+			return i, j + 1, true
+		}
+		return j, i, true
+	}
+	if len(motion) == 2 && (motion[0] == 'i' || motion[0] == 'a') {
+		if pair, ok := textObjects[motion[1]]; ok {
+			var a, b int
+			if pair[0] == pair[1] {
+				a, b, ok = quoted(l, i, pair[0])
+			} else {
+				a, b, ok = bracketed(l, i, pair[0], pair[1])
+			}
+			if !ok {
+				return 0, 0, false
+			}
+			if motion[0] == 'i' {
+				return a + 1, b, true
+			}
+			return a, b + 1, true
+		}
+	}
+	return 0, 0, false
+}
+
+// paragraph is ip (around false) or ap over n lines from line i: the run of
+// lines that are blank or not, like line i; ap adds the blank lines after
+// it, or before it when none follow.
+func paragraph(n, i int, around bool, blank func(int) bool) (int, int) {
+	run := func(a, b int, want bool) (int, int) {
+		for a > 0 && blank(a-1) == want {
+			a--
+		}
+		for b+1 < n && blank(b+1) == want {
+			b++
+		}
+		return a, b
+	}
+	from, to := run(i, i, blank(i))
+	if !around {
+		return from, to
+	}
+	if to+1 < n {
+		_, end := run(to+1, to+1, !blank(i))
+		return from, end
+	}
+	if from > 0 {
+		start, _ := run(from-1, from-1, !blank(i))
+		return start, to
+	}
+	return from, to
+}
+
+// bracketLines is a bracket object whose brackets are on other lines, as
+// di{ around a block. Inner of a block whose brackets end and start their
+// lines is the whole lines between them, as in Vim.
+func (a *App) bracketLines(e *Editor, op byte, motion string) bool {
+	pair, ok := textObjects[motion[len(motion)-1]]
+	if len(motion) != 2 || motion[0] != 'i' && motion[0] != 'a' || !ok || pair[0] == pair[1] {
+		return false
+	}
+	open, close := pair[0], pair[1]
+	var o, c pos
+	found := false
+	for l, i, depth := e.Line, e.Off, 0; l >= 0 && !found; l-- {
+		rs := e.Src[l]
+		if l != e.Line {
+			i = len(rs) - 1
+		} else if i < len(rs) && rs[i] == close {
+			i--
+		}
+		for ; i >= 0; i-- {
+			if i >= len(rs) {
+				continue
+			}
+			if rs[i] == close {
+				depth++
+			} else if rs[i] == open {
+				if depth == 0 {
+					o, found = pos{l, i}, true
+					break
+				}
+				depth--
+			}
+		}
+	}
+	if !found {
+		return false
+	}
+	found = false
+	for l, i, depth := o.line, o.off+1, 0; l < len(e.Src) && !found; l, i = l+1, 0 {
+		for rs := e.Src[l]; i < len(rs); i++ {
+			if rs[i] == open {
+				depth++
+			} else if rs[i] == close {
+				if depth == 0 {
+					c, found = pos{l, i}, true
+					break
+				}
+				depth--
+			}
+		}
+	}
+	if !found || c.line == o.line {
+		return false
+	}
+	from, to := pos{o.line, o.off + 1}, c
+	if motion[0] == 'a' {
+		from, to = o, pos{c.line, c.off + 1}
+	} else if from.off == len(e.Src[o.line]) && strings.TrimSpace(string(e.Src[c.line][:c.off])) == "" {
+		first, last := o.line+1, c.line-1
+		switch {
+		case op == 'y':
+			if first <= last {
+				e.yankLines(first, last)
+				a.clip(e.reg, last-first+1)
+			}
+		case first > last:
+			return false
+		case op == 'd':
+			e.save()
+			e.cutLines(first, last)
+		default:
+			e.save()
+			e.yankLines(first, last)
+			e.Src = slices.Replace(e.Src, first, last+1, []rune{})
+			e.Line, e.Off = first, 0
+			e.changed()
+		}
+		return true
+	}
+	if op == 'y' {
+		e.reg, e.lines = e.text(from, to), false
+		a.clip(e.reg, to.line-from.line+1)
+		return true
+	}
+	e.save()
+	e.reg, e.lines = e.remove(from, to), false
+	return true
+}
+
+// textObjects are the quote and bracket objects after i or a: the open and
+// close rune of each.
+var textObjects = map[byte][2]rune{
+	'"': {'"', '"'}, '\'': {'\'', '\''}, '`': {'`', '`'},
+	'(': {'(', ')'}, ')': {'(', ')'}, 'b': {'(', ')'},
+	'[': {'[', ']'}, ']': {'[', ']'},
+	'{': {'{', '}'}, '}': {'{', '}'}, 'B': {'{', '}'},
+	'<': {'<', '>'}, '>': {'<', '>'},
+}
+
+// quoted finds the quotes around i on the line, as Vim pairs them from the
+// line start; else the first pair after i.
+func quoted(l []rune, i int, q rune) (int, int, bool) {
+	var at []int
+	for k, r := range l {
+		if r == q {
+			at = append(at, k)
+		}
+	}
+	for k := 0; k+1 < len(at); k += 2 {
+		if i <= at[k+1] {
+			return at[k], at[k+1], true
+		}
+	}
+	return 0, 0, false
+}
+
+// bracketed finds the open and close bracket around i on the line.
+func bracketed(l []rune, i int, open, close rune) (int, int, bool) {
+	if len(l) == 0 {
+		return 0, 0, false
+	}
+	i = min(i, len(l)-1)
+	a := -1
+	if l[i] == close {
+		i--
+	}
+	for depth := 0; i >= 0; i-- {
+		if l[i] == close {
+			depth++
+		} else if l[i] == open {
+			if depth == 0 {
+				a = i
+				break
+			}
+			depth--
+		}
+	}
+	if a < 0 {
+		return 0, 0, false
+	}
+	for depth, k := 0, a+1; k < len(l); k++ {
+		if l[k] == open {
+			depth++
+		} else if l[k] == close {
+			if depth == 0 {
+				return a, k, true
+			}
+			depth--
+		}
+	}
 	return 0, 0, false
 }
 
@@ -410,8 +663,8 @@ func (e *Editor) render(w int, th *Theme) []Line {
 		case strings.HasPrefix(s, "```"):
 			fence = !fence
 			st = th.Muted
-		case !fence && strings.HasPrefix(s, "#"):
-			head = len(s) - len(strings.TrimLeft(s, "#"))
+		case !fence && headingLevel(s) > 0:
+			head = headingLevel(s)
 			st = headingStyle(th, head)
 		}
 		starts := wrapRunes(l, avail)
@@ -537,8 +790,13 @@ func (a *App) startEdit(k rune) {
 		for i := min(w.Cur, len(lines)-1); i >= 0 && src == 0; i-- {
 			src = lines[i].Src
 		}
-		b.Edit = newEditor(b.Artifact, bl[0].text, bl[0].art.Version)
-		b.Edit.Line = max(src-1, 0)
+		if b.Held != nil {
+			b.Edit, b.Held = b.Held, nil
+		} else {
+			b.Edit = newEditor(b.Artifact, bl[0].text, bl[0].art.Version)
+		}
+		b.Edit.Line = min(max(src-1, 0), len(b.Edit.Src)-1)
+		b.Edit.fromDoc = k != 0
 		b.dirty = true
 		// The rendered column says nothing about the source one.
 		if k == 'a' {
@@ -578,10 +836,14 @@ func (a *App) toInsert(w *Window) {
 	a.toWindow(w)
 }
 
-// stopEdit shows the document again, at the section the cursor was in.
+// stopEdit shows the document again, at the section the cursor was in. An
+// unsaved edit is held and shows in the document.
 func (a *App) stopEdit(w *Window) {
 	b := w.Buf
 	target := b.Edit.Line + 1
+	if b.Edit.Dirty {
+		b.Held = b.Edit
+	}
 	b.Edit = nil
 	b.dirty = true
 	a.mode = modeNormal
@@ -594,14 +856,47 @@ func (a *App) stopEdit(w *Window) {
 	w.Cur, w.Col = best, 0
 }
 
-// leaveEdit is <Esc>, q and :q in the source: back to the document, unless
-// that drops changes.
-func (a *App) leaveEdit(force bool) {
-	if a.cur.Buf.Edit.Dirty && !force {
-		a.notify("unsaved changes · :w saves, :q! drops them", a.th.Gold)
+// dropEdit is :q!: the saved document again, without the edit.
+func (a *App) dropEdit() {
+	b := a.cur.Buf
+	if b.Edit != nil {
+		b.Edit.Dirty = false
+		a.stopEdit(a.cur)
+	}
+	b.Held = nil
+	b.dirty = true
+}
+
+// writeHeld is :w on the document: it saves the held edit and shows the
+// document again, with the edit still held if the save failed.
+func (a *App) writeHeld(force bool) {
+	a.startEdit(0)
+	a.saveEdit(force)
+	a.stopEdit(a.cur)
+}
+
+// yankMotion is y with a motion or text object where there is no source
+// (a document, a chat): it yanks from the screen row, and ip ap whole rows.
+func (a *App) yankMotion(motion string, n int) {
+	w := a.cur
+	if motion == "ip" || motion == "ap" {
+		lines := w.Buf.Lines(a.textWidth(w), a.th, a.spin)
+		if len(lines) == 0 {
+			return
+		}
+		blank := func(i int) bool { return strings.TrimSpace(lines[i].Text()) == "" }
+		from, to := paragraph(len(lines), w.Cur, motion == "ap", blank)
+		a.yankLines(from, to)
 		return
 	}
-	a.stopEdit(a.cur)
+	l := a.line(w)
+	text := []rune(l.Text())
+	row := &Editor{Src: [][]rune{text}, Off: runeAt(text, max(w.Col-l.prefixWidth(), 0))}
+	from, to, ok := row.span('y', motion, max(n, 1))
+	if !ok || to <= from {
+		return
+	}
+	a.clip(string(row.Src[0][from:to]), 1)
 }
 
 // saveEdit sends the source to the hub as the person's new version.
@@ -647,7 +942,11 @@ func (a *App) editNormal(k string, n int) {
 	w := a.cur
 	e := w.Buf.Edit
 	if e == nil {
-		if w.Buf.Kind == KindArtifact && k[0] != 'y' {
+		if k[0] == 'y' {
+			a.yankMotion(k[1:], n)
+			return
+		}
+		if w.Buf.Kind == KindArtifact {
 			a.notify("i or :e edits the markdown", a.th.Muted)
 		}
 		return
@@ -680,6 +979,25 @@ func (a *App) editNormal(k string, n int) {
 		last := min(e.Line+n-1, len(e.Src)-1)
 		e.yankLines(e.Line, last)
 		a.clip(e.reg, last-e.Line+1)
+	case "dip", "dap", "yip", "yap", "cip", "cap":
+		blank := func(i int) bool { return strings.TrimSpace(string(e.Src[i])) == "" }
+		from, to := paragraph(len(e.Src), e.Line, k[1] == 'a', blank)
+		switch k[0] {
+		case 'y':
+			e.yankLines(from, to)
+			a.clip(e.reg, to-from+1)
+			e.Line = from
+		case 'd':
+			e.save()
+			e.cutLines(from, to)
+		case 'c':
+			e.save()
+			e.yankLines(from, to)
+			e.Src = slices.Replace(e.Src, from, to+1, []rune{})
+			e.Line, e.Off = from, 0
+			e.changed()
+			insert = true
+		}
 	case "p", "P":
 		e.save()
 		for range n {
@@ -704,6 +1022,10 @@ func (a *App) editNormal(k string, n int) {
 		op, motion := k[0], k[1:]
 		from, to, ok := e.span(op, motion, n)
 		if !ok {
+			if a.bracketLines(e, op, motion) {
+				insert = op == 'c'
+				break
+			}
 			return
 		}
 		switch op {
@@ -806,10 +1128,18 @@ func (a *App) editInsert(k string, r rune, isRune bool) {
 	e := w.Buf.Edit
 	switch k {
 	case "<Esc>":
+		if e.fromDoc {
+			a.stopEdit(w)
+			return
+		}
 		a.mode = modeNormal
 		e.Off = max(e.Off-1, 0)
 	case "<CR>", "<S-CR>", "<C-j>", "<M-\r>":
-		e.insertText("\n")
+		if a.pasting {
+			e.insertText("\n")
+		} else {
+			e.newLine()
+		}
 	case "<BS>":
 		e.backspace()
 	case "<Del>":

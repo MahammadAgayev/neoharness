@@ -69,6 +69,14 @@ func keyName(ev *tcell.EventKey) string {
 }
 
 func (a *App) key(ev *tcell.EventKey) {
+	// A fast <Esc> and the next key reach us as one Alt+key. Nothing is bound
+	// to Alt with a printable rune, so they are the two keys, as Neovim reads
+	// them: <Esc>:w in Insert saves, and <Esc>: in Normal starts a command.
+	if ev.Key() == tcell.KeyRune && ev.Modifiers()&tcell.ModAlt != 0 && unicode.IsPrint(ev.Rune()) {
+		a.key(tcell.NewEventKey(tcell.KeyEscape, 0, tcell.ModNone))
+		a.key(tcell.NewEventKey(tcell.KeyRune, ev.Rune(), tcell.ModNone))
+		return
+	}
 	k := keyName(ev)
 	if k == "" {
 		return
@@ -81,18 +89,34 @@ func (a *App) key(ev *tcell.EventKey) {
 		}
 		return
 	}
-	ed := a.cur.Buf.Edit
-	idle := func() bool { return a.mode == modeNormal && len(a.pending) == 0 && a.count == 0 && !a.replacing }
-	if ed != nil && !a.replaying {
+	// Changes are recorded in an artifact's source and on its document,
+	// where Insert starts in the source and ends back on the document.
+	b := a.cur.Buf
+	ed := b.edit()
+	recording := (b.Edit != nil || b.Kind == KindArtifact) && !a.replaying
+	idle := func() bool {
+		return a.mode == modeNormal && len(a.pending) == 0 && a.count == 0 && !a.replacing && a.finding == "" && a.selecting == "" && a.marking == "" && a.macroKey == ""
+	}
+	if a.recordInto != 0 && a.playing == 0 {
+		if k == "q" && idle() {
+			a.recordInto = 0
+			return
+		}
+		a.macros[a.recordInto] = append(a.macros[a.recordInto], ev)
+	}
+	if recording {
 		if idle() {
-			a.rec, a.recRev = nil, ed.rev
+			a.rec, a.recRev = nil, 0
+			if ed != nil {
+				a.recRev = ed.rev
+			}
 		}
 		a.rec = append(a.rec, ev)
 	}
 	a.dispatch(k, ev)
 	// A change ends back in Normal; its keys are what `.` types again.
-	if ed != nil && !a.replaying && idle() && a.cur.Buf.Edit == ed {
-		if ed.rev != a.recRev && !a.noRepeat {
+	if recording && idle() && a.cur.Buf == b {
+		if e := b.edit(); e != nil && (e != ed && e.Dirty || e == ed && e.rev != a.recRev) && !a.noRepeat {
 			a.lastChange = slices.Clone(a.rec)
 		}
 		a.noRepeat = false
@@ -104,6 +128,32 @@ func (a *App) dispatch(k string, ev *tcell.EventKey) {
 		a.replacing = false
 		if ev.Key() == tcell.KeyRune {
 			a.replace(ev.Rune(), a.replaceN)
+		}
+		return
+	}
+	if m := a.marking; m != "" {
+		a.marking = ""
+		if ev.Key() == tcell.KeyRune {
+			a.mark(m, ev.Rune())
+		}
+		return
+	}
+	if s := a.selecting; s != "" {
+		a.selecting = ""
+		a.selectObject(s, k)
+		return
+	}
+	if f := a.finding; f != "" {
+		a.finding = ""
+		if ev.Key() == tcell.KeyRune {
+			a.find(f, ev.Rune(), a.findN)
+		}
+		return
+	}
+	if m := a.macroKey; m != "" {
+		a.macroKey = ""
+		if ev.Key() == tcell.KeyRune {
+			a.macro(m, ev.Rune(), a.macroN)
 		}
 		return
 	}
@@ -129,6 +179,9 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"k":              func(n int) { a.move(w(), -max(n, 1)) },
 		"<Up>":           func(n int) { a.move(w(), -max(n, 1)) },
 		"gg":             func(n int) { a.moveTo(w(), max(n, 1)-1) },
+		"gx":             func(int) { a.openLink() },
+		"gf":             func(int) { a.openArtifactAt() },
+		"gO":             func(int) { a.outline() },
 		"G":              func(n int) { a.goEnd(w(), n) },
 		"<C-d>":          func(int) { a.move(w(), w().textH/2); center(w()) },
 		"<C-u>":          func(int) { a.move(w(), -w().textH/2); center(w()) },
@@ -183,6 +236,12 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"cc":             func(n int) { a.editNormal("cc", n) },
 		".":              func(int) { a.repeat() },
 		"r":              func(n int) { a.replacing, a.replaceN = a.cur.Buf.Edit != nil, n },
+		"%":              func(int) { a.matchPair() },
+		"m":              func(int) { a.marking = "m" },
+		"'":              func(int) { a.marking = "'" },
+		"`":              func(int) { a.marking = "`" },
+		";":              func(n int) { a.findAgain(false, n) },
+		",":              func(n int) { a.findAgain(true, n) },
 		"<CR>":           func(int) { a.enter() },
 		"<C-v>":          func(int) { a.splitFromList(true) },
 		"<C-x>":          func(int) { a.splitFromList(false) },
@@ -205,7 +264,8 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<C-w>o":         func(int) { a.only() },
 		"<C-w>=":         func(int) { a.root.equalize() },
 		"<Esc>":          func(int) { a.escape() },
-		"q":              func(int) { a.q() },
+		"q":              func(int) { a.macroKey = "q" },
+		"@":              func(n int) { a.macroKey, a.macroN = "@", n },
 		"<Space><Space>": func(int) { a.pickBuffers() },
 		"<Space>t":       func(int) { a.showList() },
 		"<Space>w":       func(int) { a.pickWorkspaces() },
@@ -223,10 +283,24 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<Space>r":       func(int) { a.insert('i') },
 		"<Space>e":       func(int) { a.toggleFold(w()) },
 	}
+	for _, f := range []string{"f", "F", "t", "T"} {
+		binds[f] = func(n int) { a.finding, a.findN = f, n }
+	}
 	for _, op := range []string{"d", "c", "y"} {
-		for _, m := range []string{"w", "e", "b", "$", "0", "^", "iw", "aw"} {
+		for _, m := range []string{"w", "e", "b", "$", "0", "^", "iw", "aw", "ip", "ap"} {
 			k := op + m
 			binds[k] = func(n int) { a.editNormal(k, n) }
+		}
+		for _, f := range []string{"f", "F", "t", "T"} {
+			k := op + f
+			binds[k] = func(n int) { a.finding, a.findN = k, n }
+		}
+		binds[op+"%"] = func(n int) { a.editNormal(op+"%", n) }
+		for obj := range textObjects {
+			for _, ia := range []string{"i", "a"} {
+				k := op + ia + string(obj)
+				binds[k] = func(n int) { a.editNormal(k, n) }
+			}
 		}
 	}
 	return binds
@@ -241,9 +315,42 @@ func (a *App) yy(n int) {
 	a.yankLines(a.cur.Cur, a.cur.Cur)
 }
 
-// repeat is `.`: it types the last change in the source again.
+// maxMacroDepth stops a macro that plays itself.
+const maxMacroDepth = 100
+
+// macro is q{a-z}, which records the keys that follow into a register until
+// the next q, and @{a-z}, which types them again n times. @@ plays the last
+// one again.
+func (a *App) macro(m string, r rune, n int) {
+	if m == "q" {
+		if r >= 'a' && r <= 'z' {
+			if a.macros == nil {
+				a.macros = map[rune][]*tcell.EventKey{}
+			}
+			a.recordInto, a.macros[r] = r, nil
+		}
+		return
+	}
+	if r == '@' {
+		r = a.lastMacro
+	}
+	keys := a.macros[r]
+	if len(keys) == 0 || a.playing >= maxMacroDepth {
+		return
+	}
+	a.lastMacro = r
+	a.playing++
+	for range max(n, 1) {
+		for _, ev := range keys {
+			a.key(ev)
+		}
+	}
+	a.playing--
+}
+
+// repeat is `.`: it types the last change in an artifact again.
 func (a *App) repeat() {
-	if a.cur.Buf.Edit == nil || len(a.lastChange) == 0 {
+	if a.cur.Buf.Kind != KindArtifact || len(a.lastChange) == 0 {
 		return
 	}
 	a.replaying = true
@@ -255,6 +362,10 @@ func (a *App) repeat() {
 }
 
 func (a *App) normalKey(k string) {
+	if a.mode == modeVisual && len(a.pending) == 0 && (k == "i" || k == "a") {
+		a.selecting = k
+		return
+	}
 	if len(a.pending) == 0 && len(k) == 1 && unicode.IsDigit(rune(k[0])) && (k != "0" || a.count > 0) {
 		a.count = a.count*10 + int(k[0]-'0')
 		return
@@ -350,6 +461,9 @@ func (a *App) clampCol(w *Window) {
 	l := a.line(w)
 	lw := l.prefixWidth() + width(l.Text())
 	w.Col = max(min(w.Col, lw-1), 0)
+	// The cursor sits on the first column of a wide character.
+	rs := []rune(strings.Repeat(" ", l.prefixWidth()) + l.Text())
+	w.Col = width(string(rs[:runeAt(rs, w.Col)]))
 	// In an artifact's source the margin is not text.
 	if w.Buf.Edit != nil {
 		w.Col = max(w.Col, l.prefixWidth())
@@ -359,28 +473,219 @@ func (a *App) clampCol(w *Window) {
 // word moves by words within the line, Vim's w and b without crossing lines.
 func (a *App) word(w *Window, d int) {
 	l := a.line(w)
-	cells := []rune(strings.Repeat(" ", l.prefixWidth()) + l.Text())
-	i := min(w.Col, len(cells)-1)
+	rs := []rune(strings.Repeat(" ", l.prefixWidth()) + l.Text())
+	i := min(runeAt(rs, w.Col), len(rs)-1)
 	for ; d > 0; d-- {
-		i = min(wordFwd(cells, i), len(cells)-1)
+		i = min(wordFwd(rs, i), len(rs)-1)
 	}
 	for ; d < 0; d++ {
-		i = wordBack(cells, i)
+		i = wordBack(rs, i)
 	}
-	w.Col = max(i, 0)
+	w.Col = width(string(rs[:max(i, 0)]))
 	a.clampCol(w)
 }
 
 // wordEnd is Vim's e within the line.
 func (a *App) wordEnd(w *Window, n int) {
 	l := a.line(w)
-	cells := []rune(strings.Repeat(" ", l.prefixWidth()) + l.Text())
-	i := w.Col
+	rs := []rune(strings.Repeat(" ", l.prefixWidth()) + l.Text())
+	i := runeAt(rs, w.Col)
 	for range n {
-		i = wordEnd(cells, i)
+		i = wordEnd(rs, i)
 	}
-	w.Col = max(i, 0)
+	w.Col = width(string(rs[:min(max(i, 0), len(rs))]))
 	a.clampCol(w)
+}
+
+// find runs f F t T with the rune r: a move on the screen row, or the reach
+// of an operator in an artifact's source (df, ct).
+func (a *App) find(f string, r rune, n int) { a.findFrom(f, r, n, false) }
+
+func (a *App) findFrom(f string, r rune, n int, again bool) {
+	kind := f[len(f)-1:]
+	a.lastFind = kind + string(r)
+	if len(f) > 1 {
+		a.editNormal(f[:1]+kind+string(r), n)
+		return
+	}
+	w := a.cur
+	l := a.line(w)
+	rs := []rune(strings.Repeat(" ", l.prefixWidth()) + l.Text())
+	if j, ok := findRune(rs, runeAt(rs, w.Col), kind[0], r, max(n, 1), again); ok {
+		w.Col = width(string(rs[:j]))
+		a.clampCol(w)
+	}
+}
+
+// mark is m{a-z}, '{a-z} and `{a-z}: set a mark in the buffer, go to its
+// line, or to its place. ” and “ go back to where the last jump started.
+func (a *App) mark(m string, r rune) {
+	w := a.cur
+	b := w.Buf
+	if b.marks == nil {
+		b.marks = map[rune][2]int{}
+	}
+	if m == "m" {
+		if r >= 'a' && r <= 'z' {
+			b.marks[r] = [2]int{w.Cur, w.Col}
+		}
+		return
+	}
+	if r == '`' {
+		r = '\''
+	}
+	p, ok := b.marks[r]
+	if !ok {
+		a.notify("mark not set", a.th.Muted)
+		return
+	}
+	b.marks['\''] = [2]int{w.Cur, w.Col}
+	a.moveTo(w, p[0])
+	w.Follow = false
+	if m == "`" {
+		w.Col = p[1]
+	} else {
+		w.Col = a.line(w).prefixWidth()
+	}
+	a.clampCol(w)
+}
+
+// matchPair is %: from the bracket at or after the cursor on the row to the
+// one that matches it.
+func (a *App) matchPair() {
+	w := a.cur
+	l := a.line(w)
+	rs := []rune(strings.Repeat(" ", l.prefixWidth()) + l.Text())
+	if j, ok := matchBracket(rs, runeAt(rs, w.Col)); ok {
+		w.Col = width(string(rs[:j]))
+		a.clampCol(w)
+	}
+}
+
+// selectObject is a text object in Visual (iw aw i( a" …): it selects it on
+// the screen row.
+func (a *App) selectObject(ia, k string) {
+	w := a.cur
+	l := a.line(w)
+	pre := l.prefixWidth()
+	cells := []rune(l.Text())
+	i := runeAt(cells, max(w.Col-pre, 0))
+	var from, to int
+	ok := true
+	if k == "p" {
+		lines := w.Buf.Lines(a.textWidth(w), a.th, a.spin)
+		blank := func(i int) bool { return strings.TrimSpace(lines[i].Text()) == "" }
+		if len(lines) == 0 {
+			return
+		}
+		w.vLine, w.Cur = paragraph(len(lines), w.Cur, ia == "a", blank)
+		w.vmode = 'V'
+		return
+	}
+	switch obj := []rune(k); {
+	case k == "w" && ia == "i":
+		from, to = innerWord(cells, i)
+	case k == "w":
+		from, to = aroundWord(cells, i)
+	case len(obj) == 1 && obj[0] < 128:
+		pair, known := textObjects[byte(obj[0])]
+		if !known {
+			return
+		}
+		if pair[0] == pair[1] {
+			from, to, ok = quoted(cells, i, pair[0])
+		} else {
+			from, to, ok = bracketed(cells, i, pair[0], pair[1])
+		}
+		if ia == "i" {
+			from++
+		} else {
+			to++
+		}
+	default:
+		return
+	}
+	if !ok || to <= from {
+		return
+	}
+	w.vLine, w.vCol = w.Cur, pre+width(string(cells[:from]))
+	w.Col = pre + width(string(cells[:to])) - 1
+	w.vmode = 'v'
+}
+
+// findAgain is ; and its reverse ,.
+func (a *App) findAgain(reverse bool, n int) {
+	if a.lastFind == "" {
+		return
+	}
+	last := a.lastFind
+	kind, r := last[0], []rune(last[1:])[0]
+	if reverse {
+		kind = map[byte]byte{'f': 'F', 'F': 'f', 't': 'T', 'T': 't'}[kind]
+	}
+	a.findFrom(string(kind), r, n, true)
+	a.lastFind = last
+}
+
+// pairs maps each bracket to the one that closes or opens it.
+var pairs = map[rune]rune{'(': ')', ')': '(', '[': ']', ']': '[', '{': '}', '}': '{'}
+
+// matchBracket is where % lands from i: the first bracket at or after i,
+// then the one that matches it, counting nested ones.
+func matchBracket(l []rune, i int) (int, bool) {
+	for ; i < len(l); i++ {
+		if _, ok := pairs[l[i]]; ok {
+			break
+		}
+	}
+	if i >= len(l) {
+		return 0, false
+	}
+	open, close, step := l[i], pairs[l[i]], 1
+	if open == ')' || open == ']' || open == '}' {
+		step = -1
+	}
+	for depth, j := 0, i+step; j >= 0 && j < len(l); j += step {
+		switch l[j] {
+		case open:
+			depth++
+		case close:
+			if depth == 0 {
+				return j, true
+			}
+			depth--
+		}
+	}
+	return 0, false
+}
+
+// findRune is where f F t T with r land from i, the nth match: f on it, t
+// just before it, F and T the same backwards. again (; and ,) makes t skip
+// a match right next to the cursor, so it goes on to the next one.
+func findRune(l []rune, i int, kind byte, r rune, n int, again bool) (int, bool) {
+	step, from := 1, i+1
+	if kind == 'F' || kind == 'T' {
+		step, from = -1, i-1
+	}
+	if again && (kind == 't' || kind == 'T') {
+		from += step
+	}
+	for j := from; j >= 0 && j < len(l); j += step {
+		if l[j] != r {
+			continue
+		}
+		if n--; n > 0 {
+			continue
+		}
+		switch kind {
+		case 't':
+			return j - 1, true
+		case 'T':
+			return j + 1, true
+		}
+		return j, true
+	}
+	return i, false
 }
 
 // goCoordinator focuses the coordinator of the open workspace, as <leader>pc.
@@ -423,6 +728,37 @@ func (a *App) nextMsg(w *Window, d int) {
 		d -= step
 	}
 	a.moveTo(w, i)
+}
+
+// outline is gO: a picker of the window's headings, or its messages in a
+// chat, as Neovim's gO lists a document's outline.
+func (a *App) outline() {
+	w := a.cur
+	var items []pickItem
+	for i, l := range w.Buf.Lines(a.textWidth(w), a.th, a.spin) {
+		if !l.Msg {
+			continue
+		}
+		items = append(items, pickItem{
+			glyph: Span{"─", a.th.Muted},
+			label: strings.TrimSpace(l.Text()),
+			run:   func() { a.moveTo(w, i); w.Follow = false; center(w) },
+		})
+	}
+	if len(items) == 0 {
+		a.notify("no headings here", a.th.Muted)
+		return
+	}
+	a.openPicker("outline", func(q string) []pickItem { return fuzzy(items, q) })
+}
+
+// openArtifactAt is gf: it opens the artifact named under the cursor.
+func (a *App) openArtifactAt() {
+	if name := a.artifactAt(a.line(a.cur), a.cur.Col); name != "" {
+		a.openArtifact(name)
+		return
+	}
+	a.notify("no artifact name under the cursor", a.th.Muted)
 }
 
 func (a *App) toggleFold(w *Window) {
@@ -472,7 +808,7 @@ func (a *App) escape() {
 // q leaves an artifact's source, else closes the artifact popup.
 func (a *App) q() {
 	if a.cur.Buf.Edit != nil {
-		a.leaveEdit(false)
+		a.stopEdit(a.cur)
 		return
 	}
 	a.closePopup()
@@ -491,16 +827,25 @@ func (a *App) closeCur(force bool) {
 // quitAll quits, unless that stops running turns and force is not set. The
 // hub lives in this process, so quitting ends every turn in flight.
 func (a *App) quitAll(force bool) {
+	// In the open workspace every thread is known, the coordinator too, and a
+	// thread at a permission card still has its turn in flight.
 	n := 0
+	for _, v := range a.threads {
+		if v.State == model.StateRunning || v.Permission != nil {
+			n++
+		}
+	}
 	for _, p := range a.workspaces {
-		n += p.Counts[model.StateRunning]
+		if p.Name != a.workspace {
+			n += p.Counts[model.StateRunning]
+		}
 	}
 	if n > 0 && !force {
 		a.notify(fmt.Sprintf("%d running · :qa! stops them", n), a.th.Gold)
 		return
 	}
 	for _, b := range a.bufs {
-		if b.Edit != nil && b.Edit.Dirty && !force {
+		if e := b.edit(); e != nil && e.Dirty && !force {
 			a.notify("unsaved changes in "+b.Artifact+" · :w saves, :qa! drops them", a.th.Gold)
 			return
 		}

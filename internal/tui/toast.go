@@ -57,7 +57,7 @@ func (a *App) toastView(old, v model.ThreadView, had bool) {
 	case !had && v.Role == model.RoleThread:
 		a.toast(v.Name, Span{"+", a.th.Iris}, "opened in "+shortHome(v.Location.String()), a.th.Iris, 4*time.Second)
 	case v.State == model.StateWaiting && old.State != model.StateWaiting:
-		body := "asks: " + v.Waiting
+		body := "asks: " + plain(v.Waiting)
 		switch {
 		case v.Permission != nil:
 			body = "needs permission · " + v.Permission.Tool
@@ -68,7 +68,7 @@ func (a *App) toastView(old, v model.ThreadView, had bool) {
 	case v.State == model.StateResolved && old.State != model.StateResolved:
 		a.toast(v.Name, Span{"✓", a.th.Muted}, "resolved", a.th.Muted, 4*time.Second)
 	case old.State == model.StateRunning && v.State == model.StateIdle:
-		body := a.chat(v.Name).lastText()
+		body := plain(a.chat(v.Name).lastText())
 		if body == "" {
 			body = "finished a turn"
 		}

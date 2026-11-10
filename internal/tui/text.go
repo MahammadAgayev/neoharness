@@ -51,6 +51,20 @@ func (l Line) prefixWidth() int {
 
 func width(s string) int { return uniseg.StringWidth(s) }
 
+// runeAt is the index in rs of the first rune of the character at screen
+// column col. A wide character covers two columns.
+func runeAt(rs []rune, col int) int {
+	g := uniseg.NewGraphemes(string(rs))
+	i, c := 0, 0
+	for g.Next() {
+		if c += g.Width(); c > col {
+			return i
+		}
+		i += len(g.Runes())
+	}
+	return len(rs)
+}
+
 // truncate cuts s to at most n cells, marking the cut with an ellipsis.
 func truncate(s string, n int) string {
 	if n <= 0 {
@@ -74,6 +88,19 @@ func truncate(s string, n int) string {
 }
 
 func flatten(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+// plainTheme renders text whose styles are thrown away.
+var plainTheme = &Theme{NoColor: true}
+
+// plain is markdown as one line of text, without its marks: a toast or a
+// list row has no room for styles.
+func plain(s string) string {
+	var parts []string
+	for _, l := range renderMarkdown(s, 1<<16, plainTheme, nil) {
+		parts = append(parts, spansText(l.Prefix)+l.Text())
+	}
+	return flatten(strings.Join(parts, " "))
+}
 
 // token is a word, a run of spaces, or a line break. A word keeps its
 // pieces apart because one word can carry several styles: markdown splits
