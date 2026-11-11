@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/gdamore/tcell/v2"
@@ -168,9 +169,17 @@ func (a *App) threadItems() []pickItem {
 		if !ok {
 			continue
 		}
-		detail := v.Progress
-		if v.Waiting != "" {
-			detail = "waiting · " + v.Waiting
+		detail := stateLabel(v.State)
+		switch {
+		case v.Permission != nil:
+			detail += " · permission · " + v.Permission.Tool
+		case v.Waiting == "paused":
+			detail += " · paused"
+		case v.State == model.StateWaiting:
+			detail += " · question"
+		}
+		if (v.State == model.StateRunning || v.State == model.StateWaiting) && !v.Since.IsZero() {
+			detail += " · " + elapsed(time.Since(v.Since))
 		}
 		name := n
 		items = append(items, pickItem{

@@ -3103,3 +3103,24 @@ func TestQuitKeepsAnEditedArtifactOpen(t *testing.T) {
 		t.Fatal(":q! should close the window and drop the edit")
 	}
 }
+
+func TestThreadPickerShowsState(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads["api-tests"]
+	v.State, v.Waiting, v.Progress = model.StateWaiting, "Which branch?", "Blocked: asking"
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	details := map[string]string{}
+	for _, it := range h.a.threadItems() {
+		details[it.label] = it.detail
+	}
+	if d := details["api-tests"]; !strings.HasPrefix(d, "waiting · question") || strings.Contains(d, "Blocked") {
+		t.Errorf("api-tests: %q, want its state, not its message", d)
+	}
+	if d := details["auth-refactor"]; !strings.HasPrefix(d, "running · ") || strings.Contains(d, "moving store") {
+		t.Errorf("auth-refactor: %q, want running and how long", d)
+	}
+	if d := details[model.Coordinator]; d != "idle" {
+		t.Errorf("coordinator: %q, want idle", d)
+	}
+}
