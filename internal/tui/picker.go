@@ -230,11 +230,20 @@ func (a *App) pickWorkspaces() {
 	for _, p := range a.workspaces {
 		name := p.Name
 		detail := displayPin(p.Pin)
-		if n := p.Counts[model.StateWaiting]; n > 0 {
-			detail += fmt.Sprintf("  · %d waiting", n)
+		glyph := Span{"▪", a.th.Iris}
+		for _, s := range []model.State{model.StateRunning, model.StateWaiting} {
+			n := p.Counts[s]
+			if p.Coordinator == s {
+				n++
+			}
+			if n > 0 {
+				detail += fmt.Sprintf(" · %d %s", n, stateLabel(s))
+				// Waiting comes last, so it wins: it needs the person.
+				glyph = Span{stateGlyph(s), a.th.state(s)}
+			}
 		}
 		items = append(items, pickItem{
-			glyph:     Span{"▪", a.th.Iris},
+			glyph:     glyph,
 			label:     name,
 			detail:    detail,
 			run:       func() { a.openWorkspace(name) },

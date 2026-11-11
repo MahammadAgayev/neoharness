@@ -16,7 +16,7 @@ const toastsShown = 3
 // toast is a small note in the top right corner about a thread that is not
 // on screen, like snacks.nvim's notifier.
 type toast struct {
-	thread string
+	workspace, thread string
 	glyph  Span
 	body   string
 	border tcell.Style
@@ -35,20 +35,20 @@ func (a *App) toast(thread string, glyph Span, body string, border tcell.Style, 
 	if a.windowOf(thread) != nil {
 		return
 	}
-	t := &toast{thread: thread, glyph: glyph, body: body, border: border}
+	t := &toast{workspace: a.workspace, thread: thread, glyph: glyph, body: body, border: border}
 	if life > 0 {
 		t.until = time.Now().Add(life)
 		time.AfterFunc(life, func() { _ = a.s.PostEvent(evRedraw{}) })
 	}
 	// One toast per thread: the newest says where it is now.
 	for i, o := range a.toasts {
-		if o.thread == thread {
+		if o.workspace == t.workspace && o.thread == thread {
 			a.toasts = append(a.toasts[:i], a.toasts[i+1:]...)
 			break
 		}
 	}
 	a.toasts = append(a.toasts, t)
-	a.logMessage(thread+": "+body, glyph.Style)
+	a.logMessage(t.workspace+" · "+thread+": "+body, glyph.Style)
 }
 
 // toastView turns a thread's change into a toast.
@@ -83,7 +83,7 @@ func (a *App) pruneToasts() {
 	keep := a.toasts[:0]
 	for _, t := range a.toasts {
 		if t.until.IsZero() {
-			if a.threads[t.thread].State == model.StateWaiting && a.windowOf(t.thread) == nil {
+			if a.stillWaits(t) {
 				keep = append(keep, t)
 			}
 		} else if now.Before(t.until) {
@@ -95,7 +95,7 @@ func (a *App) pruneToasts() {
 
 func (a *App) drawToasts(W, H int) {
 	a.pruneToasts()
-	tw := min(44, W-4)
+	tw := min(56, W-4)
 	if tw < 20 {
 		return
 	}
@@ -105,10 +105,26 @@ func (a *App) drawToasts(W, H int) {
 		t := shown[i]
 		a.box(x0, y, tw, 4, "", t.border)
 		x := a.put(x0+2, y+1, x0+tw-2, t.glyph.Text+" ", t.glyph.Style)
+		x = a.put(x, y+1, x0+tw-2, t.workspace+" · ", a.th.Subtle)
 		a.put(x, y+1, x0+tw-2, t.thread, a.th.Text.Bold(true))
 		a.put(x0+4, y+2, x0+tw-2, truncate(flatten(t.body), tw-6), a.th.Subtle)
 		y += 4
 	}
+}
+
+// stillWaits reports whether a waiting toast's thread still waits and is not
+// on screen. Of another workspace only its summary is known: something there
+// waits.
+func (a *App) stillWaits(t *toast) bool {
+	if t.workspace == a.workspace {
+		return a.threads[t.thread].State == model.StateWaiting && a.windowOf(t.thread) == nil
+	}
+	for _, p := range a.workspaces {
+		if p.Name == t.workspace {
+			return p.Counts[model.StateWaiting] > 0 || p.Coordinator == model.StateWaiting
+		}
+	}
+	return false
 }
 
 // lastText is the first line of the newest reply in the buffer.

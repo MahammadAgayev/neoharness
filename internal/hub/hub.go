@@ -1614,6 +1614,8 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 	for _, th := range ws.threads {
 		if th.t.Role == model.RoleThread {
 			v.Counts[th.state]++
+		} else {
+			v.Coordinator = th.state
 		}
 		for _, at := range th.t.Turns {
 			if age := int(now.Sub(at).Hours()); age >= 0 && age < 24 {

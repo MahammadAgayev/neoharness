@@ -3020,3 +3020,29 @@ func TestMouseWheelMovesTheWindowUnderIt(t *testing.T) {
 		t.Fatalf("Cur = %d, want %d", chat.Cur, before-wheelLines)
 	}
 }
+
+func TestWorkspacePickerShowsWhatWaits(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.a.apply(model.Update{Kind: model.UpdateWorkspace, Workspace: "ops", Summary: &model.WorkspaceView{
+		Name: "ops", Counts: map[model.State]int{model.StateRunning: 2}, Coordinator: model.StateWaiting}})
+	h.press("<Esc>", "<Space>w")
+	for _, it := range h.a.picker.items {
+		if it.label == "ops" && (it.glyph.Text != stateGlyph(model.StateWaiting) || it.detail != "not pinned · 2 running · 1 waiting") {
+			t.Fatalf("ops shows %q %q, want the waiting glyph and both counts", it.glyph.Text, it.detail)
+		}
+	}
+}
+
+func TestToastsSayTheWorkspace(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads["api-tests"]
+	v.State = model.StateWaiting
+	v.Waiting = "Which branch?"
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("demo · api-tests")
+	h.press("<Esc>", ":messages", "<CR>")
+	h.see("demo · api-tests: asks: Which branch?")
+}

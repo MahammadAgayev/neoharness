@@ -1392,3 +1392,16 @@ func TestRestoreSaysATurnWasStoppedByTheDelete(t *testing.T) {
 		t.Fatalf("last event = %+v", last)
 	}
 }
+
+func TestTheSummarySaysTheCoordinatorsState(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	if err := h.AskUser("demo", model.Coordinator, "Which phase first?"); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range h.Workspaces() {
+		if s.Name == "demo" && (s.Coordinator != model.StateWaiting || s.Counts[model.StateWaiting] != 0) {
+			t.Fatalf("summary = %+v; the coordinator waits, and it is not a thread", s)
+		}
+	}
+}

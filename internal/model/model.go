@@ -210,6 +210,8 @@ type WorkspaceView struct {
 	Pin       string        `json:"pin,omitempty"`
 	CreatedAt time.Time     `json:"createdAt"`
 	Counts    map[State]int `json:"counts"`
+	// Coordinator is the coordinator's state; Counts are the threads'.
+	Coordinator State `json:"coordinator,omitempty"`
 	// Activity is turns per hour over the last 24 hours, oldest first.
 	Activity []int `json:"activity"`
 }
