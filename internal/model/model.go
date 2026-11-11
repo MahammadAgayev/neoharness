@@ -133,6 +133,9 @@ const (
 	// EventArtifact is a document the thread wrote: Detail is its name, Text
 	// its title.
 	EventArtifact EventKind = "artifact"
+	// EventNotice is what the coordinator told the person with notify;
+	// NeedsYou says the person must act.
+	EventNotice EventKind = "notice"
 )
 
 // Event is one transcript entry.
@@ -148,7 +151,8 @@ type Event struct {
 	Tokens int       `json:"tokens,omitempty"`
 	Exit   int       `json:"exit,omitempty"`
 	// Version is an artifact's version.
-	Version int `json:"version,omitempty"`
+	Version  int  `json:"version,omitempty"`
+	NeedsYou bool `json:"needsYou,omitempty"`
 }
 
 // Artifact is a markdown document an agent wrote for the person to read. Its
@@ -185,6 +189,9 @@ type ThreadView struct {
 	Waiting    string      `json:"waiting,omitempty"`
 	Permission *Permission `json:"permission,omitempty"`
 	Pending    []Event     `json:"pending,omitempty"` // queued, not yet in the transcript
+	// Quiet says the coordinator decides what of this thread reaches the
+	// person: only its questions and permission requests notify them.
+	Quiet bool `json:"quiet,omitempty"`
 	// Model, Context and ContextWindow are as of the last turn; Cost is the
 	// total of every turn, in US dollars. Branch is the git branch of the
 	// thread's folder, empty outside a repository.

@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	lua "github.com/yuin/gopher-lua"
 
 	"github.com/MahammadAgayev/neoharness/internal/model"
 )
@@ -23,6 +25,9 @@ type toast struct {
 	// until is when it goes away. Zero keeps it while the thread waits for
 	// the person and is not on screen.
 	until time.Time
+	// notice is the coordinator's: with until zero it stays until the
+	// coordinator is on screen.
+	notice bool
 }
 
 type evRedraw struct{}
@@ -35,7 +40,24 @@ func (a *App) toast(thread string, glyph Span, body string, border tcell.Style, 
 	if a.windowOf(thread) != nil {
 		return
 	}
-	t := &toast{workspace: a.workspace, thread: thread, glyph: glyph, body: body, border: border}
+	a.addToast(&toast{workspace: a.workspace, thread: thread, glyph: glyph, body: body, border: border}, life)
+}
+
+// showNotice shows what a coordinator told the person with notify, from any
+// workspace. One the person must act on stays until they look.
+func (a *App) showNotice(workspace string, e model.Event) {
+	if workspace == a.workspace && a.windowOf(model.Coordinator) != nil {
+		return
+	}
+	glyph, border, life := Span{"↗", a.th.Foam}, a.th.Foam, 8*time.Second
+	if e.NeedsYou {
+		glyph, border, life = Span{"↗", a.th.Gold}, a.th.Gold, 0
+	}
+	a.addToast(&toast{workspace: workspace, thread: model.Coordinator, glyph: glyph, body: e.Text, border: border, notice: true}, life)
+}
+
+func (a *App) addToast(t *toast, life time.Duration) {
+	thread := t.thread
 	if life > 0 {
 		t.until = time.Now().Add(life)
 		time.AfterFunc(life, func() { _ = a.s.PostEvent(evRedraw{}) })
@@ -48,12 +70,15 @@ func (a *App) toast(thread string, glyph Span, body string, border tcell.Style, 
 		}
 	}
 	a.toasts = append(a.toasts, t)
-	a.logMessage(t.workspace+" · "+thread+": "+body, glyph.Style)
+	a.logMessage(t.workspace+" · "+thread+": "+t.body, t.glyph.Style)
 }
 
-// toastView turns a thread's change into a toast.
+// toastView turns a thread's change into a toast. Of a quiet thread only a
+// question or a permission request does: the coordinator tells the rest.
 func (a *App) toastView(old, v model.ThreadView, had bool) {
+	a.compactWarn(old, v, had)
 	switch {
+	case v.Quiet && v.State != model.StateWaiting:
 	case !had && v.Role == model.RoleThread:
 		a.toast(v.Name, Span{"+", a.th.Iris}, "opened in "+shortHome(v.Location.String()), a.th.Iris, 4*time.Second)
 	case v.State == model.StateWaiting && old.State != model.StateWaiting:
@@ -74,6 +99,26 @@ func (a *App) toastView(old, v model.ThreadView, had bool) {
 		}
 		a.toast(v.Name, Span{"✓", a.th.Pine}, body, a.th.Pine, 4*time.Second)
 	}
+}
+
+// compactWarn says once, when a session's context passes
+// neoharness.o.compactwarn percent, that /compact would save tokens: every
+// turn sends the whole context again.
+func (a *App) compactWarn(old, v model.ThreadView, had bool) {
+	limit, _ := a.opt("compactwarn").(lua.LNumber)
+	if !had || limit <= 0 || v.ContextWindow == 0 || old.ContextWindow == 0 {
+		return
+	}
+	pct, was := v.Context*100/v.ContextWindow, old.Context*100/old.ContextWindow
+	if was >= int(limit) || pct < int(limit) {
+		return
+	}
+	body := fmt.Sprintf("context at %d%% · /compact to spend fewer tokens per turn", pct)
+	if a.windowOf(v.Name) != nil {
+		a.notify(v.Name+": "+body, a.th.Gold)
+		return
+	}
+	a.toast(v.Name, Span{"!", a.th.Gold}, body, a.th.Gold, 8*time.Second)
 }
 
 // pruneToasts drops toasts whose time is up, and waiting ones whose thread
@@ -116,6 +161,9 @@ func (a *App) drawToasts(W, H int) {
 // on screen. Of another workspace only its summary is known: something there
 // waits.
 func (a *App) stillWaits(t *toast) bool {
+	if t.notice {
+		return t.workspace != a.workspace || a.windowOf(t.thread) == nil
+	}
 	if t.workspace == a.workspace {
 		return a.threads[t.thread].State == model.StateWaiting && a.windowOf(t.thread) == nil
 	}

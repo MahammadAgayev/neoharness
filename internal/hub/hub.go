@@ -82,6 +82,9 @@ type Config struct {
 	Branch BranchReader
 	// Shell runs `!` commands. Nil refuses them.
 	Shell ShellRunner
+	// Notify makes the coordinator the one that notifies the person: thread
+	// turns wake it, and it decides with notify what reaches them.
+	Notify bool
 }
 
 // Hub is the running state of every workspace.
@@ -116,6 +119,8 @@ type space struct {
 	// turn began. A thread's report does not wake the coordinator, so its
 	// next turn starts with a note about them.
 	ended []string
+	// reports wakes the coordinator about ended, when Config.Notify is on.
+	reports *time.Timer
 }
 
 type thread struct {
@@ -1192,6 +1197,59 @@ func (h *Hub) AskUser(workspaceName, name, question string) error {
 	return nil
 }
 
+// reportDelay is how long the coordinator waits after a thread's turn ends
+// before it hears of it, so the threads that end close together make one
+// coordinator turn.
+var reportDelay = 15 * time.Second
+
+// reportFrom is the sender of the message that wakes the coordinator about
+// the threads that ended a turn.
+const reportFrom = "threads"
+
+// report wakes the coordinator about the threads that ended a turn, after
+// reportDelay, when Config.Notify is on. A busy coordinator hears of them in
+// its next turn; when that turn ends, report runs again. Callers hold h.mu.
+func (h *Hub) report(ws *space) {
+	if !h.cfg.Notify || ws.reports != nil {
+		return
+	}
+	ws.reports = time.AfterFunc(reportDelay, func() {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		ws.reports = nil
+		co, ok := ws.threads[model.Coordinator]
+		if h.ctx.Err() != nil || !ok || co.deleted || co.busy || len(ws.ended) == 0 {
+			return
+		}
+		if slices.ContainsFunc(co.t.Queue, func(m workspace.Message) bool { return m.From == reportFrom }) {
+			return
+		}
+		h.enqueue(ws, co, reportFrom, prompts.Reports(ws.ended))
+	})
+}
+
+// Notifies says the coordinator is the one that notifies the person.
+func (h *Hub) Notifies() bool { return h.cfg.Notify }
+
+// Notify shows the person a notice from the coordinator. needsYou keeps it
+// on screen until they look.
+func (h *Hub) Notify(workspaceName, name, text string, needsYou bool) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	if th.t.Role != model.RoleCoordinator {
+		return errors.New("only the coordinator notifies the person")
+	}
+	if text = strings.TrimSpace(text); text == "" {
+		return errors.New("empty notice")
+	}
+	h.event(ws, th, model.Event{Kind: model.EventNotice, Text: text, NeedsYou: needsYou})
+	return nil
+}
+
 // Identify maps an MCP token to the thread it belongs to.
 func (h *Hub) Identify(token string) (Identity, bool) {
 	h.mu.Lock()
@@ -1316,14 +1374,17 @@ func (h *Hub) kick(ws *space, th *thread) {
 		return
 	}
 	fromUser := slices.ContainsFunc(t.Queue, func(m workspace.Message) bool { return m.From == model.User })
-	if !fromUser && t.AgentTurns >= h.cfg.MaxAgentTurns {
+	// Reports to the coordinator do not count: threads can loop only by
+	// messages, and those count on both sides.
+	counts := slices.ContainsFunc(t.Queue, func(m workspace.Message) bool { return m.From != reportFrom })
+	if !fromUser && counts && t.AgentTurns >= h.cfg.MaxAgentTurns {
 		t.Paused = true
 		h.event(ws, th, model.Event{Kind: model.EventNote,
 			Text: fmt.Sprintf("Paused after %d turns without your input. Write to continue.", t.AgentTurns)})
 		h.changed(ws, th)
 		return
 	}
-	if !fromUser {
+	if !fromUser && counts {
 		t.AgentTurns++
 	}
 	// A /compact request is a turn of its own.
@@ -1475,6 +1536,9 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	h.changed(ws, th)
 	if h.ctx.Err() == nil {
 		h.kick(ws, th)
+		if len(ws.ended) > 0 {
+			h.report(ws)
+		}
 	}
 }
 
@@ -1527,7 +1591,7 @@ func (h *Hub) readBranch(ws *space, th *thread) {
 }
 
 func (h *Hub) systemPrompt(ws *space, th *thread) string {
-	in := prompts.SessionInput{Workspace: ws.p.Name, Name: th.t.Name, Location: th.t.Location.String()}
+	in := prompts.SessionInput{Workspace: ws.p.Name, Name: th.t.Name, Location: th.t.Location.String(), Notify: h.cfg.Notify}
 	if th.t.Role == model.RoleCoordinator {
 		return prompts.Coordinator(in)
 	}
@@ -1696,6 +1760,7 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		ContextWindow: t.ContextWindow,
 		Cost:          t.Cost,
 		Branch:        th.branch,
+		Quiet:         h.cfg.Notify,
 		Since:         t.Since,
 		UpdatedAt:     t.UpdatedAt,
 		CreatedAt:     t.CreatedAt,

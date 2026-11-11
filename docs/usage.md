@@ -70,6 +70,23 @@ card shows in the chat:
 <leader>x   :deny [reason]   deny
 ```
 
+## Notifications
+
+Toasts show in the top right corner and name the workspace and the thread.
+`<leader>nc` dismisses them and `<leader>nh` shows their history.
+
+- By default the coordinator decides what reaches you. A thread that ends a
+  turn wakes it; it sends corrections on its own, and notifies you when the
+  work you asked for is done or needs you. Tell it how often you want to
+  hear from it. Its notices show in its chat as `↗ notified you: …`, and
+  one that needs you stays until you open the coordinator.
+- Questions, permission requests and errors always come to you directly.
+- `notify = "threads"` in the hub setup goes back to a toast for every
+  thread's finished turn.
+- When a session's context passes 50%, you get one warning: every turn
+  sends the whole context again, so `/compact` then saves tokens.
+  `neoharness.o.compactwarn` changes the percentage.
+
 ## Artifacts
 
 Artifacts are markdown documents that agents write for you: plans, designs,

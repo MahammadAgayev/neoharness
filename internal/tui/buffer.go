@@ -43,6 +43,8 @@ const (
 	bNote
 	bShell
 	bArtifact
+	// bNotice is what the coordinator told the person with notify.
+	bNotice
 	// bKey is a row of :help: a key and what it does, or a heading when
 	// there is no key.
 	bKey
@@ -55,19 +57,21 @@ type toolCall struct{ tool, detail, id, failed string }
 // caches them per width, so appending to a long transcript only renders the
 // new block.
 type block struct {
-	kind   blockKind
-	from   string
-	text   string
-	text2  string // a permission's answer, a shell command's output
-	id     string
-	exit   int
-	art    model.Artifact
-	tools  []toolCall
-	live   bool
-	open   bool
-	raw    []Line
-	cacheW int
-	cache  []Line
+	kind  blockKind
+	from  string
+	text  string
+	text2 string // a permission's answer, a shell command's output
+	id    string
+	exit  int
+	// needsYou marks a notice the person must act on.
+	needsYou bool
+	art      model.Artifact
+	tools    []toolCall
+	live     bool
+	open     bool
+	raw      []Line
+	cacheW   int
+	cache    []Line
 }
 
 // Prompt is the editable region at the end of a chat buffer.
@@ -376,6 +380,8 @@ func (b *Buffer) AddEvent(e model.Event) {
 		b.push(&block{kind: bProgress, text: e.Text})
 	case model.EventNote:
 		b.push(&block{kind: bNote, text: e.Text})
+	case model.EventNotice:
+		b.push(&block{kind: bNotice, text: e.Text, needsYou: e.NeedsYou})
 	case model.EventShell:
 		for _, bl := range b.blocks {
 			if bl.kind == bShell && bl.id == e.ID {
@@ -468,6 +474,12 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 		return wrap([]Span{{bl.text, th.Subtle}}, w, []Span{{"  ↳ ", th.Foam}}, []Span{{"    ", th.Text}})
 	case bNote:
 		return wrap([]Span{{bl.text, th.Muted.Italic(true)}}, w, []Span{{"  — ", th.Muted}}, []Span{{"    ", th.Text}})
+	case bNotice:
+		glyph := th.Foam
+		if bl.needsYou {
+			glyph = th.Gold
+		}
+		return wrap([]Span{{"notified you: ", th.Muted}, {bl.text, th.Subtle}}, w, []Span{{"  ↗ ", glyph}}, []Span{{"    ", th.Text}})
 	case bShell:
 		return bl.renderShell(w, th, spin)
 	case bKey:

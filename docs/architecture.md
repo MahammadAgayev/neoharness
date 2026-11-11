@@ -30,8 +30,12 @@ the UUID.
 
 - Messages that arrive while a thread is busy wait in a queue. All of them
   go into the next turn as one prompt.
-- A thread's report does not wake the coordinator. The coordinator's next
-  turn starts with a note on the threads that ended since its last turn.
+- Every coordinator turn starts with a note on the threads that ended a turn
+  since its last one. With `notify = "coordinator"` (the default), a
+  thread's turn also wakes the coordinator, 15 seconds later so that threads
+  that end close together make one turn. It decides with `notify` what
+  reaches the person; these turns do not count toward the pause. With
+  `notify = "threads"`, only the person's messages wake it.
 - Send now stops the running turn, so the queue goes in the next turn at
   once.
 - From each turn the adapter reads the slash commands, the model, the
@@ -47,7 +51,7 @@ so no thread can act for another thread or another workspace.
 | Who | Tools |
 |---|---|
 | all sessions | `whoami`, `workspace_status`, `send_message`, `report_progress`, `ask_user`, `wake_me`, `read_thread`, `write_artifact`, `read_artifact` |
-| coordinator only | `open_thread`, `resolve_thread` |
+| coordinator only | `open_thread`, `resolve_thread`, and `notify` with `notify = "coordinator"` |
 | internal | `permission_prompt` |
 
 A turn ends when Claude's reply ends, and only a message starts the next

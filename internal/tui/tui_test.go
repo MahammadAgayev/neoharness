@@ -3180,3 +3180,74 @@ func TestAnIdleThreadSaysWhenItWakes(t *testing.T) {
 		}
 	}
 }
+
+// TestQuietThreadsToastOnlyWhenTheyWait: when the coordinator notifies the
+// person, a thread's finished turn makes no toast; its question still does.
+func TestQuietThreadsToastOnlyWhenTheyWait(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	done := h.a.threads["auth-refactor"]
+	done.Quiet, done.State = true, model.StateIdle
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: done.Name, View: &done})
+	if len(h.a.toasts) != 0 {
+		t.Fatalf("a quiet thread's turn made a toast: %+v", h.a.toasts[0])
+	}
+	v := h.a.threads["api-tests"]
+	v.Quiet, v.State, v.Waiting = true, model.StateWaiting, "Which branch?"
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("asks: Which branch?")
+}
+
+// TestCoordinatorNoticesFromAnyWorkspace: a notice shows with its workspace,
+// even from one that is not open; one that needs the person stays.
+func TestCoordinatorNoticesFromAnyWorkspace(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "other", Thread: model.Coordinator,
+		Event: &model.Event{Kind: model.EventNotice, Text: "json needs your pick of format", NeedsYou: true}})
+	h.a.draw()
+	h.see("other · coordinator")
+	h.see("json needs your pick of format")
+	h.a.pruneToasts()
+	if len(h.a.toasts) != 1 || !h.a.toasts[0].until.IsZero() {
+		t.Fatal("a notice that needs the person should stay")
+	}
+}
+
+func TestNoticeShowsInTheCoordinatorChat(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator,
+		Event: &model.Event{Kind: model.EventNotice, Text: "tests are done"}})
+	h.a.draw()
+	h.see("notified you: tests are done")
+	if len(h.a.toasts) != 0 {
+		t.Fatal("the coordinator is on screen; its notice needs no toast")
+	}
+}
+
+// TestCompactWarning: a session whose context passes compactwarn says so
+// once, on the bottom line when it is on screen.
+func TestCompactWarning(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	set := func(name string, ctx int) {
+		v := h.a.threads[name]
+		v.Context, v.ContextWindow = ctx, 1000
+		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: name, View: &v})
+	}
+	set("auth-refactor", 400)
+	set("auth-refactor", 520)
+	h.a.draw()
+	h.see("context at 52%")
+	h.press("<Space>nc")
+	set("auth-refactor", 600)
+	if len(h.a.toasts) != 0 {
+		t.Fatal("the warning should come once")
+	}
+	set(model.Coordinator, 100)
+	set(model.Coordinator, 700)
+	h.a.draw()
+	h.see("coordinator: context at 70%")
+}

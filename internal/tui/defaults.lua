@@ -11,10 +11,12 @@
 
 neoharness.o.leader = " "
 neoharness.o.equalalways = true -- after a split or a close, windows get the same size
+neoharness.o.compactwarn = 50   -- warn once when a session's context passes this %; 0 never
 
 -- The hub. Its settings take effect when it starts.
 require("neoharness").setup({
   mcp_port = 47821,              -- remote hosts reach the hub through a tunnel on it
+  notify = "coordinator",        -- the coordinator decides what reaches you; "threads": every thread does
 })
 
 -- The claude agent. /model and /effort change the model and effort per

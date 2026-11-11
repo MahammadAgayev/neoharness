@@ -18,15 +18,36 @@ var threadMD string
 //go:embed compact.md
 var compactMD string
 
+//go:embed reports.md
+var reportsMD string
+
+//go:embed reports_notify.md
+var reportsNotifyMD string
+
 // SessionInput is what a hub session's system prompt depends on.
 type SessionInput struct {
 	Workspace string
 	Name      string
 	Location  string
+	// Notify says the coordinator is the one that notifies the person.
+	Notify bool
 }
 
 // Coordinator is the system prompt for a workspace's coordinator.
-func Coordinator(in SessionInput) string { return fill(coordinatorMD, in) }
+func Coordinator(in SessionInput) string {
+	acts, reports := "You act only when the person writes to you.", reportsMD
+	if in.Notify {
+		acts, reports = "You act when the person writes to you, and when threads end a turn.", reportsNotifyMD
+	}
+	s := strings.NewReplacer("{{acts}}", acts, "{{reports}}", strings.TrimSpace(reports)).Replace(coordinatorMD)
+	return fill(s, in)
+}
+
+// Reports wakes the coordinator about the threads that ended a turn. The
+// note on each comes before it, as in every coordinator turn.
+func Reports(names []string) string {
+	return strings.Join(names, ", ") + " ended a turn. Decide whether the person needs to hear of it now."
+}
 
 // Thread is the system prompt for a thread.
 func Thread(in SessionInput) string { return fill(threadMD, in) }

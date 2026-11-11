@@ -1596,3 +1596,87 @@ func TestAWakeUpOutlivesARestart(t *testing.T) {
 		return len(rs) == 1 && strings.Contains(rs[0].Prompt, "after the restart")
 	})
 }
+
+// TestThreadTurnsWakeTheCoordinator: with Notify on, threads that end a turn
+// close together wake the coordinator once, and those turns do not count
+// toward the pause.
+func TestThreadTurnsWakeTheCoordinator(t *testing.T) {
+	defer func(d time.Duration) { reportDelay = d }(reportDelay)
+	reportDelay = 50 * time.Millisecond
+	f := &fake{}
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	h, err := New(Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }, Notify: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	pinned(t, h, "demo")
+	for _, n := range []string{"tests", "json"} {
+		if err := h.OpenThread("demo", model.Coordinator, n, "work", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reports := func() []agent.Request {
+		var out []agent.Request
+		for _, r := range f.requests() {
+			if strings.Contains(r.Prompt, "Message from threads") {
+				out = append(out, r)
+			}
+		}
+		return out
+	}
+	eventually(t, "the coordinator to hear of the threads", func() bool { return len(reports()) > 0 })
+	time.Sleep(4 * reportDelay)
+	rs := reports()
+	if len(rs) != 1 || !strings.Contains(rs[0].Prompt, "tests") || !strings.Contains(rs[0].Prompt, "json") {
+		t.Fatalf("report prompts = %d, want one about both threads: %+v", len(rs), rs)
+	}
+	if !strings.Contains(rs[0].SystemPrompt, "notify(") {
+		t.Fatal("the coordinator's prompt should tell it to notify")
+	}
+	h.mu.Lock()
+	turns := h.workspaces["demo"].threads[model.Coordinator].t.AgentTurns
+	h.mu.Unlock()
+	if turns != 0 {
+		t.Fatalf("agent turns = %d; reports must not count toward the pause", turns)
+	}
+}
+
+func TestThreadTurnsDoNotWakeTheCoordinatorWithoutNotify(t *testing.T) {
+	defer func(d time.Duration) { reportDelay = d }(reportDelay)
+	reportDelay = 10 * time.Millisecond
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "tests", "work", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "tests", model.StateIdle)
+	time.Sleep(10 * reportDelay)
+	for _, r := range f.requests() {
+		if strings.Contains(r.Prompt, "Message from threads") {
+			t.Fatal("without Notify a thread's turn must not wake the coordinator")
+		}
+	}
+	if err := h.Notify("demo", model.Coordinator, "done", false); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOnlyTheCoordinatorNotifies(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "tests", "work", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Notify("demo", "tests", "hi", false); err == nil {
+		t.Fatal("a thread must not notify the person")
+	}
+	if err := h.Notify("demo", model.Coordinator, "tests are done", true); err != nil {
+		t.Fatal(err)
+	}
+	evs, _ := h.Events("demo", model.Coordinator, 1)
+	if len(evs) != 1 || evs[0].Kind != model.EventNotice || !evs[0].NeedsYou || evs[0].Text != "tests are done" {
+		t.Fatalf("last event = %+v", evs)
+	}
+}

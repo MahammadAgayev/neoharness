@@ -78,6 +78,11 @@ type wakeIn struct {
 	Note    string `json:"note,omitempty" jsonschema:"what to check then; the wake-up message holds it"`
 }
 
+type notifyIn struct {
+	Text     string `json:"text" jsonschema:"one or two short lines for the person; name the threads"`
+	NeedsYou bool   `json:"needs_you,omitempty" jsonschema:"true when the person must act: the notice stays until they look"`
+}
+
 type openIn struct {
 	Name     string `json:"name" jsonschema:"short kebab-case name, unique in the workspace"`
 	Brief    string `json:"brief" jsonschema:"the task: goal, area, what done means, who to agree with"`
@@ -225,6 +230,17 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 				return nil, nil, err
 			}
 			return text("Resolved " + in.Name + "."), nil, nil
+		})
+
+	if !h.Notifies() {
+		return s
+	}
+	mcp.AddTool(s, &mcp.Tool{Name: "notify", Description: "Show the person a notice. Threads do not notify them; you decide what reaches them and when."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in notifyIn) (*mcp.CallToolResult, any, error) {
+			if err := h.Notify(p, me, in.Text, in.NeedsYou); err != nil {
+				return nil, nil, err
+			}
+			return text("Notified."), nil, nil
 		})
 	return s
 }

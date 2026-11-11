@@ -14,7 +14,10 @@ import (
 // require("neoharness.claude").setup.
 type HubSettings struct {
 	MCPPort int
-	Claude  ClaudeSettings
+	// Notify is "coordinator" when the coordinator decides what reaches the
+	// person, or "threads" when every thread notifies them itself.
+	Notify string
+	Claude ClaudeSettings
 }
 
 // ClaudeSettings configure the claude agent.
@@ -82,6 +85,8 @@ func ReadHubSettings(path string) (HubSettings, error) {
 			if n, ok := v.(lua.LNumber); ok {
 				s.MCPPort = int(n)
 			}
+		case "neoharness.notify":
+			s.Notify = text(v)
 		case "neoharness.claude.command":
 			s.Claude.Command = words(v)
 		case "neoharness.claude.remote_command":

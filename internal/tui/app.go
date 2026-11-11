@@ -438,6 +438,9 @@ func (a *App) apply(u model.Update) {
 			a.onView(*u.View)
 		}
 	case model.UpdateEvent:
+		if u.Event != nil && u.Event.Kind == model.EventNotice {
+			a.showNotice(u.Workspace, *u.Event)
+		}
 		if u.Workspace == a.workspace && u.Event != nil {
 			a.chat(u.Thread).AddEvent(*u.Event)
 			if u.Event.Kind == model.EventError {

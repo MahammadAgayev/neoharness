@@ -12,6 +12,7 @@ table.
 ```lua
 neoharness.o.leader = ","                                 -- default <Space>
 neoharness.o.equalalways = false                          -- default true
+neoharness.o.compactwarn = 70                             -- default 50; 0 never
 neoharness.keymap.set("n", "<leader>t", ":threads<CR>")   -- keys or an ex command
 neoharness.keymap.set("n", "gt", function() neoharness.cmd("threads") end)
 neoharness.keymap.set("n", "Q", "<leader>t", { remap = true })
@@ -24,6 +25,7 @@ neoharness.cmd("workspace demo")                          -- runs after start
 |---|---|
 | `neoharness.o.leader` | the leader; it moves the default maps |
 | `neoharness.o.equalalways` | a split or a close makes the windows the same size |
+| `neoharness.o.compactwarn` | warn once when a session's context passes this percent: every turn sends the whole context again, so `/compact` then saves tokens |
 | `neoharness.keymap.set(mode, lhs, rhs, opts)` | `n`, `x` or `i`; `rhs` is keys, an ex command or a function; `{ remap = true }` |
 | `neoharness.keymap.del(mode, lhs)` | removes a map |
 | `neoharness.hl(group, opts)` | `Text Subtle Muted Iris Rose Foam Gold Pine Love Code Separator CursorLine Selection`; `fg`, `bg`, `bold`, `italic`, `underline` |
@@ -52,6 +54,7 @@ when the hub starts: restart neoharness after a change.
 ```lua
 require("neoharness").setup({
   mcp_port = 47821,                     -- remote hosts reach the hub through a tunnel on it
+  notify = "coordinator",               -- the coordinator decides what reaches you; "threads": every thread does
 })
 
 require("neoharness.claude").setup({
