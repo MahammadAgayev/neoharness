@@ -5,11 +5,11 @@ import (
 	"errors"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 
 	agentclaude "github.com/MahammadAgayev/neoharness/internal/agent/claude"
 	"github.com/MahammadAgayev/neoharness/internal/model"
+	"github.com/MahammadAgayev/neoharness/internal/procgroup"
 )
 
 // listScript prints a folder's files relative to it: what git tracks and does
@@ -49,11 +49,17 @@ func runShell(ctx context.Context, l model.Location, command string) (string, in
 		ssh := agentclaude.SSHCommand(l.Host, l.Dir, args)
 		cmd = exec.CommandContext(ctx, ssh[0], ssh[1:]...)
 	} else {
+		if sh := localShell(); sh != "" {
+			args[0] = sh
+		} else {
+			// Windows without Git's sh: the command still runs, in cmd.
+			args = []string{"cmd", "/C", command}
+		}
 		cmd = exec.CommandContext(ctx, args[0], args[1:]...)
 		cmd.Dir = l.Dir
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	procgroup.Isolate(cmd)
+	cmd.Cancel = func() error { return procgroup.Kill(cmd) }
 	cmd.WaitDelay = time.Second
 	out, err := cmd.CombinedOutput()
 	var exit *exec.ExitError
@@ -71,7 +77,11 @@ func runIn(ctx context.Context, l model.Location, script string) (string, error)
 		ssh := agentclaude.SSHCommand(l.Host, l.Dir, args)
 		cmd = exec.CommandContext(ctx, ssh[0], ssh[1:]...)
 	} else {
-		cmd = exec.CommandContext(ctx, args[0], args[1:]...)
+		sh := localShell()
+		if sh == "" {
+			return "", errors.New("no sh found: install Git for Windows")
+		}
+		cmd = exec.CommandContext(ctx, sh, args[1:]...)
 		cmd.Dir = l.Dir
 	}
 	// A wrapper's child can outlive the kill and hold the pipe open; do not

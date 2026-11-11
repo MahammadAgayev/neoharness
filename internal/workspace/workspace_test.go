@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func TestCreateListThreadsEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(filepath.Join(ThreadDir("demo", "api-tests"), "thread.json"))
-	if err != nil || info.Mode().Perm() != 0o600 {
+	if err != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("thread.json must be 0600 (holds a token): %v %v", info.Mode(), err)
 	}
 	ths, err := Threads("demo")
