@@ -383,6 +383,32 @@ func TestAskUserWaitsAndUserReplyClears(t *testing.T) {
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
 }
 
+func TestAnswerStopsATurnThatStillRunsAfterItsQuestion(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if strings.Contains(req.Prompt, "postgres") {
+			return agent.Result{Text: "ok"}
+		}
+		_ = h.AskUser("demo", model.Coordinator, "which database?")
+		req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "asked"})
+		// claude -p waits here for a background task.
+		<-ctx.Done()
+		return agent.Result{ExitCode: -1}
+	}
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")
+	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
+	if v := view(t, h, "demo", model.Coordinator); v.Waiting != "which database?" {
+		t.Fatalf("waiting = %q", v.Waiting)
+	}
+	_ = h.Send("demo", model.User, model.Coordinator, "postgres")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if reqs := f.requests(); len(reqs) != 2 || !strings.Contains(reqs[1].Prompt, "postgres") {
+		t.Fatalf("the answer should start the next turn at once; %d turns", len(reqs))
+	}
+}
+
 func TestResolveRefusesMessagesAndReopenKeepsSession(t *testing.T) {
 	gate := make(chan struct{})
 	f := &fake{}

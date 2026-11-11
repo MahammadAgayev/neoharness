@@ -620,7 +620,14 @@ func (h *Hub) send(workspaceName, from, to, text string) (*thread, error) {
 			return th, err
 		}
 	}
+	answer := from == model.User && th.t.Asking != ""
 	h.enqueue(ws, th, from, text)
+	// The thread asked and ended its reply; what still runs (background
+	// tasks) must not hold the answer back.
+	if answer && th.busy && th.cancel != nil {
+		th.interrupted = true
+		th.cancel()
+	}
 	return th, nil
 }
 
@@ -1437,11 +1444,13 @@ func (th *thread) derive() model.State {
 	switch {
 	case t.Resolved:
 		return model.StateResolved
-	case len(th.perms) > 0:
+	// A question waits for the person even while its turn still runs: claude
+	// -p stays up until its background tasks end.
+	case len(th.perms) > 0 || t.Asking != "":
 		return model.StateWaiting
 	case th.busy:
 		return model.StateRunning
-	case t.Asking != "" || t.Paused:
+	case t.Paused:
 		return model.StateWaiting
 	case len(t.Queue) > 0:
 		return model.StateRunning
