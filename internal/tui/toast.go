@@ -1,12 +1,10 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
-	lua "github.com/yuin/gopher-lua"
 
 	"github.com/MahammadAgayev/neoharness/internal/model"
 )
@@ -76,7 +74,6 @@ func (a *App) addToast(t *toast, life time.Duration) {
 // toastView turns a thread's change into a toast. Of a quiet thread only a
 // question or a permission request does: the coordinator tells the rest.
 func (a *App) toastView(old, v model.ThreadView, had bool) {
-	a.compactWarn(old, v, had)
 	switch {
 	case v.Quiet && v.State != model.StateWaiting:
 	case !had && v.Role == model.RoleThread:
@@ -99,26 +96,6 @@ func (a *App) toastView(old, v model.ThreadView, had bool) {
 		}
 		a.toast(v.Name, Span{"✓", a.th.Pine}, body, a.th.Pine, 4*time.Second)
 	}
-}
-
-// compactWarn says once, when a session's context passes
-// neoharness.o.compactwarn percent, that /compact would save tokens: every
-// turn sends the whole context again.
-func (a *App) compactWarn(old, v model.ThreadView, had bool) {
-	limit, _ := a.opt("compactwarn").(lua.LNumber)
-	if !had || limit <= 0 || v.ContextWindow == 0 || old.ContextWindow == 0 {
-		return
-	}
-	pct, was := v.Context*100/v.ContextWindow, old.Context*100/old.ContextWindow
-	if was >= int(limit) || pct < int(limit) {
-		return
-	}
-	body := fmt.Sprintf("context at %d%% · /compact to spend fewer tokens per turn", pct)
-	if a.windowOf(v.Name) != nil {
-		a.notify(v.Name+": "+body, a.th.Gold)
-		return
-	}
-	a.toast(v.Name, Span{"!", a.th.Gold}, body, a.th.Gold, 8*time.Second)
 }
 
 // pruneToasts drops toasts whose time is up, and waiting ones whose thread

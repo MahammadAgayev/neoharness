@@ -3227,27 +3227,24 @@ func TestNoticeShowsInTheCoordinatorChat(t *testing.T) {
 	}
 }
 
-// TestCompactWarning: a session whose context passes compactwarn says so
-// once, on the bottom line when it is on screen.
+// TestCompactWarning: past compactwarn, the status line says /compact.
 func TestCompactWarning(t *testing.T) {
 	h := start(t)
 	h.openDemo()
-	set := func(name string, ctx int) {
-		v := h.a.threads[name]
+	set := func(ctx int) {
+		v := h.a.threads[model.Coordinator]
 		v.Context, v.ContextWindow = ctx, 1000
-		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: name, View: &v})
+		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+		h.a.draw()
 	}
-	set("auth-refactor", 700)
-	set("auth-refactor", 820)
-	h.a.draw()
-	h.see("context at 82%")
-	h.press("<Space>nc")
-	set("auth-refactor", 900)
+	set(700)
+	h.see("ctx 70%")
+	if strings.Contains(h.screen(), "/compact") {
+		t.Fatal("under compactwarn the status line should not ask for /compact")
+	}
+	set(820)
+	h.see("ctx 82% · /compact")
 	if len(h.a.toasts) != 0 {
-		t.Fatal("the warning should come once")
+		t.Fatal("the warning belongs in the status line, not a toast")
 	}
-	set(model.Coordinator, 100)
-	set(model.Coordinator, 850)
-	h.a.draw()
-	h.see("coordinator: context at 85%")
 }

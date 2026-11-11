@@ -9,6 +9,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/uniseg"
+	lua "github.com/yuin/gopher-lua"
 
 	"github.com/MahammadAgayev/neoharness/internal/model"
 )
@@ -504,12 +505,12 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 		add(shortModel(v.Model), color(a.th.Rose), 2)
 		if v.ContextWindow > 0 {
 			pct := v.Context * 100 / v.ContextWindow
-			ctxSt := color(a.th.Gold)
-			if pct >= 80 {
-				// A nearly full context needs the person: time to /compact.
-				ctxSt = a.th.Love
+			label, ctxSt := fmt.Sprintf("ctx %d%%", pct), color(a.th.Gold)
+			if limit, _ := a.opt("compactwarn").(lua.LNumber); limit > 0 && pct >= int(limit) {
+				// Every turn sends the whole context again: time to /compact.
+				label, ctxSt = label+" · /compact", a.th.Love
 			}
-			add(fmt.Sprintf("ctx %d%%", pct), ctxSt, 4)
+			add(label, ctxSt, 4)
 		}
 		if v.Cost > 0 {
 			add(fmt.Sprintf("$%.2f", v.Cost), color(a.th.Pine), 3)

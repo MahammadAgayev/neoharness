@@ -83,9 +83,10 @@ Toasts show in the top right corner and name the workspace and the thread.
 - Questions, permission requests and errors always come to you directly.
 - `notify = "threads"` in the hub setup goes back to a toast for every
   thread's finished turn.
-- When a session's context passes 80%, you get one warning: every turn
-  sends the whole context again, so `/compact` then saves tokens.
-  `neoharness.o.compactwarn` changes the percentage.
+- When a session's context passes 80%, its status line shows
+  `ctx 82% · /compact` in red: every turn sends the whole context again, so
+  `/compact` then saves tokens. `neoharness.o.compactwarn` changes the
+  percentage.
 
 ## Artifacts
 

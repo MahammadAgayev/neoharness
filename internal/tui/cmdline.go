@@ -608,7 +608,7 @@ func (a *App) helpBuf() *Buffer {
 		row("defaults.lua", "every default map, color and setting; copy a line to init.lua and edit it"),
 		row("neoharness.o.leader", "the leader, <Space> by default; it moves the default maps"),
 		row("neoharness.o.equalalways", "on: a split or a close makes the windows the same size"),
-		row("neoharness.o.compactwarn", "warn once when a session's context passes this %; 0 never"),
+		row("neoharness.o.compactwarn", "past this context %, the status line says /compact; 0 never"),
 		row("neoharness.keymap.set / del", "n x i maps: keys, an ex command (:threads<CR>), a function"),
 		row("<Plug>(neoharness-…)", "threads grep yank dismiss coordinator: actions with no ex command"),
 		row("neoharness.hl", "a color: Text Subtle Muted Iris Foam Gold Rose Pine Love Code …"),
