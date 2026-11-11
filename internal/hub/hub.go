@@ -1593,6 +1593,11 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		UpdatedAt:     t.UpdatedAt,
 		CreatedAt:     t.CreatedAt,
 	}
+	// A report from before the turn that runs now is old news: "blocked,
+	// asking the user" reads wrong once the answer came.
+	if th.state == model.StateRunning && t.ProgressAt.Before(t.Since) {
+		v.Progress = ""
+	}
 	switch {
 	case len(th.perms) > 0:
 		p := th.perms[0].Permission
