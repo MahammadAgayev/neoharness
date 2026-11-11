@@ -4,19 +4,24 @@ A terminal UI for running several Claude Code sessions at once, with Vim keys.
 
 ![a coordinator opens three threads; one writes a design note](docs/demo/demo.gif)
 
-Each workspace has a coordinator: a Claude session you write to. It opens
-threads, which are separate Claude sessions that each do one task, in a local
-folder or on another machine over ssh. The threads pane shows each thread and
-its state (running, waiting on you, idle). You can open any thread and write to
-it directly.
+## Three concepts
 
-- Threads report progress, send messages to each other and read each other's
-  transcripts. A thread can ask to be woken later.
-- Agents can write artifacts: markdown documents such as plans or reports.
-  They open in the window, and you can edit them; the agent sees your edit
-  as a diff.
-- Permission requests and questions show as cards. A toast names the
-  workspace and thread that needs you.
+- **Workspace**: one piece of work, usually pinned to a folder. Each
+  workspace has a coordinator: a Claude session you write to. It splits your
+  request into threads, sends them corrections, and tells you when the work
+  is done or needs you.
+- **Thread**: a separate Claude session that does one task, in a local
+  folder or on another machine over ssh. The threads pane shows each thread
+  and its state (running, waiting on you, idle). You can open any thread and
+  write to it directly. Threads report progress, message each other and read
+  each other's transcripts.
+- **Artifact**: a markdown document an agent writes for you, such as a plan
+  or a report. It opens in the window and you can edit it; the agent sees
+  your edit as a diff.
+
+Also:
+
+- Permission requests and questions show as cards, and come to you at once.
 - Normal Vim motions, operators, search, marks, macros, splits and `:`
   commands. Configuration is in `init.lua`.
 
