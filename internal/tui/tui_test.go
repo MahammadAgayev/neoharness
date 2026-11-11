@@ -891,12 +891,42 @@ func (h *neoharness) fgAt(want string) tcell.Color {
 	return 0
 }
 
+func TestChatShowsWorkingUntilSomethingSpins(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads[model.Coordinator]
+	v.State = model.StateRunning
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("working")
+	e := model.Event{Kind: model.EventTool, Tool: "Read", Detail: "a.go", ID: "t1"}
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: v.Name, Event: &e})
+	h.a.draw()
+	if strings.Contains(h.screen(), "working") {
+		t.Fatal("a spinning tool call should replace the working line")
+	}
+	v.State = model.StateIdle
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	if strings.Contains(h.screen(), "working") {
+		t.Fatal("an idle thread should not show working")
+	}
+}
+
+func TestStatusLineNamesTheWorkspace(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.see("demo · coordinator")
+	h.see("demo · threads")
+}
+
 func TestStatusColorsAndPromptHeight(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	v := h.a.threads[model.Coordinator]
 	v.Model, v.Context, v.ContextWindow, v.Cost, v.Branch = "claude-opus-5[1m]", 100, 1000, 9.17, "trunk"
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.s.SetSize(160, 36)
 	h.a.draw()
 	for want, color := range map[string]tcell.Color{"trunk": rpFoam, "opus-5 1m": rpRose, "ctx 10%": rpGold, "$9.17": rpPine} {
 		if got := h.fgAt(want); got != color {

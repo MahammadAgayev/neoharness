@@ -97,6 +97,8 @@ type Buffer struct {
 	// pending are a chat's queued messages, shown after the transcript
 	// until the turn that reads them starts.
 	pending []model.Event
+	// working is set while the chat's thread has a turn running.
+	working bool
 	lines   []Line
 	linesW  int
 	dirty   bool
@@ -168,10 +170,7 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 	if b.Edit != nil {
 		return b.Edit.render(w, th)
 	}
-	live := false
-	for _, bl := range b.blocks {
-		live = live || bl.live
-	}
+	live := b.Live()
 	if !b.dirty && !live && b.linesW == w {
 		return b.lines
 	}
@@ -185,6 +184,11 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 			l.Block = i
 			out = append(out, l)
 		}
+	}
+	if b.waiting() {
+		out = append(out, Line{Block: len(b.blocks)}, Line{Block: len(b.blocks),
+			Prefix: []Span{{"  " + spinner[spin%len(spinner)] + " ", th.Foam}},
+			Spans:  []Span{{"working", th.Subtle}}})
 	}
 	for _, e := range b.pending {
 		bar := []Span{{"▎ ", th.Muted}}
@@ -213,6 +217,28 @@ func (b *Buffer) SetPending(evs []model.Event) {
 	}
 }
 
+// SetWorking tells a chat whether its thread has a turn running.
+func (b *Buffer) SetWorking(on bool) {
+	if b.working != on {
+		b.working = on
+		b.dirty = true
+	}
+}
+
+// waiting reports whether a turn runs and nothing in it spins yet: claude
+// takes seconds to start and to think, and the chat must show that it heard.
+func (b *Buffer) waiting() bool {
+	if !b.working {
+		return false
+	}
+	for _, bl := range b.blocks {
+		if bl.live {
+			return false
+		}
+	}
+	return true
+}
+
 // joins reports whether block i sits directly under the one before it,
 // without a blank line: a run of permission lines reads as one list.
 func (b *Buffer) joins(i int) bool {
@@ -222,6 +248,9 @@ func (b *Buffer) joins(i int) bool {
 
 // Live reports whether something in the buffer animates.
 func (b *Buffer) Live() bool {
+	if b.working {
+		return true
+	}
 	for _, bl := range b.blocks {
 		if bl.live {
 			return true

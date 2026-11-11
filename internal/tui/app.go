@@ -398,6 +398,7 @@ func (a *App) loadHistory(v model.ThreadView) {
 		b.AddEvent(e)
 	}
 	b.settle(v.State == model.StateRunning)
+	b.SetWorking(v.State == model.StateRunning)
 }
 
 func (a *App) apply(u model.Update) {
@@ -551,6 +552,7 @@ func (a *App) onView(v model.ThreadView) {
 		a.order = append(a.order, v.Name)
 	}
 	a.chat(v.Name).SetPending(v.Pending)
+	a.chat(v.Name).SetWorking(v.State == model.StateRunning)
 	// A turn that ended may have reported the thread's first command list.
 	if had && old.State == model.StateRunning && v.State != model.StateRunning {
 		if b := a.chat(v.Name); a.mode == modeInsert && a.cur.Buf == b {

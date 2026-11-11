@@ -446,6 +446,13 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 	if focused {
 		nameSt = a.th.Text
 	}
+	ws := b.Workspace
+	if b.Kind == KindThreads {
+		ws = a.workspace
+	}
+	if ws != "" {
+		x = a.put(x, y, right, ws+" · ", a.th.Subtle)
+	}
 	x = a.put(x, y, right, name, nameSt) + 2
 
 	// Right side, in muted color. When it does not fit, the first parts of
