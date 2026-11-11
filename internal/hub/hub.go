@@ -230,10 +230,20 @@ func (h *Hub) start(ws *space) {
 	}
 }
 
-// Close cancels every running turn and waits for them to unwind.
+// closeWait is how long Close waits for turns to unwind. An agent that does
+// not stop must not keep the program from quitting.
+var closeWait = 5 * time.Second
+
+// Close cancels every running turn and waits for them to unwind, for
+// closeWait at most.
 func (h *Hub) Close() {
 	h.cancel()
-	h.wg.Wait()
+	done := make(chan struct{})
+	go func() { h.wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(closeWait):
+	}
 }
 
 // --- workspaces ---

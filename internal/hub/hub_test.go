@@ -556,6 +556,34 @@ func TestRestartReportsTheLostTurn(t *testing.T) {
 	h.Close()
 }
 
+// TestCloseDoesNotWaitForeverOnAStuckTurn: a turn whose agent ignores the
+// cancel must not keep the program from quitting.
+func TestCloseDoesNotWaitForeverOnAStuckTurn(t *testing.T) {
+	defer func(d time.Duration) { closeWait = d }(closeWait)
+	closeWait = 100 * time.Millisecond
+	block := make(chan struct{})
+	defer close(block)
+	f := &fake{script: func(ctx context.Context, req agent.Request) agent.Result {
+		<-block
+		return agent.Result{}
+	}}
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	h, err := New(Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "work")
+	stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
+	done := make(chan struct{})
+	go func() { h.Close(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Close still waits for the stuck turn")
+	}
+}
+
 func TestSubscribersSeeUpdates(t *testing.T) {
 	h := newHub(t, &fake{})
 	ch, stop := h.Subscribe()
