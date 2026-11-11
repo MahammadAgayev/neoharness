@@ -1071,12 +1071,16 @@ func TestThreadsPaneGroupsByStateAndFoldsResolved(t *testing.T) {
 	}
 }
 
-func TestSendNowWithCtrlXCtrlS(t *testing.T) {
+func TestEnterOnAQueuedMessageSendsItNow(t *testing.T) {
 	h := start(t)
 	h.openDemo()
-	h.press("i", "stop", "<C-x>", "<C-s>")
-	h.press("x", "<C-x>", "y", "<CR>")
-	if strings.Join(h.hub.sent, "|") != "now coordinator: stop|coordinator: xy" {
+	h.a.chat(model.Coordinator).SetPending([]model.Event{{Kind: model.EventMessage, From: model.User, Text: "stop"}})
+	h.press("<Esc>", "G")
+	for h.a.line(h.a.cur).Item != queuedRow {
+		h.press("k")
+	}
+	h.press("<CR>")
+	if strings.Join(h.hub.sent, "|") != "now coordinator: " {
 		t.Fatalf("sent = %q", h.hub.sent)
 	}
 }
@@ -2592,7 +2596,7 @@ func TestHelpWrapsInANarrowWindow(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	want := "send now: stop the running turn (in Insert)"
+	want := "on a queued message: send it now, stopping the running turn"
 	for _, w := range []int{36, 100} {
 		if got := text(w); !strings.Contains(got, want) {
 			t.Errorf("at width %d help should show %q whole; got %q", w, want, got)

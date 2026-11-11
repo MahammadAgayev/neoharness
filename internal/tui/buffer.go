@@ -200,8 +200,11 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 		for _, l := range strings.Split(e.Text, "\n") {
 			rows = append(rows, wrap([]Span{{l, th.Muted}}, w, bar, bar)...)
 		}
-		for _, l := range rows {
+		for i, l := range rows {
 			l.Block = len(b.blocks)
+			if i > 0 {
+				l.Item = queuedRow
+			}
 			out = append(out, l)
 		}
 	}

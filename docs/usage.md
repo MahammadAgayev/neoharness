@@ -49,10 +49,9 @@ The coordinator usually opens threads. You can open one yourself:
   `<C-j>` makes a new line, `<Esc>` goes to Normal mode.
 - The prompt is a part of the chat buffer. Vim motions, changes, undo and
   Visual mode work in it.
-- `<C-x><C-s>` sends now: it stops the running turn, and the message goes
-  in the next turn at once.
 - Messages sent while a thread is busy wait in a queue and show dim at the
-  end of the chat.
+  end of the chat. `<CR>` on one sends it now: the running turn stops, and
+  the queue goes in the next turn at once.
 - `/` at the start completes slash commands. `@` completes threads and files.
 - `!<command>` at the start runs a shell command in the thread's folder. The
   output goes to Claude with your next message.

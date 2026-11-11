@@ -994,7 +994,7 @@ func (a *App) cycleThread(d int) {
 func (a *App) enter() {
 	// <CR> on the prompt sends it, as in Insert.
 	if a.cur.inPrompt {
-		a.send(false)
+		a.send()
 		return
 	}
 	if a.cur.Buf.Edit != nil {
@@ -1021,6 +1021,12 @@ func (a *App) enter() {
 			a.showThread(l.Item)
 		}
 	default:
+		if l.Item == queuedRow {
+			if err := a.c.SendNow(a.cur.Buf.Workspace, a.cur.Buf.Thread, ""); err != nil {
+				a.notify(err.Error(), a.th.Love)
+			}
+			return
+		}
 		if bs := a.cur.Buf.blocks; l.Block < len(bs) && bs[l.Block].kind == bArtifact {
 			a.openArtifact(bs[l.Block].art.Name)
 			return
@@ -1103,19 +1109,6 @@ func (a *App) insertKey(k string, ev *tcell.EventKey) {
 		a.mode = modeNormal
 		return
 	}
-	// <C-x><C-s> sends now, like Claude Code's send-now: it stops the turn
-	// that runs.
-	if a.ctrlX {
-		a.ctrlX = false
-		if k == "<C-s>" {
-			a.send(true)
-			return
-		}
-	}
-	if k == "<C-x>" {
-		a.ctrlX = true
-		return
-	}
 	if a.menuKey(k) {
 		return
 	}
@@ -1134,7 +1127,7 @@ func (a *App) insertKey(k string, ev *tcell.EventKey) {
 			p.insert('\n')
 			return
 		}
-		a.send(false)
+		a.send()
 	case "<S-CR>", "<C-j>", "<M-\r>":
 		p.insert('\n')
 	case "<BS>":
@@ -1181,17 +1174,13 @@ func (p *Prompt) insert(r rune) {
 	p.Cur++
 }
 
-func (a *App) send(now bool) {
+func (a *App) send() {
 	b := a.cur.Buf
 	text := strings.TrimSpace(string(b.Prompt.Text))
 	if text == "" {
 		return
 	}
-	send := a.c.Send
-	if now {
-		send = a.c.SendNow
-	}
-	if err := send(b.Workspace, b.Thread, text); err != nil {
+	if err := a.c.Send(b.Workspace, b.Thread, text); err != nil {
 		a.notify(err.Error(), a.th.Love)
 		return
 	}

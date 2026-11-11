@@ -146,7 +146,6 @@ type App struct {
 	menu     *menu
 	toasts   []*toast
 	menuShut int // the word whose menu <Esc> closed, or -1
-	ctrlX    bool
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key
@@ -1031,6 +1030,10 @@ func countSpans(c map[model.State]int, th *Theme) []Span {
 // resolvedRow is the Item of the row that folds the resolved threads. A
 // thread name cannot hold a NUL.
 const resolvedRow = "\x00resolved"
+
+// queuedRow is the Item of a queued message's rows: <CR> on one sends the
+// queue now.
+const queuedRow = "\x00queued"
 
 func (a *App) renderThreads() {
 	if a.threadsBuf == nil {

@@ -593,12 +593,21 @@ func (h *Hub) Send(workspaceName, from, to, text string) error {
 }
 
 // SendNow sends a message from the user and stops the running turn, so the
-// message starts the next turn at once. Claude keeps the work of the stopped
-// turn in its session.
+// message starts the next turn at once. With no text, the messages already
+// queued go now. Claude keeps the work of the stopped turn in its session.
 func (h *Hub) SendNow(workspaceName, to, text string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	th, err := h.send(workspaceName, model.User, to, text)
+	var th *thread
+	var err error
+	if strings.TrimSpace(text) == "" {
+		_, th, err = h.lookup(workspaceName, to)
+		if err == nil && len(th.t.Queue) == 0 {
+			err = errors.New("nothing is queued")
+		}
+	} else {
+		th, err = h.send(workspaceName, model.User, to, text)
+	}
 	if err != nil {
 		return err
 	}

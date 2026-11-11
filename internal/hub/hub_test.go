@@ -908,8 +908,10 @@ func TestDeleteWorkspaceHidesItAndStopsTurns(t *testing.T) {
 }
 
 func TestSendNowInterruptsTheTurn(t *testing.T) {
-	for _, started := range []bool{true, false} {
-		t.Run(fmt.Sprintf("started=%v", started), func(t *testing.T) {
+	for _, c := range []struct{ started, queued bool }{{true, false}, {false, false}, {true, true}} {
+		started, queued := c.started, c.queued
+		t.Run(fmt.Sprintf("started=%v,queued=%v", started, queued), func(t *testing.T) {
+			var err error
 			f := &fake{}
 			f.script = func(ctx context.Context, req agent.Request) agent.Result {
 				if strings.Contains(req.Prompt, "now") {
@@ -927,7 +929,15 @@ func TestSendNowInterruptsTheTurn(t *testing.T) {
 				t.Fatal(err)
 			}
 			stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
-			if err := h.SendNow("demo", model.Coordinator, "stop, do this now"); err != nil {
+			if queued {
+				if err := h.Send("demo", model.User, model.Coordinator, "stop, do this now"); err != nil {
+					t.Fatal(err)
+				}
+				err = h.SendNow("demo", model.Coordinator, "")
+			} else {
+				err = h.SendNow("demo", model.Coordinator, "stop, do this now")
+			}
+			if err != nil {
 				t.Fatal(err)
 			}
 			stateIs(t, h, "demo", model.Coordinator, model.StateIdle)

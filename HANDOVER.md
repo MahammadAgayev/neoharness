@@ -118,8 +118,8 @@ with key auth, and `claude` installed and logged in on that host.
   since the coordinator's last turn (`space.ended`) and starts its next turn
   with a note: each thread's state, last report and last reply (300
   characters; `endedNote`, `prompts.ThreadsEnded`). Items 56 and 57.
-- **Send now** (`<C-x><C-s>` in Insert, `hub.SendNow`, `"now": true` on the
-  messages route): the message is queued and the running turn is stopped, so
+- **Send now** (`<CR>` on a queued message, `queuedRow`; `hub.SendNow` with
+  no text, `"now": true` on the messages route): the message is queued and the running turn is stopped, so
   the queue goes in the next turn at once. Claude keeps the stopped turn's
   work in its session. If the turn had no output yet, Claude never saw its
   messages, so they go again with the new one. The chat shows "Interrupted."
@@ -388,7 +388,7 @@ chroma (code colors, style `rose-pine-moon`).
   the prompt is the buffer's end in Normal too, item 63),
   Visual (`v`, `V`), Command-line (`:` and `/`), Picker (`<leader>…`).
 - **Prompt**: at least 3 lines tall, grows to 12 lines before it scrolls.
-  `<CR>` sends, `<C-j>` makes a new line, `<C-x><C-s>` sends now. It is the
+  `<CR>` sends, `<C-j>` makes a new line. It is the
   end of the chat buffer in Normal mode too (`prompt.go`, items 63 to 65):
   `<Esc>` leaves the cursor in it, one rune back; `j` below the transcript
   and `G` go in, `k` above it and `gg` go out. There every motion, change
@@ -490,7 +490,7 @@ are `<leader>p…` (`pf`, `pb`, `ps`), and `<leader>f` formats code.
 | `i a o A I` / `<CR>` / `<C-j>` / `<Esc>` | write / send / new line / Normal (the cursor stays in the prompt) |
 | `j` at the end, `G` / `k` at the top, `gg` | into the prompt / out of it; there `x dw cc u . r v` edit it and `<CR>` sends |
 | `p` / `<C-r>"` (Insert) | put the last yank in the prompt |
-| `<C-x><C-s>` (Insert) | send now: stop the running turn |
+| `<CR>` on a queued message | send now: stop the running turn |
 | `!<command>` (Insert, at the start) | run it in the thread's folder |
 | `j k gg G h l w b 0 ^ $` | move |
 | `<C-d>` `<C-u>` `n` `N` | half page, search; all recenter like `zz` (scrolloff 8) |
