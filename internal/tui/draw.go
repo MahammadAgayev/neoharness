@@ -124,6 +124,11 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	if b.Prompt != nil {
 		textBottom-- // a blank line between transcript and prompt
 	}
+	// The transcript ends above the card, so the card hides none of it.
+	cardBottom := textBottom
+	if title, body, _ := a.card(w); title != "" && textBottom-len(body)-2 > top {
+		textBottom -= len(body) + 2
+	}
 	h := max(textBottom-top, 1)
 	w.textH = h
 
@@ -250,7 +255,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		}
 	}
 	if b.Kind == KindChat {
-		a.drawFloats(w, top, textBottom)
+		a.drawFloats(w, top, cardBottom)
 	}
 	if focused && a.menu != nil {
 		a.drawMenu(w, top, promptTop)
@@ -569,19 +574,18 @@ func bufTitle(b *Buffer) string {
 }
 
 // drawFloats draws the permission and question cards over a chat window.
-func (a *App) drawFloats(w *Window, top, bottom int) {
+// card is the box a waiting chat shows above its prompt: its title and
+// rows, and its width. No title, no card.
+func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 	v, ok := a.threads[w.Buf.Thread]
-	if !ok || v.State != model.StateWaiting {
+	if w.Buf.Kind != KindChat || !ok || v.State != model.StateWaiting {
 		return
 	}
-	r := w.rect
-	bw := min(r.W-4, 64)
+	bw = min(w.rect.W-4, 64)
 	if bw < 20 {
 		return
 	}
 	th := a.th
-	var title string
-	var body [][]Span
 	switch {
 	case v.Permission != nil:
 		title = "permission"
@@ -596,18 +600,23 @@ func (a *App) drawFloats(w *Window, top, bottom int) {
 		}
 	case v.Waiting != "":
 		title = "question"
-		// The card covers the end of the transcript, where the question is,
-		// so it shows all of it that fits.
-		lines := wrap([]Span{{v.Waiting, th.Text}}, bw-4, nil, nil)
-		if room := bottom - top - 3; len(lines) > room {
-			lines = lines[:max(room, 1)]
-			lines[len(lines)-1].Spans = append(lines[len(lines)-1].Spans, Span{"…", th.Muted})
-		}
-		for _, l := range lines {
+		// The whole question is in the transcript above the card.
+		for i, l := range wrap([]Span{{v.Waiting, th.Text}}, bw-4, nil, nil) {
+			if i == 3 {
+				break
+			}
 			body = append(body, l.Spans)
 		}
 		body = append(body, []Span{{"i", th.Iris}, {" reply", th.Muted}})
-	default:
+	}
+	return title, body, bw
+}
+
+// drawFloats draws the card in the rows the transcript left for it, just
+// above bottom.
+func (a *App) drawFloats(w *Window, top, bottom int) {
+	title, body, bw := a.card(w)
+	if title == "" {
 		return
 	}
 	bh := len(body) + 2
@@ -615,8 +624,8 @@ func (a *App) drawFloats(w *Window, top, bottom int) {
 	if y0 < top {
 		return
 	}
-	x0 := r.X + 2
-	a.box(x0, y0, bw, bh, title, th.Gold)
+	x0 := w.rect.X + 2
+	a.box(x0, y0, bw, bh, title, a.th.Gold)
 	for i, spans := range body {
 		x := x0 + 2
 		for _, sp := range spans {

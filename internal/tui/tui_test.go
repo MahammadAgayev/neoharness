@@ -2906,13 +2906,19 @@ func TestPopupMarginsAreBlank(t *testing.T) {
 	}
 }
 
-func TestTheQuestionCardShowsTheWholeQuestion(t *testing.T) {
+func TestTheQuestionCardHidesNoneOfTheTranscript(t *testing.T) {
 	h := start(t)
 	h.openDemo()
+	for i := 0; i < 40; i++ {
+		h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &model.Event{Kind: model.EventText, Text: fmt.Sprintf("line %d", i)}})
+	}
+	q := strings.Repeat("The roadmap has phases and dates to check. ", 8) + "Which phase first?"
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &model.Event{Kind: model.EventAsk, Text: q}})
 	v := h.a.threads[model.Coordinator]
 	v.State = model.StateWaiting
-	v.Waiting = strings.Repeat("The roadmap has phases and dates to check. ", 8) + "Which phase first?"
+	v.Waiting = q
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
 	h.see("phase first?")
+	h.see("reply")
 }
