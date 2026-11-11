@@ -130,7 +130,7 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			return text(Status(vs, me, time.Now()) + Artifacts(as)), nil, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "write_artifact", Description: "Write a markdown document for the person to read: a plan, design, report, or summary longer than a screen. The person opens it beside your chat. Writing the same name again replaces it with a new version; send the whole document each time."},
+	mcp.AddTool(s, &mcp.Tool{Name: "write_artifact", Description: "Write a markdown document for the person to read beside your chat. Only when the person asks for a document, or your task is to make one (a plan, design, or report); otherwise answer in the chat, even at length. Writing the same name again replaces it with a new version; send the whole document each time."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in artifactIn) (*mcp.CallToolResult, any, error) {
 			a, err := h.WriteArtifact(p, me, in.Name, in.Content)
 			if err != nil {

@@ -30,7 +30,8 @@ You have these tools through the `neoharness` MCP server:
 - `read_thread(name, tail, query?)` reads the end of a thread's transcript,
   when you need it to decide what to do next.
 - `write_artifact(name, content)` and `read_artifact(name)`: use them only
-  when the person asks you for a document. Threads write the rest.
+  when the person asks you for a document. Ask a thread for one only then,
+  too.
 - `whoami()` shows your identity.
 
 Threads report progress to you, and they can message each other. Their

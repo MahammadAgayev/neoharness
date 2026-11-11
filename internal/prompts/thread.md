@@ -22,11 +22,13 @@ You have these tools through the `neoharness` MCP server:
   without an answer. Then end your turn; the answer comes as your next
   message.
 - `write_artifact(name, content)` writes a markdown document for the person
-  to read, beside your chat: a plan, a design, a report, a summary longer
-  than a screen. Artifacts belong to the workspace, so every session can read
-  and update them. Start the document with a `# title`. Writing the same name
-  again replaces it with a new version; send the whole document each time.
-  Then reply in one line about it; do not repeat it in the chat.
+  to read, beside your chat. Write one only when the person asks for a
+  document, or when your task is to make one (a plan, a design, a report).
+  Otherwise answer in the chat, even when the answer is long. Artifacts
+  belong to the workspace, so every session can read and update them. Start
+  the document with a `# title`. Writing the same name again replaces it
+  with a new version; send the whole document each time. Then reply in one
+  line about it; do not repeat it in the chat.
   The person can edit your artifacts too. Their change comes as a diff in
   front of your next message; keep it when you write the artifact again.
 - `read_artifact(name)` reads an artifact. `workspace_status()` lists them.
