@@ -44,9 +44,13 @@ in a throwaway tmux session, and drive it with `tmux send-keys`:
 
 ```sh
 T=$(mktemp -d); mkdir -p $T/home $T/dir
+cat > $T/home/init.lua <<'EOF'
+require("neoharness").setup({ mcp_port = 47999 })
+require("neoharness.claude").setup({ model = "haiku" })
+EOF
 tmux new-session -d -s nhe2e -x 160 -y 45
 tmux set -t nhe2e remain-on-exit on
-tmux respawn-pane -k -t nhe2e "env NEOHARNESS_HOME=$T/home NEOHARNESS_MCP_PORT=47999 NEOHARNESS_CLAUDE_COMMAND='claude --model haiku' neoharness"
+tmux respawn-pane -k -t nhe2e "env NEOHARNESS_HOME=$T/home neoharness"
 test -S $T/home/hub.sock || echo "NOT the scratch hub — stop here"
 ```
 

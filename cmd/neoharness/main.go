@@ -10,7 +10,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 )
 
 const usage = `neoharness — many Claude Code sessions, in the terminal
@@ -35,11 +34,4 @@ func main() {
 		fmt.Fprintln(os.Stderr, "neoharness: "+err.Error())
 		os.Exit(1)
 	}
-}
-
-// commandFor reads the command words for claude from an environment variable.
-// Empty means the bare binary. It is overridable because claude is not always
-// a bare binary: a wrapper that injects credentials is a normal setup.
-func commandFor(envKey string) []string {
-	return strings.Fields(os.Getenv(envKey))
 }

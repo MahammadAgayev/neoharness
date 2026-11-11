@@ -596,12 +596,12 @@ machine this was done on 2026-11-09; a backup is at
 
 ## 7. Configuration
 
-| Variable | Use |
-|---|---|
-| `NEOHARNESS_HOME` | root folder instead of `~/.neoharness` (tests use it) |
-| `NEOHARNESS_MCP_PORT` | MCP port, default 47821 |
-| `NEOHARNESS_CLAUDE_COMMAND` | local claude command, e.g. `authwrap agent run claude` or `claude --model haiku` |
-| `NEOHARNESS_REMOTE_CLAUDE_COMMAND` | claude command on remote hosts (default `claude`) |
+`NEOHARNESS_HOME` is the root folder instead of `~/.neoharness` (tests use
+it). Everything else is in Lua: `require("neoharness").setup({ mcp_port })`
+and `require("neoharness.claude").setup({ command, remote_command, model,
+effort })`, in `defaults.lua` (model `claude-opus-5-5[1m]`; plain `opus` maps to a blocked older model on the remote host's older claude) and the user's `init.lua`.
+`cmd` reads them before the hub starts (`tui.ReadHubSettings`); the TUI
+runs the same files again for keys and colors and ignores the setup calls.
 
 The hub runs in the TUI's process, so it has the shell's full environment
 (PATH, `SSH_AUTH_SOCK`, credentials). Per-thread model and effort are set
@@ -686,7 +686,8 @@ session, and drive it with `tmux send-keys`:
 T=$(mktemp -d); mkdir -p $T/home $T/dir
 tmux new-session -d -s nhe2e -x 160 -y 45
 tmux set -t nhe2e remain-on-exit on          # keeps an error on screen, and the session after :qa!
-tmux respawn-pane -k -t nhe2e "env NEOHARNESS_HOME=$T/home NEOHARNESS_MCP_PORT=47999 NEOHARNESS_CLAUDE_COMMAND='claude --model haiku' ./neoharness"
+printf 'require("neoharness").setup({ mcp_port = 47999 })\nrequire("neoharness.claude").setup({ model = "haiku" })\n' > $T/home/init.lua
+tmux respawn-pane -k -t nhe2e "env NEOHARNESS_HOME=$T/home ./neoharness"
 test -S $T/home/hub.sock || echo "NOT the scratch hub — stop here"
 ```
 

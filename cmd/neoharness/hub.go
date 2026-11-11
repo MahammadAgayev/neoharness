@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -8,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/MahammadAgayev/neoharness/internal/agent"
@@ -17,6 +17,7 @@ import (
 	"github.com/MahammadAgayev/neoharness/internal/hubapi"
 	"github.com/MahammadAgayev/neoharness/internal/hubserver"
 	"github.com/MahammadAgayev/neoharness/internal/mcpserver"
+	"github.com/MahammadAgayev/neoharness/internal/tui"
 	"github.com/MahammadAgayev/neoharness/internal/tunnel"
 	"github.com/MahammadAgayev/neoharness/internal/workspace"
 )
@@ -25,13 +26,6 @@ import (
 // through a tunnel bound to the same number, and a session resumed after a
 // hub restart still has the old URL in its MCP config.
 const defaultMCPPort = 47821
-
-func mcpPort() int {
-	if p, err := strconv.Atoi(os.Getenv("NEOHARNESS_MCP_PORT")); err == nil && p > 0 {
-		return p
-	}
-	return defaultMCPPort
-}
 
 // logOut is where the hub logs. Never the terminal: the TUI owns it.
 var logOut io.Writer = io.Discard
@@ -50,11 +44,18 @@ func startHub() (stop func(), err error) {
 	}
 	logOut = logFile
 
-	port := mcpPort()
+	// Read when the hub starts, so a hub taken over from another neoharness
+	// gets this machine's init.lua as it is now.
+	cfg, err := tui.ReadHubSettings(filepath.Join(filepath.Dir(sock), "init.lua"))
+	if err != nil {
+		logFile.Close()
+		return nil, err
+	}
+	port := cmp.Or(cfg.MCPPort, defaultMCPPort)
 	mcpLn, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		logFile.Close()
-		return nil, fmt.Errorf("MCP port %d is taken (set NEOHARNESS_MCP_PORT to use another): %w", port, err)
+		return nil, fmt.Errorf("MCP port %d is taken (set mcp_port in require(\"neoharness\").setup to use another): %w", port, err)
 	}
 	// The caller found no hub answering, so a socket file left here belongs to
 	// a hub that died without cleaning up.
@@ -77,7 +78,8 @@ func startHub() (stop func(), err error) {
 	}
 
 	tunnels := tunnel.New(port)
-	h, err := hub.New(hub.Config{MCPPort: port, Factory: agentFactory(tunnels), Files: listFiles, Branch: gitBranch, Shell: runShell})
+	h, err := hub.New(hub.Config{MCPPort: port, Model: cfg.Claude.Model, Effort: cfg.Claude.Effort,
+		Factory: agentFactory(tunnels, cfg.Claude), Files: listFiles, Branch: gitBranch, Shell: runShell})
 	if err != nil {
 		apiLn.Close()
 		mcpLn.Close()
@@ -112,14 +114,14 @@ func startHub() (stop func(), err error) {
 
 // agentFactory builds the claude adapter for a thread, opening the ssh tunnel
 // first for a remote one.
-func agentFactory(tunnels *tunnel.Manager) hub.AgentFactory {
+func agentFactory(tunnels *tunnel.Manager, cfg tui.ClaudeSettings) hub.AgentFactory {
 	return func(p workspace.Workspace, t workspace.Thread) agent.Agent {
 		if !t.Location.Remote() {
-			return agentclaude.New(commandFor("NEOHARNESS_CLAUDE_COMMAND")...)
+			return agentclaude.New(cfg.Command...)
 		}
 		// The local command may be a wrapper that only exists here, so the
-		// remote one has its own override.
-		a := agentclaude.New(commandFor("NEOHARNESS_REMOTE_CLAUDE_COMMAND")...)
+		// remote one has its own setting.
+		a := agentclaude.New(cfg.RemoteCommand...)
 		a.Host, a.Dir = t.Location.Host, t.Location.Dir
 		return tunneled{Agent: a, tunnels: tunnels, host: t.Location.Host}
 	}

@@ -33,14 +33,32 @@ Lua function. Actions with no ex command:
 The colors are Rose Pine Moon. The background is never painted, so
 transparent terminals stay transparent. `NO_COLOR` is supported.
 
+## The hub and the agent
+
+`setup()` calls set the hub and the claude agent. A call sets only the keys
+it names, so `init.lua` changes what `defaults.lua` set. They take effect
+when the hub starts: restart neoharness after a change.
+
+```lua
+require("neoharness").setup({
+  mcp_port = 47821,                     -- remote hosts reach the hub through a tunnel on it
+})
+
+require("neoharness.claude").setup({
+  command = "claude",                   -- here; a wrapper that adds credentials works too
+  remote_command = "claude",            -- on ssh hosts
+  model = "claude-opus-5-5[1m]",        -- for threads with no /model of their own
+  effort = "high",                      -- low, medium, high, xhigh, max; leave out for claude's own
+})
+```
+
+`/model` and `/effort` change a thread's model and effort; `/model default`
+goes back to the setting.
+
 ## Environment
 
-| Variable | Use |
-|---|---|
-| `NEOHARNESS_HOME` | data folder instead of `~/.neoharness` |
-| `NEOHARNESS_MCP_PORT` | MCP port, default 47821 |
-| `NEOHARNESS_CLAUDE_COMMAND` | local claude command, for example `claude --model haiku` or a wrapper that adds credentials |
-| `NEOHARNESS_REMOTE_CLAUDE_COMMAND` | claude command on remote hosts, default `claude` |
+`NEOHARNESS_HOME` is the data folder, and the folder of `init.lua`, instead
+of `~/.neoharness`.
 
 The hub runs in the TUI's process, so it has your shell's environment
 (PATH, `SSH_AUTH_SOCK`, credentials).

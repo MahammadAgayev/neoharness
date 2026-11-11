@@ -1308,6 +1308,30 @@ func TestALostConversationStartsANewOne(t *testing.T) {
 	}
 }
 
+func TestConfigModelUnlessTheThreadChoseOne(t *testing.T) {
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	f := &fake{}
+	h, err := New(Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }, MCPPort: 4242, Model: "opus"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	pinned(t, h, "demo")
+	for _, msg := range []string{"one", "/model sonnet", "two", "/model default", "three"} {
+		if err := h.Send("demo", model.User, model.Coordinator, msg); err != nil {
+			t.Fatal(err)
+		}
+		stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	}
+	var got []string
+	for _, r := range f.requests() {
+		got = append(got, r.Model)
+	}
+	if !slices.Equal(got, []string{"opus", "sonnet", "opus"}) {
+		t.Fatalf("models = %q", got)
+	}
+}
+
 func TestRestoreSaysATurnWasStoppedByTheDelete(t *testing.T) {
 	seen := make(chan struct{}, 1)
 	f := &fake{}

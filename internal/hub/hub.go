@@ -10,6 +10,7 @@
 package hub
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -62,7 +63,10 @@ type Config struct {
 	Factory AgentFactory
 	// MCPPort is where the MCP server listens, on 127.0.0.1 here and, through
 	// the ssh tunnel, on every remote host.
-	MCPPort       int
+	MCPPort int
+	// Model and Effort are for a thread with no /model or /effort of its
+	// own. Empty leaves the agent's default.
+	Model, Effort string
 	MaxAgentTurns int
 	TurnTimeout   time.Duration
 	// Files lists a thread's folder for `@` completion. Nil lists nothing.
@@ -1231,8 +1235,8 @@ func (h *Hub) kick(ws *space, th *thread) {
 	}
 	req := agent.Request{
 		Prompt:       prompt,
-		Model:        t.ModelChoice,
-		Effort:       t.Effort,
+		Model:        cmp.Or(t.ModelChoice, h.cfg.Model),
+		Effort:       cmp.Or(t.Effort, h.cfg.Effort),
 		SystemPrompt: h.systemPrompt(ws, th),
 		Conversation: t.SessionID,
 		Resume:       t.Started,

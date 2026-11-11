@@ -65,6 +65,8 @@ func (a *App) runConfig(src, name string, defaults bool) {
 func (a *App) luaAPI() {
 	L := lua.NewState()
 	a.lua = L
+	// The hub read the setup calls before the TUI started.
+	setupModules(L, nil)
 	vim, g, o, keymap, api := L.NewTable(), L.NewTable(), L.NewTable(), L.NewTable(), L.NewTable()
 	L.SetField(vim, "g", g)
 	L.SetField(vim, "o", o)

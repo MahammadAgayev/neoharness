@@ -12,6 +12,19 @@
 vim.g.mapleader = " "
 vim.o.equalalways = true -- after a split or a close, windows get the same size
 
+-- The hub. Its settings take effect when it starts.
+require("neoharness").setup({
+  mcp_port = 47821,              -- remote hosts reach the hub through a tunnel on it
+})
+
+-- The claude agent. /model and /effort change the model and effort per
+-- thread; "default" goes back to these. Leave effort out for claude's own.
+require("neoharness.claude").setup({
+  command = "claude",            -- here; a wrapper works too
+  remote_command = "claude",     -- on ssh hosts
+  model = "claude-opus-5-5[1m]",
+})
+
 local map = vim.keymap.set
 local hl = function(group, opts) vim.api.nvim_set_hl(0, group, opts) end
 
