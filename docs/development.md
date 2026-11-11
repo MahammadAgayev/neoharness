@@ -58,5 +58,3 @@ test -S $T/home/hub.sock || echo "NOT the scratch hub — stop here"
   Always check that the scratch socket exists before you type.
 - `:new` leaves you in Insert mode.
 - Use `send-keys -l` for text with special characters.
-
-[HANDOVER.md](../HANDOVER.md) has the full design notes and the change log.
