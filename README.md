@@ -1,22 +1,28 @@
 # neoharness
 
-Work with many Claude Code sessions at the same time, in one terminal, with
-Vim keys.
+A terminal UI for running several Claude Code sessions at once, with Vim keys.
 
-- A **workspace** is one piece of work. You can pin it to a folder.
-- The **coordinator** is the Claude session of a workspace. It acts only
-  when you write to it. It opens threads, gives them work, and knows their
-  status.
-- A **thread** is a separate Claude session that does one task, in a local
-  folder or on another machine over ssh.
-- Threads report progress, send messages to each other, read each other's
-  transcripts, and write **artifacts**: markdown documents for you, which you
-  can read and edit in place.
+![a coordinator opens three threads; one writes a design note](docs/demo/demo.gif)
 
-neoharness is one program, like Neovim. The hub that runs the sessions lives
-in the TUI process: no daemon, no tmux. Agents talk to it through an MCP
-server that it adds to each session, so you install nothing in your Claude
-setup.
+Each workspace has a coordinator: a Claude session you write to. It opens
+threads, which are separate Claude sessions that each do one task, in a local
+folder or on another machine over ssh. The threads pane shows each thread and
+its state (running, waiting on you, idle). You can open any thread and write to
+it directly.
+
+- Threads report progress, send messages to each other and read each other's
+  transcripts. A thread can ask to be woken later.
+- Agents can write artifacts: markdown documents such as plans or reports.
+  They open in the window, and you can edit them; the agent sees your edit
+  as a diff.
+- Permission requests and questions show as cards. A toast names the
+  workspace and thread that needs you.
+- Normal Vim motions, operators, search, marks, macros, splits and `:`
+  commands. Configuration is in `init.lua`.
+
+neoharness is one program. The hub that runs the sessions lives in the TUI
+process: no daemon, no tmux. Agents talk to it through an MCP server that it
+adds to each session, so you change nothing in your Claude setup.
 
 ## Install
 
@@ -43,14 +49,14 @@ neoharness
 :new demo ~/src/demo    create a workspace pinned to a folder, and open it
 :new demo               the same, but pick the folder in a fuzzy picker
 i                       write to the coordinator; <CR> sends, <Esc> goes to Normal
-<leader>t               threads pane on the right (<leader> is <Space>)
+<C-w>l                  go to the threads pane; <CR> on a thread opens it, <C-o> goes back
+<leader>pt              pick a thread (<leader> is <Space>)
 <leader>pa              pick an artifact
 :help                   every key and command
 ```
 
-Ask the coordinator for work ("split this refactor into three threads"). It
-opens threads, and they show in the pane. `<CR>` on a thread opens it. You can
-write to any thread directly.
+Ask the coordinator for work, for example "split this refactor into three
+threads". It opens the threads, and they show in the pane.
 
 ## Docs
 
@@ -60,3 +66,7 @@ write to any thread directly.
   permissions, remote threads, data on disk
 - [Development](docs/development.md): code map, tests, a scratch hub for
   end-to-end runs
+
+The GIF is recorded with [VHS](https://github.com/charmbracelet/vhs) from
+[docs/demo/demo.tape](docs/demo/demo.tape), with real agents on a toy
+repository in `/tmp`.
