@@ -3081,3 +3081,25 @@ func TestAtSearchesAFolderWithManyFiles(t *testing.T) {
 		t.Fatalf("queries = %q; one search at a time, the last for the whole word", h.hub.queries)
 	}
 }
+
+func TestQuitKeepsAnEditedArtifactOpen(t *testing.T) {
+	h := editDemo(t, "# Design\n\nKeep it in redis.\n")
+	for !strings.Contains(h.a.line(h.a.cur).Text(), "Keep it") {
+		h.press("j")
+	}
+	h.press("<C-w>", "v", "A", " Or sqlite.", "<Esc>")
+	b := h.a.cur.Buf
+	h.press(":q", "<CR>")
+	if len(h.a.root.windows()) != 2 {
+		t.Fatal("another window shows the edit, so :q closes this one")
+	}
+	h.press(":q", "<CR>")
+	if h.a.cur.Buf != b || !b.Edit.Dirty {
+		t.Fatal(":q should keep the last window of an unsaved edit")
+	}
+	h.see("no write since the last change")
+	h.press(":q!", "<CR>")
+	if h.a.cur.Buf == b || b.Edit.Dirty {
+		t.Fatal(":q! should close the window and drop the edit")
+	}
+}

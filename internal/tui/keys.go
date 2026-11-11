@@ -912,6 +912,12 @@ func (a *App) closeCur(force bool) {
 		return
 	}
 	if e := a.cur.Buf.Edit; e != nil {
+		// Edits no window shows are forgotten, and the agents' new versions
+		// then warn about them out of the blue.
+		if e.Dirty && !force && !a.shownElsewhere(a.cur) {
+			a.notify("no write since the last change · :w saves, :q! drops it", a.th.Gold)
+			return
+		}
 		a.closeDiff(e)
 	}
 	to, vert := a.root.closeWindow(a.cur)
@@ -950,6 +956,16 @@ func (a *App) quitAll(force bool) {
 		}
 	}
 	a.quit = true
+}
+
+// shownElsewhere reports whether another window shows w's buffer.
+func (a *App) shownElsewhere(w *Window) bool {
+	for _, o := range a.root.windows() {
+		if o != w && o.Buf == w.Buf {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) only() {
