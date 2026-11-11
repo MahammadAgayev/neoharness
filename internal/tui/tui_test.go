@@ -2944,3 +2944,79 @@ func TestCtrlWHFromAChatWithManyLines(t *testing.T) {
 		}
 	}
 }
+
+// mouse sends a mouse event and draws, like the real loop.
+func (h *neoharness) mouse(x, y int, btn tcell.ButtonMask) {
+	h.t.Helper()
+	h.s.InjectMouse(x, y, btn, tcell.ModNone)
+	h.a.handle(h.s.PollEvent())
+	h.a.draw()
+}
+
+func (h *neoharness) click(x, y int) {
+	h.mouse(x, y, tcell.Button1)
+	h.mouse(x, y, tcell.ButtonNone)
+}
+
+// at is where text is on the screen.
+func (h *neoharness) at(text string) (x, y int) {
+	h.t.Helper()
+	screen := h.screen()
+	i := strings.Index(screen, text)
+	if i < 0 {
+		h.t.Fatalf("screen does not show %q", text)
+	}
+	return len([]rune(screen[strings.LastIndex(screen[:i], "\n")+1 : i])), strings.Count(screen[:i], "\n")
+}
+
+func TestMouseClickFocusesAWindow(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("<Esc>")
+	chat := h.a.cur
+	h.click(h.at("○ api-tests"))
+	if h.a.cur.Buf.Kind != KindThreads {
+		t.Fatal("a click on the threads pane should focus it")
+	}
+	if h.a.line(h.a.cur).Item != "api-tests" {
+		t.Fatalf("the cursor should be on the clicked row, is on %q", h.a.line(h.a.cur).Text())
+	}
+	h.click(h.at("Opened auth-refactor"))
+	if h.a.cur != chat || h.a.cur.inPrompt || !strings.Contains(h.a.line(h.a.cur).Text(), "Opened auth-refactor") {
+		t.Fatal("a click on the chat should focus it, with the cursor on the clicked line")
+	}
+	h.click(chat.rect.X+5, chat.rect.Y+chat.rect.H-1-minPromptLines)
+	if h.a.mode != modeInsert {
+		t.Fatal("a click on the prompt should start Insert")
+	}
+}
+
+func TestMouseDoubleClickOnAQueuedMessageSendsItNow(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.a.chat(model.Coordinator).SetPending([]model.Event{{Kind: model.EventMessage, From: model.User, Text: "stop now please"}})
+	h.a.draw()
+	x, y := h.at("stop now please")
+	h.click(x, y)
+	h.click(x, y)
+	if strings.Join(h.hub.sent, "|") != "now coordinator: " {
+		t.Fatalf("sent = %q", h.hub.sent)
+	}
+}
+
+func TestMouseWheelMovesTheWindowUnderIt(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	for i := 0; i < 80; i++ {
+		h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &model.Event{Kind: model.EventText, Text: fmt.Sprintf("line %d", i)}})
+	}
+	h.press("<Esc>", "<C-w>", "l")
+	h.press("<C-w>", "h", "G", "k")
+	chat := h.a.cur
+	before := chat.Cur
+	h.press("<C-w>", "l")
+	h.mouse(chat.rect.X+3, chat.rect.Y+3, tcell.WheelUp)
+	if chat.Cur != before-wheelLines {
+		t.Fatalf("Cur = %d, want %d", chat.Cur, before-wheelLines)
+	}
+}

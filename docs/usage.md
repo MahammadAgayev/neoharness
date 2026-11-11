@@ -106,6 +106,11 @@ reports. They belong to the workspace, and every session can read them.
 | `<leader>nc` / `<leader>nh` | dismiss notifications / their history |
 | in pickers: `<CR>` `<C-v>` `<C-x>` `<C-d>` | open, split right, split above, delete (after `y`) |
 
+The mouse works too: a click focuses a window and puts the cursor there, a
+double click is `<CR>`, and the wheel moves the window under the pointer.
+A click on the prompt starts writing. Hold Shift (Option in some terminals)
+to select text with the terminal.
+
 ## Commands
 
 `:b <name>`, `:ls`, `:split`, `:vsplit`, `:only`, `:threads`, `:artifacts`,

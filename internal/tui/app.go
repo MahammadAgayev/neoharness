@@ -146,6 +146,11 @@ type App struct {
 	menu     *menu
 	toasts   []*toast
 	menuShut int // the word whose menu <Esc> closed, or -1
+	// mouseDown is the left button's state, as the terminal sends a press
+	// and a release; lastClick is the last press, for double clicks.
+	mouseDown              bool
+	lastClick              time.Time
+	lastClickX, lastClickY int
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key
@@ -214,6 +219,9 @@ func Run(c Client, restart func() error) error {
 		defer func() { _, _ = tty.Write([]byte("\x1b[?2027l")) }()
 	}
 	s.EnablePaste()
+	// Clicks and the wheel, no drags: the terminal still selects text with
+	// Shift (or Option) held.
+	s.EnableMouse(tcell.MouseButtonEvents)
 	a := newApp(s, c)
 	a.restart = restart
 	a.loadConfig(filepath.Join(filepath.Dir(hubapi.SocketPath()), "init.lua"))
@@ -266,6 +274,8 @@ func (a *App) handle(ev tcell.Event) {
 		a.quit = true
 	case *tcell.EventKey:
 		a.key(ev)
+	case *tcell.EventMouse:
+		a.mouse(ev)
 	case *tcell.EventPaste:
 		a.pasting = ev.Start()
 		if !a.pasting && a.mode == modeInsert && a.cur.Buf.Edit != nil {
