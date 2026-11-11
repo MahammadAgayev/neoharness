@@ -73,6 +73,11 @@ type askIn struct {
 	Question string `json:"question" jsonschema:"the question for the person"`
 }
 
+type wakeIn struct {
+	Minutes int    `json:"minutes" jsonschema:"minutes from now, up to 1440; 0 cancels the wake-up"`
+	Note    string `json:"note,omitempty" jsonschema:"what to check then; the wake-up message holds it"`
+}
+
 type openIn struct {
 	Name     string `json:"name" jsonschema:"short kebab-case name, unique in the workspace"`
 	Brief    string `json:"brief" jsonschema:"the task: goal, area, what done means, who to agree with"`
@@ -171,6 +176,17 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 				return nil, nil, err
 			}
 			return text("Reported."), nil, nil
+		})
+
+	mcp.AddTool(s, &mcp.Tool{Name: "wake_me", Description: "Be woken after some minutes with a message that holds your note. Nothing else wakes you once your turn ends. Use it when you start work that outlives your turn, such as a long benchmark, then end your turn. A new call replaces the old wake-up."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in wakeIn) (*mcp.CallToolResult, any, error) {
+			if err := h.WakeMe(p, me, time.Duration(in.Minutes)*time.Minute, in.Note); err != nil {
+				return nil, nil, err
+			}
+			if in.Minutes == 0 {
+				return text("No wake-up."), nil, nil
+			}
+			return text(fmt.Sprintf("You will be woken in %d minutes.", in.Minutes)), nil, nil
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "ask_user", Description: "Ask the person a question you cannot continue without. End your turn after; the answer comes as your next message."},

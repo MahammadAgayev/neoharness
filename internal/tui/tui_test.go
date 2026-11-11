@@ -3163,3 +3163,20 @@ func TestXOrDdCancelsAMessage(t *testing.T) {
 		t.Fatalf("dd on the running message: sent %q", got)
 	}
 }
+
+func TestAnIdleThreadSaysWhenItWakes(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads["api-tests"]
+	v.WakeAt = time.Date(2026, 11, 11, 16, 52, 0, 0, time.Local)
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("wakes at 16:52")
+	h.press("<Esc>", ":b api-tests", "<CR>")
+	h.see("demo · api-tests  ○ idle  wakes at 16:52")
+	for _, it := range h.a.threadItems() {
+		if it.label == "api-tests" && it.detail != "idle · wakes at 16:52" {
+			t.Errorf("picker: %q", it.detail)
+		}
+	}
+}

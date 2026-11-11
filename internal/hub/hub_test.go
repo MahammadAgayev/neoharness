@@ -1507,3 +1507,64 @@ func TestUnqueueAndStop(t *testing.T) {
 		t.Error("Stop with nothing running should say so")
 	}
 }
+
+func TestWakeMeStartsATurn(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.WakeMe("demo", model.Coordinator, time.Hour, "first"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.WakeMe("demo", model.Coordinator, 0, ""); err != nil {
+		t.Fatal(err)
+	}
+	if v := view(t, h, "demo", model.Coordinator); !v.WakeAt.IsZero() {
+		t.Fatalf("0 should cancel the wake-up; WakeAt %v", v.WakeAt)
+	}
+	if err := h.WakeMe("demo", model.Coordinator, 2*MaxWake, ""); err == nil {
+		t.Error("a wake-up past MaxWake should fail")
+	}
+
+	_ = h.WakeMe("demo", model.Coordinator, time.Hour, "old note")
+	_ = h.WakeMe("demo", model.Coordinator, 50*time.Millisecond, "check the benchmark")
+	if v := view(t, h, "demo", model.Coordinator); v.WakeAt.IsZero() {
+		t.Fatal("the view should say when the thread wakes")
+	}
+	eventually(t, "the wake-up turn", func() bool { return len(f.requests()) == 1 })
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	p := f.requests()[0].Prompt
+	if !strings.Contains(p, "Message from neoharness:\nYou asked to be woken now: check the benchmark") || strings.Contains(p, "old note") {
+		t.Fatalf("wake-up prompt = %q", p)
+	}
+	if v := view(t, h, "demo", model.Coordinator); !v.WakeAt.IsZero() {
+		t.Error("a wake-up that came should be gone")
+	}
+	time.Sleep(100 * time.Millisecond)
+	if n := len(f.requests()); n != 1 {
+		t.Errorf("%d turns; the replaced wake-up must not fire", n)
+	}
+}
+
+func TestAWakeUpOutlivesARestart(t *testing.T) {
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	f := &fake{}
+	cfg := Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }}
+	h, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned(t, h, "demo")
+	_ = h.WakeMe("demo", model.Coordinator, 100*time.Millisecond, "after the restart")
+	h.Close()
+	time.Sleep(150 * time.Millisecond)
+
+	h2, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h2.Close)
+	eventually(t, "the wake-up after the restart", func() bool {
+		rs := f.requests()
+		return len(rs) == 1 && strings.Contains(rs[0].Prompt, "after the restart")
+	})
+}

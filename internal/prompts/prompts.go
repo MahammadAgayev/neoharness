@@ -31,6 +31,14 @@ func Coordinator(in SessionInput) string { return fill(coordinatorMD, in) }
 // Thread is the system prompt for a thread.
 func Thread(in SessionInput) string { return fill(threadMD, in) }
 
+// Wake is the message a thread gets when the wake-up it asked for comes.
+func Wake(note string) string {
+	if note = strings.TrimSpace(note); note == "" {
+		return "You asked to be woken now."
+	}
+	return "You asked to be woken now: " + note
+}
+
 // Compact asks a session for the summary a new session starts from, as
 // /compact. focus is what the person typed after /compact.
 func Compact(focus string) string {

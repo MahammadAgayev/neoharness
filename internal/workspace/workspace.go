@@ -76,6 +76,10 @@ type Thread struct {
 
 	Progress   string    `json:"progress,omitempty"`
 	ProgressAt time.Time `json:"progressAt,omitzero"`
+	// WakeAt is when the thread asked to be woken, with WakeNote as the
+	// reason; zero is never.
+	WakeAt   time.Time `json:"wakeAt,omitzero"`
+	WakeNote string    `json:"wakeNote,omitempty"`
 
 	Queue []Message `json:"queue"`
 	// InFlight is the batch the current turn is working on. Non-empty on load

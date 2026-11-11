@@ -126,8 +126,10 @@ type thread struct {
 	// interrupted marks a turn that SendNow or Stop stopped; dropped says
 	// Stop did, so the messages of the turn do not go again.
 	interrupted, dropped bool
-	perms                []*pending
-	state                model.State
+	// wake is the timer of the thread's wake-up.
+	wake  *time.Timer
+	perms []*pending
+	state model.State
 	// reply is the final text of its last turn, for the coordinator's note.
 	reply string
 	// deleted stops a turn that is still unwinding from writing the thread
@@ -222,6 +224,7 @@ func (h *Hub) load(p workspace.Workspace) (*space, error) {
 // Callers hold h.mu.
 func (h *Hub) start(ws *space) {
 	for _, th := range ws.threads {
+		h.armWake(ws, th)
 		h.kick(ws, th)
 		h.readBranch(ws, th)
 	}
@@ -845,6 +848,8 @@ func (h *Hub) Resolve(workspaceName, by, name string) error {
 	t.Queue = []workspace.Message{}
 	t.Asking = ""
 	t.Paused = false
+	t.WakeAt, t.WakeNote = time.Time{}, ""
+	h.armWake(ws, th)
 	if th.cancel != nil {
 		th.cancel()
 	}
@@ -868,6 +873,9 @@ func (h *Hub) Delete(workspaceName, name string) error {
 	}
 	th.deleted = true
 	th.t.Queue = nil
+	if th.wake != nil {
+		th.wake.Stop()
+	}
 	if th.cancel != nil {
 		th.cancel()
 	}
@@ -1105,6 +1113,58 @@ func (h *Hub) ReportProgress(workspaceName, name, summary string) error {
 	h.event(ws, th, model.Event{Kind: model.EventProgress, Text: summary})
 	h.changed(ws, th)
 	return nil
+}
+
+// MaxWake is the furthest ahead a thread can ask to be woken.
+const MaxWake = 24 * time.Hour
+
+// wakeFrom is the sender of a wake-up message.
+const wakeFrom = "neoharness"
+
+// WakeMe wakes a thread after d with a message that holds note, so it comes
+// back to work that outlives its turn: nothing else wakes it. A new call
+// replaces the old one; 0 cancels it.
+func (h *Hub) WakeMe(workspaceName, name string, d time.Duration, note string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	if d < 0 || d > MaxWake {
+		return fmt.Errorf("a wake-up is at most %s ahead", MaxWake)
+	}
+	t := th.t
+	t.WakeAt, t.WakeNote = time.Time{}, ""
+	if d > 0 {
+		t.WakeAt, t.WakeNote = time.Now().UTC().Add(d), strings.TrimSpace(note)
+	}
+	h.armWake(ws, th)
+	h.changed(ws, th)
+	return nil
+}
+
+// armWake sets the timer of a thread's wake-up, or stops it when there is
+// none. A wake-up whose time passed while the hub was down fires at once.
+func (h *Hub) armWake(ws *space, th *thread) {
+	if th.wake != nil {
+		th.wake.Stop()
+		th.wake = nil
+	}
+	at, note := th.t.WakeAt, th.t.WakeNote
+	if at.IsZero() {
+		return
+	}
+	th.wake = time.AfterFunc(time.Until(at), func() {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		t := th.t
+		if h.ctx.Err() != nil || th.deleted || t.Resolved || !t.WakeAt.Equal(at) {
+			return
+		}
+		t.WakeAt, t.WakeNote, th.wake = time.Time{}, "", nil
+		h.enqueue(ws, th, wakeFrom, prompts.Wake(note))
+	})
 }
 
 // AskUser posts a question to the user. The thread waits until the user
@@ -1620,6 +1680,7 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		Queued:        len(t.Queue),
 		Pending:       unshown(t.Queue),
 		Progress:      t.Progress,
+		WakeAt:        t.WakeAt,
 		Model:         t.Model,
 		Context:       t.Context,
 		ContextWindow: t.ContextWindow,

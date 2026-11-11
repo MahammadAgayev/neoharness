@@ -481,6 +481,9 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 		if !v.Since.IsZero() && v.State != model.StateIdle {
 			x = a.put(x+2, y, right, elapsed(time.Since(v.Since)), dim)
 		}
+		if w := wakeLabel(v); w != "" {
+			x = a.put(x+2, y, right, w, dim)
+		}
 		add := func(text string, st tcell.Style, rank int) {
 			if text != "" {
 				rightText = append(rightText, part{Span{text, st}, rank})

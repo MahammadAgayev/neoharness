@@ -1025,6 +1025,14 @@ func (a *App) renderWorkspaces() {
 	a.workspacesBuf.SetLines(lines)
 }
 
+// wakeLabel says when an idle thread wakes, if it asked to be woken.
+func wakeLabel(v model.ThreadView) string {
+	if v.State != model.StateIdle || v.WakeAt.IsZero() {
+		return ""
+	}
+	return "wakes at " + v.WakeAt.Local().Format("15:04")
+}
+
 func displayPin(pin string) string {
 	if pin == "" {
 		return "not pinned"
@@ -1099,6 +1107,9 @@ func (a *App) renderThreads() {
 		}
 		if v.State == model.StateRunning && !v.Since.IsZero() {
 			info = strings.TrimSuffix(elapsed(time.Since(v.Since))+" · "+info, " · ")
+		}
+		if w := wakeLabel(v); w != "" {
+			info = strings.TrimSuffix(w+" · "+info, " · ")
 		}
 		if v.Queued > 0 {
 			info = fmt.Sprintf("+%d queued  %s", v.Queued, info)

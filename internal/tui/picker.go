@@ -181,6 +181,9 @@ func (a *App) threadItems() []pickItem {
 		if (v.State == model.StateRunning || v.State == model.StateWaiting) && !v.Since.IsZero() {
 			detail += " · " + elapsed(time.Since(v.Since))
 		}
+		if w := wakeLabel(v); w != "" {
+			detail += " · " + w
+		}
 		name := n
 		items = append(items, pickItem{
 			glyph:  Span{stateGlyph(v.State), a.th.state(v.State)},

@@ -173,13 +173,15 @@ type Permission struct {
 
 // ThreadView is a thread as the API shows it.
 type ThreadView struct {
-	Workspace  string      `json:"workspace"`
-	Name       string      `json:"name"`
-	Role       Role        `json:"role"`
-	Location   Location    `json:"location"`
-	State      State       `json:"state"`
-	Queued     int         `json:"queued"`
-	Progress   string      `json:"progress,omitempty"`
+	Workspace string   `json:"workspace"`
+	Name      string   `json:"name"`
+	Role      Role     `json:"role"`
+	Location  Location `json:"location"`
+	State     State    `json:"state"`
+	Queued    int      `json:"queued"`
+	Progress  string   `json:"progress,omitempty"`
+	// WakeAt is when the thread asked to be woken; zero is never.
+	WakeAt     time.Time   `json:"wakeAt,omitzero"`
 	Waiting    string      `json:"waiting,omitempty"`
 	Permission *Permission `json:"permission,omitempty"`
 	Pending    []Event     `json:"pending,omitempty"` // queued, not yet in the transcript
