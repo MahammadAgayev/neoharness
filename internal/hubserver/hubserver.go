@@ -81,7 +81,7 @@ func Handler(h *hub.Hub) http.Handler {
 		reply(w, evs, err)
 	})
 	mux.HandleFunc("GET /workspaces/{p}/threads/{t}/completions", func(w http.ResponseWriter, r *http.Request) {
-		c, err := h.Completions(r.PathValue("p"), r.PathValue("t"))
+		c, err := h.Completions(r.PathValue("p"), r.PathValue("t"), r.URL.Query().Get("q"))
 		reply(w, c, err)
 	})
 	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/messages", func(w http.ResponseWriter, r *http.Request) {

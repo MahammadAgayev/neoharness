@@ -22,7 +22,7 @@ func TestListFilesUsesGitElseWalks(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	got, err := listFiles(context.Background(), model.Location{Dir: dir})
+	got, _, err := listFiles(context.Background(), model.Location{Dir: dir}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,10 +35,20 @@ func TestListFilesUsesGitElseWalks(t *testing.T) {
 	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
 		t.Skip("no git")
 	}
-	got, _ = listFiles(context.Background(), model.Location{Dir: dir})
+	got, _, _ = listFiles(context.Background(), model.Location{Dir: dir}, "")
 	slices.Sort(got)
 	if want := []string{".gitignore", "a b.go", "sub/c.go"}; !slices.Equal(got, want) {
 		t.Errorf("git = %q, want %q", got, want)
+	}
+
+	// A repository that tracks the limit or more says so, and is searched.
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	if out, _ := runIn(context.Background(), model.Location{Dir: dir}, listScript, "2"); out != ":many\n" {
+		t.Errorf("over the limit: %q, want :many", out)
+	}
+	got, many, err := listFiles(context.Background(), model.Location{Dir: dir}, "C.GO")
+	if err != nil || many || !slices.Equal(got, []string{"sub/c.go"}) {
+		t.Errorf("search = %q %v %v, want sub/c.go in any case", got, many, err)
 	}
 }
 

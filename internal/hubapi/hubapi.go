@@ -156,9 +156,9 @@ func (c *Client) Events(workspace, thread string, tail int) ([]model.Event, erro
 	return out, c.do("GET", fmt.Sprintf("%s/events?tail=%d", threadPath(workspace, thread), tail), nil, &out)
 }
 
-func (c *Client) Completions(workspace, thread string) (model.Completions, error) {
+func (c *Client) Completions(workspace, thread, query string) (model.Completions, error) {
 	var out model.Completions
-	return out, c.do("GET", threadPath(workspace, thread)+"/completions", nil, &out)
+	return out, c.do("GET", threadPath(workspace, thread)+"/completions?q="+url.QueryEscape(query), nil, &out)
 }
 
 func (c *Client) Send(workspace, thread, text string) error {

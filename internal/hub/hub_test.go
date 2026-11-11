@@ -584,9 +584,9 @@ func TestCompletionsCommandsFilesAndThreads(t *testing.T) {
 	lists := 0
 	h, err := New(Config{
 		Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f },
-		Files: func(ctx context.Context, l model.Location) ([]string, error) {
+		Files: func(ctx context.Context, l model.Location, query string) ([]string, bool, error) {
 			lists++
-			return []string{"main.go", "go.mod"}, nil
+			return []string{"main.go", "go.mod"}, false, nil
 		},
 	})
 	if err != nil {
@@ -598,7 +598,7 @@ func TestCompletionsCommandsFilesAndThreads(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := h.Completions("demo", model.Coordinator)
+	c, err := h.Completions("demo", model.Coordinator, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -610,11 +610,11 @@ func TestCompletionsCommandsFilesAndThreads(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the turn's commands", func() bool {
-		c, _ := h.Completions("demo", model.Coordinator)
+		c, _ := h.Completions("demo", model.Coordinator, "")
 		return strings.Join(c.Commands, " ") == "simplify review"
 	})
 	// api has had no turn, but stands in the same folder.
-	c, _ = h.Completions("demo", "api")
+	c, _ = h.Completions("demo", "api", "")
 	if strings.Join(c.Commands, " ") != "simplify review" || strings.Join(c.Threads, " ") != model.Coordinator {
 		t.Fatalf("api: %+v", c)
 	}
@@ -1403,5 +1403,36 @@ func TestTheSummarySaysTheCoordinatorsState(t *testing.T) {
 		if s.Name == "demo" && (s.Coordinator != model.StateWaiting || s.Counts[model.StateWaiting] != 0) {
 			t.Fatalf("summary = %+v; the coordinator waits, and it is not a thread", s)
 		}
+	}
+}
+
+func TestCompletionsSearchAFolderWithManyFiles(t *testing.T) {
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	var queries []string
+	h, err := New(Config{
+		Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return &fake{} },
+		Files: func(ctx context.Context, l model.Location, query string) ([]string, bool, error) {
+			queries = append(queries, query)
+			if query == "" {
+				return nil, true, nil
+			}
+			return []string{"internal/tui/mouse.go"}, false, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	pinned(t, h, "demo")
+	c, _ := h.Completions("demo", model.Coordinator, "")
+	if !c.Many || len(c.Files) != 0 {
+		t.Fatalf("with no query: %+v", c)
+	}
+	c, _ = h.Completions("demo", model.Coordinator, "mouse")
+	if !c.Many || c.Query != "mouse" || strings.Join(c.Files, " ") != "internal/tui/mouse.go" {
+		t.Fatalf("with a query: %+v", c)
+	}
+	if strings.Join(queries, ",") != ",mouse" {
+		t.Errorf("queries = %q; the list is asked once, then each search", queries)
 	}
 }

@@ -47,8 +47,10 @@ const (
 // AgentFactory builds the agent that runs a thread's turns.
 type AgentFactory func(p workspace.Workspace, t workspace.Thread) agent.Agent
 
-// FileLister lists the files in a location, relative to its folder.
-type FileLister func(ctx context.Context, l model.Location) ([]string, error)
+// FileLister lists the files in a location, relative to its folder: all of
+// them, or with a query only those whose path holds it. many says there are
+// too many to list, and the folder must be searched.
+type FileLister func(ctx context.Context, l model.Location, query string) (paths []string, many bool, err error)
 
 // BranchReader reads the git branch of a location; empty outside a
 // repository.
@@ -104,6 +106,7 @@ type Hub struct {
 type fileList struct {
 	at    time.Time
 	paths []string
+	many  bool
 }
 
 type space struct {
@@ -423,7 +426,9 @@ func (h *Hub) Events(workspaceName, threadName string, n int) ([]model.Event, er
 // are the ones the thread's last turn reported; before its first turn, those
 // of another thread in the same folder, else on the same host, because a
 // different machine has different plugins and skills.
-func (h *Hub) Completions(workspaceName, threadName string) (model.Completions, error) {
+// Completions is what a thread's prompt completes. In a folder with too many
+// files to send, Files are only those whose path holds query.
+func (h *Hub) Completions(workspaceName, threadName, query string) (model.Completions, error) {
 	h.mu.Lock()
 	ws, th, err := h.lookup(workspaceName, threadName)
 	if err != nil {
@@ -441,7 +446,9 @@ func (h *Hub) Completions(workspaceName, threadName string) (model.Completions, 
 		}
 	}
 	h.mu.Unlock()
-	c.Files = h.listFiles(loc)
+	if c.Files, c.Many = h.listFiles(loc); c.Many {
+		c.Files, c.Query = h.searchFiles(loc, query), query
+	}
 	if c.Commands == nil {
 		c.Commands = []string{}
 	}
@@ -468,22 +475,36 @@ func (h *Hub) commandsNear(loc model.Location) []string {
 // listFiles returns a location's files, cached for filesTTL. A failure is
 // cached too and shows as no files: one unreachable host must not cost an ssh
 // timeout on every Insert.
-func (h *Hub) listFiles(loc model.Location) []string {
+func (h *Hub) listFiles(loc model.Location) ([]string, bool) {
 	if h.cfg.Files == nil {
-		return []string{}
+		return []string{}, false
 	}
 	h.filesMu.Lock()
 	defer h.filesMu.Unlock()
 	if f, ok := h.files[loc]; ok && time.Since(f.at) < filesTTL {
-		return f.paths
+		return f.paths, f.many
 	}
 	ctx, cancel := context.WithTimeout(h.ctx, 10*time.Second)
 	defer cancel()
-	paths, err := h.cfg.Files(ctx, loc)
+	paths, many, err := h.cfg.Files(ctx, loc, "")
 	if err != nil || paths == nil {
 		paths = []string{}
 	}
-	h.files[loc] = fileList{at: time.Now(), paths: paths}
+	h.files[loc] = fileList{at: time.Now(), paths: paths, many: many && err == nil}
+	return paths, many && err == nil
+}
+
+// searchFiles returns the files of a location whose path holds query.
+func (h *Hub) searchFiles(loc model.Location, query string) []string {
+	if query == "" {
+		return []string{}
+	}
+	ctx, cancel := context.WithTimeout(h.ctx, 10*time.Second)
+	defer cancel()
+	paths, _, err := h.cfg.Files(ctx, loc, query)
+	if err != nil || paths == nil {
+		return []string{}
+	}
 	return paths
 }
 

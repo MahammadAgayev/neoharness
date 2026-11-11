@@ -17,11 +17,12 @@ type menu struct {
 
 // fetchCompletions asks the hub in the background: for a remote thread the
 // file list costs an ssh round trip, and the prompt must not wait on it.
-func (a *App) fetchCompletions(b *Buffer) {
+// query is the `@` word, for a folder with too many files to send.
+func (a *App) fetchCompletions(b *Buffer, query string) {
+	a.compBusy[b.Name] = true
 	go func() {
-		if c, err := a.c.Completions(b.Workspace, b.Thread); err == nil {
-			_ = a.s.PostEvent(evComplete{b.Name, c})
-		}
+		c, err := a.c.Completions(b.Workspace, b.Thread, query)
+		_ = a.s.PostEvent(evComplete{b.Name, c, err == nil})
 	}()
 }
 
@@ -55,6 +56,11 @@ func (a *App) updateMenu() {
 			items = append(items, pickItem{glyph: Span{"/", a.th.Muted}, label: s})
 		}
 	case sigil == '@':
+		// A folder with too many files is searched as the word changes, one
+		// search at a time; the last results show meanwhile.
+		if q := string(p.Text[i+1 : p.Cur]); c.Many && q != c.Query && !a.compBusy[a.cur.Buf.Name] {
+			a.fetchCompletions(a.cur.Buf, q)
+		}
 		// Threads first: fuzzy keeps this order between equal scores.
 		for _, s := range c.Threads {
 			items = append(items, pickItem{glyph: Span{"#", a.th.Iris}, label: s})

@@ -17,9 +17,9 @@ const toastsShown = 3
 // on screen, like snacks.nvim's notifier.
 type toast struct {
 	workspace, thread string
-	glyph  Span
-	body   string
-	border tcell.Style
+	glyph             Span
+	body              string
+	border            tcell.Style
 	// until is when it goes away. Zero keeps it while the thread waits for
 	// the person and is not on screen.
 	until time.Time

@@ -29,6 +29,8 @@ type fakeClient struct {
 	gone       []string
 	docs       map[string]string
 	arts       []model.Artifact
+	many       func(query string) []string
+	queries    []string
 	// merged is what an edit from an old version merges to; empty refuses.
 	merged string
 }
@@ -89,7 +91,11 @@ func (f *fakeClient) OpenThread(p, name, brief, loc string) error {
 	return nil
 }
 func (f *fakeClient) Events(p, t string, tail int) ([]model.Event, error) { return f.events[t], nil }
-func (f *fakeClient) Completions(p, t string) (model.Completions, error) {
+func (f *fakeClient) Completions(p, t, query string) (model.Completions, error) {
+	if f.many != nil {
+		f.queries = append(f.queries, query)
+		return model.Completions{Many: true, Query: query, Files: f.many(query)}, nil
+	}
 	return model.Completions{
 		Commands: []string{"simplify", "code-review", "dev:pr-create"},
 		Files:    []string{"main.go", "internal/auth/auth.go", "go.mod"},
@@ -3045,4 +3051,33 @@ func TestToastsSayTheWorkspace(t *testing.T) {
 	h.see("demo · api-tests")
 	h.press("<Esc>", ":messages", "<CR>")
 	h.see("demo · api-tests: asks: Which branch?")
+}
+
+func TestAtSearchesAFolderWithManyFiles(t *testing.T) {
+	h := start(t)
+	h.hub.many = func(q string) []string {
+		if q == "" {
+			return nil
+		}
+		return []string{"src/" + q + ".go"}
+	}
+	h.openDemo()
+	wait := func() {
+		deadline := time.Now().Add(time.Second)
+		for (len(h.a.compBusy) > 0 || h.s.HasPendingEvent()) && time.Now().Before(deadline) {
+			for h.s.HasPendingEvent() {
+				h.a.handle(h.s.PollEvent())
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		h.a.draw()
+	}
+	h.press("<Esc>", "i")
+	wait()
+	h.press("@mouse")
+	wait()
+	h.see("src/mouse.go")
+	if last := h.hub.queries[len(h.hub.queries)-1]; last != "mouse" || len(h.hub.queries) > 4 {
+		t.Fatalf("queries = %q; one search at a time, the last for the whole word", h.hub.queries)
+	}
 }

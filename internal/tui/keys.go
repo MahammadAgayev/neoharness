@@ -1076,7 +1076,7 @@ func (a *App) insert(k rune) {
 	a.mode = modeInsert
 	a.cur.vmode = 0
 	a.cur.Follow = true
-	a.fetchCompletions(a.cur.Buf)
+	a.fetchCompletions(a.cur.Buf, "")
 }
 
 func (a *App) insertKey(k string, ev *tcell.EventKey) {

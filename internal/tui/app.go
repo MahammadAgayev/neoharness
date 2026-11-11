@@ -41,7 +41,7 @@ type Client interface {
 	EditArtifact(workspace, name, text, baseText string, base int, force bool) (model.Artifact, string, error)
 	OpenThread(workspace, name, brief, location string) error
 	Events(workspace, thread string, tail int) ([]model.Event, error)
-	Completions(workspace, thread string) (model.Completions, error)
+	Completions(workspace, thread, query string) (model.Completions, error)
 	Send(workspace, thread, text string) error
 	SendNow(workspace, thread, text string) error
 	Resolve(workspace, thread string) error
@@ -76,6 +76,7 @@ type (
 	evComplete   struct {
 		buf string
 		c   model.Completions
+		ok  bool
 	}
 )
 
@@ -180,7 +181,9 @@ type App struct {
 	// confirm runs on y; any other key drops it.
 	confirm func()
 	comps   map[string]model.Completions
-	search  string
+	// compBusy holds the buffers whose completions are being fetched.
+	compBusy map[string]bool
+	search   string
 	// searchBack says the last search was ?, so n goes up.
 	searchBack bool
 	notice     string
@@ -241,6 +244,7 @@ func newApp(s tcell.Screen, c Client) *App {
 		bufs:     map[string]*Buffer{},
 		threads:  map[string]model.ThreadView{},
 		comps:    map[string]model.Completions{},
+		compBusy: map[string]bool{},
 		menuShut: -1,
 	}
 	a.workspacesBuf = newBuffer("neoharness://workspaces", KindWorkspaces)
@@ -308,6 +312,10 @@ func (a *App) handle(ev tcell.Event) {
 			a.flushPending()
 		}
 	case evComplete:
+		delete(a.compBusy, ev.buf)
+		if !ev.ok {
+			break
+		}
 		a.comps[ev.buf] = ev.c
 		if a.mode == modeInsert && a.cur.Buf.Name == ev.buf {
 			a.updateMenu()
@@ -565,7 +573,7 @@ func (a *App) onView(v model.ThreadView) {
 	// A turn that ended may have reported the thread's first command list.
 	if had && old.State == model.StateRunning && v.State != model.StateRunning {
 		if b := a.chat(v.Name); a.mode == modeInsert && a.cur.Buf == b {
-			a.fetchCompletions(b)
+			a.fetchCompletions(b, "")
 		}
 	}
 	// A stopped turn sends no turn end, so its tool calls would spin forever.

@@ -202,6 +202,10 @@ type Completions struct {
 	Commands []string `json:"commands"`
 	Files    []string `json:"files"`
 	Threads  []string `json:"threads"`
+	// Many says the folder has too many files to send: Files are only those
+	// whose path holds Query, and the prompt asks again as its word changes.
+	Many  bool   `json:"many,omitempty"`
+	Query string `json:"query,omitempty"`
 }
 
 // WorkspaceView is a workspace with a summary of its threads.
