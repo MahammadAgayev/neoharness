@@ -2922,3 +2922,23 @@ func TestTheQuestionCardHidesNoneOfTheTranscript(t *testing.T) {
 	h.see("phase first?")
 	h.see("reply")
 }
+
+func TestCtrlWHFromAChatWithManyLines(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	for i := 0; i < 80; i++ {
+		h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &model.Event{Kind: model.EventText, Text: fmt.Sprintf("line %d", i)}})
+	}
+	h.press("<Esc>", "<C-w>", "v")
+	h.a.draw()
+	left, right := h.a.root.windows()[0], h.a.root.windows()[1]
+	for _, keys := range [][]string{{"G"}, {"G", "k", "k", "k"}, {"gg"}, {"i"}} {
+		h.a.cur = right
+		h.press(keys...)
+		h.a.draw()
+		h.press("<Esc>", "<C-w>", "h")
+		if h.a.cur != left {
+			t.Fatalf("after %v, <C-w>h did not reach the left window", keys)
+		}
+	}
+}

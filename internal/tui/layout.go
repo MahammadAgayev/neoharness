@@ -287,7 +287,9 @@ func (n *node) equalize(vert bool) {
 // neighbor finds the window next to w in a direction: 'h', 'j', 'k', 'l'.
 func neighbor(wins []*Window, w *Window, dir rune) *Window {
 	r := w.rect
-	cx, cy := r.X+min(w.Col, r.W-1), r.Y+min(w.Cur-w.Top, r.H-1)
+	// In the prompt, Cur is a prompt row and not a transcript row: the
+	// cursor's row is then out of the window, and it stays in it.
+	cx, cy := r.X+min(w.Col, r.W-1), r.Y+max(min(w.Cur-w.Top, r.H-1), 0)
 	var best *Window
 	bestD := 1 << 30
 	for _, o := range wins {
