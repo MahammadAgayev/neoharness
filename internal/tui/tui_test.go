@@ -2427,7 +2427,7 @@ func TestPromptMotionsFollowItsWrappedRows(t *testing.T) {
 func TestInsertMaps(t *testing.T) {
 	h := start(t)
 	h.openDemo()
-	h.a.runConfig(`vim.keymap.set("i", "jk", "<Esc>")`, "init.lua", false)
+	h.a.runConfig(`neoharness.keymap.set("i", "jk", "<Esc>")`, "init.lua", false)
 	h.press("i", "hi", "j", "k")
 	if h.a.mode != modeNormal || h.prompt() != "hi" {
 		t.Fatalf("jk should leave Insert without typing: mode %v, prompt %q", h.a.mode, h.prompt())
@@ -2491,7 +2491,7 @@ func TestSplitsAreEqualAsInNeovim(t *testing.T) {
 		t.Fatalf("a close should make the widths equal again; got %v", ws)
 	}
 
-	h.a.runConfig(`vim.o.equalalways = false`, "init.lua", false)
+	h.a.runConfig(`neoharness.o.equalalways = false`, "init.lua", false)
 	before := widths()
 	h.press("<C-w>v")
 	if ws := widths(); ws[0]+ws[1]+1 != before[0] || ws[2] != before[1] {
@@ -2504,14 +2504,14 @@ func TestInitLuaMapsAndColors(t *testing.T) {
 	h.openDemo()
 	h.a.runConfig(`
 -- as in a Neovim config
-vim.g.mapleader = ","
-vim.keymap.set("n", "<leader>t", ":help<CR>")
-vim.keymap.set("n", "gz", function() vim.cmd("threads") end)
-vim.keymap.set("n", "Q", "<leader>t", { remap = true })
-vim.keymap.set("n", "R", "<leader>t")
-vim.keymap.del("n", "<C-d>")
-vim.api.nvim_set_hl(0, "Iris", { fg = "#ff0000", bold = true })
-vim.keymap.set("c", "jk", "<Esc>")
+neoharness.o.leader = ","
+neoharness.keymap.set("n", "<leader>t", ":help<CR>")
+neoharness.keymap.set("n", "gz", function() neoharness.cmd("threads") end)
+neoharness.keymap.set("n", "Q", "<leader>t", { remap = true })
+neoharness.keymap.set("n", "R", "<leader>t")
+neoharness.keymap.del("n", "<C-d>")
+neoharness.hl("Iris", { fg = "#ff0000", bold = true })
+neoharness.keymap.set("c", "jk", "<Esc>")
 `, "init.lua", false)
 	if _, ok := h.a.binds[",w"]; !ok {
 		t.Fatal("the default <leader> maps should move to the new leader")
@@ -2520,10 +2520,10 @@ vim.keymap.set("c", "jk", "<Esc>")
 		t.Fatal("<Space>w should be gone with leader ,")
 	}
 	if _, ok := h.a.binds["<C-d>"]; ok {
-		t.Fatal("vim.keymap.del should remove a default map")
+		t.Fatal("neoharness.keymap.del should remove a default map")
 	}
 	if fg, _, attrs := h.a.th.Iris.Decompose(); fg != tcell.GetColor("#ff0000") || attrs&tcell.AttrBold == 0 {
-		t.Fatal("nvim_set_hl should set the theme color")
+		t.Fatal("neoharness.hl should set the theme color")
 	}
 	if !strings.Contains(h.a.notice, "only Normal, Visual and Insert maps") {
 		t.Fatalf("a Command-line map should give a notice, got %q", h.a.notice)
@@ -2549,11 +2549,11 @@ vim.keymap.set("c", "jk", "<Esc>")
 	h.a.cur = coord
 	h.press("g", "z")
 	if h.a.cur.Buf.Kind != KindThreads {
-		t.Fatal("a Lua function map should run vim.cmd")
+		t.Fatal("a Lua function map should run neoharness.cmd")
 	}
 
 	h2 := start(t)
-	h2.a.runConfig("vim.keymap.set(", "init.lua", false)
+	h2.a.runConfig("neoharness.keymap.set(", "init.lua", false)
 	if !strings.Contains(h2.a.notice, "init.lua") {
 		t.Fatalf("a Lua error should give a notice, got %q", h2.a.notice)
 	}

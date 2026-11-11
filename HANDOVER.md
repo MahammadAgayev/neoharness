@@ -371,7 +371,7 @@ chroma (code colors, style `rose-pine-moon`).
   vertical splits go right, horizontal ones above, like the user's Neovim
   (`splitright`, `nosplitbelow`). After a split or a close the windows get
   the same size, as Neovim's `equalalways` (the user's Neovim has it on);
-  `vim.o.equalalways = false` turns it off, and then a close gives its space
+  `neoharness.o.equalalways = false` turns it off, and then a close gives its space
   to one neighbor. The cursor goes to the window that got the space. The
   bottom line counts running (`●`) and waiting (`◆`) threads.
 - **Threads pane** (`App.pane`, `toPane`): `<leader>t` or `:threads` focuses
@@ -608,21 +608,21 @@ The hub runs in the TUI's process, so it has the shell's full environment
 with `/model` and `/effort`.
 
 Keymaps and colors: `$NEOHARNESS_HOME/init.lua` (default
-`~/.neoharness/init.lua`), read when the TUI starts, with a small part of
-Neovim's Lua API (items 49 and 51 in section 11.3). It runs after the
-built-in `internal/tui/defaults.lua`, which lists every default map and
-color; copy a line from it and edit it:
+`~/.neoharness/init.lua`), read when the TUI starts. It runs after the
+built-in `internal/tui/defaults.lua`, which lists every default map, color
+and setting; copy a line from it and edit it. The API is the global
+`neoharness` table, not `vim` (the user asked for a full rename and a clean
+start: add only what is needed). `require("neoharness")` is the same table.
 
 ```lua
-vim.g.mapleader = ","                               -- default <Space>
-vim.o.equalalways = false                           -- default true
-vim.keymap.set("n", "<leader>t", ":threads<CR>")    -- keys or an ex command
-vim.keymap.set("n", "gt", function() vim.cmd("threads") end)
-vim.keymap.set("n", "Q", "<leader>t", { remap = true })
-vim.keymap.del("n", "<C-d>")
-vim.api.nvim_set_hl(0, "Iris", { fg = "#c4a7e7", bold = true })
-vim.cmd("workspace demo")                           -- runs after start
-vim.notify("loaded")
+neoharness.o.leader = ","                                 -- default <Space>
+neoharness.o.equalalways = false                          -- default true
+neoharness.keymap.set("n", "<leader>t", ":threads<CR>")   -- keys or an ex command
+neoharness.keymap.set("n", "gt", function() neoharness.cmd("threads") end)
+neoharness.keymap.set("n", "Q", "<leader>t", { remap = true })
+neoharness.keymap.del("n", "<C-d>")
+neoharness.hl("Iris", { fg = "#c4a7e7", bold = true })    -- theme names only
+neoharness.cmd("workspace demo")                          -- runs after start
 ```
 
 ## 8. How it was tested

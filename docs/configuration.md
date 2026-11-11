@@ -2,22 +2,32 @@
 
 ## init.lua
 
-neoharness reads `~/.neoharness/init.lua` when it starts. It supports a small
-part of Neovim's Lua API. It runs after the built-in
-[`defaults.lua`](../internal/tui/defaults.lua), which lists every default key
-and color. Copy a line from there and edit it.
+neoharness reads `~/.neoharness/init.lua` when it starts, after the built-in
+[`defaults.lua`](../internal/tui/defaults.lua), which lists every default
+key, color and setting. Copy a line from there and edit it.
+
+The API is the global `neoharness` table; `require("neoharness")` is the same
+table.
 
 ```lua
-vim.g.mapleader = ","                               -- default <Space>
-vim.o.equalalways = false                           -- default true
-vim.keymap.set("n", "<leader>t", ":threads<CR>")    -- keys or an ex command
-vim.keymap.set("n", "gt", function() vim.cmd("threads") end)
-vim.keymap.set("n", "Q", "<leader>t", { remap = true })
-vim.keymap.del("n", "<C-d>")
-vim.api.nvim_set_hl(0, "Iris", { fg = "#c4a7e7", bold = true })
-vim.cmd("workspace demo")                           -- runs after start
-vim.notify("loaded")
+neoharness.o.leader = ","                                 -- default <Space>
+neoharness.o.equalalways = false                          -- default true
+neoharness.keymap.set("n", "<leader>t", ":threads<CR>")   -- keys or an ex command
+neoharness.keymap.set("n", "gt", function() neoharness.cmd("threads") end)
+neoharness.keymap.set("n", "Q", "<leader>t", { remap = true })
+neoharness.keymap.del("n", "<C-d>")
+neoharness.hl("Iris", { fg = "#c4a7e7", bold = true })
+neoharness.cmd("workspace demo")                          -- runs after start
 ```
+
+| | |
+|---|---|
+| `neoharness.o.leader` | the leader; it moves the default maps |
+| `neoharness.o.equalalways` | a split or a close makes the windows the same size |
+| `neoharness.keymap.set(mode, lhs, rhs, opts)` | `n`, `x` or `i`; `rhs` is keys, an ex command or a function; `{ remap = true }` |
+| `neoharness.keymap.del(mode, lhs)` | removes a map |
+| `neoharness.hl(group, opts)` | `Text Subtle Muted Iris Rose Foam Gold Pine Love Code Separator CursorLine Selection`; `fg`, `bg`, `bold`, `italic`, `underline` |
+| `neoharness.cmd(line)` | runs an ex command |
 
 A map can run keys, an ex command, a `<Plug>(neoharness-...)` action, or a
 Lua function. Actions with no ex command:

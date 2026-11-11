@@ -21,9 +21,9 @@ func TestHubSettingsDefaultToOpus(t *testing.T) {
 func TestInitLuaSetupChangesOnlyItsKeys(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "init.lua")
 	src := `
-vim.g.mapleader = ","
-vim.keymap.set("n", "Q", ":help<CR>")
-vim.cmd("workspace demo")
+neoharness.o.leader = ","
+neoharness.keymap.set("n", "Q", ":help<CR>")
+neoharness.cmd("workspace demo")
 require("neoharness").setup({ mcp_port = 47999 })
 require("neoharness.claude").setup({ command = "authwrap agent run claude", model = "sonnet", effort = "high" })
 `
@@ -38,6 +38,18 @@ require("neoharness.claude").setup({ command = "authwrap agent run claude", mode
 		!slices.Equal(s.Claude.Command, []string{"authwrap", "agent", "run", "claude"}) ||
 		!slices.Equal(s.Claude.RemoteCommand, []string{"claude"}) {
 		t.Fatalf("settings = %+v", s)
+	}
+}
+
+func TestTheAPIIsNeoharnessNotVim(t *testing.T) {
+	h := start(t)
+	h.a.runConfig(`assert(require("neoharness") == neoharness)`, "init.lua", false)
+	if h.a.notice != "" {
+		t.Fatalf("require(\"neoharness\") should be the neoharness table, got %q", h.a.notice)
+	}
+	h.a.runConfig(`vim.o.equalalways = false`, "init.lua", false)
+	if h.a.notice == "" {
+		t.Fatal("vim should not exist")
 	}
 }
 

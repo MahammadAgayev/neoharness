@@ -4,13 +4,13 @@
 -- change any of it: copy a line there and edit it. Vim's own keys (motions,
 -- operators, :commands, <C-w> windows) are built in and not listed here.
 --
--- Maps here take the leader that init.lua sets, so a new vim.g.mapleader
+-- Maps here take the leader that init.lua sets, so a new neoharness.o.leader
 -- moves all of them. A map runs keys, an ex command (":threads<CR>"), a
 -- <Plug>(neoharness-...) action, or a Lua function. Maps are noremap unless
 -- { remap = true }.
 
-vim.g.mapleader = " "
-vim.o.equalalways = true -- after a split or a close, windows get the same size
+neoharness.o.leader = " "
+neoharness.o.equalalways = true -- after a split or a close, windows get the same size
 
 -- The hub. Its settings take effect when it starts.
 require("neoharness").setup({
@@ -26,8 +26,8 @@ require("neoharness.claude").setup({
   context_window = 400000,       -- ctx % counts up to this, though the model takes more
 })
 
-local map = vim.keymap.set
-local hl = function(group, opts) vim.api.nvim_set_hl(0, group, opts) end
+local map = neoharness.keymap.set
+local hl = neoharness.hl
 
 -- Pickers.
 map("n", "<leader><leader>", ":ls<CR>")                -- buffers

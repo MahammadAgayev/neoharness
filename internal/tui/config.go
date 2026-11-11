@@ -16,7 +16,7 @@ import (
 //go:embed defaults.lua
 var defaultsLua string
 
-// mapOp is one vim.keymap.set or vim.keymap.del. leader is the leader when
+// mapOp is one neoharness.keymap.set or neoharness.keymap.del. leader is the leader when
 // it was made, as Neovim takes it then; "" in defaults.lua, whose maps take
 // the leader the user's init.lua sets.
 type mapOp struct {
@@ -61,19 +61,16 @@ func (a *App) runConfig(src, name string, defaults bool) {
 	}
 }
 
-// luaAPI makes the vim table that configs see.
+// luaAPI makes the neoharness table that configs see.
 func (a *App) luaAPI() {
 	L := lua.NewState()
 	a.lua = L
+	nh, o, keymap := L.NewTable(), L.NewTable(), L.NewTable()
+	L.SetField(nh, "o", o)
+	L.SetField(nh, "keymap", keymap)
+	L.SetGlobal("neoharness", nh)
 	// The hub read the setup calls before the TUI started.
-	setupModules(L, nil)
-	vim, g, o, keymap, api := L.NewTable(), L.NewTable(), L.NewTable(), L.NewTable(), L.NewTable()
-	L.SetField(vim, "g", g)
-	L.SetField(vim, "o", o)
-	L.SetField(vim, "opt", o)
-	L.SetField(vim, "keymap", keymap)
-	L.SetField(vim, "api", api)
-	L.SetGlobal("vim", vim)
+	setupModules(L, nh, nil)
 	// modes says which of Normal (with Visual) and Insert a map is for.
 	modes := func(l *lua.LState) (normal, insert bool) {
 		check := func(m string) {
@@ -136,13 +133,13 @@ func (a *App) luaAPI() {
 		add(mapOp{lhs: l.CheckString(2), del: true}, normal, insert)
 		return 0
 	}))
-	L.SetField(api, "nvim_set_hl", L.NewFunction(func(l *lua.LState) int {
-		if err := a.setHighlight(l.CheckString(2), l.CheckTable(3)); err != nil {
+	L.SetField(nh, "hl", L.NewFunction(func(l *lua.LState) int {
+		if err := a.setHighlight(l.CheckString(1), l.CheckTable(2)); err != nil {
 			a.notify(fmt.Sprintf("%s: %v", a.cfgName, err), a.th.Gold)
 		}
 		return 0
 	}))
-	L.SetField(vim, "cmd", L.NewFunction(func(l *lua.LState) int {
+	L.SetField(nh, "cmd", L.NewFunction(func(l *lua.LState) int {
 		line := strings.TrimPrefix(strings.TrimSpace(l.CheckString(1)), ":")
 		if line == "" {
 			return 0
@@ -154,19 +151,23 @@ func (a *App) luaAPI() {
 		}
 		return 0
 	}))
-	L.SetField(vim, "notify", L.NewFunction(func(l *lua.LState) int {
-		a.notify(l.CheckString(1), a.th.Subtle)
-		return 0
-	}))
 }
 
-// option is a vim.o option that is on or off.
-func (a *App) option(name string) bool {
+// opt is a neoharness.o option, nil when it is not set.
+func (a *App) opt(name string) lua.LValue {
 	if a.lua == nil {
-		return false
+		return lua.LNil
 	}
-	o, _ := a.lua.GetField(a.lua.GetGlobal("vim"), "o").(*lua.LTable)
-	return o != nil && lua.LVAsBool(o.RawGetString(name))
+	o, _ := a.lua.GetField(a.lua.GetGlobal("neoharness"), "o").(*lua.LTable)
+	if o == nil {
+		return lua.LNil
+	}
+	return o.RawGetString(name)
+}
+
+// option is a neoharness.o option that is on or off.
+func (a *App) option(name string) bool {
+	return lua.LVAsBool(a.opt(name))
 }
 
 // equalAlways is Neovim's equalalways: after a split or a close, the windows
@@ -177,16 +178,9 @@ func (a *App) equalAlways(vert bool) {
 	}
 }
 
-// leader is vim.g.mapleader as a key name, <Space> when it is not set.
+// leader is neoharness.o.leader as a key name, <Space> when it is not set.
 func (a *App) leader() string {
-	if a.lua == nil {
-		return "<Space>"
-	}
-	g, _ := a.lua.GetField(a.lua.GetGlobal("vim"), "g").(*lua.LTable)
-	if g == nil {
-		return "<Space>"
-	}
-	if s, ok := a.lua.GetField(g, "mapleader").(lua.LString); ok && s != "" && s != " " {
+	if s, ok := a.opt("leader").(lua.LString); ok && s != "" && s != " " {
 		return strings.Join(parseKeys(string(s), "<Space>"), "")
 	}
 	return "<Space>"
@@ -321,15 +315,14 @@ func (a *App) bindings() map[string]func(int) {
 	return a.binds
 }
 
-// setHighlight is nvim_set_hl for a theme color. Neovim's own group names
-// work for the ones that have a match here.
+// setHighlight is neoharness.hl: it sets a theme color.
 func (a *App) setHighlight(group string, opts *lua.LTable) error {
 	th := a.th
 	groups := map[string]*tcell.Style{
-		"Text": &th.Text, "Normal": &th.Text, "Subtle": &th.Subtle, "Muted": &th.Muted, "Comment": &th.Muted,
+		"Text": &th.Text, "Subtle": &th.Subtle, "Muted": &th.Muted,
 		"Iris": &th.Iris, "Rose": &th.Rose, "Foam": &th.Foam, "Gold": &th.Gold, "Pine": &th.Pine,
-		"Love": &th.Love, "Error": &th.Love, "CursorLine": &th.CursorLine, "Selection": &th.Selection,
-		"Visual": &th.Selection, "Separator": &th.Separator, "WinSeparator": &th.Separator, "Code": &th.Code,
+		"Love": &th.Love, "CursorLine": &th.CursorLine, "Selection": &th.Selection,
+		"Separator": &th.Separator, "Code": &th.Code,
 	}
 	st, ok := groups[group]
 	if !ok {
