@@ -12,7 +12,7 @@ table.
 ```lua
 neoharness.o.leader = ","                                 -- default <Space>
 neoharness.o.equalalways = false                          -- default true
-neoharness.o.compactwarn = 70                             -- default 50; 0 never
+neoharness.o.compactwarn = 60                             -- default 80; 0 never
 neoharness.keymap.set("n", "<leader>t", ":threads<CR>")   -- keys or an ex command
 neoharness.keymap.set("n", "gt", function() neoharness.cmd("threads") end)
 neoharness.keymap.set("n", "Q", "<leader>t", { remap = true })

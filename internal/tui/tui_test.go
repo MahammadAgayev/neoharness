@@ -3237,17 +3237,17 @@ func TestCompactWarning(t *testing.T) {
 		v.Context, v.ContextWindow = ctx, 1000
 		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: name, View: &v})
 	}
-	set("auth-refactor", 400)
-	set("auth-refactor", 520)
+	set("auth-refactor", 700)
+	set("auth-refactor", 820)
 	h.a.draw()
-	h.see("context at 52%")
+	h.see("context at 82%")
 	h.press("<Space>nc")
-	set("auth-refactor", 600)
+	set("auth-refactor", 900)
 	if len(h.a.toasts) != 0 {
 		t.Fatal("the warning should come once")
 	}
 	set(model.Coordinator, 100)
-	set(model.Coordinator, 700)
+	set(model.Coordinator, 850)
 	h.a.draw()
-	h.see("coordinator: context at 70%")
+	h.see("coordinator: context at 85%")
 }
