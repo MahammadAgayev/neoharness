@@ -58,6 +58,19 @@ i                       write to the coordinator; <CR> sends, <Esc> goes to Norm
 Ask the coordinator for work, for example "split this refactor into three
 threads". It opens the threads, and they show in the pane.
 
+## Configure
+
+Every default key, color and setting is in
+[`defaults.lua`](internal/tui/defaults.lua): the model, notifications, the
+context warning, the leader and all maps. To change one, copy its line to
+`~/.neoharness/init.lua` and edit it. For example:
+
+```lua
+neoharness.o.leader = ","
+neoharness.keymap.set("n", "gt", ":threads<CR>")
+require("neoharness.claude").setup({ model = "sonnet" })
+```
+
 ## Docs
 
 - [Usage](docs/usage.md): workspaces, threads, artifacts, keys, commands
