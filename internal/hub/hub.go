@@ -620,14 +620,14 @@ func (h *Hub) send(workspaceName, from, to, text string) (*thread, error) {
 			return th, err
 		}
 	}
-	answer := from == model.User && th.t.Asking != ""
-	h.enqueue(ws, th, from, text)
 	// The thread asked and ended its reply; what still runs (background
-	// tasks) must not hold the answer back.
-	if answer && th.busy && th.cancel != nil {
+	// tasks) must not hold the answer back. Checked before enqueue, which may
+	// start the answer's own turn.
+	if from == model.User && th.t.Asking != "" && th.busy && th.cancel != nil {
 		th.interrupted = true
 		th.cancel()
 	}
+	h.enqueue(ws, th, from, text)
 	return th, nil
 }
 

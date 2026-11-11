@@ -409,6 +409,40 @@ func TestAnswerStopsATurnThatStillRunsAfterItsQuestion(t *testing.T) {
 	}
 }
 
+func TestAnswerAfterTheTurnEndedInterruptsNothing(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	gate := make(chan struct{})
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if strings.Contains(req.Prompt, "postgres") {
+			select {
+			case <-gate:
+			case <-ctx.Done():
+				return agent.Result{ExitCode: -1}
+			}
+			return agent.Result{Text: "ok"}
+		}
+		_ = h.AskUser("demo", model.Coordinator, "which database?")
+		return agent.Result{Text: "asked"}
+	}
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")
+	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
+	eventually(t, "the asking turn to end", func() bool {
+		evs, _ := h.Events("demo", model.Coordinator, 50)
+		return slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventTurnEnd })
+	})
+	_ = h.Send("demo", model.User, model.Coordinator, "postgres")
+	close(gate)
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	evs, _ := h.Events("demo", model.Coordinator, 50)
+	for _, e := range evs {
+		if e.Kind == model.EventNote && e.Text == "Interrupted." {
+			t.Fatal("an answer must not stop the turn it starts")
+		}
+	}
+}
+
 func TestResolveRefusesMessagesAndReopenKeepsSession(t *testing.T) {
 	gate := make(chan struct{})
 	f := &fake{}
