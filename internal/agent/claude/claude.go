@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/MahammadAgayev/neoharness/internal/agent"
 	"github.com/MahammadAgayev/neoharness/internal/procgroup"
@@ -95,15 +96,19 @@ func (a *Agent) run(ctx context.Context, req agent.Request) (agent.Result, error
 	// waiting on it forever.
 	cmd.Stdin = nil
 	procgroup.Isolate(cmd)
-	cmd.Cancel = func() error {
-		_ = procgroup.Kill(cmd)
-		return nil
-	}
-
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return agent.Result{}, err
 	}
+	// An ssh ControlMaster holds the client's stdout and stderr until the
+	// remote turn ends, even after the client is killed. Closing our end and
+	// WaitDelay end a stopped turn now.
+	cmd.Cancel = func() error {
+		_ = procgroup.Kill(cmd)
+		_ = stdout.Close()
+		return nil
+	}
+	cmd.WaitDelay = time.Second
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 

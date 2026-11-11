@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MahammadAgayev/neoharness/internal/agent"
 )
@@ -330,6 +331,28 @@ esac
 	}
 	if res.ExitCode != 0 || res.Text != "resumed" {
 		t.Fatalf("result = %+v, want the turn continued with --resume", res)
+	}
+}
+
+// TestStopEndsTheTurnWhileOthersHoldTheOutput: an ssh ControlMaster gets the
+// client's stdout and stderr and keeps them open after the client is killed,
+// until the remote turn ends. A stopped turn must end at once all the same.
+func TestStopEndsTheTurnWhileOthersHoldTheOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake claude is a shell script")
+	}
+	script := filepath.Join(t.TempDir(), "claude")
+	// set -m puts sleep in its own process group, out of reach of the kill.
+	body := "#!/bin/sh\nset -m\nsleep 30 &\necho '{\"type\":\"system\"}'\nwait\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, _ = New(script).Run(ctx, agent.Request{Prompt: "hi"})
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("the stopped turn took %v to end", d)
 	}
 }
 
