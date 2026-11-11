@@ -25,6 +25,9 @@ type ClaudeSettings struct {
 	// Model and Effort are used when a thread has no /model or /effort of its
 	// own. Empty leaves claude's default.
 	Model, Effort string
+	// ContextWindow, when not 0, is the most of the model's window the
+	// context percentage counts.
+	ContextWindow int
 }
 
 // setupModules gives a Lua state the neoharness modules. Each setup call
@@ -79,6 +82,10 @@ func ReadHubSettings(path string) (HubSettings, error) {
 			s.Claude.Model = text(v)
 		case "neoharness.claude.effort":
 			s.Claude.Effort = text(v)
+		case "neoharness.claude.context_window":
+			if n, ok := v.(lua.LNumber); ok {
+				s.Claude.ContextWindow = int(n)
+			}
 		}
 	})
 	noop := L.NewFunction(func(*lua.LState) int { return 0 })

@@ -23,6 +23,7 @@ require("neoharness.claude").setup({
   command = "claude",            -- here; a wrapper works too
   remote_command = "claude",     -- on ssh hosts
   model = "claude-opus-5-5[1m]",
+  context_window = 400000,       -- ctx % counts up to this, though the model takes more
 })
 
 local map = vim.keymap.set

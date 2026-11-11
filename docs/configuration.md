@@ -49,6 +49,7 @@ require("neoharness.claude").setup({
   remote_command = "claude",            -- on ssh hosts
   model = "claude-opus-5-5[1m]",        -- for threads with no /model of their own
   effort = "high",                      -- low, medium, high, xhigh, max; leave out for claude's own
+  context_window = 400000,              -- ctx % counts up to this; claude itself can go further
 })
 ```
 

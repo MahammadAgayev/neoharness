@@ -1332,6 +1332,30 @@ func TestConfigModelUnlessTheThreadChoseOne(t *testing.T) {
 	}
 }
 
+func TestContextWindowSettingCapsTheModelsWindow(t *testing.T) {
+	for _, tc := range []struct{ model, setting, want int }{
+		{1000000, 400000, 400000},
+		{200000, 400000, 200000},
+		{1000000, 0, 1000000},
+	} {
+		t.Setenv("NEOHARNESS_HOME", t.TempDir())
+		f := &fake{script: func(ctx context.Context, req agent.Request) agent.Result {
+			return agent.Result{Text: "ok", Context: 1000, ContextWindow: tc.model}
+		}}
+		h, err := New(Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }, MCPPort: 4242, ContextWindow: tc.setting})
+		if err != nil {
+			t.Fatal(err)
+		}
+		pinned(t, h, "demo")
+		_ = h.Send("demo", model.User, model.Coordinator, "hi")
+		stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+		if got := view(t, h, "demo", model.Coordinator).ContextWindow; got != tc.want {
+			t.Errorf("model %d, setting %d: window %d, want %d", tc.model, tc.setting, got, tc.want)
+		}
+		h.Close()
+	}
+}
+
 func TestRestoreSaysATurnWasStoppedByTheDelete(t *testing.T) {
 	seen := make(chan struct{}, 1)
 	f := &fake{}

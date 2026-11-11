@@ -67,6 +67,10 @@ type Config struct {
 	// Model and Effort are for a thread with no /model or /effort of its
 	// own. Empty leaves the agent's default.
 	Model, Effort string
+	// ContextWindow, when not 0, is the most of a model's window that
+	// counts: the context percentage is of this, so it warns in time to
+	// /compact.
+	ContextWindow int
 	MaxAgentTurns int
 	TurnTimeout   time.Duration
 	// Files lists a thread's folder for `@` completion. Nil lists nothing.
@@ -1287,6 +1291,9 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	}
 	if res.Context > 0 {
 		t.Context, t.ContextWindow = res.Context, res.ContextWindow
+		if c := h.cfg.ContextWindow; c > 0 && c < t.ContextWindow {
+			t.ContextWindow = c
+		}
 	}
 	// A failed turn was still paid for.
 	t.Cost += res.Cost

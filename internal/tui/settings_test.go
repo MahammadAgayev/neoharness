@@ -12,7 +12,7 @@ func TestHubSettingsDefaultToOpus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.MCPPort != 47821 || s.Claude.Model != "claude-opus-5-5[1m]" || s.Claude.Effort != "" ||
+	if s.MCPPort != 47821 || s.Claude.Model != "claude-opus-5-5[1m]" || s.Claude.Effort != "" || s.Claude.ContextWindow != 400000 ||
 		!slices.Equal(s.Claude.Command, []string{"claude"}) || !slices.Equal(s.Claude.RemoteCommand, []string{"claude"}) {
 		t.Fatalf("settings = %+v", s)
 	}

@@ -78,7 +78,7 @@ func startHub() (stop func(), err error) {
 	}
 
 	tunnels := tunnel.New(port)
-	h, err := hub.New(hub.Config{MCPPort: port, Model: cfg.Claude.Model, Effort: cfg.Claude.Effort,
+	h, err := hub.New(hub.Config{MCPPort: port, Model: cfg.Claude.Model, Effort: cfg.Claude.Effort, ContextWindow: cfg.Claude.ContextWindow,
 		Factory: agentFactory(tunnels, cfg.Claude), Files: listFiles, Branch: gitBranch, Shell: runShell})
 	if err != nil {
 		apiLn.Close()
