@@ -99,7 +99,7 @@ func (a *App) drawToasts(W, H int) {
 	if tw < 20 {
 		return
 	}
-	x0, y := W-tw-1, 0
+	x0, y := W-tw-margin, 1
 	shown := a.toasts[max(len(a.toasts)-toastsShown, 0):]
 	for i := len(shown) - 1; i >= 0 && y+4 < H; i-- {
 		t := shown[i]

@@ -1408,7 +1408,7 @@ func TestArtifactNamesInAChatAreLinks(t *testing.T) {
 	}
 
 	h.press("G")
-	for !strings.Contains(h.a.line(h.a.cur).Text(), "cache-design") {
+	for !strings.Contains(h.a.line(h.a.cur).Text(), "cache-design;") {
 		h.press("k")
 	}
 	h.press("<CR>")
@@ -2900,4 +2900,15 @@ func TestPopupMarginsAreBlank(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestTheQuestionCardShowsTheWholeQuestion(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads[model.Coordinator]
+	v.State = model.StateWaiting
+	v.Waiting = strings.Repeat("The roadmap has phases and dates to check. ", 8) + "Which phase first?"
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("phase first?")
 }

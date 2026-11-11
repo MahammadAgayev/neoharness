@@ -16,6 +16,10 @@ import (
 // scrollOff keeps this many lines visible around the cursor.
 const scrollOff = 8
 
+// margin keeps the windows off the terminal's edges: this many columns at
+// the left and right, and a row at the top.
+const margin = 2
+
 // The prompt is at least minPromptLines tall, so it reads as a place to
 // write, and grows to maxPromptLines before it scrolls.
 const (
@@ -43,7 +47,7 @@ func (a *App) draw() {
 		}
 	}
 	live := false
-	area := Rect{0, 0, W, H - 1}
+	area := Rect{margin, 1, W - 2*margin, H - 2}
 	a.root.layout(area, sep)
 	a.bindDiff()
 	for _, w := range a.root.windows() {
@@ -592,10 +596,14 @@ func (a *App) drawFloats(w *Window, top, bottom int) {
 		}
 	case v.Waiting != "":
 		title = "question"
-		for i, l := range wrap([]Span{{v.Waiting, th.Text}}, bw-4, nil, nil) {
-			if i == 3 {
-				break
-			}
+		// The card covers the end of the transcript, where the question is,
+		// so it shows all of it that fits.
+		lines := wrap([]Span{{v.Waiting, th.Text}}, bw-4, nil, nil)
+		if room := bottom - top - 3; len(lines) > room {
+			lines = lines[:max(room, 1)]
+			lines[len(lines)-1].Spans = append(lines[len(lines)-1].Spans, Span{"…", th.Muted})
+		}
+		for _, l := range lines {
 			body = append(body, l.Spans)
 		}
 		body = append(body, []Span{{"i", th.Iris}, {" reply", th.Muted}})
@@ -736,7 +744,7 @@ func (a *App) drawGlobal(W, H int) {
 			right = append(right, Span{fmt.Sprintf(" %s %d", stateGlyph(s), n[s]), th.state(s)})
 		}
 	}
-	rx := W - 1
+	rx := W - margin
 	for _, sp := range right {
 		rx -= width(sp.Text)
 	}
@@ -744,7 +752,7 @@ func (a *App) drawGlobal(W, H int) {
 		x = a.put(x, y, W, right[i].Text, right[i].Style)
 	}
 
-	x := 1
+	x := margin + 1
 	if a.offline {
 		x = a.put(x, y, W, "● offline  ", th.Love)
 	}
