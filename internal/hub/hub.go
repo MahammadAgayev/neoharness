@@ -1268,6 +1268,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		}
 	}
 	batch := t.InFlight
+	resumed := t.Started
 	th.busy = false
 	th.cancel = nil
 	t.InFlight = nil
@@ -1309,6 +1310,12 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		t.SessionID, t.Started = workspace.NewID(), false
 		t.Queue = append(batch, t.Queue...)
 		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "The agent has no record of this conversation, so a new one starts."})
+	// A new session that is full at once would only fail again.
+	case res.Full && resumed:
+		t.Summary = h.handoff(ws, th)
+		t.SessionID, t.Started, t.Context = workspace.NewID(), false, 0
+		t.Queue = append(batch, t.Queue...)
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "The conversation outgrew the model's context. A new one starts from this thread's transcript."})
 	case res.ExitCode != 0:
 		h.event(ws, th, model.Event{Kind: model.EventError, Text: "the agent failed: " + lastLine(res.Stderr, res.Text)})
 	default:
@@ -1414,6 +1421,31 @@ func compose(batch []workspace.Message, threads map[string]*thread) string {
 		prompt += "\n\n@" + n + " is the thread " + n + " in this workspace. Read its transcript with read_thread if you need it."
 	}
 	return prompt
+}
+
+// handoffLimit is how much of the end of a transcript a handoff carries.
+const handoffLimit = 20000
+
+// handoff is what a thread's new session starts from when the old one
+// outgrew the context. It is built from the transcript, not by the model,
+// because the full session cannot answer any more.
+func (h *Hub) handoff(ws *space, th *thread) string {
+	evs, err := workspace.Events(ws.p.Name, th.t.Name, 0)
+	if err != nil {
+		return prompts.Handoff(th.t.Name, "", "")
+	}
+	task := ""
+	if i := slices.IndexFunc(evs, func(e model.Event) bool { return e.Kind == model.EventMessage }); i >= 0 {
+		task = evs[i].Text
+	}
+	recent := model.Transcript(evs)
+	if len(recent) > handoffLimit {
+		recent = recent[len(recent)-handoffLimit:]
+		if i := strings.IndexByte(recent, '\n'); i >= 0 {
+			recent = recent[i+1:]
+		}
+	}
+	return prompts.Handoff(th.t.Name, task, recent)
 }
 
 // endedNote tells the coordinator which threads ended a turn since its last

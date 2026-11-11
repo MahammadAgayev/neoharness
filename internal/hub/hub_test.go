@@ -1308,6 +1308,58 @@ func TestALostConversationStartsANewOne(t *testing.T) {
 	}
 }
 
+func TestAFullConversationStartsANewOneFromTheTranscript(t *testing.T) {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if req.Resume {
+			return agent.Result{ExitCode: 1, Full: true, Text: "Prompt is too long"}
+		}
+		req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "ok"})
+		return agent.Result{Text: "ok"}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	for _, msg := range []string{"build the benchmark", "what?"} {
+		if err := h.Send("demo", model.User, model.Coordinator, msg); err != nil {
+			t.Fatal(err)
+		}
+		stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	}
+	reqs := f.requests()
+	if len(reqs) != 3 {
+		t.Fatalf("requests = %d, want 3", len(reqs))
+	}
+	last := reqs[2]
+	if last.Resume || last.Conversation == reqs[0].Conversation {
+		t.Fatalf("the retry should be a new conversation: %+v", last)
+	}
+	for _, want := range []string{"outgrew the model's context", "The task:\nbuild the benchmark", "what?"} {
+		if !strings.Contains(last.Prompt, want) {
+			t.Errorf("prompt lacks %q:\n%s", want, last.Prompt)
+		}
+	}
+	evs, _ := h.Events("demo", model.Coordinator, 50)
+	for _, e := range evs {
+		if e.Kind == model.EventError {
+			t.Errorf("a full conversation that starts again is not an error: %q", e.Text)
+		}
+	}
+}
+
+func TestANewConversationThatIsFullAtOnceIsAnError(t *testing.T) {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		return agent.Result{ExitCode: 1, Full: true, Text: "Prompt is too long"}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, strings.Repeat("x", 100))
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if n := len(f.requests()); n != 1 {
+		t.Fatalf("requests = %d; a fresh conversation that is full must not loop", n)
+	}
+}
+
 func TestRestoreSaysATurnWasStoppedByTheDelete(t *testing.T) {
 	seen := make(chan struct{}, 1)
 	f := &fake{}

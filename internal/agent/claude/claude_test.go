@@ -343,6 +343,27 @@ func TestUnknownConversationIsLost(t *testing.T) {
 	}
 }
 
+func TestPromptTooLongIsFull(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "claude")
+	body := "#!/bin/sh\necho '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":true,\"result\":\"Prompt is too long\"}'; exit 1\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var texts int
+	res, err := New(script).Run(context.Background(), agent.Request{Prompt: "hi", Conversation: "abc", Resume: true,
+		OnEvent: func(e agent.Event) {
+			if e.Kind == agent.KindAssistantText {
+				texts++
+			}
+		}})
+	if err != nil || !res.Full {
+		t.Fatalf("full = %v, err = %v", res.Full, err)
+	}
+	if texts != 0 {
+		t.Error("the failure should not also show as a reply")
+	}
+}
+
 func TestResumeContinuesTheConversation(t *testing.T) {
 	got := strings.Join(New().args(agent.Request{Prompt: "hi", Conversation: "abc", Resume: true}), " ")
 	if !strings.Contains(got, "--resume abc") || strings.Contains(got, "--session-id") {
