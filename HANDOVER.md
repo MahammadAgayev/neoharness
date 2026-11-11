@@ -49,7 +49,7 @@ In the TUI:
 :new demo ~/src/demo    create a workspace pinned to a folder, and open it
 :new demo               the same, but pick the folder in a fuzzy picker
 i                       write to the coordinator; <CR> sends, <Esc> stops
-<leader>t               threads pane on the right (<leader> is <Space>); <CR> opens a thread in it
+:threads                threads pane on the right (<leader> is <Space>); <CR> opens a thread in it
 <leader>pa              artifacts; <CR> on a ◇ line or an artifact name opens one too
 :help                   every key and command
 ```
@@ -374,7 +374,7 @@ chroma (code colors, style `rose-pine-moon`).
   `vim.o.equalalways = false` turns it off, and then a close gives its space
   to one neighbor. The cursor goes to the window that got the space. The
   bottom line counts running (`●`) and waiting (`◆`) threads.
-- **Threads pane** (`App.pane`, `toPane`): `<leader>t` or `:threads` focuses
+- **Threads pane** (`App.pane`, `toPane`): `:threads` focuses
   it and shows the threads list; if it was closed, it opens again on the right
   at full height. The list is grouped by state (waiting, running, idle; the
   coordinator is not listed); resolved threads fold into `▸ N resolved`, and
@@ -504,7 +504,7 @@ are `<leader>p…` (`pf`, `pb`, `ps`), and `<leader>f` formats code.
 | `<C-w>h/j/k/l` `<C-h/j/k/l>` `<Tab>` | move between windows |
 | `<C-w>v` `<C-w>s` `<C-w>c` `<C-w>o` `<C-w>=` | split right / above, close, only, equal |
 | `<leader><leader>` `<leader>pb` / `<leader>pt` / `<leader>pa` / `<leader>ps` / `<leader>w` | pickers: buffers (threads and artifacts included) / threads / artifacts / search all transcripts / workspaces |
-| `<leader>t` | threads pane on the right |
+| `:threads` | threads pane on the right (no default key) |
 | `<leader>pv` / `<leader>c` | workspaces screen / coordinator |
 | `<leader>a` `<leader>A` `<leader>x` | allow / allow always / deny a permission |
 | `<leader>nc` / `<leader>nh` | dismiss toasts / their history |

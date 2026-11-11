@@ -97,7 +97,6 @@ reports. They belong to the workspace, and every session can read them.
 | `<leader>ps` | search every transcript |
 | `<leader>w` | pick a workspace |
 | `<leader>pv` | workspaces screen |
-| `<leader>t` | threads pane |
 | `<leader>c` | coordinator |
 | `]m` `[m` / `]b` `[b` / `<C-^>` | next/previous message (heading in an artifact) / thread / alternate buffer |
 | `gO` | outline: messages, or headings in an artifact |
@@ -109,7 +108,8 @@ reports. They belong to the workspace, and every session can read them.
 
 ## Commands
 
-`:b <name>`, `:ls`, `:split`, `:vsplit`, `:only`, `:threads`, `:artifacts`,
+`:b <name>`, `:ls`, `:split`, `:vsplit`, `:only`, `:threads` (the threads
+pane), `:artifacts`,
 `:messages`, `:help`, `:q`, `:qa`, `:q!`, `:qa!`.
 
 `:q` on the last window and `:qa` refuse while threads run. `:qa!` stops
