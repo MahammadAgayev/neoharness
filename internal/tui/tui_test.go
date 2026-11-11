@@ -323,10 +323,10 @@ func TestInsertSendsToTheFocusedThread(t *testing.T) {
 func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
 	h := start(t)
 	h.openDemo()
-	h.press(":threads", "<CR>")
+	h.press("<Space>", "t")
 	wins := h.a.root.windows()
 	if len(wins) != 2 || wins[1] != h.a.cur || h.a.cur.Buf.Kind != KindThreads || wins[0].Buf.Thread != model.Coordinator {
-		t.Fatalf(":threads should focus the threads pane on the right; got %d windows", len(wins))
+		t.Fatalf("<leader>t should focus the threads pane on the right; got %d windows", len(wins))
 	}
 	coord, pane := wins[0], wins[1]
 	// Rows: running, auth-refactor, blank, idle, api-tests.
@@ -334,7 +334,7 @@ func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
 	if len(h.a.root.windows()) != 2 || h.a.cur != pane || pane.Buf.Thread != "api-tests" {
 		t.Fatalf("<CR> should show api-tests in the pane; got %q", pane.Buf.Name)
 	}
-	h.press(":threads", "<CR>", "gg", "j", "<CR>")
+	h.press("<Space>", "t", "gg", "j", "<CR>")
 	if len(h.a.root.windows()) != 2 || pane.Buf.Thread != "auth-refactor" {
 		t.Fatalf("the next thread should open in the same pane; got %q", pane.Buf.Name)
 	}
@@ -1029,7 +1029,7 @@ func TestThreadsPaneGroupsByStateAndFoldsResolved(t *testing.T) {
 		v.State = st
 		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: name, View: &v})
 	}
-	h.press(":threads", "<CR>")
+	h.press("<Space>", "t")
 	rows := func() []string {
 		var out []string
 		for _, l := range h.a.threadsBuf.Lines(80, h.a.th, 0) {
@@ -2431,7 +2431,7 @@ func TestDefaultsLuaIsTheDefault(t *testing.T) {
 	if h.a.notice != "" {
 		t.Fatalf("defaults.lua should load without a notice, got %q", h.a.notice)
 	}
-	for _, k := range []string{"<Space>c", "<Space>ps", "<Space>pt", "<Space>pb", "<Tab>", "<C-h>"} {
+	for _, k := range []string{"<Space>t", "<Space>c", "<Space>ps", "<Space>pt", "<Space>pb", "<Tab>", "<C-h>"} {
 		if h.a.binds[k] == nil {
 			t.Errorf("defaults.lua should map %s", k)
 		}
@@ -2487,10 +2487,10 @@ func TestInitLuaMapsAndColors(t *testing.T) {
 	h.a.runConfig(`
 -- as in a Neovim config
 vim.g.mapleader = ","
-vim.keymap.set("n", "<leader>pt", ":help<CR>")
+vim.keymap.set("n", "<leader>t", ":help<CR>")
 vim.keymap.set("n", "gz", function() vim.cmd("threads") end)
-vim.keymap.set("n", "Q", "<leader>pt", { remap = true })
-vim.keymap.set("n", "R", "<leader>pt")
+vim.keymap.set("n", "Q", "<leader>t", { remap = true })
+vim.keymap.set("n", "R", "<leader>t")
 vim.keymap.del("n", "<C-d>")
 vim.api.nvim_set_hl(0, "Iris", { fg = "#ff0000", bold = true })
 vim.keymap.set("c", "jk", "<Esc>")
@@ -2511,23 +2511,22 @@ vim.keymap.set("c", "jk", "<Esc>")
 		t.Fatalf("a Command-line map should give a notice, got %q", h.a.notice)
 	}
 	coord := h.a.cur
-	h.press(",", "p", "t")
+	h.press(",", "t")
 	if h.a.cur.Buf.Kind != KindHelp {
-		t.Fatal(",pt should run :help<CR>")
+		t.Fatal(",t should run :help<CR>")
 	}
 	h.press(":q", "<CR>")
 	h.a.cur = coord
 	h.press("Q")
 	if h.a.cur.Buf.Kind != KindHelp {
-		t.Fatal("a remap map should reach the user's ,pt")
+		t.Fatal("a remap map should reach the user's ,t")
 	}
 	h.press(":q", "<CR>")
 	h.a.cur = coord
 	h.press("R")
-	if h.a.picker == nil || h.a.picker.title != "threads" {
-		t.Fatal("a map that is not remap should reach the default ,pt (threads picker)")
+	if h.a.cur.Buf.Kind != KindThreads {
+		t.Fatalf("a map that is not remap should reach the default ,t (threads), got %v", h.a.cur.Buf.Kind)
 	}
-	h.press("<Esc>")
 	h.a.pane.show(h.a.chat(model.Coordinator))
 	h.a.cur = coord
 	h.press("g", "z")

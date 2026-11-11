@@ -106,7 +106,7 @@ type App struct {
 
 	workspacesBuf *Buffer
 	threadsBuf    *Buffer
-	// pane is the window on the right that :threads opens. It shows the
+	// pane is the window on the right that <leader>t opens. It shows the
 	// threads list, and the threads opened from it.
 	pane         *Window
 	showResolved bool

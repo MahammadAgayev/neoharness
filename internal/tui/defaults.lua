@@ -25,6 +25,7 @@ map("n", "<leader>w", ":workspace<CR>")
 
 -- Windows that are not pickers.
 map("n", "<leader>pv", ":workspaces<CR>")              -- workspaces screen
+map("n", "<leader>t", ":threads<CR>")                  -- threads pane
 map("n", "<leader>c", "<Plug>(neoharness-coordinator)")
 
 -- Permissions: the card of the thread in this window.

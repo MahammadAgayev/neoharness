@@ -38,7 +38,7 @@ neoharness
 :new demo ~/src/demo    create a workspace pinned to a folder, and open it
 :new demo               the same, but pick the folder in a fuzzy picker
 i                       write to the coordinator; <CR> sends, <Esc> goes to Normal
-<leader>pt              pick a thread (<leader> is <Space>)
+<leader>t               threads pane on the right (<leader> is <Space>)
 <leader>pa              pick an artifact
 :help                   every key and command
 ```
