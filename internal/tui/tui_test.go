@@ -110,6 +110,14 @@ func (f *fakeClient) SendNow(p, t, text string) error {
 	f.sent = append(f.sent, "now "+t+": "+text)
 	return nil
 }
+func (f *fakeClient) Stop(p, t string) error {
+	f.sent = append(f.sent, "stop "+t)
+	return nil
+}
+func (f *fakeClient) Unqueue(p, t string, at time.Time) error {
+	f.sent = append(f.sent, "unqueue "+t+" "+at.UTC().Format(time.RFC3339))
+	return nil
+}
 func (f *fakeClient) Resolve(p, t string) error {
 	f.resolved = append(f.resolved, t)
 	return nil
@@ -1084,7 +1092,7 @@ func TestEnterOnAQueuedMessageSendsItNow(t *testing.T) {
 	h.openDemo()
 	h.a.chat(model.Coordinator).SetPending([]model.Event{{Kind: model.EventMessage, From: model.User, Text: "stop"}})
 	h.press("<Esc>", "G")
-	for h.a.line(h.a.cur).Item != queuedRow {
+	for !strings.HasPrefix(h.a.line(h.a.cur).Item, queuedRow) {
 		h.press("k")
 	}
 	h.press("<CR>")
@@ -3122,5 +3130,36 @@ func TestThreadPickerShowsState(t *testing.T) {
 	}
 	if d := details[model.Coordinator]; d != "idle" {
 		t.Errorf("coordinator: %q, want idle", d)
+	}
+}
+
+func TestXOrDdCancelsAMessage(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	at := time.Date(2026, 11, 11, 15, 4, 5, 0, time.UTC)
+	h.a.chat(model.Coordinator).SetPending([]model.Event{{At: at, Kind: model.EventMessage, From: model.User, Text: "drop this"}})
+	h.press("<Esc>", "G")
+	for !strings.HasPrefix(h.a.line(h.a.cur).Item, queuedRow) {
+		h.press("k")
+	}
+	h.press("x")
+	if got := strings.Join(h.hub.sent, "|"); got != "unqueue coordinator 2026-11-11T15:04:05Z" {
+		t.Fatalf("x on a queued message: sent %q", got)
+	}
+
+	// dd on your message while its turn runs stops the turn.
+	h.hub.sent = nil
+	h.a.chat(model.Coordinator).SetPending(nil)
+	h.a.chat(model.Coordinator).AddEvent(model.Event{Kind: model.EventMessage, From: model.User, Text: "long task"})
+	v := h.a.threads[model.Coordinator]
+	v.State = model.StateRunning
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.press("G")
+	for !strings.Contains(h.a.line(h.a.cur).Text(), "long task") {
+		h.press("k")
+	}
+	h.press("dd")
+	if got := strings.Join(h.hub.sent, "|"); got != "stop coordinator" {
+		t.Fatalf("dd on the running message: sent %q", got)
 	}
 }

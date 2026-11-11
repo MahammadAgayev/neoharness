@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/MahammadAgayev/neoharness/internal/hub"
 	"github.com/MahammadAgayev/neoharness/internal/hubapi"
@@ -94,6 +95,17 @@ func Handler(h *hub.Hub) http.Handler {
 			return
 		}
 		reply(w, nil, h.Send(r.PathValue("p"), model.User, r.PathValue("t"), in.Text))
+	})
+	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/stop", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, nil, h.Stop(r.PathValue("p"), r.PathValue("t")))
+	})
+	mux.HandleFunc("DELETE /workspaces/{p}/threads/{t}/queue", func(w http.ResponseWriter, r *http.Request) {
+		at, err := time.Parse(time.RFC3339Nano, r.URL.Query().Get("at"))
+		if err != nil {
+			reply(w, nil, fmt.Errorf("at: %w", err))
+			return
+		}
+		reply(w, nil, h.Unqueue(r.PathValue("p"), r.PathValue("t"), at))
 	})
 	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/resolve", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, nil, h.Resolve(r.PathValue("p"), model.User, r.PathValue("t")))

@@ -44,6 +44,8 @@ type Client interface {
 	Completions(workspace, thread, query string) (model.Completions, error)
 	Send(workspace, thread, text string) error
 	SendNow(workspace, thread, text string) error
+	Stop(workspace, thread string) error
+	Unqueue(workspace, thread string, at time.Time) error
 	Resolve(workspace, thread string) error
 	Delete(workspace, thread string) error
 	Reopen(workspace, thread string) error
@@ -1052,8 +1054,8 @@ func countSpans(c map[model.State]int, th *Theme) []Span {
 // thread name cannot hold a NUL.
 const resolvedRow = "\x00resolved"
 
-// queuedRow is the Item of a queued message's rows: <CR> on one sends the
-// queue now.
+// queuedRow starts the Item of a queued message's rows, then when it was
+// queued: <CR> on one sends the queue now, x or dd takes it back.
 const queuedRow = "\x00queued"
 
 func (a *App) renderThreads() {

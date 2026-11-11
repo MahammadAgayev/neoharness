@@ -1037,7 +1037,7 @@ func (a *App) enter() {
 			a.showThread(l.Item)
 		}
 	default:
-		if l.Item == queuedRow {
+		if strings.HasPrefix(l.Item, queuedRow) {
 			if err := a.c.SendNow(a.cur.Buf.Workspace, a.cur.Buf.Thread, ""); err != nil {
 				a.notify(err.Error(), a.th.Love)
 			}

@@ -543,6 +543,7 @@ func (a *App) helpBuf() *Buffer {
 		row("i a o", "write to the thread in this window"),
 		row("<CR>", "send (in Insert)"),
 		row("<CR>", "on a queued message: send it now, stopping the running turn"),
+		row("x  dd", "on a queued message: take it back; on the last one while it runs: stop the turn"),
 		row("!<command>", "run it in the thread's folder; the output goes with your next message"),
 		row("<C-j>  <S-CR>", "new line (in Insert)"),
 		row("p  <C-r>\"", "put the last yank in the prompt; <C-r>\" in Insert"),

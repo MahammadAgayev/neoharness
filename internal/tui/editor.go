@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -1104,6 +1105,23 @@ func (a *App) saveEdit(force bool) bool {
 	return true
 }
 
+// cancelMessage is x or dd on a message in a chat: a queued one is taken
+// back, and on the last message the turn that runs it stops.
+func (a *App) cancelMessage(w *Window) {
+	b, l := w.Buf, a.line(w)
+	var err error
+	switch at, queued := strings.CutPrefix(l.Item, queuedRow); {
+	case queued:
+		t, _ := time.Parse(time.RFC3339Nano, at)
+		err = a.c.Unqueue(b.Workspace, b.Thread, t)
+	case l.Block == b.lastMessage() && a.threads[b.Thread].State == model.StateRunning:
+		err = a.c.Stop(b.Workspace, b.Thread)
+	}
+	if err != nil {
+		a.notify(err.Error(), a.th.Love)
+	}
+}
+
 // editNormal runs a Normal key that changes the source: x D dd p P u <C-r>
 // J s S C cc r, and an operator (d c y) with a motion (w e b $ 0 ^ iw aw).
 func (a *App) editNormal(k string, n int) {
@@ -1114,6 +1132,10 @@ func (a *App) editNormal(k string, n int) {
 		return
 	}
 	if e == nil {
+		if (k == "x" || k == "dd") && w.Buf.Kind == KindChat {
+			a.cancelMessage(w)
+			return
+		}
 		if k == "x" && w.Buf.Kind == KindWorkspaces {
 			if item := a.line(w).Item; item != "" {
 				a.askDeleteWorkspace(item)

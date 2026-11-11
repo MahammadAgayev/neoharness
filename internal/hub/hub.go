@@ -123,10 +123,11 @@ type thread struct {
 	busy    bool
 	started bool // the current turn produced output, so its session exists
 	cancel  context.CancelFunc
-	// interrupted marks a turn that SendNow stopped.
-	interrupted bool
-	perms       []*pending
-	state       model.State
+	// interrupted marks a turn that SendNow or Stop stopped; dropped says
+	// Stop did, so the messages of the turn do not go again.
+	interrupted, dropped bool
+	perms                []*pending
+	state                model.State
 	// reply is the final text of its last turn, for the coordinator's note.
 	reply string
 	// deleted stops a turn that is still unwinding from writing the thread
@@ -636,6 +637,41 @@ func (h *Hub) SendNow(workspaceName, to, text string) error {
 		th.interrupted = true
 		th.cancel()
 	}
+	return nil
+}
+
+// Stop stops a thread's running turn. Messages Claude did not see yet are
+// dropped, not sent again.
+func (h *Hub) Stop(workspaceName, name string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	_, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	if !th.busy || th.cancel == nil {
+		return errors.New("nothing runs")
+	}
+	th.interrupted, th.dropped = true, true
+	th.cancel()
+	return nil
+}
+
+// Unqueue takes back a queued message that no turn has read yet. at is when
+// it was queued.
+func (h *Hub) Unqueue(workspaceName, name string, at time.Time) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(th.t.Queue, func(m workspace.Message) bool { return !m.Shown && m.At.Equal(at) })
+	if i < 0 {
+		return errors.New("that message is no longer queued")
+	}
+	th.t.Queue = slices.Delete(th.t.Queue, i, i+1)
+	h.changed(ws, th)
 	return nil
 }
 
@@ -1242,7 +1278,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 	ctx, cancel := context.WithTimeout(h.ctx, h.cfg.TurnTimeout)
 	th.busy = true
 	th.started = false
-	th.interrupted = false
+	th.interrupted, th.dropped = false, false
 	th.cancel = cancel
 	h.changed(ws, th)
 
@@ -1338,7 +1374,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	case th.interrupted:
 		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Interrupted."})
 		// Claude never saw these messages, so they go again with the new one.
-		if !th.started {
+		if !th.started && !th.dropped {
 			t.Queue = append(batch, t.Queue...)
 		}
 	case ctx.Err() == context.DeadlineExceeded:
@@ -1567,7 +1603,7 @@ func unshown(q []workspace.Message) []model.Event {
 	var out []model.Event
 	for _, m := range q {
 		if !m.Shown {
-			out = append(out, model.Event{Kind: model.EventMessage, From: m.From, Text: m.Text})
+			out = append(out, model.Event{At: m.At, Kind: model.EventMessage, From: m.From, Text: m.Text})
 		}
 	}
 	return out

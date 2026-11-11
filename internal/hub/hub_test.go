@@ -1467,3 +1467,43 @@ func TestAnOldReportDoesNotShowWhileANewTurnRuns(t *testing.T) {
 		t.Fatalf("a new turn runs; the old report shows %q", p)
 	}
 }
+
+func TestUnqueueAndStop(t *testing.T) {
+	f := &fake{}
+	gate := make(chan struct{})
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		select {
+		case <-gate:
+			return agent.Result{Text: "ok"}
+		case <-ctx.Done():
+			return agent.Result{ExitCode: -1}
+		}
+	}
+	h := newHub(t, f)
+	t.Cleanup(func() { close(gate) })
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "long task")
+	stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
+	_ = h.Send("demo", model.User, model.Coordinator, "never mind")
+	pending := view(t, h, "demo", model.Coordinator).Pending
+	if len(pending) != 1 {
+		t.Fatalf("pending = %+v", pending)
+	}
+	if err := h.Unqueue("demo", model.Coordinator, pending[0].At); err != nil {
+		t.Fatal(err)
+	}
+	if v := view(t, h, "demo", model.Coordinator); len(v.Pending) != 0 || v.Queued != 0 {
+		t.Fatalf("after unqueue: pending %+v, queued %d", v.Pending, v.Queued)
+	}
+
+	if err := h.Stop("demo", model.Coordinator); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if n := len(f.requests()); n != 1 {
+		t.Fatalf("%d turns; a stopped turn's message must not go again", n)
+	}
+	if err := h.Stop("demo", model.Coordinator); err == nil {
+		t.Error("Stop with nothing running should say so")
+	}
+}

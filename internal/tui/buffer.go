@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/MahammadAgayev/neoharness/internal/model"
 )
@@ -203,13 +204,24 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 		for i, l := range rows {
 			l.Block = len(b.blocks)
 			if i > 0 {
-				l.Item = queuedRow
+				l.Item = queuedRow + e.At.Format(time.RFC3339Nano)
 			}
 			out = append(out, l)
 		}
 	}
 	b.lines, b.linesW, b.dirty = out, w, false
 	return out
+}
+
+// lastMessage is the block of the last message to the thread, from anyone;
+// -1 when there is none.
+func (b *Buffer) lastMessage() int {
+	for i := len(b.blocks) - 1; i >= 0; i-- {
+		if b.blocks[i].kind == bMessage {
+			return i
+		}
+	}
+	return -1
 }
 
 // SetPending shows a chat's queued messages after its transcript.

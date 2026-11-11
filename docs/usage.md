@@ -51,7 +51,8 @@ The coordinator usually opens threads. You can open one yourself:
   Visual mode work in it.
 - Messages sent while a thread is busy wait in a queue and show dim at the
   end of the chat. `<CR>` on one sends it now: the running turn stops, and
-  the queue goes in the next turn at once.
+  the queue goes in the next turn at once. `x` or `dd` on one takes it back.
+- `x` or `dd` on the last message while its turn runs stops the turn.
 - `/` at the start completes slash commands. `@` completes threads and files.
 - `!<command>` at the start runs a shell command in the thread's folder. The
   output goes to Claude with your next message.

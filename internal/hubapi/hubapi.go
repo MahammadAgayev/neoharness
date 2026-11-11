@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/MahammadAgayev/neoharness/internal/model"
 )
@@ -167,6 +168,15 @@ func (c *Client) Send(workspace, thread, text string) error {
 
 func (c *Client) SendNow(workspace, thread, text string) error {
 	return c.do("POST", threadPath(workspace, thread)+"/messages", Message{Text: text, Now: true}, nil)
+}
+
+func (c *Client) Stop(workspace, thread string) error {
+	return c.do("POST", threadPath(workspace, thread)+"/stop", nil, nil)
+}
+
+// Unqueue takes back a queued message; at is when it was queued.
+func (c *Client) Unqueue(workspace, thread string, at time.Time) error {
+	return c.do("DELETE", threadPath(workspace, thread)+"/queue?at="+url.QueryEscape(at.Format(time.RFC3339Nano)), nil, nil)
 }
 
 func (c *Client) Resolve(workspace, thread string) error {
