@@ -320,6 +320,24 @@ func TestInsertSendsToTheFocusedThread(t *testing.T) {
 	}
 }
 
+func TestThreadsPaneGoesBackToTheRight(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	onRight := func(what string) {
+		t.Helper()
+		r := h.a.root
+		if !r.vert || r.kids[len(r.kids)-1].win != h.a.pane || h.a.cur != h.a.pane || h.a.pane.Buf.Kind != KindThreads {
+			t.Fatalf("%s: <leader>t should put the pane at full height on the right", what)
+		}
+	}
+	h.press("<Space>", "t", "<C-w>s")
+	h.press("<Space>", "t")
+	onRight("after a split of the pane")
+	h.press("<C-w>v")
+	h.press("<Space>", "t")
+	onRight("after a window right of the pane")
+}
+
 func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
 	h := start(t)
 	h.openDemo()

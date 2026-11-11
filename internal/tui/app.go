@@ -682,15 +682,33 @@ func (a *App) knownThread(name string) bool {
 // toPane shows a buffer in the threads pane on the right and focuses it. If
 // the pane was closed, it opens again at full height.
 func (a *App) toPane(b *Buffer) {
-	if a.pane == nil || a.root.find(a.pane) == nil {
+	switch {
+	case a.pane == nil:
 		a.pane = newWindow(b)
-		a.root.weight = 1
-		a.root = split(true, a.root, leaf(a.pane, 1))
-		a.equalAlways(true)
-	} else {
+	case a.paneOnRight():
+		a.pane.show(b)
+		a.cur = a.pane
+		return
+	default:
+		// Splits moved it; it goes back to a full-height column on the right.
+		if a.root.find(a.pane) != nil {
+			a.root.closeWindow(a.pane)
+		}
 		a.pane.show(b)
 	}
+	a.root.weight = 1
+	a.root = split(true, a.root, leaf(a.pane, 1))
+	a.equalAlways(true)
 	a.cur = a.pane
+}
+
+// paneOnRight reports whether the pane is the rightmost column at full
+// height, or the only window.
+func (a *App) paneOnRight() bool {
+	if a.root.win == a.pane {
+		return true
+	}
+	return a.root.vert && a.root.kids[len(a.root.kids)-1].win == a.pane
 }
 
 // showList opens the threads list in the pane.
