@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -310,6 +311,9 @@ func TestHubTurnsKeepPermissionChecks(t *testing.T) {
 // is new. Claude then refuses the id on every later turn; the adapter must
 // continue the session instead.
 func TestSessionAlreadyInUseIsResumed(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake claude is a shell script")
+	}
 	script := filepath.Join(t.TempDir(), "claude")
 	body := `#!/bin/sh
 case "$*" in
@@ -330,6 +334,9 @@ esac
 }
 
 func TestUnknownConversationIsLost(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake claude is a shell script")
+	}
 	script := filepath.Join(t.TempDir(), "claude")
 	body := "#!/bin/sh\necho 'No conversation found with session ID: abc' >&2; exit 1\n"
 	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {

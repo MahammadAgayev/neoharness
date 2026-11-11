@@ -16,9 +16,9 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
-	"syscall"
 
 	"github.com/MahammadAgayev/neoharness/internal/agent"
+	"github.com/MahammadAgayev/neoharness/internal/procgroup"
 )
 
 // Agent runs turns through the Claude Code CLI.
@@ -94,9 +94,9 @@ func (a *Agent) run(ctx context.Context, req agent.Request) (agent.Result, error
 	// An inherited stdin pipe that nobody closes leaves a `--print` invocation
 	// waiting on it forever.
 	cmd.Stdin = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	procgroup.Isolate(cmd)
 	cmd.Cancel = func() error {
-		killGroup(cmd)
+		_ = procgroup.Kill(cmd)
 		return nil
 	}
 

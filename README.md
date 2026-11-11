@@ -28,6 +28,11 @@ cd neoharness
 ./install.sh            # builds to ~/.local/bin; BIN=/other/dir ./install.sh to change
 ```
 
+On Windows, run `.\install.ps1` in PowerShell instead. You also need
+[Git for Windows](https://git-scm.com/download/win): its `sh` lists the files
+for `@` and runs `!` commands. Remote threads use the `ssh` that ships with
+Windows.
+
 ## Start
 
 ```sh

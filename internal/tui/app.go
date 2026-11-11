@@ -932,8 +932,11 @@ func (a *App) openLink() {
 		return
 	}
 	open := "xdg-open"
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		open = "open"
+	case "windows":
+		open = "explorer"
 	}
 	if err := a.openURL(open, url); err != nil {
 		a.notify(err.Error(), a.th.Love)

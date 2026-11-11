@@ -154,7 +154,7 @@ func Migrate() error {
 			}
 		}
 	}
-	return os.Symlink(filepath.Base(root), old)
+	return linkDir(filepath.Base(root), old)
 }
 
 // Dir is a workspace's folder.

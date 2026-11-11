@@ -489,6 +489,7 @@ func TestNewWorkspaceFolder(t *testing.T) {
 	}
 	t.Chdir(tmp)
 	t.Setenv("HOME", tmp)
+	t.Setenv("USERPROFILE", tmp) // home on Windows
 	h := start(t)
 	last := func() model.WorkspaceView { return h.hub.workspaces[len(h.hub.workspaces)-1] }
 
@@ -507,12 +508,12 @@ func TestNewWorkspaceFolder(t *testing.T) {
 		t.Fatalf(":new without a folder should open the folder picker; mode %v", h.a.mode)
 	}
 	h.see("not pinned")
-	h.see("~/beta")
+	h.see(filepath.FromSlash("~/beta"))
 	if strings.Contains(h.screen(), ".hidden") {
 		t.Fatal("the folder picker should hide dot folders")
 	}
 	h.press("inner")
-	h.see("~/beta/inner")
+	h.see(filepath.FromSlash("~/beta/inner"))
 	h.press("<BS>", "<BS>", "<BS>", "<BS>", "<BS>", "<CR>")
 	if p := last(); p.Name != "z" || p.Pin != "" {
 		t.Fatalf("the first choice should create an unpinned workspace; got %+v", p)
@@ -935,8 +936,9 @@ func TestChangeFolderAndDeleteWorkspace(t *testing.T) {
 	h.openDemo()
 
 	h.press(":folder other", "<CR>")
-	h.press(":folder", "<CR>", "1/other", "<CR>")
-	if len(h.hub.folders) != 2 || !strings.HasSuffix(h.hub.folders[0], "/other") || !strings.HasSuffix(h.hub.folders[1], "/other") {
+	sep := string(filepath.Separator)
+	h.press(":folder", "<CR>", "1"+sep+"other", "<CR>")
+	if len(h.hub.folders) != 2 || !strings.HasSuffix(h.hub.folders[0], sep+"other") || !strings.HasSuffix(h.hub.folders[1], sep+"other") {
 		t.Fatalf("folders = %q, want twice .../other", h.hub.folders)
 	}
 

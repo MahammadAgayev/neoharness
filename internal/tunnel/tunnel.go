@@ -13,8 +13,9 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
+
+	"github.com/MahammadAgayev/neoharness/internal/procgroup"
 )
 
 // startGrace is how long a new tunnel must stay up before it counts as open.
@@ -80,8 +81,8 @@ func (m *Manager) Ensure(host string) error {
 	// ssh on PATH can be a wrapper script that runs the real ssh as its child.
 	// Killing only the wrapper leaves that child holding the remote port, and
 	// Wait blocks on its stderr pipe, so Close never returns.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	procgroup.Isolate(cmd)
+	cmd.Cancel = func() error { return procgroup.Kill(cmd) }
 	cmd.WaitDelay = time.Second
 	var stderr strings.Builder
 	cmd.Stderr = &stderr

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -77,7 +78,7 @@ func ParseLocation(s string) (Location, error) {
 	if s == "" {
 		return Location{}, errors.New("empty location")
 	}
-	if i := strings.Index(s, ":"); i > 0 && !strings.Contains(s[:i], "/") {
+	if i := strings.Index(s, ":"); i > 0 && !strings.Contains(s[:i], "/") && !drivePath(s) {
 		host, dir := s[:i], s[i+1:]
 		if dir == "" {
 			dir = "~"
@@ -85,6 +86,16 @@ func ParseLocation(s string) (Location, error) {
 		return Location{Host: host, Dir: dir}, nil
 	}
 	return Location{Dir: s}, nil
+}
+
+// drivePath reports a Windows path with a drive letter, such as C:\src or
+// C:/src. Only on Windows: elsewhere "c:/src" is the folder /src on host c.
+func drivePath(s string) bool {
+	if runtime.GOOS != "windows" || len(s) < 2 || s[1] != ':' {
+		return false
+	}
+	c := s[0] | 0x20
+	return c >= 'a' && c <= 'z' && (len(s) == 2 || s[2] == '\\' || s[2] == '/')
 }
 
 // EventKind classifies a transcript entry.

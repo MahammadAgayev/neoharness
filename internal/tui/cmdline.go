@@ -145,7 +145,7 @@ func (a *App) complete(forward bool) {
 		var pool []string
 		if argIdx == 0 {
 			pool = commands
-		} else if (argIdx == 2 && (fields[0] == "new" || fields[0] == "open") || argIdx == 1 && fields[0] == "folder") && !strings.Contains(word, ":") {
+		} else if (argIdx == 2 && (fields[0] == "new" || fields[0] == "open") || argIdx == 1 && fields[0] == "folder") && !remoteWord(word) {
 			pool = folderCompletions(word)
 		} else {
 			switch fields[0] {
@@ -194,7 +194,7 @@ func folderCompletions(word string) []string {
 	if read == "" {
 		read = "."
 	}
-	if strings.HasPrefix(read, "~/") {
+	if strings.HasPrefix(read, "~/") || strings.HasPrefix(read, `~\`) {
 		home, _ := os.UserHomeDir()
 		read = filepath.Join(home, read[2:])
 	}
@@ -640,4 +640,11 @@ func (a *App) helpBuf() *Buffer {
 	}
 	a.bufs[b.Name] = b
 	return b
+}
+
+// remoteWord reports a word that names a folder on an ssh host, which cannot
+// be completed from here. C:\src on Windows is not one.
+func remoteWord(word string) bool {
+	l, err := model.ParseLocation(word)
+	return err == nil && l.Remote()
 }
