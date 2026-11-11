@@ -45,15 +45,6 @@ func Compacted(summary string) string {
 	return "This conversation continues an earlier session that was compacted. Its summary:\n\n" + summary
 }
 
-// Handoff starts a thread's new session after the old one outgrew the
-// model's context: the task and the end of the old transcript, from the hub.
-func Handoff(thread, task, recent string) string {
-	return "The earlier session of this thread outgrew the model's context and could not continue.\n" +
-		"Below are its first message (the task) and the end of its transcript. Continue the work from there.\n" +
-		"read_thread(\"" + thread + "\", tail, query) reads more of the old transcript.\n\n" +
-		"The task:\n" + task + "\n\nThe end of the transcript:\n" + recent
-}
-
 // Shell is a command the user ran with `!` and its output, for the next
 // message. bash-input and bash-stdout are the tags of Claude Code's own
 // shell mode.

@@ -36,9 +36,6 @@ the UUID.
   once.
 - From each turn the adapter reads the slash commands, the model, the
   context size and the cost. The status line shows them.
-- When a conversation outgrows the model's context, every turn of it fails.
-  The hub then starts a new conversation from the thread's own transcript
-  (the task and its end), and sends the failed message again.
 - Under `-p`, `/clear`, `/compact`, `/model`, `/effort` and `!` do not work
   as in the interactive CLI, so the hub does them itself.
 

@@ -76,7 +76,6 @@ func (a *Agent) Run(ctx context.Context, req agent.Request) (agent.Result, error
 	// login, can look started; claude's own files can also be gone.
 	res.Lost = err == nil && res.ExitCode != 0 && req.Resume &&
 		strings.Contains(res.Stderr+res.Text, "No conversation found with session ID")
-	res.Full = err == nil && res.ExitCode != 0 && strings.Contains(res.Stderr+res.Text, "Prompt is too long")
 	return res, err
 }
 
@@ -334,9 +333,8 @@ func (a *accumulator) consume(line []byte) {
 		if strings.TrimSpace(e.Result) != "" {
 			a.text = strings.TrimSpace(e.Result)
 			// Built-in commands such as /context answer only here, with no
-			// assistant message; without this the turn looks silent. A
-			// failure shows once, as the turn's error.
-			if !a.said && !e.IsError {
+			// assistant message; without this the turn looks silent.
+			if !a.said {
 				a.emit(agent.Event{Kind: agent.KindAssistantText, Text: a.text, Tokens: a.tokens})
 			}
 		}

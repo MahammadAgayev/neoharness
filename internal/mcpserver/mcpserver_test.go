@@ -255,7 +255,7 @@ func TestArtifactsBelongToTheWorkspace(t *testing.T) {
 }
 
 func TestTranscriptTellsThePersonsEditApart(t *testing.T) {
-	got := model.Transcript([]model.Event{
+	got := Transcript([]model.Event{
 		{Kind: model.EventArtifact, Detail: "plan", Text: "Plan", Version: 1},
 		{Kind: model.EventArtifact, From: model.User, Detail: "plan", Text: "Plan", Version: 2},
 	})
@@ -265,7 +265,7 @@ func TestTranscriptTellsThePersonsEditApart(t *testing.T) {
 }
 
 func TestTranscriptNamesTheFailedTool(t *testing.T) {
-	got := model.Transcript([]model.Event{
+	got := Transcript([]model.Event{
 		{Kind: model.EventTool, Tool: "Bash", Detail: "rm x", ID: "t1"},
 		{Kind: model.EventTool, ID: "t1", Exit: 1, Text: "denied"},
 		{Kind: model.EventTool, ID: "t2", Exit: 1},

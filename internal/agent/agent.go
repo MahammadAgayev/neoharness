@@ -153,9 +153,6 @@ type Result struct {
 	// Lost says the agent has no record of the conversation the request
 	// resumed. The caller starts a new conversation and sends the prompt again.
 	Lost bool
-	// Full says the conversation no longer fits the model's context, so
-	// every later turn of it fails. The caller starts a new conversation.
-	Full bool
 }
 
 // Agent runs one turn and reports what happened.
