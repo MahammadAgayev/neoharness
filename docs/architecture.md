@@ -3,7 +3,7 @@
 ```
  neoharness (TUI) ──unix socket, HTTP + SSE──▶ hub (same process)
                                                ├─ state of all workspaces and threads (only writer)
-                                               ├─ one turn at a time per thread → claude -p (local or ssh)
+                                               ├─ one turn at a time per thread → a kept claude -p process (local or ssh)
                                                ├─ MCP server http://127.0.0.1:47821/mcp (token = which thread)
                                                └─ one ssh reverse tunnel per remote host
 ```
@@ -21,17 +21,29 @@
 
 ## Turns
 
-Each turn is one `claude -p` call with `--output-format stream-json`,
-`--session-id` on the first turn and `--resume` after, `--mcp-config`,
-`--permission-prompt-tool mcp__neoharness__permission_prompt`,
-`--permission-mode auto` and `--append-system-prompt`. There is no
-long-lived Claude process: Claude keeps the conversation, and the hub keeps
-the UUID.
+A conversation runs in one `claude -p` process with `--input-format
+stream-json` and `--output-format stream-json`, `--session-id` on the first
+start and `--resume` after, `--mcp-config`, `--permission-prompt-tool
+mcp__neoharness__permission_prompt`, `--permission-mode auto` and
+`--append-system-prompt`. Each turn is one line on its stdin, and ends with
+the `result` record. Claude keeps the conversation, and the hub keeps the
+UUID.
+
+- The process stays for the next turn, so a turn does not pay for starting
+  claude, its hooks and MCP servers. It ends after 5 minutes without a turn,
+  when the model, effort or folder changes, and when neoharness stops. The
+  next turn starts a new one with `--resume`.
+- Stopping a turn asks claude to interrupt it, and the process stays. A
+  turn that does not end in 3 seconds is killed.
+- The coordinator runs with `--tools ""` and `--strict-mcp-config`: only the
+  neoharness tools. It manages and cannot do a thread's work, and its context
+  stays small.
 
 - Messages that arrive while a thread is busy wait in a queue. All of them
   go into the next turn as one prompt.
-- Every coordinator turn starts with a note on the threads that ended a turn
-  since its last one. With `notify = "coordinator"` (the default), a
+- Every coordinator turn starts with the board: each open thread, its state
+  and last report, and the start of its reply if it ended a turn since the
+  coordinator's last one. With `notify = "coordinator"` (the default), a
   thread's turn also wakes the coordinator, 15 seconds later so that threads
   that end close together make one turn. It decides with `notify` what
   reaches the person; these turns do not count toward the pause. With

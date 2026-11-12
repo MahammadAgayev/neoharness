@@ -1430,8 +1430,8 @@ func (h *Hub) kick(ws *space, th *thread) {
 		}
 	}
 	if t.Role == model.RoleCoordinator && !batch[0].Compact {
-		if note := h.endedNote(ws, batch); note != "" {
-			prompt = note + "\n\n---\n\n" + prompt
+		if b := h.board(ws, batch); b != "" {
+			prompt = b + "\n\n---\n\n" + prompt
 		}
 	}
 	req := agent.Request{
@@ -1442,6 +1442,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 		Conversation: t.SessionID,
 		Resume:       t.Started,
 		Harness:      agent.Harness{URL: fmt.Sprintf("http://127.0.0.1:%d/mcp", h.cfg.MCPPort), Token: t.Token},
+		HarnessOnly:  t.Role == model.RoleCoordinator,
 	}
 	if !t.Location.Remote() {
 		req.Cwd = t.Location.Dir
@@ -1627,23 +1628,26 @@ func compose(batch []workspace.Message, threads map[string]*thread) string {
 	return prompt
 }
 
-// endedNote tells the coordinator which threads ended a turn since its last
-// turn, with their state, last report and last reply, and forgets them. A thread whose
-// message is in the batch says it there. Callers hold h.mu.
-func (h *Hub) endedNote(ws *space, batch []workspace.Message) string {
+// board is every open thread, for the start of a coordinator turn, so the
+// coordinator manages without asking for the status. A thread that ended a
+// turn since its last turn adds the start of its reply, unless its message
+// is in the batch and says it there. Callers hold h.mu.
+func (h *Hub) board(ws *space, batch []workspace.Message) string {
 	var lines []string
-	for _, n := range ws.ended {
-		th, ok := ws.threads[n]
-		if !ok || slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From == n }) {
+	for _, n := range slices.Sorted(maps.Keys(ws.threads)) {
+		th := ws.threads[n]
+		if n == model.Coordinator || th.deleted || th.t.Resolved {
 			continue
 		}
-		lines = append(lines, prompts.ThreadEnded(n, string(th.state), th.t.Progress, th.reply))
+		ended := slices.Contains(ws.ended, n) &&
+			!slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From == n })
+		lines = append(lines, prompts.BoardLine(n, string(th.state), th.t.Progress, th.reply, ended))
 	}
 	ws.ended = nil
 	if len(lines) == 0 {
 		return ""
 	}
-	return prompts.ThreadsEnded(lines)
+	return prompts.Board(lines)
 }
 
 // --- state and updates ---

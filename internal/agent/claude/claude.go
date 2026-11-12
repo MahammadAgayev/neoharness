@@ -7,10 +7,8 @@
 package claude
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,7 +17,6 @@ import (
 	"time"
 
 	"github.com/MahammadAgayev/neoharness/internal/agent"
-	"github.com/MahammadAgayev/neoharness/internal/procgroup"
 )
 
 // Agent runs turns through the Claude Code CLI.
@@ -32,6 +29,8 @@ type Agent struct {
 	// locally in the request's Cwd.
 	Host string
 	Dir  string
+
+	pool *pool
 }
 
 // New returns an Agent driving the given command, defaulting to `claude`.
@@ -39,30 +38,34 @@ func New(command ...string) *Agent {
 	if len(command) == 0 {
 		command = []string{"claude"}
 	}
-	return &Agent{Command: command}
+	return &Agent{Command: command, pool: newPool()}
 }
 
-// Provider makes claude agents.
+// Provider makes claude agents. Its agents share the sessions it keeps
+// between turns.
 type Provider struct {
 	command, remote []string
+	pool            *pool
 }
 
 // NewProvider runs command on this machine and remote on ssh hosts. The
 // local command may be a wrapper that exists only here. Empty means `claude`.
 func NewProvider(command, remote []string) *Provider {
-	return &Provider{command: command, remote: remote}
+	return &Provider{command: command, remote: remote, pool: newPool()}
 }
 
 func (p *Provider) Agent(host, dir string) agent.Agent {
-	if host == "" {
-		return New(p.command...)
+	a := New(p.command...)
+	if host != "" {
+		a = New(p.remote...)
+		a.Host, a.Dir = host, dir
 	}
-	a := New(p.remote...)
-	a.Host, a.Dir = host, dir
+	a.pool = p.pool
 	return a
 }
 
-func (p *Provider) Close() {}
+// Close ends the sessions.
+func (p *Provider) Close() { p.pool.close() }
 
 const maxStderr = 2000
 
@@ -104,85 +107,120 @@ func (a *Agent) Run(ctx context.Context, req agent.Request) (agent.Result, error
 
 func (a *Agent) run(ctx context.Context, req agent.Request) (agent.Result, error) {
 	args := a.args(req)
-
-	var cmd *exec.Cmd
-	if a.Host != "" {
-		ssh := sshCommand(a.Host, a.Dir, env, args)
-		cmd = exec.CommandContext(ctx, ssh[0], ssh[1:]...)
-	} else {
-		cmd = exec.CommandContext(ctx, args[0], args[1:]...)
-		cmd.Dir = req.Cwd
-		cmd.Env = append(os.Environ(), env...)
+	key := strings.Join(append(sessionArgs(args), a.Host, a.Dir, req.Cwd), "\x00")
+	if s := a.pool.take(req.Conversation, key); s != nil {
+		// A session can die while it waits; then a new one takes the turn.
+		if res, ok := a.turn(ctx, s, req, true); ok {
+			return res, nil
+		}
 	}
-	// An inherited stdin pipe that nobody closes leaves a `--print` invocation
-	// waiting on it forever.
-	cmd.Stdin = nil
-	procgroup.Isolate(cmd)
-	stdout, err := cmd.StdoutPipe()
+	s, err := start(a.command(args, req.Cwd), key)
 	if err != nil {
-		return agent.Result{}, err
-	}
-	// An ssh ControlMaster holds the client's stdout and stderr until the
-	// remote turn ends, even after the client is killed. Closing our end and
-	// WaitDelay end a stopped turn now.
-	cmd.Cancel = func() error {
-		_ = procgroup.Kill(cmd)
-		_ = stdout.Close()
-		return nil
-	}
-	cmd.WaitDelay = time.Second
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-
-	if err := cmd.Start(); err != nil {
 		return agent.Result{}, fmt.Errorf("starting %s: %w", args[0], err)
 	}
+	res, _ := a.turn(ctx, s, req, false)
+	return res, nil
+}
 
+// turn runs one turn in s, and gives s back to the pool if it is still up.
+// ok is false when a reused session had exited before it read anything.
+func (a *Agent) turn(ctx context.Context, s *session, req agent.Request, reused bool) (res agent.Result, ok bool) {
+	if reused {
+		// What the session wrote between turns is not this turn's.
+		s.stderr.take()
+	}
 	acc := &accumulator{onEvent: req.OnEvent}
-	scanner := bufio.NewScanner(stdout)
-	// Claude embeds whole tool results in the stream, so lines run well past
-	// bufio's 64KB default. Without this the scanner stops early and silently.
-	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
-	for scanner.Scan() {
-		acc.consume(scanner.Bytes())
+	// A failed write means the process is gone; the read below sees it.
+	_ = s.prompt(req.Prompt)
+	read, exited := 0, false
+	stopped, kill := ctx.Done(), (<-chan time.Time)(nil)
+	for !acc.ended && !exited {
+		select {
+		case line, open := <-s.lines:
+			if !open {
+				exited = true
+				break
+			}
+			read++
+			acc.consume(line)
+		case <-stopped:
+			// Claude ends the turn and keeps the process for the next one.
+			stopped = nil
+			_ = s.interrupt()
+			kill = time.After(interruptWait)
+		case <-kill:
+			kill = nil
+			s.kill()
+		}
+	}
+	if exited && reused && read == 0 {
+		return agent.Result{}, false
 	}
 
-	waitErr := cmd.Wait()
-
-	res := agent.Result{
+	res = agent.Result{
 		Text:     acc.text,
 		Tools:    acc.tools,
 		Tokens:   acc.tokens,
-		Stderr:   trim(stderr.String(), maxStderr),
+		Stderr:   trim(s.stderr.take(), maxStderr),
 		Commands: acc.commands,
 		Model:    acc.model,
 		Context:  acc.context,
-		Cost:     acc.cost,
 	}
 	for _, m := range acc.models {
 		res.ContextWindow = max(res.ContextWindow, m.ContextWindow)
 	}
+	if acc.cost > 0 {
+		res.Cost, s.cost = acc.cost-s.cost, acc.cost
+	}
 	switch {
-	case waitErr != nil:
-		var exitErr *exec.ExitError
-		if errors.As(waitErr, &exitErr) {
-			res.ExitCode = exitErr.ExitCode()
-		} else {
-			return res, fmt.Errorf("running %s: %w", args[0], waitErr)
-		}
-	case acc.isError:
+	case exited && s.exitCode() != 0:
+		res.ExitCode = s.exitCode()
+	case acc.isError || exited && !acc.ended:
 		// Claude reports a failed turn in the result record while still
 		// exiting zero.
 		res.ExitCode = 1
 	}
-	return res, nil
+	if exited {
+		s.kill()
+	} else {
+		a.pool.put(req.Conversation, s)
+	}
+	return res, true
+}
+
+// command runs claude with args here in cwd, or on the ssh host.
+func (a *Agent) command(args []string, cwd string) *exec.Cmd {
+	if a.Host != "" {
+		ssh := sshCommand(a.Host, a.Dir, env, args)
+		return exec.Command(ssh[0], ssh[1:]...)
+	}
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Dir = cwd
+	cmd.Env = append(os.Environ(), env...)
+	return cmd
+}
+
+// sessionArgs are the start arguments a running session must match to take
+// a turn. The conversation flags differ between the first turn and the rest,
+// and claude keeps the system prompt of a conversation's first request.
+func sessionArgs(args []string) []string {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--session-id", "--resume", "--append-system-prompt":
+			i++
+		default:
+			out = append(out, args[i])
+		}
+	}
+	return out
 }
 
 func (a *Agent) args(req agent.Request) []string {
 	args := append([]string{}, a.Command...)
 	// --verbose is required for stream-json to emit anything per-event; without
 	// it the stream carries only the final result.
-	args = append(args, "--output-format", "stream-json", "--verbose")
+	args = append(args, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose")
 	if h := req.Harness; h.URL != "" {
 		cfg, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"neoharness": map[string]any{
 			"type":    "http",
@@ -191,6 +229,11 @@ func (a *Agent) args(req agent.Request) []string {
 		}}})
 		args = append(args, "--permission-prompt-tool", permissionTool, "--permission-mode", permissionMode,
 			"--mcp-config", string(cfg))
+		if req.HarnessOnly {
+			// No built-in tools and no MCP servers but ours. Without the
+			// built-in ToolSearch, claude must load the harness tools up front.
+			args = append(args, "--tools", "", "--strict-mcp-config")
+		}
 	}
 	if req.Conversation != "" {
 		if req.Resume {
@@ -212,10 +255,8 @@ func (a *Agent) args(req agent.Request) []string {
 		// working coding agent, not a replacement for one.
 		args = append(args, "--append-system-prompt", req.SystemPrompt)
 	}
-	// -p last and immediately before the prompt: Claude reads the prompt as
-	// -p's value, and a prompt beginning with a dash would otherwise be taken
-	// for a flag.
-	return append(args, "-p", req.Prompt)
+	// The prompt goes on stdin, as a session's turns do.
+	return args
 }
 
 // accumulator folds Claude's stream into a Result.
@@ -225,6 +266,7 @@ type accumulator struct {
 	tools    int
 	tokens   int
 	isError  bool
+	ended    bool // saw the result record
 	said     bool // emitted assistant text this turn
 	commands []string
 	model    string
@@ -352,6 +394,7 @@ func (a *accumulator) consume(line []byte) {
 		if t := e.Usage.total(); t > a.tokens {
 			a.tokens = t
 		}
+		a.ended = true
 		a.isError = e.IsError
 		a.cost = e.Cost
 		a.models = e.ModelUsage

@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -229,20 +231,20 @@ func TestUserAndSystemRecordsAreIgnored(t *testing.T) {
 
 // --- command line ---
 
-func TestArgsCarriesPromptLast(t *testing.T) {
+func TestArgsKeepThePromptOff(t *testing.T) {
 	a := New()
 	got := a.args(agent.Request{Prompt: "-do the thing"})
 
 	if got[0] != "claude" {
 		t.Errorf("args[0] = %q, want the default binary", got[0])
 	}
-	// The prompt must be the value of a trailing -p, or a prompt starting with
-	// a dash is read as a flag.
-	if n := len(got); got[n-2] != "-p" || got[n-1] != "-do the thing" {
-		t.Errorf("args tail = %q, want -p followed by the prompt", got[n-2:])
+	// The prompt goes on stdin, so a session can take the next one there.
+	if slices.Contains(got, "-do the thing") {
+		t.Errorf("args = %q, want the prompt on stdin", got)
 	}
 	joined := strings.Join(got, " ")
 	for _, want := range []string{
+		"-p --input-format stream-json",
 		"--output-format stream-json",
 		"--verbose",
 	} {
@@ -438,7 +440,7 @@ func TestBuiltinCommandOutputIsShown(t *testing.T) {
 
 func TestModelAndEffortFlags(t *testing.T) {
 	args := strings.Join(New().args(agent.Request{Prompt: "hi", Model: "sonnet", Effort: "high"}), " ")
-	if !strings.Contains(args, "--model sonnet") || !strings.Contains(args, "--effort high") || !strings.HasSuffix(args, "-p hi") {
+	if !strings.Contains(args, "--model sonnet") || !strings.Contains(args, "--effort high") {
 		t.Fatalf("args = %s", args)
 	}
 }
@@ -477,5 +479,153 @@ func TestPermissionPromptsInTheHubsTerms(t *testing.T) {
 	}
 	if !HarnessTool("mcp__neoharness__whoami") || HarnessTool("mcp__slack__read") {
 		t.Error("only the neoharness tools skip the person")
+	}
+}
+
+func TestHarnessOnlyDropsTheOtherTools(t *testing.T) {
+	req := agent.Request{Prompt: "hi", Harness: agent.Harness{URL: "http://127.0.0.1:4242/mcp", Token: "tok"}}
+	if got := New().args(req); slices.Contains(got, "--tools") || slices.Contains(got, "--strict-mcp-config") {
+		t.Errorf("args = %q, want the agent's own tools for a thread", got)
+	}
+	req.HarnessOnly = true
+	got := New().args(req)
+	if i := slices.Index(got, "--tools"); i < 0 || got[i+1] != "" || !slices.Contains(got, "--strict-mcp-config") {
+		t.Errorf("args = %q, want --tools \"\" and --strict-mcp-config", got)
+	}
+}
+
+// --- sessions that outlive a turn ---
+
+// fakeSession writes a claude that answers each prompt on stdin with a
+// result, "slow" only when interrupted, and counts its starts in a file.
+func fakeSession(t *testing.T, exitAfterTurn bool) (provider *Provider, starts func() int) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake claude is a shell script")
+	}
+	dir := t.TempDir()
+	count := filepath.Join(dir, "starts")
+	exit := ""
+	if exitAfterTurn {
+		exit = "exit 0"
+	}
+	body := fmt.Sprintf(`#!/bin/sh
+echo x >> %q
+n=0
+while IFS= read -r line; do
+  case "$line" in
+  *control_request*) echo '{"type":"result","is_error":true}' ;;
+  *'"slow"'*) ;;
+  *) n=$((n+1)); echo "{\"type\":\"result\",\"result\":\"turn $n\",\"total_cost_usd\":0.$n}"; %s ;;
+  esac
+done
+`, count, exit)
+	script := filepath.Join(dir, "claude")
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	provider = NewProvider([]string{script}, nil)
+	t.Cleanup(provider.Close)
+	return provider, func() int {
+		b, _ := os.ReadFile(count)
+		return strings.Count(string(b), "x")
+	}
+}
+
+func turn(t *testing.T, p *Provider, ctx context.Context, req agent.Request) agent.Result {
+	t.Helper()
+	res, err := p.Agent("", "").Run(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
+// TestTheNextTurnUsesTheSameProcess: a turn must not pay for starting claude
+// again.
+func TestTheNextTurnUsesTheSameProcess(t *testing.T) {
+	p, starts := fakeSession(t, false)
+	req := agent.Request{Prompt: "hi", Conversation: "c1"}
+	first := turn(t, p, context.Background(), req)
+	req.Resume = true
+	second := turn(t, p, context.Background(), req)
+	if first.Text != "turn 1" || second.Text != "turn 2" || starts() != 1 {
+		t.Fatalf("texts %q %q, %d starts; want both turns from one process", first.Text, second.Text, starts())
+	}
+	// Claude counts the cost from the process start.
+	if math.Abs(second.Cost-0.1) > 1e-9 {
+		t.Errorf("second turn cost %v, want 0.1", second.Cost)
+	}
+}
+
+func TestAStoppedTurnKeepsTheProcess(t *testing.T) {
+	p, starts := fakeSession(t, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	begin := time.Now()
+	res := turn(t, p, ctx, agent.Request{Prompt: "slow", Conversation: "c1"})
+	if d := time.Since(begin); d > 2*time.Second || res.ExitCode == 0 {
+		t.Fatalf("stopped turn took %v, exit %d", d, res.ExitCode)
+	}
+	if res := turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1", Resume: true}); res.Text != "turn 1" || starts() != 1 {
+		t.Fatalf("next turn %q after %d starts, want the same process", res.Text, starts())
+	}
+}
+
+func TestATurnThatClaudeIgnoresIsKilled(t *testing.T) {
+	old := interruptWait
+	interruptWait = 100 * time.Millisecond
+	t.Cleanup(func() { interruptWait = old })
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake claude is a shell script")
+	}
+	script := filepath.Join(t.TempDir(), "claude")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexec sleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	begin := time.Now()
+	res, err := New(script).Run(ctx, agent.Request{Prompt: "hi", Conversation: "c1"})
+	if err != nil || res.ExitCode == 0 || time.Since(begin) > 3*time.Second {
+		t.Fatalf("exit %d, err %v, after %v", res.ExitCode, err, time.Since(begin))
+	}
+}
+
+func TestANewModelStartsANewProcess(t *testing.T) {
+	p, starts := fakeSession(t, false)
+	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1"})
+	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1", Resume: true, Model: "sonnet"})
+	if starts() != 2 {
+		t.Fatalf("%d starts, want 2", starts())
+	}
+}
+
+func TestAProcessThatEndedIsStartedAgain(t *testing.T) {
+	p, starts := fakeSession(t, true)
+	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1"})
+	time.Sleep(100 * time.Millisecond)
+	res := turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1", Resume: true})
+	if res.ExitCode != 0 || res.Text != "turn 1" || starts() != 2 {
+		t.Fatalf("result %+v after %d starts, want a new process to take the turn", res, starts())
+	}
+}
+
+func TestAnIdleProcessEnds(t *testing.T) {
+	old := idleFor
+	idleFor = 50 * time.Millisecond
+	t.Cleanup(func() { idleFor = old })
+	p, starts := fakeSession(t, false)
+	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1"})
+	time.Sleep(200 * time.Millisecond)
+	p.pool.mu.Lock()
+	n := len(p.pool.sessions)
+	p.pool.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("%d idle sessions after idleFor", n)
+	}
+	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1", Resume: true})
+	if starts() != 2 {
+		t.Fatalf("%d starts, want 2", starts())
 	}
 }

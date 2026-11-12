@@ -22,7 +22,9 @@
 
 ## Threads
 
-The coordinator usually opens threads. You can open one yourself:
+The coordinator usually opens threads. It has no tools to read files, run
+commands or change code: it manages, and threads do the work. You can open a
+thread yourself:
 
 ```
 :open <name> [folder|host:dir]    open a thread, locally or on an ssh host

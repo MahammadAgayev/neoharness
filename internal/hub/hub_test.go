@@ -241,7 +241,10 @@ func TestAQueuedMessageJoinsTheTranscriptWhenItsTurnStarts(t *testing.T) {
 	}
 }
 
-func TestCoordinatorHearsWhichThreadsEnded(t *testing.T) {
+// TestCoordinatorTurnsStartWithTheBoard: the coordinator sees every open
+// thread at the start of each turn, so it manages without asking for the
+// status. A thread that ended a turn since its last turn adds its reply.
+func TestCoordinatorTurnsStartWithTheBoard(t *testing.T) {
 	f := &fake{}
 	h := newHub(t, f)
 	pinned(t, h, "demo")
@@ -266,14 +269,39 @@ func TestCoordinatorHearsWhichThreadsEnded(t *testing.T) {
 	if len(coord) != 2 {
 		t.Fatalf("%d coordinator turns, want 2", len(coord))
 	}
-	if !strings.HasPrefix(coord[0], "Since your last turn, these threads ended a turn:\n- docs: idle. Last report: Done: usage written. Last reply: ok\n\n---\n\n") {
-		t.Errorf("the coordinator should hear that docs ended; got %q", coord[0])
+	if want := "Threads:\n- docs: idle, ended a turn. Report: Done: usage written. Reply: ok\n- lint: idle.\n\n---\n\n"; !strings.HasPrefix(coord[0], want) {
+		t.Errorf("first turn = %q, want it to start with %q", coord[0], want)
 	}
-	if strings.Contains(coord[0], "- lint:") {
-		t.Error("lint's own message says it ended; the note should not repeat it")
+	if want := "Threads:\n- docs: idle. Report: Done: usage written.\n- lint: idle.\n\n---\n\n"; !strings.HasPrefix(coord[1], want) {
+		t.Errorf("second turn = %q, want it to start with %q: a reply comes once", coord[1], want)
 	}
-	if strings.Contains(coord[1], "ended a turn") {
-		t.Errorf("the note comes once; got %q", coord[1])
+}
+
+// TestOnlyTheCoordinatorIsHarnessOnly: the coordinator manages, so it gets
+// only the harness tools; threads keep the agent's own.
+func TestOnlyTheCoordinatorIsHarnessOnly(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "lint", "work", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "lint", model.StateIdle)
+	_ = h.Send("demo", model.User, model.Coordinator, "hi")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	var coord, thread int
+	for _, r := range f.requests() {
+		switch coordinator := strings.Contains(r.SystemPrompt, "coordinator of the workspace"); {
+		case coordinator && r.HarnessOnly:
+			coord++
+		case !coordinator && !r.HarnessOnly:
+			thread++
+		default:
+			t.Errorf("coordinator %v, harness only %v", coordinator, r.HarnessOnly)
+		}
+	}
+	if coord == 0 || thread == 0 {
+		t.Fatalf("%d coordinator and %d thread turns", coord, thread)
 	}
 }
 

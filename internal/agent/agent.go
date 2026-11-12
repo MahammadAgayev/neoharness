@@ -90,6 +90,10 @@ type Request struct {
 	// it to the CLI's servers and asks it before a tool call the CLI may not
 	// make on its own, so a person can answer without a terminal.
 	Harness Harness
+	// HarnessOnly leaves the session only the harness tools: no files, no
+	// shell, none of the person's own tools. A session that manages others
+	// has no use for them, and their descriptions fill its context.
+	HarnessOnly bool
 	// Model and Effort choose the model and effort level; empty leaves the
 	// CLI's default.
 	Model  string

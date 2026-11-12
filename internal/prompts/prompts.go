@@ -100,30 +100,42 @@ func ArtifactEdited(name string, from, to int, diff string, sections []string, a
 	return head + " The change, as a unified diff:\n\n```diff\n" + diff + "\n```\n\nKeep their changes when you write it again."
 }
 
-// replyLimit is how much of a thread's last reply ThreadEnded keeps.
-const replyLimit = 300
+// Limits keep the board short: it starts every coordinator turn.
+const (
+	reportLimit = 150
+	replyLimit  = 200
+)
 
-// ThreadEnded is one line of ThreadsEnded: a thread, its state, its last
-// progress report, and the start of its last reply. A report can be older
-// than the reply, so both go in.
-func ThreadEnded(name, state, progress, reply string) string {
-	s := fmt.Sprintf("- %s: %s.", name, state)
-	if progress != "" {
-		s += " Last report: " + strings.TrimRight(progress, ".") + "."
+// BoardLine is one thread on the board: its state and last progress report,
+// and, when it ended a turn since the coordinator's last turn, the start of
+// its reply. A report can be older than the reply, so both go in.
+func BoardLine(name, state, progress, reply string, ended bool) string {
+	s := "- " + name + ": " + state
+	if ended {
+		s += ", ended a turn"
 	}
-	if reply = strings.Join(strings.Fields(reply), " "); reply != "" {
-		if r := []rune(reply); len(r) > replyLimit {
-			reply = string(r[:replyLimit]) + "…"
-		}
-		s += " Last reply: " + reply
+	s += "."
+	if progress = clip(progress, reportLimit); progress != "" {
+		s += " Report: " + strings.TrimRight(progress, ".") + "."
+	}
+	if reply = clip(reply, replyLimit); ended && reply != "" {
+		s += " Reply: " + reply
 	}
 	return s
 }
 
-// ThreadsEnded tells the coordinator which threads ended a turn since its
-// last turn, as their reports do not wake it.
-func ThreadsEnded(lines []string) string {
-	return "Since your last turn, these threads ended a turn:\n" + strings.Join(lines, "\n")
+// Board starts a coordinator turn with every open thread.
+func Board(lines []string) string {
+	return "Threads:\n" + strings.Join(lines, "\n")
+}
+
+// clip puts s on one line and cuts it to n runes.
+func clip(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > n {
+		s = string(r[:n]) + "…"
+	}
+	return s
 }
 
 func fill(tmpl string, in SessionInput) string {
