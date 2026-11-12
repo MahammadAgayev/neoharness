@@ -60,6 +60,14 @@ func (a *App) awayView(workspace string, v model.ThreadView) {
 	}
 }
 
+func (a *App) awayReply(workspace, thread, text string) {
+	if a.awayText == nil {
+		a.awayText = map[string]string{}
+	}
+	line, _, _ := strings.Cut(strings.TrimSpace(text), "\n")
+	a.awayText[workspace+"\x00"+thread] = line
+}
+
 // showNotice shows what a coordinator told the person with notify, from any
 // workspace. One the person must act on stays until they look.
 func (a *App) showNotice(workspace string, e model.Event) {
@@ -112,16 +120,24 @@ func (a *App) toastView(workspace string, old, v model.ThreadView, had bool) {
 	case v.State == model.StateResolved && old.State != model.StateResolved:
 		toast(Span{"✓", a.th.Muted}, "resolved", a.th.Muted, 4*time.Second)
 	case old.State == model.StateRunning && v.State == model.StateIdle:
-		// The chat of a workspace that is not open is not loaded; its
-		// thread's last report says where it is.
-		body := plain(v.Progress)
+		var body string
+		life := 4 * time.Second
 		if workspace == a.workspace {
 			body = plain(a.chat(v.Name).lastText())
+		} else {
+			// The chat of a workspace that is not open is not loaded, and
+			// you are less likely to be looking.
+			key := workspace + "\x00" + v.Name
+			body, life = plain(a.awayText[key]), 10*time.Second
+			delete(a.awayText, key)
+			if body == "" {
+				body = plain(v.Progress)
+			}
 		}
 		if body == "" {
 			body = "finished a turn"
 		}
-		toast(Span{"✓", a.th.Pine}, body, a.th.Pine, 4*time.Second)
+		toast(Span{"✓", a.th.Pine}, body, a.th.Pine, life)
 	}
 }
 

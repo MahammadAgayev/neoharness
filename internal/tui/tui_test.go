@@ -3073,6 +3073,34 @@ func TestThreadsOfOtherWorkspacesToast(t *testing.T) {
 	}
 }
 
+// The thread's last report can be a turn old; the reply says what it just did.
+func TestAFinishedTurnElsewhereToastsItsReply(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	view := func(state model.State) {
+		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "ops", Thread: "api",
+			View: &model.ThreadView{Workspace: "ops", Name: "api", Role: model.RoleThread, State: state, Progress: "plan sent"}})
+	}
+	text := func(s string) {
+		h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "ops", Thread: "api", Event: &model.Event{Kind: model.EventText, Text: s}})
+	}
+	view(model.StateRunning)
+	text("Looking at it.")
+	text("Partly. Renaming makes sense.\n\nWhy rename: ...")
+	view(model.StateIdle)
+	tt := h.a.toasts[len(h.a.toasts)-1]
+	if tt.body != "Partly. Renaming makes sense." || time.Until(tt.until) < 6*time.Second {
+		t.Fatalf("toast = %q for %v, want the reply's first line for longer than in the open workspace", tt.body, time.Until(tt.until))
+	}
+
+	// A turn with no reply falls back to the report, not the last turn's reply.
+	view(model.StateRunning)
+	view(model.StateIdle)
+	if tt := h.a.toasts[len(h.a.toasts)-1]; tt.body != "plan sent" {
+		t.Fatalf("toast = %q, want the report", tt.body)
+	}
+}
+
 func TestUTakesTheLastMessageBack(t *testing.T) {
 	h := start(t)
 	h.openDemo()

@@ -152,7 +152,8 @@ type App struct {
 	// away is the last view of each thread in the workspaces that are not
 	// open, by workspace and name, so their changes toast too.
 	away     map[string]model.ThreadView
-	menuShut int // the word whose menu <Esc> closed, or -1
+	awayText map[string]string // their reply in the running turn, first line
+	menuShut int               // the word whose menu <Esc> closed, or -1
 	// mouseDown is the left button's state, as the terminal sends a press
 	// and a release; lastClick is the last press, for double clicks.
 	mouseDown              bool
@@ -454,6 +455,8 @@ func (a *App) apply(u model.Update) {
 		}
 		if u.Workspace == a.workspace && u.Event != nil {
 			a.chat(u.Thread).AddEvent(*u.Event)
+		} else if u.Event != nil && u.Event.Kind == model.EventText {
+			a.awayReply(u.Workspace, u.Thread, u.Event.Text)
 		}
 	case model.UpdateArtifact:
 		if u.Workspace != a.workspace || u.Artifact == nil {

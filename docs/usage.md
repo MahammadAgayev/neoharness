@@ -82,7 +82,8 @@ card shows in the chat:
 Toasts show in the top right corner and name the workspace and the thread.
 `<leader>nc` dismisses them and `<leader>nh` shows their history.
 
-- By default every thread that ends a turn shows a toast.
+- By default every thread that ends a turn shows a toast with the first
+  line of its reply. One from a workspace that is not open stays longer.
 - Questions, permission requests and errors always come to you directly.
 - With `notify = "coordinator"` in the hub setup, the coordinator decides
   what reaches you instead. A thread that ends a turn wakes it; it sends
