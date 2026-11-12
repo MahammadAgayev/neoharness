@@ -57,6 +57,9 @@ thread yourself:
   end of the chat. `<CR>` on one sends it now: the running turn stops, and
   the queue goes in the next turn at once. `x` or `dd` on one takes it back.
 - `x` or `dd` on the last message while its turn runs stops the turn.
+- `u` with an empty prompt is Esc in Claude Code: your last message comes
+  back to the prompt to edit, while the agent has not answered it yet. A
+  queued one leaves the queue; a running turn stops.
 - `/` at the start completes slash commands. `@` completes threads and files.
 - `!<command>` at the start runs a shell command in the thread's folder. The
   output goes to Claude with your next message.

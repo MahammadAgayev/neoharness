@@ -3035,6 +3035,49 @@ func TestMouseClickFocusesAWindow(t *testing.T) {
 	}
 }
 
+// TestUTakesTheLastMessageBack: u with an empty prompt is Esc in Claude
+// Code. The person's last message comes back to the prompt while the agent
+// has not answered it: a queued one leaves the queue, and a running turn
+// stops.
+func TestUTakesTheLastMessageBack(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("<Esc>")
+	chat := h.a.chat(model.Coordinator)
+	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	chat.SetPending([]model.Event{{Kind: model.EventMessage, From: model.User, Text: "queued one", At: at}})
+	h.press("u")
+	if got := string(chat.Prompt.Text); got != "queued one" || strings.Join(h.hub.sent, "|") != "unqueue coordinator 2026-01-02T03:04:05Z" {
+		t.Fatalf("prompt %q, sent %q", got, h.hub.sent)
+	}
+
+	// A draft in the prompt is not overwritten: u undoes in it.
+	h.press("u")
+	if len(h.hub.sent) != 1 {
+		t.Fatalf("sent = %q, want nothing more with a draft", h.hub.sent)
+	}
+
+	chat.Prompt.Text, chat.Prompt.Cur, chat.Prompt.ed = nil, 0, nil
+	chat.SetPending(nil)
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &model.Event{Kind: model.EventMessage, From: model.User, Text: "fix it"}})
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: model.Coordinator,
+		View: &model.ThreadView{Workspace: "demo", Name: model.Coordinator, Role: model.RoleCoordinator, State: model.StateRunning}})
+	h.press("u")
+	if got := string(chat.Prompt.Text); got != "fix it" || h.hub.sent[len(h.hub.sent)-1] != "stop coordinator" {
+		t.Fatalf("prompt %q, sent %q", got, h.hub.sent)
+	}
+
+	// Answered: nothing to take back.
+	chat.Prompt.Text, chat.Prompt.Cur, chat.Prompt.ed = nil, 0, nil
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: model.Coordinator,
+		View: &model.ThreadView{Workspace: "demo", Name: model.Coordinator, Role: model.RoleCoordinator, State: model.StateIdle}})
+	n := len(h.hub.sent)
+	h.press("u")
+	if len(chat.Prompt.Text) != 0 || len(h.hub.sent) != n {
+		t.Fatalf("prompt %q, sent %q: an answered message stays", string(chat.Prompt.Text), h.hub.sent)
+	}
+}
+
 func TestMouseDoubleClickOnAQueuedMessageSendsItNow(t *testing.T) {
 	h := start(t)
 	h.openDemo()

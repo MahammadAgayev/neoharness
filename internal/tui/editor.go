@@ -1122,11 +1122,53 @@ func (a *App) cancelMessage(w *Window) {
 	}
 }
 
+// takeBack is u in a chat with an empty prompt, as Esc in Claude Code: the
+// person's last message comes back to the prompt while the agent has not
+// answered it. A queued one leaves the queue; one whose turn runs stops it.
+// It reports whether there was such a message.
+func (a *App) takeBack(w *Window) bool {
+	b := w.Buf
+	var text string
+	var err error
+	queued := -1
+	for i, e := range b.pending {
+		if e.From == model.User {
+			queued = i
+		}
+	}
+	last := b.lastMessage()
+	state := a.threads[b.Thread].State
+	switch {
+	case queued >= 0:
+		e := b.pending[queued]
+		text, err = e.Text, a.c.Unqueue(b.Workspace, b.Thread, e.At)
+	case last >= 0 && b.blocks[last].from == model.User && (state == model.StateRunning || state == model.StateWaiting):
+		text, err = b.blocks[last].text, a.c.Stop(b.Workspace, b.Thread)
+	default:
+		return false
+	}
+	if err != nil {
+		a.notify(err.Error(), a.th.Love)
+		return true
+	}
+	b.Prompt.Text, b.Prompt.ed = []rune(text), nil
+	b.Prompt.Cur = len(b.Prompt.Text)
+	if w.inPrompt {
+		a.leavePrompt(w)
+	}
+	a.enterPrompt(w)
+	w.Follow = true
+	return true
+}
+
 // editNormal runs a Normal key that changes the source: x D dd p P u <C-r>
 // J s S C cc r, and an operator (d c y) with a motion (w e b $ 0 ^ iw aw).
 func (a *App) editNormal(k string, n int) {
 	w := a.cur
 	e := w.Buf.Edit
+	if k == "u" && w.Buf.Kind == KindChat && len(w.Buf.Prompt.Text) == 0 && a.takeBack(w) {
+		return
+	}
 	if w.inPrompt {
 		a.onPrompt(func(e *Editor) (bool, bool) { return a.editOp(e, k, n) })
 		return
