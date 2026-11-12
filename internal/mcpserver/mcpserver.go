@@ -232,10 +232,7 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			return text("Resolved " + in.Name + "."), nil, nil
 		})
 
-	if !h.Notifies() {
-		return s
-	}
-	mcp.AddTool(s, &mcp.Tool{Name: "notify", Description: "Show the person a notice. Threads do not notify them; you decide what reaches them and when."},
+	mcp.AddTool(s, &mcp.Tool{Name: "notify", Description: "Show the person a notice, wherever they are in neoharness. With needs_you it stays until they look."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in notifyIn) (*mcp.CallToolResult, any, error) {
 			if err := h.Notify(p, me, in.Text, in.NeedsYou); err != nil {
 				return nil, nil, err

@@ -122,7 +122,8 @@ func TestUnknownTokenIsRejected(t *testing.T) {
 func TestCoordinatorOpensThreadsAndThreadsCannot(t *testing.T) {
 	h, srv := setup(t)
 	coord := connect(t, srv, token(t, model.Coordinator))
-	if names := toolNames(t, coord); !slices.Contains(names, "open_thread") || !slices.Contains(names, "resolve_thread") {
+	// notify too, so a coordinator can reach the person in any notify mode.
+	if names := toolNames(t, coord); !slices.Contains(names, "open_thread") || !slices.Contains(names, "resolve_thread") || !slices.Contains(names, "notify") {
 		t.Fatalf("coordinator tools = %v", names)
 	}
 	if out, isErr := call(t, coord, "open_thread", map[string]any{"name": "api-tests", "brief": "write tests"}); isErr {
@@ -134,7 +135,7 @@ func TestCoordinatorOpensThreadsAndThreadsCannot(t *testing.T) {
 
 	th := connect(t, srv, token(t, "api-tests"))
 	names := toolNames(t, th)
-	if slices.Contains(names, "open_thread") || slices.Contains(names, "resolve_thread") {
+	if slices.Contains(names, "open_thread") || slices.Contains(names, "resolve_thread") || slices.Contains(names, "notify") {
 		t.Fatalf("a thread must not get coordinator tools: %v", names)
 	}
 	out, _ := call(t, th, "whoami", nil)

@@ -86,12 +86,13 @@ workspace.
 - By default every thread that ends a turn shows a toast with the first
   line of its reply. One from a workspace that is not open stays longer.
 - Questions, permission requests and errors always come to you directly.
+- The coordinator can send you a notice when something needs you. Its
+  notices show in its chat as `↗ notified you: …`, and one that needs you
+  stays until you open the coordinator.
 - With `notify = "coordinator"` in the hub setup, the coordinator decides
   what reaches you instead. A thread that ends a turn wakes it; it sends
   corrections on its own, and notifies you when the work you asked for is
-  done or needs you. Tell it how often you want to hear from it. Its notices
-  show in its chat as `↗ notified you: …`, and one that needs you stays
-  until you open the coordinator.
+  done or needs you. Tell it how often you want to hear from it.
 - When a session's context passes 80%, its status line shows
   `ctx 82% · /compact` in red: every turn sends the whole context again, so
   `/compact` then saves tokens. `neoharness.o.compactwarn` changes the

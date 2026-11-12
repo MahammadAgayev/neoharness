@@ -64,7 +64,7 @@ so no thread can act for another thread or another workspace.
 | Who | Tools |
 |---|---|
 | all sessions | `whoami`, `workspace_status`, `send_message`, `report_progress`, `ask_user`, `wake_me`, `read_thread`, `write_artifact`, `read_artifact` |
-| coordinator only | `open_thread`, `resolve_thread`, and `notify` with `notify = "coordinator"` |
+| coordinator only | `open_thread`, `resolve_thread`, `notify` |
 | internal | `permission_prompt` |
 
 A turn ends when Claude's reply ends, and only a message starts the next

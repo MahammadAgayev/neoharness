@@ -1296,9 +1296,6 @@ func (h *Hub) report(ws *space) {
 	})
 }
 
-// Notifies says the coordinator is the one that notifies the person.
-func (h *Hub) Notifies() bool { return h.cfg.Notify }
-
 // Notify shows the person a notice from the coordinator. needsYou keeps it
 // on screen until they look.
 func (h *Hub) Notify(workspaceName, name, text string, needsYou bool) error {
