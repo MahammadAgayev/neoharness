@@ -3039,6 +3039,40 @@ func TestMouseClickFocusesAWindow(t *testing.T) {
 // Code. The person's last message comes back to the prompt while the agent
 // has not answered it: a queued one leaves the queue, and a running turn
 // stops.
+// TestThreadsOfOtherWorkspacesToast: a question, a permission request, a
+// finished turn or an error reaches you from any workspace, not only the
+// open one.
+func TestThreadsOfOtherWorkspacesToast(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	view := func(state model.State, waiting string) {
+		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "ops", Thread: "git-init",
+			View: &model.ThreadView{Workspace: "ops", Name: "git-init", Role: model.RoleThread, State: state, Waiting: waiting, Progress: "tests pass"}})
+	}
+	last := func() *toast {
+		if len(h.a.toasts) == 0 {
+			t.Fatal("no toast")
+		}
+		return h.a.toasts[len(h.a.toasts)-1]
+	}
+	view(model.StateRunning, "")
+	if len(h.a.toasts) != 0 {
+		t.Fatalf("toasts = %d: a thread seen first, running, is no news", len(h.a.toasts))
+	}
+	view(model.StateIdle, "")
+	if tt := last(); tt.workspace != "ops" || tt.thread != "git-init" || tt.body != "tests pass" {
+		t.Fatalf("finished toast = %+v", tt)
+	}
+	view(model.StateWaiting, "which branch?")
+	if tt := last(); tt.body != "asks: which branch?" || !tt.until.IsZero() {
+		t.Fatalf("waiting toast = %+v", tt)
+	}
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "ops", Thread: "git-init", Event: &model.Event{Kind: model.EventError, Text: "the agent failed"}})
+	if tt := last(); tt.workspace != "ops" || tt.body != "the agent failed" {
+		t.Fatalf("error toast = %+v", tt)
+	}
+}
+
 func TestUTakesTheLastMessageBack(t *testing.T) {
 	h := start(t)
 	h.openDemo()

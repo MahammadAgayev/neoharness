@@ -35,10 +35,29 @@ func (evRedraw) When() time.Time { return time.Now() }
 // toast shows a note about a thread, unless the thread is on screen: then
 // the person sees it already. life 0 keeps it while the thread waits.
 func (a *App) toast(thread string, glyph Span, body string, border tcell.Style, life time.Duration) {
-	if a.windowOf(thread) != nil {
+	a.toastIn(a.workspace, thread, glyph, body, border, life)
+}
+
+// toastIn is toast for a thread of any workspace.
+func (a *App) toastIn(workspace, thread string, glyph Span, body string, border tcell.Style, life time.Duration) {
+	if workspace == a.workspace && a.windowOf(thread) != nil {
 		return
 	}
-	a.addToast(&toast{workspace: a.workspace, thread: thread, glyph: glyph, body: body, border: border}, life)
+	a.addToast(&toast{workspace: workspace, thread: thread, glyph: glyph, body: body, border: border}, life)
+}
+
+// awayView toasts the change of a thread in a workspace that is not open.
+// Its first view since the start is news only when it waits.
+func (a *App) awayView(workspace string, v model.ThreadView) {
+	if a.away == nil {
+		a.away = map[string]model.ThreadView{}
+	}
+	key := workspace + "\x00" + v.Name
+	old, had := a.away[key]
+	a.away[key] = v
+	if had || v.State == model.StateWaiting {
+		a.toastView(workspace, old, v, true)
+	}
 }
 
 // showNotice shows what a coordinator told the person with notify, from any
@@ -73,11 +92,14 @@ func (a *App) addToast(t *toast, life time.Duration) {
 
 // toastView turns a thread's change into a toast. Of a quiet thread only a
 // question or a permission request does: the coordinator tells the rest.
-func (a *App) toastView(old, v model.ThreadView, had bool) {
+func (a *App) toastView(workspace string, old, v model.ThreadView, had bool) {
+	toast := func(glyph Span, body string, border tcell.Style, life time.Duration) {
+		a.toastIn(workspace, v.Name, glyph, body, border, life)
+	}
 	switch {
 	case v.Quiet && v.State != model.StateWaiting:
 	case !had && v.Role == model.RoleThread:
-		a.toast(v.Name, Span{"+", a.th.Iris}, "opened in "+shortHome(v.Location.String()), a.th.Iris, 4*time.Second)
+		toast(Span{"+", a.th.Iris}, "opened in "+shortHome(v.Location.String()), a.th.Iris, 4*time.Second)
 	case v.State == model.StateWaiting && old.State != model.StateWaiting:
 		body := "asks: " + plain(v.Waiting)
 		switch {
@@ -86,15 +108,20 @@ func (a *App) toastView(old, v model.ThreadView, had bool) {
 		case v.Waiting == "paused":
 			body = "paused · write to continue"
 		}
-		a.toast(v.Name, Span{"◆", a.th.Gold}, body, a.th.Gold, 0)
+		toast(Span{"◆", a.th.Gold}, body, a.th.Gold, 0)
 	case v.State == model.StateResolved && old.State != model.StateResolved:
-		a.toast(v.Name, Span{"✓", a.th.Muted}, "resolved", a.th.Muted, 4*time.Second)
+		toast(Span{"✓", a.th.Muted}, "resolved", a.th.Muted, 4*time.Second)
 	case old.State == model.StateRunning && v.State == model.StateIdle:
-		body := plain(a.chat(v.Name).lastText())
+		// The chat of a workspace that is not open is not loaded; its
+		// thread's last report says where it is.
+		body := plain(v.Progress)
+		if workspace == a.workspace {
+			body = plain(a.chat(v.Name).lastText())
+		}
 		if body == "" {
 			body = "finished a turn"
 		}
-		a.toast(v.Name, Span{"✓", a.th.Pine}, body, a.th.Pine, 4*time.Second)
+		toast(Span{"✓", a.th.Pine}, body, a.th.Pine, 4*time.Second)
 	}
 }
 

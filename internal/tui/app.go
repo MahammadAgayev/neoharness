@@ -138,17 +138,20 @@ type App struct {
 	cfgCmds     []string
 	// imaps are the Insert maps; iheld and ikeys are the keys that wait for
 	// one, iflush is set while they go in as typed.
-	imaps    map[string]func(int)
-	iheld    []*tcell.EventKey
-	ikeys    []string
-	iflush   bool
-	pending  []string
-	pendSeq  int
-	count    int
-	cmd      *cmdline
-	picker   *picker
-	menu     *menu
-	toasts   []*toast
+	imaps   map[string]func(int)
+	iheld   []*tcell.EventKey
+	ikeys   []string
+	iflush  bool
+	pending []string
+	pendSeq int
+	count   int
+	cmd     *cmdline
+	picker  *picker
+	menu    *menu
+	toasts  []*toast
+	// away is the last view of each thread in the workspaces that are not
+	// open, by workspace and name, so their changes toast too.
+	away     map[string]model.ThreadView
 	menuShut int // the word whose menu <Esc> closed, or -1
 	// mouseDown is the left button's state, as the terminal sends a press
 	// and a release; lastClick is the last press, for double clicks.
@@ -435,18 +438,22 @@ func (a *App) apply(u model.Update) {
 		}
 		a.renderWorkspaces()
 	case model.UpdateThread:
-		if u.Workspace == a.workspace && u.View != nil {
+		switch {
+		case u.View == nil:
+		case u.Workspace == a.workspace:
 			a.onView(*u.View)
+		default:
+			a.awayView(u.Workspace, *u.View)
 		}
 	case model.UpdateEvent:
 		if u.Event != nil && u.Event.Kind == model.EventNotice {
 			a.showNotice(u.Workspace, *u.Event)
 		}
+		if u.Event != nil && u.Event.Kind == model.EventError {
+			a.toastIn(u.Workspace, u.Thread, Span{"✗", a.th.Love}, u.Event.Text, a.th.Love, 8*time.Second)
+		}
 		if u.Workspace == a.workspace && u.Event != nil {
 			a.chat(u.Thread).AddEvent(*u.Event)
-			if u.Event.Kind == model.EventError {
-				a.toast(u.Thread, Span{"✗", a.th.Love}, u.Event.Text, a.th.Love, 8*time.Second)
-			}
 		}
 	case model.UpdateArtifact:
 		if u.Workspace != a.workspace || u.Artifact == nil {
@@ -633,7 +640,7 @@ func (a *App) onView(v model.ThreadView) {
 	if v.State == model.StateIdle || v.State == model.StateResolved {
 		a.chat(v.Name).settle(false)
 	}
-	a.toastView(old, v, had)
+	a.toastView(a.workspace, old, v, had)
 	a.renderThreads()
 }
 
@@ -700,6 +707,14 @@ func (a *App) openWorkspace(name string) {
 		return
 	}
 	a.saveLayout()
+	// The threads of the workspace left behind keep toasting from where
+	// they are now.
+	if a.away == nil {
+		a.away = map[string]model.ThreadView{}
+	}
+	for n, v := range a.threads {
+		a.away[a.workspace+"\x00"+n] = v
+	}
 	a.workspace = name
 	if l, ok := a.layouts[name]; ok {
 		a.threadsBuf = l.threads
