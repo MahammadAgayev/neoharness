@@ -742,7 +742,7 @@ func (h *Hub) command(ws *space, th *thread, text string) (bool, error) {
 		}
 		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Model " + f[1] + " from the next turn."})
 	case f[0] == "/effort" && len(f) == 2:
-		if e, ok := h.cfg.Factory(ws.p, *t).(agent.Efforter); ok && f[1] != "default" && !slices.Contains(e.Efforts(), f[1]) {
+		if e, ok := h.cfg.Factory(ws.p, *t).(agent.Efforter); ok && len(e.Efforts()) > 0 && f[1] != "default" && !slices.Contains(e.Efforts(), f[1]) {
 			return true, fmt.Errorf("effort is one of %s, or default", strings.Join(e.Efforts(), ", "))
 		}
 		t.Effort = f[1]

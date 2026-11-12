@@ -42,6 +42,28 @@ func New(command ...string) *Agent {
 	return &Agent{Command: command}
 }
 
+// Provider makes claude agents.
+type Provider struct {
+	command, remote []string
+}
+
+// NewProvider runs command on this machine and remote on ssh hosts. The
+// local command may be a wrapper that exists only here. Empty means `claude`.
+func NewProvider(command, remote []string) *Provider {
+	return &Provider{command: command, remote: remote}
+}
+
+func (p *Provider) Agent(host, dir string) agent.Agent {
+	if host == "" {
+		return New(p.command...)
+	}
+	a := New(p.remote...)
+	a.Host, a.Dir = host, dir
+	return a
+}
+
+func (p *Provider) Close() {}
+
 const maxStderr = 2000
 
 const (

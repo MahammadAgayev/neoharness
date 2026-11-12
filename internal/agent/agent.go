@@ -120,7 +120,8 @@ type Permission struct {
 }
 
 // Efforter is an Agent that names the effort levels it takes. The hub checks
-// /effort against them; without it, any level goes to the agent.
+// /effort against them; without it, or with no levels, any level goes to the
+// agent.
 type Efforter interface {
 	Efforts() []string
 }
@@ -164,4 +165,16 @@ type Agent interface {
 	// cancelled). A model that ran and failed is a Result with a non-zero
 	// ExitCode, not an error.
 	Run(ctx context.Context, req Request) (Result, error)
+}
+
+// Provider makes the agents of one kind, such as claude. It lives as long as
+// the hub, so it can keep things between turns that an Agent, made again for
+// each turn, cannot: a running process, for example.
+type Provider interface {
+	// Agent returns the agent for a session on this machine when host is
+	// empty, or on the ssh host in dir.
+	Agent(host, dir string) Agent
+	// Close ends what the provider keeps. The hub calls it after its turns
+	// ended.
+	Close()
 }

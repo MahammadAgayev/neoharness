@@ -5,10 +5,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/MahammadAgayev/neoharness/internal/agent"
@@ -51,6 +54,17 @@ func startHub() (stop func(), err error) {
 		logFile.Close()
 		return nil, err
 	}
+	ag, err := cfg.Selected()
+	if err != nil {
+		logFile.Close()
+		return nil, err
+	}
+	newProvider, ok := kinds[ag.Kind]
+	if !ok {
+		logFile.Close()
+		return nil, fmt.Errorf("agent %q: there is no kind %q; the kinds are %s", cfg.Agent, ag.Kind, strings.Join(slices.Sorted(maps.Keys(kinds)), ", "))
+	}
+	provider := newProvider(ag)
 	port := cmp.Or(cfg.MCPPort, defaultMCPPort)
 	mcpLn, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
@@ -78,8 +92,8 @@ func startHub() (stop func(), err error) {
 	}
 
 	tunnels := tunnel.New(port)
-	h, err := hub.New(hub.Config{MCPPort: port, Model: cfg.Claude.Model, Effort: cfg.Claude.Effort, ContextWindow: cfg.Claude.ContextWindow,
-		Factory: agentFactory(tunnels, cfg.Claude), Files: listFiles, Branch: gitBranch, Shell: runShell,
+	h, err := hub.New(hub.Config{MCPPort: port, Model: ag.Model, Effort: ag.Effort, ContextWindow: ag.ContextWindow,
+		Factory: agentFactory(tunnels, provider), Files: listFiles, Branch: gitBranch, Shell: runShell,
 		Notify: cfg.Notify != "threads"})
 	if err != nil {
 		apiLn.Close()
@@ -103,6 +117,7 @@ func startHub() (stop func(), err error) {
 		logf("hub stopping")
 		// Turns end first, so their final events still reach anyone listening.
 		h.Close()
+		provider.Close()
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = apiSrv.Shutdown(ctx)
@@ -113,23 +128,24 @@ func startHub() (stop func(), err error) {
 	}, nil
 }
 
-// agentFactory builds the claude adapter for a thread, opening the ssh tunnel
-// first for a remote one.
-func agentFactory(tunnels *tunnel.Manager, cfg tui.ClaudeSettings) hub.AgentFactory {
+// kinds are the agent adapters init.lua can name as an agent's kind.
+var kinds = map[string]func(tui.AgentSettings) agent.Provider{
+	"claude": func(s tui.AgentSettings) agent.Provider { return agentclaude.NewProvider(s.Command, s.RemoteCommand) },
+}
+
+// agentFactory builds a thread's agent, opening the ssh tunnel first for a
+// remote one.
+func agentFactory(tunnels *tunnel.Manager, provider agent.Provider) hub.AgentFactory {
 	return func(p workspace.Workspace, t workspace.Thread) agent.Agent {
 		if !t.Location.Remote() {
-			return agentclaude.New(cfg.Command...)
+			return provider.Agent("", "")
 		}
-		// The local command may be a wrapper that only exists here, so the
-		// remote one has its own setting.
-		a := agentclaude.New(cfg.RemoteCommand...)
-		a.Host, a.Dir = t.Location.Host, t.Location.Dir
-		return tunneled{Agent: a, tunnels: tunnels, host: t.Location.Host}
+		return tunneled{Agent: provider.Agent(t.Location.Host, t.Location.Dir), tunnels: tunnels, host: t.Location.Host}
 	}
 }
 
 type tunneled struct {
-	*agentclaude.Agent
+	agent.Agent
 	tunnels *tunnel.Manager
 	host    string
 }
@@ -139,6 +155,15 @@ func (t tunneled) Run(ctx context.Context, req agent.Request) (agent.Result, err
 		return agent.Result{}, err
 	}
 	return t.Agent.Run(ctx, req)
+}
+
+// Efforts passes the agent's levels on, so /effort checks them on remote
+// threads too.
+func (t tunneled) Efforts() []string {
+	if e, ok := t.Agent.(agent.Efforter); ok {
+		return e.Efforts()
+	}
+	return nil
 }
 
 // logUpdates writes a line per thread state change, so hub.log is a readable

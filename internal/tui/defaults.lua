@@ -17,15 +17,20 @@ neoharness.o.compactwarn = 80   -- past this context %, the status line says /co
 require("neoharness").setup({
   mcp_port = 47821,              -- remote hosts reach the hub through a tunnel on it
   notify = "coordinator",        -- the coordinator decides what reaches you; "threads": every thread does
+  agent = "claude",              -- the entry of agents below that sessions run
 })
 
--- The claude agent. /model and /effort change the model and effort per
--- thread; "default" goes back to these. Leave effort out for claude's own.
-require("neoharness.claude").setup({
-  command = "claude",            -- here; a wrapper works too
-  remote_command = "claude",     -- on ssh hosts
-  model = "claude-opus-5-5[1m]",
-  context_window = 400000,       -- ctx % counts up to this, though the model takes more
+-- Agents, by a name you choose. kind is the adapter that runs one; leave it
+-- out when the name is the kind. claude is the only kind for now. /model and
+-- /effort change the model and effort per thread; "default" goes back to
+-- these. Leave effort out for the agent's own.
+require("neoharness.agents").setup({
+  claude = {
+    command = "claude",          -- here; a wrapper works too
+    remote_command = "claude",   -- on ssh hosts
+    model = "claude-opus-5-5[1m]",
+    context_window = 400000,     -- ctx % counts up to this, though the model takes more
+  },
 })
 
 local map = neoharness.keymap.set

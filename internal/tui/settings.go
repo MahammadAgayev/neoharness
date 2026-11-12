@@ -10,23 +10,28 @@ import (
 )
 
 // HubSettings are the settings of the Lua config that the hub needs before
-// the TUI starts: require("neoharness").setup and, for the claude agent,
-// require("neoharness.claude").setup.
+// the TUI starts: require("neoharness").setup and
+// require("neoharness.agents").setup.
 type HubSettings struct {
 	MCPPort int
 	// Notify is "coordinator" when the coordinator decides what reaches the
 	// person, or "threads" when every thread notifies them itself.
 	Notify string
-	Claude ClaudeSettings
+	// Agent names the entry of Agents that sessions run.
+	Agent  string
+	Agents map[string]AgentSettings
 }
 
-// ClaudeSettings configure the claude agent.
-type ClaudeSettings struct {
-	// Command is the command words for claude here, RemoteCommand on ssh
-	// hosts. The local one may be a wrapper that exists only on this machine.
+// AgentSettings configure one agent.
+type AgentSettings struct {
+	// Kind is the adapter that runs it, such as "claude". Empty means the
+	// agent's name.
+	Kind string
+	// Command is the command words here, RemoteCommand on ssh hosts. The
+	// local one may be a wrapper that exists only on this machine.
 	Command, RemoteCommand []string
 	// Model and Effort are used when a thread has no /model or /effort of its
-	// own. Empty leaves claude's default.
+	// own. Empty leaves the agent's default.
 	Model, Effort string
 	// ContextWindow, when not 0, is the most of the model's window the
 	// context percentage counts.
@@ -34,9 +39,11 @@ type ClaudeSettings struct {
 }
 
 // setupModules gives a Lua state the modules: require("neoharness") is the
-// global neoharness table nh, and require("neoharness.claude") the agent's.
-// Each setup call sets only the keys it names, so init.lua changes what
-// defaults.lua set. set is nil in the TUI, which reads none of it.
+// global neoharness table nh, and require("neoharness.agents") the agents'.
+// require("neoharness.claude").setup(t) is agents.setup({ claude = t }), as
+// it was before there were agents. Each setup call sets only the keys it
+// names, so init.lua changes what defaults.lua set. set is nil in the TUI,
+// which reads none of it.
 func setupModules(L *lua.LState, nh *lua.LTable, set func(module, key string, v lua.LValue)) {
 	setup := func(name string) *lua.LFunction {
 		return L.NewFunction(func(l *lua.LState) int {
@@ -51,19 +58,21 @@ func setupModules(L *lua.LState, nh *lua.LTable, set func(module, key string, v 
 		l.Push(nh)
 		return 1
 	})
-	L.PreloadModule("neoharness.claude", func(l *lua.LState) int {
-		mod := l.NewTable()
-		l.SetField(mod, "setup", setup("neoharness.claude"))
-		l.Push(mod)
-		return 1
-	})
+	for _, name := range []string{"neoharness.agents", "neoharness.claude"} {
+		L.PreloadModule(name, func(l *lua.LState) int {
+			mod := l.NewTable()
+			l.SetField(mod, "setup", setup(name))
+			l.Push(mod)
+			return 1
+		})
+	}
 }
 
 // ReadHubSettings runs defaults.lua, then the init.lua at path if there is
 // one, for their setup calls. Maps, colors and commands do nothing here; the
 // TUI runs the same files again for those.
 func ReadHubSettings(path string) (HubSettings, error) {
-	var s HubSettings
+	s := HubSettings{Agents: map[string]AgentSettings{}}
 	L := lua.NewState()
 	defer L.Close()
 	words := func(v lua.LValue) []string {
@@ -78,8 +87,36 @@ func ReadHubSettings(path string) (HubSettings, error) {
 		}
 		return strings.TrimSpace(v.String())
 	}
+	agentKey := func(name, key string, v lua.LValue) {
+		a := s.Agents[name]
+		switch key {
+		case "kind":
+			a.Kind = text(v)
+		case "command":
+			a.Command = words(v)
+		case "remote_command":
+			a.RemoteCommand = words(v)
+		case "model":
+			a.Model = text(v)
+		case "effort":
+			a.Effort = text(v)
+		case "context_window":
+			if n, ok := v.(lua.LNumber); ok {
+				a.ContextWindow = int(n)
+			}
+		}
+		s.Agents[name] = a
+	}
 	nh := L.NewTable()
 	setupModules(L, nh, func(module, key string, v lua.LValue) {
+		switch module {
+		case "neoharness.claude":
+			agentKey("claude", key, v)
+		case "neoharness.agents":
+			if t, ok := v.(*lua.LTable); ok {
+				t.ForEach(func(k, v lua.LValue) { agentKey(key, k.String(), v) })
+			}
+		}
 		switch module + "." + key {
 		case "neoharness.mcp_port":
 			if n, ok := v.(lua.LNumber); ok {
@@ -87,18 +124,8 @@ func ReadHubSettings(path string) (HubSettings, error) {
 			}
 		case "neoharness.notify":
 			s.Notify = text(v)
-		case "neoharness.claude.command":
-			s.Claude.Command = words(v)
-		case "neoharness.claude.remote_command":
-			s.Claude.RemoteCommand = words(v)
-		case "neoharness.claude.model":
-			s.Claude.Model = text(v)
-		case "neoharness.claude.effort":
-			s.Claude.Effort = text(v)
-		case "neoharness.claude.context_window":
-			if n, ok := v.(lua.LNumber); ok {
-				s.Claude.ContextWindow = int(n)
-			}
+		case "neoharness.agent":
+			s.Agent = text(v)
 		}
 	})
 	noop := L.NewFunction(func(*lua.LState) int { return 0 })
@@ -125,4 +152,16 @@ func ReadHubSettings(path string) (HubSettings, error) {
 		}
 	}
 	return s, nil
+}
+
+// Selected is the agent that sessions run, with its kind filled in.
+func (s HubSettings) Selected() (AgentSettings, error) {
+	a, ok := s.Agents[s.Agent]
+	if !ok {
+		return AgentSettings{}, fmt.Errorf("agent %q is not in require(\"neoharness.agents\").setup", s.Agent)
+	}
+	if a.Kind == "" {
+		a.Kind = s.Agent
+	}
+	return a, nil
 }

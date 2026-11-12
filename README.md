@@ -73,7 +73,7 @@ context warning, the leader and all maps. To change one, copy its line to
 ```lua
 neoharness.o.leader = ","
 neoharness.keymap.set("n", "gt", ":threads<CR>")
-require("neoharness.claude").setup({ model = "sonnet" })
+require("neoharness.agents").setup({ claude = { model = "sonnet" } })
 ```
 
 ## Docs

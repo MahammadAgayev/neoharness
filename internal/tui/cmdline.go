@@ -613,7 +613,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<Plug>(neoharness-…)", "threads grep yank dismiss coordinator: actions with no ex command"),
 		row("neoharness.hl", "a color: Text Subtle Muted Iris Foam Gold Rose Pine Love Code …"),
 		row("neoharness.cmd", "run a command"),
-		row("require(\"neoharness\").setup", "hub settings; require(\"neoharness.claude\").setup: the agent's"),
+		row("require(\"neoharness\").setup", "hub settings; agent = the entry of require(\"neoharness.agents\").setup to run"),
 		row("notify = \"threads\"", "in the hub setup: every thread notifies you, not only the coordinator"),
 		{},
 		sec("edit an artifact"),

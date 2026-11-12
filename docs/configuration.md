@@ -45,26 +45,43 @@ Lua function. Actions with no ex command:
 The colors are Rose Pine Moon. The background is never painted, so
 transparent terminals stay transparent. `NO_COLOR` is supported.
 
-## The hub and the agent
+## The hub and the agents
 
-`setup()` calls set the hub and the claude agent. A call sets only the keys
-it names, so `init.lua` changes what `defaults.lua` set. They take effect
-when the hub starts: restart neoharness after a change.
+`setup()` calls set the hub and the agents. A call sets only the keys it
+names, so `init.lua` changes what `defaults.lua` set. They take effect when
+the hub starts: restart neoharness after a change.
 
 ```lua
 require("neoharness").setup({
   mcp_port = 47821,                     -- remote hosts reach the hub through a tunnel on it
   notify = "coordinator",               -- the coordinator decides what reaches you; "threads": every thread does
+  agent = "claude",                     -- the entry of agents that sessions run
 })
 
-require("neoharness.claude").setup({
-  command = "claude",                   -- here; a wrapper that adds credentials works too
-  remote_command = "claude",            -- on ssh hosts
-  model = "claude-opus-5-5[1m]",        -- for threads with no /model of their own
-  effort = "high",                      -- low, medium, high, xhigh, max; leave out for claude's own
-  context_window = 400000,              -- ctx % counts up to this; claude itself can go further
+require("neoharness.agents").setup({
+  claude = {
+    command = "claude",                 -- here; a wrapper that adds credentials works too
+    remote_command = "claude",          -- on ssh hosts
+    model = "claude-opus-5-5[1m]",      -- for threads with no /model of their own
+    effort = "high",                    -- low, medium, high, xhigh, max; leave out for claude's own
+    context_window = 400000,            -- ctx % counts up to this; claude itself can go further
+  },
 })
 ```
+
+An agent has a name you choose. `kind` is the adapter that runs it; leave it
+out when the name is the kind. `claude` is the only kind for now. To run a
+second setup of claude, add an entry and select it:
+
+```lua
+require("neoharness.agents").setup({
+  fast = { kind = "claude", model = "sonnet" },
+})
+require("neoharness").setup({ agent = "fast" })
+```
+
+`require("neoharness.claude").setup({...})` still works: it sets the entry
+`claude`.
 
 `/model` and `/effort` change a thread's model and effort; `/model default`
 goes back to the setting.

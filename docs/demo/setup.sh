@@ -7,7 +7,7 @@ rm -rf "$D"
 mkdir -p "$D/home" "$D/todo"
 cat > "$D/home/init.lua" <<'EOF'
 require("neoharness").setup({ mcp_port = 47998 })
-require("neoharness.claude").setup({ model = "haiku" })
+require("neoharness.agents").setup({ claude = { model = "haiku" } })
 EOF
 cat > "$D/todo/todo.py" <<'EOF'
 """A tiny todo list kept in todo.txt."""
