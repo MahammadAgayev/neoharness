@@ -54,7 +54,7 @@ the hub starts: restart neoharness after a change.
 ```lua
 require("neoharness").setup({
   mcp_port = 47821,                     -- remote hosts reach the hub through a tunnel on it
-  notify = "coordinator",               -- the coordinator decides what reaches you; "threads": every thread does
+  notify = "threads",                   -- every thread notifies you; "coordinator": the coordinator decides
   coordinator = "claude",               -- the agent coordinators run
   threads = "quick",                    -- the agent threads run; left out: the coordinator's
 })

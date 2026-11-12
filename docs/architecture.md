@@ -43,11 +43,11 @@ UUID.
   go into the next turn as one prompt.
 - Every coordinator turn starts with the board: each open thread, its state
   and last report, and the start of its reply if it ended a turn since the
-  coordinator's last one. With `notify = "coordinator"` (the default), a
+  coordinator's last one. With `notify = "coordinator"`, a
   thread's turn also wakes the coordinator, 15 seconds later so that threads
   that end close together make one turn. It decides with `notify` what
   reaches the person; these turns do not count toward the pause. With
-  `notify = "threads"`, only the person's messages wake it.
+  `notify = "threads"` (the default), only the person's messages wake it.
 - Send now stops the running turn, so the queue goes in the next turn at
   once.
 - From each turn the adapter reads the slash commands, the model, the

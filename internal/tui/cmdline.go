@@ -633,7 +633,7 @@ func (a *App) helpBuf() *Buffer {
 		row("neoharness.hl", "a color: Text Subtle Muted Iris Foam Gold Rose Pine Love Code …"),
 		row("neoharness.cmd", "run a command"),
 		row("require(\"neoharness\").setup", "hub settings; coordinator = and threads = name agents of require(\"neoharness.agents\").setup"),
-		row("notify = \"threads\"", "in the hub setup: every thread notifies you, not only the coordinator"),
+		row("notify = \"coordinator\"", "in the hub setup: the coordinator decides what reaches you, not every thread"),
 		{},
 		sec("edit an artifact"),
 		row("i a o", "write in the markdown; only the cursor's line shows raw"),

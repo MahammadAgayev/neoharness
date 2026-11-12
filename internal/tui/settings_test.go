@@ -16,7 +16,7 @@ func TestHubSettingsDefaultToOpus(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := s.Agents[s.Coordinator]
-	if s.MCPPort != 47821 || s.Coordinator != "claude" || s.Threads != "" || s.Kind("claude") != "claude" || a.Model != "claude-opus-5-5[1m]" || a.Effort != "" || a.ContextWindow != 400000 ||
+	if s.MCPPort != 47821 || s.Notify != "threads" || s.Coordinator != "claude" || s.Threads != "" || s.Kind("claude") != "claude" || a.Model != "claude-opus-5-5[1m]" || a.Effort != "" || a.ContextWindow != 400000 ||
 		!slices.Equal(a.Command, []string{"claude"}) || !slices.Equal(a.RemoteCommand, []string{"claude"}) {
 		t.Fatalf("settings = %+v", s)
 	}

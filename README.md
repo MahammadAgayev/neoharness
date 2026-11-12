@@ -8,8 +8,7 @@ A terminal UI for running several Claude Code sessions at once, with Vim keys.
 
 - **Workspace**: one piece of work, usually pinned to a folder. Each
   workspace has a coordinator: a Claude session you write to. It splits your
-  request into threads, sends them corrections, and tells you when the work
-  is done or needs you.
+  request into threads, and sends them corrections and your answers.
 - **Thread**: a separate Claude session that does one task, in a local
   folder or on another machine over ssh. The threads pane shows each thread
   and its state (running, waiting on you, idle). You can open any thread and
