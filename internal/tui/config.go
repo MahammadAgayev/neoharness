@@ -322,6 +322,7 @@ func (a *App) setHighlight(group string, opts *lua.LTable) error {
 		"Text": &th.Text, "Subtle": &th.Subtle, "Muted": &th.Muted,
 		"Iris": &th.Iris, "Rose": &th.Rose, "Foam": &th.Foam, "Gold": &th.Gold, "Pine": &th.Pine,
 		"Love": &th.Love, "CursorLine": &th.CursorLine, "Selection": &th.Selection,
+		"Search": &th.Search, "CurSearch": &th.CurSearch,
 		"Separator": &th.Separator, "Code": &th.Code,
 	}
 	st, ok := groups[group]

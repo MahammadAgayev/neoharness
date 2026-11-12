@@ -195,9 +195,11 @@ type App struct {
 	search   string
 	// searchBack says the last search was ?, so n goes up.
 	searchBack bool
-	notice     string
-	noticeSt   tcell.Style
-	offline    bool
+	// inc is the search being typed, as Vim's incsearch shows it.
+	inc      *incsearch
+	notice   string
+	noticeSt tcell.Style
+	offline  bool
 
 	cursorX int
 	cursorY int

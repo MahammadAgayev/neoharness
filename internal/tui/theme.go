@@ -22,15 +22,19 @@ var (
 	rpHLLow   = tcell.NewHexColor(0x2a283e)
 	rpHLMed   = tcell.NewHexColor(0x44415a)
 	rpOverlay = tcell.NewHexColor(0x393552)
+	rpBase    = tcell.NewHexColor(0x232136)
+	// rpGold at 20% over rpBase, as the Rose Pine Neovim theme blends Search.
+	rpGoldLow = tcell.NewHexColor(0x4d4143)
 )
 
 // Theme maps meaning to style. Background is never set except on the cursor
-// line and the visual selection, so a transparent terminal stays transparent.
+// line, the visual selection and search matches, so a transparent terminal stays transparent.
 type Theme struct {
 	Base, Text, Subtle, Muted tcell.Style
 	Iris, Rose, Foam, Gold    tcell.Style
 	Pine, Love                tcell.Style
 	CursorLine, Selection     tcell.Style
+	Search, CurSearch         tcell.Style
 	Separator                 tcell.Style
 	Bold, Italic, Code        tcell.Style
 	NoColor                   bool
@@ -44,6 +48,7 @@ func newTheme() *Theme {
 			Iris: base.Bold(true), Rose: base, Foam: base.Bold(true), Gold: base.Bold(true),
 			Pine: base, Love: base.Bold(true),
 			CursorLine: base.Reverse(true), Selection: base.Reverse(true),
+			Search: base.Reverse(true), CurSearch: base.Reverse(true),
 			Separator: base.Dim(true),
 			Bold:      base.Bold(true), Italic: base.Italic(true), Code: base,
 			NoColor: true,
@@ -63,6 +68,8 @@ func newTheme() *Theme {
 		Love:       fg(rpLove),
 		CursorLine: base.Background(rpHLLow),
 		Selection:  base.Background(rpHLMed),
+		Search:     base.Background(rpGoldLow),
+		CurSearch:  base.Background(rpGold).Foreground(rpBase),
 		Separator:  fg(rpOverlay),
 		Bold:       fg(rpText).Bold(true),
 		Italic:     fg(rpText).Italic(true),

@@ -28,7 +28,7 @@ neoharness.cmd("workspace demo")                          -- runs after start
 | `neoharness.o.compactwarn` | past this context percent, the status line shows `ctx 82% · /compact` in red: every turn sends the whole context again, so `/compact` then saves tokens |
 | `neoharness.keymap.set(mode, lhs, rhs, opts)` | `n`, `x` or `i`; `rhs` is keys, an ex command or a function; `{ remap = true }` |
 | `neoharness.keymap.del(mode, lhs)` | removes a map |
-| `neoharness.hl(group, opts)` | `Text Subtle Muted Iris Rose Foam Gold Pine Love Code Separator CursorLine Selection`; `fg`, `bg`, `bold`, `italic`, `underline` |
+| `neoharness.hl(group, opts)` | `Text Subtle Muted Iris Rose Foam Gold Pine Love Code Separator CursorLine Selection Search CurSearch`; `fg`, `bg`, `bold`, `italic`, `underline` |
 | `neoharness.cmd(line)` | runs an ex command |
 
 A map can run keys, an ex command, a `<Plug>(neoharness-...)` action, or a

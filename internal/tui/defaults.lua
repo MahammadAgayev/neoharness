@@ -91,3 +91,5 @@ hl("Code", { fg = "#ea9a97" })
 hl("Separator", { fg = "#393552" })
 hl("CursorLine", { bg = "#2a283e" })
 hl("Selection", { bg = "#44415a" })
+hl("Search", { bg = "#4d4143" })                       -- matches while you type / or ?
+hl("CurSearch", { fg = "#232136", bg = "#f6c177" })    -- the one the cursor goes to

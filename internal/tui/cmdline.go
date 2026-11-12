@@ -44,6 +44,50 @@ func (a *App) startCmd(prefix rune) {
 	a.cmd.hidx = len(a.cmd.history[prefix])
 	a.cmd.comp = nil
 	a.mode = modeCommand
+	a.inc = nil
+	if (prefix == '/' || prefix == '?') && a.cur != nil {
+		a.inc = &incsearch{w: a.cur, top: a.cur.Top, cur: a.cur.Cur, col: a.cur.Col, follow: a.cur.Follow}
+		if e := a.cur.Buf.Edit; e != nil {
+			a.inc.shown, a.inc.shownTo = e.shown, e.shownTo
+		}
+	}
+}
+
+// incsearch is where the window was when a search started, so <Esc> goes
+// back, and the pattern typed so far, which the window highlights.
+type incsearch struct {
+	w              *Window
+	top, cur, col  int
+	follow         bool
+	shown, shownTo int
+	re             *regexp.Regexp
+}
+
+func (a *App) incRestore() {
+	s := a.inc
+	s.w.Top, s.w.Cur, s.w.Col, s.w.Follow = s.top, s.cur, s.col, s.follow
+	if e := s.w.Buf.Edit; e != nil {
+		e.shown, e.shownTo = s.shown, s.shownTo
+		a.fromWindow(s.w)
+	}
+}
+
+// incSearch moves the window to the first match of what is typed so far.
+func (a *App) incSearch() {
+	s := a.inc
+	a.incRestore()
+	q := string(a.cmd.text)
+	s.re = nil
+	if q == "" {
+		return
+	}
+	d := 1
+	if a.cmd.prefix == '?' {
+		d = -1
+	}
+	if a.seek(q, d, false) {
+		s.re = vimPattern(q, strings.ToLower(q) == q)
+	}
 }
 
 func (a *App) cmdKey(k string, ev *tcell.EventKey) {
@@ -51,12 +95,29 @@ func (a *App) cmdKey(k string, ev *tcell.EventKey) {
 	if k != "<Tab>" && k != "<S-Tab>" {
 		c.comp = nil
 	}
+	if a.inc != nil {
+		defer func() {
+			switch {
+			case a.mode != modeCommand:
+				a.inc = nil
+			case a.inc != nil:
+				a.incSearch()
+			}
+		}()
+	}
 	switch k {
 	case "<Esc>", "<C-c>":
 		a.mode = modeNormal
+		if a.inc != nil {
+			a.incRestore()
+		}
 	case "<CR>":
 		line := strings.TrimSpace(string(c.text))
 		a.mode = modeNormal
+		// The search starts again from where it started, so n counts right.
+		if a.inc != nil {
+			a.incRestore()
+		}
 		if line == "" {
 			return
 		}
@@ -72,6 +133,9 @@ func (a *App) cmdKey(k string, ev *tcell.EventKey) {
 		if c.cur == 0 {
 			if len(c.text) == 0 {
 				a.mode = modeNormal
+				if a.inc != nil {
+					a.incRestore()
+				}
 			}
 			return
 		}
@@ -450,15 +514,22 @@ func (a *App) findNext(d int) {
 	}
 	// A search writes over the last message, as in Vim.
 	a.notice = ""
+	a.seek(a.search, d, true)
+}
+
+// seek moves the cursor to the next match of q, and with report says which
+// match it is, or that there is none.
+func (a *App) seek(q string, d int, report bool) bool {
 	w := a.cur
-	q := a.search
 	re := vimPattern(q, strings.ToLower(q) == q)
 	if e := w.Buf.Edit; e != nil {
 		a.fromWindow(w)
 		p, ok := e.find(re, d)
 		if !ok {
-			a.notify("pattern not found: "+q, a.th.Love)
-			return
+			if report {
+				a.notify("pattern not found: "+q, a.th.Love)
+			}
+			return false
 		}
 		wrapped := d > 0 && (p.line < e.Line || p.line == e.Line && p.off <= e.Off) ||
 			d < 0 && (p.line > e.Line || p.line == e.Line && p.off >= e.Off)
@@ -466,10 +537,12 @@ func (a *App) findNext(d int) {
 		for i, l := range e.Src {
 			rows[i] = string(l)
 		}
-		a.searchCount(re, rows, p.line, len(string(e.Src[p.line][:p.off])), wrapped)
+		if report {
+			a.searchCount(re, rows, p.line, len(string(e.Src[p.line][:p.off])), wrapped)
+		}
 		e.Line, e.Off, e.shown, e.shownTo = p.line, p.off, p.line, p.line
 		a.toWindow(w)
-		return
+		return true
 	}
 	lines := w.Buf.Lines(a.textWidth(w), a.th, a.spin)
 	for step := 1; step <= len(lines); step++ {
@@ -489,15 +562,20 @@ func (a *App) findNext(d int) {
 				for k, l := range lines {
 					rows[k] = l.Text()
 				}
-				a.searchCount(re, rows, i, j, d > 0 && i <= w.Cur || d < 0 && i >= w.Cur)
+				if report {
+					a.searchCount(re, rows, i, j, d > 0 && i <= w.Cur || d < 0 && i >= w.Cur)
+				}
 				a.moveTo(w, i)
 				w.Col = lines[i].prefixWidth() + width(text[:j])
 				w.Follow = false
-				return
+				return true
 			}
 		}
 	}
-	a.notify("pattern not found: "+q, a.th.Love)
+	if report {
+		a.notify("pattern not found: "+q, a.th.Love)
+	}
+	return false
 }
 
 // searchCount shows the search with which match the cursor is on and how
@@ -576,7 +654,7 @@ func (a *App) helpBuf() *Buffer {
 		row("]m [m", "next / previous message, or heading in an artifact"),
 		row("gO", "outline: pick a heading, or a message in a chat"),
 		row("ma  'a  `a  ''", "set a mark, go to its line, its place, back"),
-		row("/ ? n N", "search down, up, again, back"),
+		row("/ ? n N", "search down, up, again, back; matches light up as you type, <Esc> goes back"),
 		row("za  <leader>e", "open or close a turn's tool calls"),
 		row("v V  y  yy  <leader>y", "select and yank to the clipboard"),
 		row("v then iw a( i\" ip", "select a word, brackets, quotes, a paragraph"),

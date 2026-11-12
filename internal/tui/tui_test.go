@@ -638,6 +638,42 @@ func TestSearchAndYank(t *testing.T) {
 	}
 }
 
+func TestSearchHighlightsAsYouType(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("<Esc>", "gg")
+	start, logged := h.a.cur.Cur, len(h.a.messages)
+	h.press("/sess")
+	if h.a.mode != modeCommand || !strings.Contains(h.a.line(h.a.cur).Text(), "session") {
+		t.Fatalf("while typing, the cursor is on %q", h.a.line(h.a.cur).Text())
+	}
+	x, y := h.at("session store")
+	if _, _, st, _ := h.s.GetContent(x, y); st != overlay(st, h.a.th.CurSearch) {
+		t.Fatalf("the match under the cursor is not highlighted: %v", st)
+	}
+	if _, _, st, _ := h.s.GetContent(x+4, y); st == overlay(st, h.a.th.CurSearch) {
+		t.Fatal("the highlight goes past the match")
+	}
+	h.press("<Esc>")
+	if h.a.cur.Cur != start || len(h.a.messages) != logged {
+		t.Fatalf("<Esc> left the cursor on %d, want %d; %d messages logged while typing", h.a.cur.Cur, start, len(h.a.messages)-logged)
+	}
+	if _, _, st, _ := h.s.GetContent(x, y); st == overlay(st, h.a.th.CurSearch) {
+		t.Fatal("the highlight stays after <Esc>")
+	}
+
+	// From the prompt too: the search looks in the transcript.
+	h.press("G", "j")
+	if !h.a.cur.inPrompt {
+		t.Fatal("j below the transcript should go into the prompt")
+	}
+	h.press("/sess")
+	x, y = h.at("session store")
+	if _, _, st, _ := h.s.GetContent(x, y); st != overlay(st, h.a.th.CurSearch) {
+		t.Fatalf("from the prompt, the match is not the current one: %v", st)
+	}
+}
+
 func TestQuitClosesLastWindow(t *testing.T) {
 	h := start(t)
 	h.hub.workspaces[0].Counts = nil

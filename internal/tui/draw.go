@@ -181,6 +181,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		if w.Buf.Kind == KindChat {
 			spans = a.linkify(spans)
 		}
+		matches := a.matchCols(w, li, l)
 		for _, sp := range append(clone(l.Prefix), spans...) {
 			g := uniseg.NewGraphemes(sp.Text)
 			for g.Next() {
@@ -198,6 +199,15 @@ func (a *App) drawWindow(w *Window, focused bool) {
 				}
 				if li >= vl1 && li <= vl2 && a.selected(w, li, col, l) {
 					st = overlay(st, a.th.Selection)
+				}
+				for _, m := range matches {
+					switch {
+					case col < m[0] || col >= m[1]:
+					case li == w.Cur && m[0] == w.Col:
+						st = a.th.CurSearch
+					default:
+						st = overlay(st, a.th.Search)
+					}
 				}
 				rs := g.Runes()
 				a.s.SetContent(x, y, rs[0], rs[1:], st)
@@ -350,6 +360,22 @@ func (a *App) selected(w *Window, li, col int, l Line) bool {
 		return false
 	}
 	return true
+}
+
+// matchCols is where the search being typed matches row li of w, as
+// columns from the start of the row, its prefix included.
+func (a *App) matchCols(w *Window, li int, l Line) [][2]int {
+	if a.mode != modeCommand || a.inc == nil || a.inc.w != w || a.inc.re == nil {
+		return nil
+	}
+	text, pw := l.Text(), l.prefixWidth()
+	var cols [][2]int
+	for _, m := range a.inc.re.FindAllStringIndex(text, -1) {
+		if m[1] > m[0] {
+			cols = append(cols, [2]int{pw + width(text[:m[0]]), pw + width(text[:m[1]])})
+		}
+	}
+	return cols
 }
 
 func (a *App) drawLine(x, y, maxX int, l Line) int {
