@@ -38,7 +38,7 @@ thread yourself:
 | idle | nothing to do |
 | running | a turn runs, or messages wait in the queue |
 | waiting | a permission request, a question to you, or the loop guard paused it |
-| resolved | closed; `:reopen` brings it back |
+| resolved | closed; `:reopen` or a message from you brings it back |
 
 - The threads pane groups threads by state. Resolved threads fold into
   `▸ N resolved`.

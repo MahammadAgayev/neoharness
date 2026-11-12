@@ -89,9 +89,6 @@ func TestClientServerRoundTrip(t *testing.T) {
 	if err := c.Resolve("demo", "api-tests"); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Send("demo", "api-tests", "more"); err == nil {
-		t.Fatal("resolved thread should refuse")
-	}
 	if err := c.Reopen("demo", "api-tests"); err != nil {
 		t.Fatal(err)
 	}

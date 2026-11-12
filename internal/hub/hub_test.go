@@ -492,8 +492,8 @@ func TestResolveRefusesMessagesAndReopenKeepsSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	stateIs(t, h, "demo", "docs", model.StateResolved)
-	if err := h.Send("demo", model.User, "docs", "more"); err == nil {
-		t.Fatal("a resolved thread must refuse messages")
+	if err := h.Send("demo", model.Coordinator, "docs", "more"); err == nil {
+		t.Fatal("a resolved thread must refuse the coordinator's messages")
 	}
 	if err := h.Resolve("demo", model.User, model.Coordinator); err == nil {
 		t.Fatal("the coordinator cannot be resolved")
@@ -1785,5 +1785,30 @@ func TestOnlyTheCoordinatorNotifies(t *testing.T) {
 	evs, _ := h.Events("demo", model.Coordinator, 1)
 	if len(evs) != 1 || evs[0].Kind != model.EventNotice || !evs[0].NeedsYou || evs[0].Text != "tests are done" {
 		t.Fatalf("last event = %+v", evs)
+	}
+}
+
+// TestYourMessageReopensAResolvedThread: writing to a resolved thread means
+// you want it back; a thread or the coordinator still has to reopen it.
+func TestYourMessageReopensAResolvedThread(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "docs", "work", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	if err := h.Resolve("demo", model.Coordinator, "docs"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Send("demo", model.Coordinator, "docs", "more"); err == nil {
+		t.Fatal("the coordinator's message should not reopen it")
+	}
+	if err := h.Send("demo", model.User, "docs", "one more thing"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	if reqs := f.requests(); !strings.Contains(reqs[len(reqs)-1].Prompt, "one more thing") {
+		t.Fatalf("last prompt = %q, want your message to run", reqs[len(reqs)-1].Prompt)
 	}
 }

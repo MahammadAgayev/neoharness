@@ -754,7 +754,11 @@ func (h *Hub) send(workspaceName, from, to, text string) (*thread, error) {
 	if from == to {
 		return nil, errors.New("a thread cannot message itself")
 	}
-	if th.t.Resolved {
+	switch {
+	case th.t.Resolved && from == model.User:
+		// Writing to it says the person wants it back.
+		h.reopen(ws, th)
+	case th.t.Resolved:
 		return nil, fmt.Errorf("thread %q is resolved; reopen it first", to)
 	}
 	if from == model.User {
@@ -964,14 +968,17 @@ func (h *Hub) Reopen(workspaceName, name string) error {
 	if err != nil {
 		return err
 	}
-	if !th.t.Resolved {
-		return nil
+	if th.t.Resolved {
+		h.reopen(ws, th)
 	}
+	return nil
+}
+
+func (h *Hub) reopen(ws *space, th *thread) {
 	th.t.Resolved = false
 	th.t.AgentTurns = 0
 	h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Reopened"})
 	h.changed(ws, th)
-	return nil
 }
 
 // ReportProgress sets a thread's progress line.

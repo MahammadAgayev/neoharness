@@ -611,7 +611,7 @@ func (a *App) helpBuf() *Buffer {
 		row(":setlocal coordinator=<agent>", "this workspace's coordinator runs that agent; threads= for its threads"),
 		row(":setlocal threads& / threads?", "back to the config / show; no argument shows both"),
 		row(":open <name> [where]", "open a thread: folder or host:dir"),
-		row(":resolve  :reopen", "close or bring back a thread"),
+		row(":resolve  :reopen", "close or bring back a thread; your message to one brings it back too"),
 		row(":allow :always :deny", "answer a permission (:deny <reason>)"),
 		row(":b <name>  :ls", "switch buffer"),
 		row(":vsplit :split [name]", "split with a buffer"),
