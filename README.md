@@ -54,7 +54,7 @@ neoharness
 :new demo               the same, but pick the folder in a fuzzy picker
 i                       write to the coordinator; <CR> sends, <Esc> goes to Normal
 <C-w>l                  go to the threads pane; <CR> on a thread opens it, <C-o> goes back
-<leader>pt              pick a thread (<leader> is <Space>)
+<leader>pt              pick a thread, in any workspace (<leader> is <Space>)
 <leader>pa              pick an artifact
 :help                   every key and command
 ```

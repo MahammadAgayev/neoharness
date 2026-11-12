@@ -40,7 +40,8 @@ local hl = neoharness.hl
 -- Pickers.
 map("n", "<leader><leader>", ":ls<CR>")                -- buffers
 map("n", "<leader>pb", ":ls<CR>")
-map("n", "<leader>pt", "<Plug>(neoharness-threads)")
+map("n", "<leader>pt", "<Plug>(neoharness-threads)")       -- every workspace's
+map("n", "<leader>pl", "<Plug>(neoharness-local-threads)") -- this workspace's, resolved too
 map("n", "<leader>pa", ":artifacts<CR>")
 map("n", "<leader>pm", "<Plug>(neoharness-messages)")   -- notifications; a row opens its thread
 map("n", "<leader>ps", "<Plug>(neoharness-grep)")      -- search every transcript

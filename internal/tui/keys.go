@@ -290,12 +290,13 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"q":          func(int) { a.macroKey = "q" },
 		"@":          func(n int) { a.macroKey, a.macroN = "@", n },
 		// Actions with no ex command, for maps in defaults.lua and init.lua.
-		"<Plug>(neoharness-grep)":        func(int) { a.pickGrep() },
-		"<Plug>(neoharness-threads)":     func(int) { a.pickThreads() },
-		"<Plug>(neoharness-messages)":    func(int) { a.pickMessages() },
-		"<Plug>(neoharness-yank)":        func(int) { a.yank() },
-		"<Plug>(neoharness-dismiss)":     func(int) { a.toasts = nil },
-		"<Plug>(neoharness-coordinator)": func(int) { a.goCoordinator() },
+		"<Plug>(neoharness-grep)":          func(int) { a.pickGrep() },
+		"<Plug>(neoharness-threads)":       func(int) { a.pickThreads() },
+		"<Plug>(neoharness-local-threads)": func(int) { a.pickLocalThreads() },
+		"<Plug>(neoharness-messages)":      func(int) { a.pickMessages() },
+		"<Plug>(neoharness-yank)":          func(int) { a.yank() },
+		"<Plug>(neoharness-dismiss)":       func(int) { a.toasts = nil },
+		"<Plug>(neoharness-coordinator)":   func(int) { a.goCoordinator() },
 	}
 	for _, f := range []string{"f", "F", "t", "T"} {
 		binds[f] = func(n int) { a.finding, a.findN = f, n }

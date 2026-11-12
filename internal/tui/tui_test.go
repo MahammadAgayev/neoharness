@@ -1191,6 +1191,33 @@ func TestThreadsPicker(t *testing.T) {
 	}
 }
 
+func TestThreadsPickerSpansWorkspaces(t *testing.T) {
+	h := start(t)
+	h.hub.CreateWorkspace("ops", "")
+	h.hub.threads["ops"] = append(h.hub.threads["ops"],
+		model.ThreadView{Workspace: "ops", Name: "git-init", Role: model.RoleThread, State: model.StateIdle},
+		model.ThreadView{Workspace: "ops", Name: "old-work", Role: model.RoleThread, State: model.StateResolved})
+	h.a.loadWorkspaces()
+	h.openDemo()
+	h.press("<Esc>", "<Space>pt")
+	var labels []string
+	for _, it := range h.a.picker.items {
+		labels = append(labels, it.label)
+	}
+	if got := strings.Join(labels, "|"); got != "demo · coordinator|demo · auth-refactor|demo · api-tests|ops · coordinator|ops · git-init" {
+		t.Fatalf("threads picker = %s; want the open workspace first and no resolved thread", got)
+	}
+	h.press("git", "<CR>")
+	if h.a.workspace != "ops" || h.a.cur.Buf.Thread != "git-init" {
+		t.Fatalf("<CR> opened %q · %q", h.a.workspace, h.a.cur.Buf.Thread)
+	}
+
+	h.press("<Esc>", "<Space>pl")
+	if h.a.picker == nil || len(h.a.picker.items) != 3 || h.a.picker.items[2].label != "old-work" {
+		t.Fatalf("<leader>pl should list the open workspace's threads, resolved too: %+v", h.a.picker)
+	}
+}
+
 func TestMessagesPickerOpensTheThread(t *testing.T) {
 	h := start(t)
 	h.hub.CreateWorkspace("ops", "")

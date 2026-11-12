@@ -120,7 +120,8 @@ reports. They belong to the workspace, and every session can read them.
 | Keys | What |
 |---|---|
 | `<leader><leader>` `<leader>pb` | pick a buffer (threads and artifacts included) |
-| `<leader>pt` | pick a thread |
+| `<leader>pt` | pick a thread of any workspace (not resolved ones) |
+| `<leader>pl` | pick a thread of this workspace |
 | `<leader>pa` | pick an artifact |
 | `<leader>ps` | search every transcript |
 | `<leader>pm` | pick a notification and open its thread |

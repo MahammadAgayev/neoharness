@@ -37,6 +37,7 @@ Lua function. Actions with no ex command:
 | Action | Default |
 |---|---|
 | `<Plug>(neoharness-threads)` | `<leader>pt` |
+| `<Plug>(neoharness-local-threads)` | `<leader>pl` |
 | `<Plug>(neoharness-grep)` | `<leader>ps` |
 | `<Plug>(neoharness-messages)` | `<leader>pm` |
 | `<Plug>(neoharness-coordinator)` | `<leader>c` |

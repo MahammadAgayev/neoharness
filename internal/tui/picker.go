@@ -170,32 +170,81 @@ func (a *App) threadItems() []pickItem {
 		if !ok {
 			continue
 		}
-		detail := stateLabel(v.State)
-		switch {
-		case v.Permission != nil:
-			detail += " · permission · " + v.Permission.Tool
-		case v.Waiting == "paused":
-			detail += " · paused"
-		case v.State == model.StateWaiting:
-			detail += " · question"
-		}
-		if (v.State == model.StateRunning || v.State == model.StateWaiting) && !v.Since.IsZero() {
-			detail += " · " + elapsed(time.Since(v.Since))
-		}
-		if w := wakeLabel(v); w != "" {
-			detail += " · " + w
-		}
-		name := n
-		items = append(items, pickItem{
-			glyph:  Span{stateGlyph(v.State), a.th.state(v.State)},
-			label:  n,
-			detail: detail,
-			run:    func() { a.showThread(name) },
-			split:  func(vert bool) { a.splitThread(name, vert) },
-			thread: name,
-		})
+		it := a.threadItem(v)
+		it.label = n
+		items = append(items, it)
 	}
 	return items
+}
+
+// allThreadItems are the open threads of every workspace, the open
+// workspace's first, so one pick goes to a thread anywhere.
+func (a *App) allThreadItems() []pickItem {
+	var items []pickItem
+	add := func(ws string, v model.ThreadView, it pickItem) {
+		if v.State == model.StateResolved {
+			return
+		}
+		it.label = ws + " · " + v.Name
+		items = append(items, it)
+	}
+	for _, it := range a.threadItems() {
+		add(a.workspace, a.threads[it.thread], it)
+	}
+	for _, p := range a.workspaces {
+		if p.Name == a.workspace {
+			continue
+		}
+		vs, err := a.c.Threads(p.Name)
+		if err != nil {
+			continue
+		}
+		for _, v := range vs {
+			ws, name := p.Name, v.Name
+			add(ws, v, pickItem{glyph: Span{stateGlyph(v.State), a.th.state(v.State)}, detail: a.threadDetail(v), run: func() { a.goThread(ws, name) }})
+		}
+	}
+	return items
+}
+
+// goThread shows a thread of any workspace.
+func (a *App) goThread(workspace, thread string) {
+	if workspace != a.workspace {
+		a.openWorkspace(workspace)
+	}
+	if workspace == a.workspace {
+		a.showThread(thread)
+	}
+}
+
+func (a *App) threadItem(v model.ThreadView) pickItem {
+	name := v.Name
+	return pickItem{
+		glyph:  Span{stateGlyph(v.State), a.th.state(v.State)},
+		detail: a.threadDetail(v),
+		run:    func() { a.showThread(name) },
+		split:  func(vert bool) { a.splitThread(name, vert) },
+		thread: name,
+	}
+}
+
+func (a *App) threadDetail(v model.ThreadView) string {
+	detail := stateLabel(v.State)
+	switch {
+	case v.Permission != nil:
+		detail += " · permission · " + v.Permission.Tool
+	case v.Waiting == "paused":
+		detail += " · paused"
+	case v.State == model.StateWaiting:
+		detail += " · question"
+	}
+	if (v.State == model.StateRunning || v.State == model.StateWaiting) && !v.Since.IsZero() {
+		detail += " · " + elapsed(time.Since(v.Since))
+	}
+	if w := wakeLabel(v); w != "" {
+		detail += " · " + w
+	}
+	return detail
 }
 
 func (a *App) artifactItems() []pickItem {
@@ -230,12 +279,17 @@ func (a *App) pickArtifacts() {
 }
 
 func (a *App) pickThreads() {
+	items := a.allThreadItems()
+	a.openPicker("threads", func(q string) []pickItem { return fuzzy(items, q) })
+}
+
+func (a *App) pickLocalThreads() {
 	if a.workspace == "" {
 		a.notify("open a workspace first", a.th.Muted)
 		return
 	}
 	items := a.threadItems()
-	a.openPicker("threads", func(q string) []pickItem { return fuzzy(items, q) })
+	a.openPicker("threads in "+a.workspace, func(q string) []pickItem { return fuzzy(items, q) })
 }
 
 // pickMessages lists the toasts, newest first; a row opens its thread, in
@@ -247,14 +301,7 @@ func (a *App) pickMessages() {
 			glyph:  t.glyph,
 			label:  t.workspace + " · " + t.thread,
 			detail: t.at.Format("15:04") + "  " + t.body,
-			run: func() {
-				if t.workspace != a.workspace {
-					a.openWorkspace(t.workspace)
-				}
-				if t.workspace == a.workspace {
-					a.showThread(t.thread)
-				}
-			},
+			run:    func() { a.goThread(t.workspace, t.thread) },
 		})
 	}
 	if len(items) == 0 {
