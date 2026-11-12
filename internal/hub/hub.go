@@ -691,9 +691,17 @@ func (h *Hub) SendNow(workspaceName, to, text string) error {
 	var th *thread
 	var err error
 	if strings.TrimSpace(text) == "" {
-		_, th, err = h.lookup(workspaceName, to)
+		var ws *space
+		ws, th, err = h.lookup(workspaceName, to)
 		if err == nil && len(th.t.Queue) == 0 {
 			err = errors.New("nothing is queued")
+		}
+		// Stopped with messages queued: nothing runs, so they start now.
+		if err == nil && th.t.Paused {
+			th.t.Paused = false
+			h.changed(ws, th)
+			h.kick(ws, th)
+			return nil
 		}
 	} else {
 		th, err = h.send(workspaceName, model.User, to, text)
@@ -709,7 +717,7 @@ func (h *Hub) SendNow(workspaceName, to, text string) error {
 }
 
 // Stop stops a thread's running turn. Messages Claude did not see yet are
-// dropped, not sent again.
+// dropped, not sent again, and those queued behind it wait for the person.
 func (h *Hub) Stop(workspaceName, name string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -739,6 +747,9 @@ func (h *Hub) Unqueue(workspaceName, name string, at time.Time) error {
 		return errors.New("that message is no longer queued")
 	}
 	th.t.Queue = slices.Delete(th.t.Queue, i, i+1)
+	if len(th.t.Queue) == 0 {
+		th.t.Paused = false
+	}
 	h.changed(ws, th)
 	return nil
 }
@@ -1565,6 +1576,11 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		// Claude never saw these messages, so they go again with the new one.
 		if !th.started && !th.dropped {
 			t.Queue = append(batch, t.Queue...)
+		}
+		// A stop means stop: what the person queued behind the turn waits
+		// for them.
+		if th.dropped && len(t.Queue) > 0 {
+			t.Paused = true
 		}
 	case ctx.Err() == context.DeadlineExceeded:
 		h.event(ws, th, model.Event{Kind: model.EventError, Text: fmt.Sprintf("the turn ran past %s and was stopped", h.cfg.TurnTimeout)})

@@ -56,7 +56,9 @@ thread yourself:
 - Messages sent while a thread is busy wait in a queue and show dim at the
   end of the chat. `<CR>` on one sends it now: the running turn stops, and
   the queue goes in the next turn at once. `x` or `dd` on one takes it back.
-- `x` or `dd` on the last message while its turn runs stops the turn.
+- `x` or `dd` on the last message while its turn runs stops the turn. The
+  queue then waits, and the thread shows `paused`, until you write or press
+  `<CR>` on a queued message.
 - `u` with an empty prompt is Esc in Claude Code: your last message comes
   back to the prompt to edit, while the agent has not answered it yet. A
   queued one leaves the queue; a running turn stops.

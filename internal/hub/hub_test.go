@@ -1643,6 +1643,73 @@ func TestUnqueueAndStop(t *testing.T) {
 	}
 }
 
+// A stop means stop: what you queued behind the turn waits for you.
+func TestStopHoldsTheQueue(t *testing.T) {
+	f := &fake{}
+	gate := make(chan struct{})
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		select {
+		case <-gate:
+			return agent.Result{Text: "ok"}
+		case <-ctx.Done():
+			return agent.Result{ExitCode: -1}
+		}
+	}
+	h := newHub(t, f)
+	t.Cleanup(func() { close(gate) })
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "long task")
+	stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
+	_ = h.Send("demo", model.User, model.Coordinator, "next one")
+	if err := h.Stop("demo", model.Coordinator); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
+	if v := view(t, h, "demo", model.Coordinator); v.Waiting != "paused" || len(v.Pending) != 1 {
+		t.Fatalf("after stop: waiting %q, pending %+v", v.Waiting, v.Pending)
+	}
+	if n := len(f.requests()); n != 1 {
+		t.Fatalf("%d turns; the queued message must wait", n)
+	}
+
+	// A thread's message does not start it again; <CR> on the queued one does.
+	_ = h.Send("demo", "docs", model.Coordinator, "fyi")
+	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
+	if err := h.SendNow("demo", model.Coordinator, ""); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the queued message to go", func() bool { return len(f.requests()) == 2 })
+	if p := f.requests()[1].Prompt; !strings.Contains(p, "next one") || !strings.Contains(p, "fyi") {
+		t.Fatalf("prompt = %q", p)
+	}
+}
+
+// Taking back the last queued message leaves nothing to wait for.
+func TestUnqueueAfterStopEndsThePause(t *testing.T) {
+	f := &fake{}
+	gate := make(chan struct{})
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		select {
+		case <-gate:
+			return agent.Result{Text: "ok"}
+		case <-ctx.Done():
+			return agent.Result{ExitCode: -1}
+		}
+	}
+	h := newHub(t, f)
+	t.Cleanup(func() { close(gate) })
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "long task")
+	stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
+	_ = h.Send("demo", model.User, model.Coordinator, "next one")
+	_ = h.Stop("demo", model.Coordinator)
+	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
+	if err := h.Unqueue("demo", model.Coordinator, view(t, h, "demo", model.Coordinator).Pending[0].At); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+}
+
 func TestWakeMeStartsATurn(t *testing.T) {
 	f := &fake{}
 	h := newHub(t, f)

@@ -49,7 +49,8 @@ UUID.
   reaches the person; these turns do not count toward the pause. With
   `notify = "threads"` (the default), only the person's messages wake it.
 - Send now stops the running turn, so the queue goes in the next turn at
-  once.
+  once. Stop leaves the queue waiting: the thread is paused until the
+  person writes or sends now.
 - From each turn the adapter reads the slash commands, the model, the
   context size and the cost. The status line shows them.
 - Under `-p`, `/clear`, `/compact`, `/model`, `/effort` and `!` do not work
