@@ -1155,6 +1155,30 @@ func TestThreadsPicker(t *testing.T) {
 	}
 }
 
+func TestMessagesPickerOpensTheThread(t *testing.T) {
+	h := start(t)
+	h.hub.CreateWorkspace("ops", "")
+	h.hub.threads["ops"] = append(h.hub.threads["ops"], model.ThreadView{Workspace: "ops", Name: "git-init", Role: model.RoleThread, State: model.StateIdle})
+	h.a.loadWorkspaces()
+	h.openDemo()
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "ops", Thread: "git-init", Event: &model.Event{Kind: model.EventError, Text: "the agent failed"}})
+	h.a.notify("already at oldest change", h.a.th.Muted)
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: "api-tests", Event: &model.Event{Kind: model.EventError, Text: "tests failed"}})
+
+	h.press("<Esc>", "<Space>pm")
+	if h.a.picker == nil || h.a.picker.title != "messages" {
+		t.Fatal("<leader>pm should open the messages picker")
+	}
+	// Newest first, and only the messages of a thread.
+	if items := h.a.picker.items; len(items) != 2 || items[0].label != "demo · api-tests" || items[1].label != "ops · git-init" || !strings.HasSuffix(items[1].detail, "  the agent failed") {
+		t.Fatalf("items = %+v", items)
+	}
+	h.press("ops", "<CR>")
+	if h.a.workspace != "ops" || h.a.cur.Buf.Thread != "git-init" {
+		t.Fatalf("<CR> opened %q · %q", h.a.workspace, h.a.cur.Buf.Thread)
+	}
+}
+
 func TestToastsForThreadsOffScreen(t *testing.T) {
 	h := start(t)
 	h.openDemo()

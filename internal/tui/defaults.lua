@@ -42,6 +42,7 @@ map("n", "<leader><leader>", ":ls<CR>")                -- buffers
 map("n", "<leader>pb", ":ls<CR>")
 map("n", "<leader>pt", "<Plug>(neoharness-threads)")
 map("n", "<leader>pa", ":artifacts<CR>")
+map("n", "<leader>pm", "<Plug>(neoharness-messages)")   -- notifications; a row opens its thread
 map("n", "<leader>ps", "<Plug>(neoharness-grep)")      -- search every transcript
 map("n", "<leader>w", ":workspace<CR>")
 

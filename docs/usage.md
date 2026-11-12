@@ -81,6 +81,8 @@ card shows in the chat:
 
 Toasts show in the top right corner and name the workspace and the thread.
 `<leader>nc` dismisses them and `<leader>nh` shows their history.
+`<leader>pm` picks one, newest first, and opens its thread, in any
+workspace.
 
 - By default every thread that ends a turn shows a toast with the first
   line of its reply. One from a workspace that is not open stays longer.
@@ -121,6 +123,7 @@ reports. They belong to the workspace, and every session can read them.
 | `<leader>pt` | pick a thread |
 | `<leader>pa` | pick an artifact |
 | `<leader>ps` | search every transcript |
+| `<leader>pm` | pick a notification and open its thread |
 | `<leader>w` | pick a workspace |
 | `<leader>pv` | workspaces screen |
 | `<leader>t` | threads pane |

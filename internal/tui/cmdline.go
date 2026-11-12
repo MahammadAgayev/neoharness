@@ -599,6 +599,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<leader>pt  <leader>w", "pick a thread, a workspace"),
 		row("<leader>pa", "pick an artifact; <CR> on a name in a chat opens it too"),
 		row("<leader>ps", "search every transcript"),
+		row("<leader>pm", "pick a notification; it opens its thread, in any workspace"),
 		row("<leader>pv", "workspaces screen"),
 		row("<leader>t", "threads pane on the right; <CR> opens a thread in it"),
 		row("<leader>c", "coordinator"),

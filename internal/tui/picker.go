@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -235,6 +236,32 @@ func (a *App) pickThreads() {
 	}
 	items := a.threadItems()
 	a.openPicker("threads", func(q string) []pickItem { return fuzzy(items, q) })
+}
+
+// pickMessages lists the toasts, newest first; a row opens its thread, in
+// its workspace.
+func (a *App) pickMessages() {
+	var items []pickItem
+	for _, t := range slices.Backward(a.toasted) {
+		items = append(items, pickItem{
+			glyph:  t.glyph,
+			label:  t.workspace + " · " + t.thread,
+			detail: t.at.Format("15:04") + "  " + t.body,
+			run: func() {
+				if t.workspace != a.workspace {
+					a.openWorkspace(t.workspace)
+				}
+				if t.workspace == a.workspace {
+					a.showThread(t.thread)
+				}
+			},
+		})
+	}
+	if len(items) == 0 {
+		a.notify("no messages yet", a.th.Muted)
+		return
+	}
+	a.openPicker("messages", func(q string) []pickItem { return fuzzy(items, q) })
 }
 
 func (a *App) pickWorkspaces() {

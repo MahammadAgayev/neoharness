@@ -26,6 +26,7 @@ type toast struct {
 	// notice is the coordinator's: with until zero it stays until the
 	// coordinator is on screen.
 	notice bool
+	at     time.Time
 }
 
 type evRedraw struct{}
@@ -95,6 +96,8 @@ func (a *App) addToast(t *toast, life time.Duration) {
 		}
 	}
 	a.toasts = append(a.toasts, t)
+	t.at = time.Now()
+	a.toasted = append(a.toasted, t)
 	a.logMessage(t.workspace+" · "+thread+": "+t.body, t.glyph.Style)
 }
 

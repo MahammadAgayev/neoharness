@@ -119,6 +119,8 @@ type App struct {
 	layouts     map[string]layout
 	messagesBuf *Buffer
 	messages    []Line
+	// toasted is every toast since the start, for the messages picker.
+	toasted []*toast
 
 	mode  mode
 	binds map[string]func(int)

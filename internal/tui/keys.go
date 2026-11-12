@@ -292,6 +292,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		// Actions with no ex command, for maps in defaults.lua and init.lua.
 		"<Plug>(neoharness-grep)":        func(int) { a.pickGrep() },
 		"<Plug>(neoharness-threads)":     func(int) { a.pickThreads() },
+		"<Plug>(neoharness-messages)":    func(int) { a.pickMessages() },
 		"<Plug>(neoharness-yank)":        func(int) { a.yank() },
 		"<Plug>(neoharness-dismiss)":     func(int) { a.toasts = nil },
 		"<Plug>(neoharness-coordinator)": func(int) { a.goCoordinator() },
