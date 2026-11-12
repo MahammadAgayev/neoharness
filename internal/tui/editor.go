@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -1105,23 +1104,6 @@ func (a *App) saveEdit(force bool) bool {
 	return true
 }
 
-// cancelMessage is x or dd on a message in a chat: a queued one is taken
-// back, and on the last message the turn that runs it stops.
-func (a *App) cancelMessage(w *Window) {
-	b, l := w.Buf, a.line(w)
-	var err error
-	switch at, queued := strings.CutPrefix(l.Item, queuedRow); {
-	case queued:
-		t, _ := time.Parse(time.RFC3339Nano, at)
-		err = a.c.Unqueue(b.Workspace, b.Thread, t)
-	case l.Block == b.lastMessage() && a.threads[b.Thread].State == model.StateRunning:
-		err = a.c.Stop(b.Workspace, b.Thread)
-	}
-	if err != nil {
-		a.notify(err.Error(), a.th.Love)
-	}
-}
-
 // takeBack is u in a chat with an empty prompt, as Esc in Claude Code: the
 // person's last message comes back to the prompt while the agent has not
 // answered it. A queued one leaves the queue; one whose turn runs stops it.
@@ -1174,10 +1156,6 @@ func (a *App) editNormal(k string, n int) {
 		return
 	}
 	if e == nil {
-		if (k == "x" || k == "dd") && w.Buf.Kind == KindChat {
-			a.cancelMessage(w)
-			return
-		}
 		if k == "x" && w.Buf.Kind == KindWorkspaces {
 			if item := a.line(w).Item; item != "" {
 				a.askDeleteWorkspace(item)
