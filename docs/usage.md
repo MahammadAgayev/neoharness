@@ -5,6 +5,8 @@
 ```
 :new <name> [folder]    create a workspace and open it; no folder opens a folder picker
 :folder [folder]        change the folder; the coordinator moves and keeps its conversation
+:setlocal coordinator=<agent>   this workspace's coordinator runs that agent; threads=<agent> for its threads
+:setlocal threads&      back to the config; threads? shows it; no argument shows both
 :workspace [name]       switch; no name opens the picker (also <leader>w)
 :workspaces             the workspaces screen (also <leader>pv)
 :restore [name]         bring back a deleted workspace; no name lists them

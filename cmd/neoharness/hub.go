@@ -54,17 +54,28 @@ func startHub() (stop func(), err error) {
 		logFile.Close()
 		return nil, err
 	}
-	ag, err := cfg.Selected()
-	if err != nil {
+	if err := cfg.Check(); err != nil {
 		logFile.Close()
 		return nil, err
 	}
-	newProvider, ok := kinds[ag.Kind]
-	if !ok {
-		logFile.Close()
-		return nil, fmt.Errorf("agent %q: there is no kind %q; the kinds are %s", cfg.Agent, ag.Kind, strings.Join(slices.Sorted(maps.Keys(kinds)), ", "))
+	// One provider per kind, which all agents of that kind share. Every agent
+	// is ready, so :setlocal can choose any of them.
+	providers := map[string]agent.Provider{}
+	agents := map[string]configured{}
+	defaults := map[string]hub.Defaults{}
+	for name, a := range cfg.Agents {
+		kind := cfg.Kind(name)
+		newProvider, ok := kinds[kind]
+		if !ok {
+			logFile.Close()
+			return nil, fmt.Errorf("agent %q: there is no kind %q; the kinds are %s", name, kind, strings.Join(slices.Sorted(maps.Keys(kinds)), ", "))
+		}
+		if providers[kind] == nil {
+			providers[kind] = newProvider()
+		}
+		agents[name] = configured{provider: providers[kind], settings: agent.Settings{Command: a.Command, RemoteCommand: a.RemoteCommand}}
+		defaults[name] = hub.Defaults{Model: a.Model, Effort: a.Effort, ContextWindow: a.ContextWindow}
 	}
-	provider := newProvider(ag)
 	port := cmp.Or(cfg.MCPPort, defaultMCPPort)
 	mcpLn, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
@@ -92,8 +103,8 @@ func startHub() (stop func(), err error) {
 	}
 
 	tunnels := tunnel.New(port)
-	h, err := hub.New(hub.Config{MCPPort: port, Model: ag.Model, Effort: ag.Effort, ContextWindow: ag.ContextWindow,
-		Factory: agentFactory(tunnels, provider), Files: listFiles, Branch: gitBranch, Shell: runShell,
+	h, err := hub.New(hub.Config{MCPPort: port, Agents: defaults, Coordinator: cfg.Coordinator, Threads: cfg.Threads,
+		Factory: agentFactory(tunnels, agents), Files: listFiles, Branch: gitBranch, Shell: runShell,
 		Notify: cfg.Notify != "threads"})
 	if err != nil {
 		apiLn.Close()
@@ -117,7 +128,9 @@ func startHub() (stop func(), err error) {
 		logf("hub stopping")
 		// Turns end first, so their final events still reach anyone listening.
 		h.Close()
-		provider.Close()
+		for _, p := range providers {
+			p.Close()
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = apiSrv.Shutdown(ctx)
@@ -129,18 +142,25 @@ func startHub() (stop func(), err error) {
 }
 
 // kinds are the agent adapters init.lua can name as an agent's kind.
-var kinds = map[string]func(tui.AgentSettings) agent.Provider{
-	"claude": func(s tui.AgentSettings) agent.Provider { return agentclaude.NewProvider(s.Command, s.RemoteCommand) },
+var kinds = map[string]func() agent.Provider{
+	"claude": func() agent.Provider { return agentclaude.NewProvider() },
+}
+
+// configured is an agent of the config: its kind's provider and what it runs.
+type configured struct {
+	provider agent.Provider
+	settings agent.Settings
 }
 
 // agentFactory builds a thread's agent, opening the ssh tunnel first for a
 // remote one.
-func agentFactory(tunnels *tunnel.Manager, provider agent.Provider) hub.AgentFactory {
-	return func(p workspace.Workspace, t workspace.Thread) agent.Agent {
+func agentFactory(tunnels *tunnel.Manager, agents map[string]configured) hub.AgentFactory {
+	return func(name string, p workspace.Workspace, t workspace.Thread) agent.Agent {
+		c := agents[name]
 		if !t.Location.Remote() {
-			return provider.Agent("", "")
+			return c.provider.Agent(c.settings, "", "")
 		}
-		return tunneled{Agent: provider.Agent(t.Location.Host, t.Location.Dir), tunnels: tunnels, host: t.Location.Host}
+		return tunneled{Agent: c.provider.Agent(c.settings, t.Location.Host, t.Location.Dir), tunnels: tunnels, host: t.Location.Host}
 	}
 }
 

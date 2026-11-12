@@ -17,9 +17,10 @@ type HubSettings struct {
 	// Notify is "coordinator" when the coordinator decides what reaches the
 	// person, or "threads" when every thread notifies them itself.
 	Notify string
-	// Agent names the entry of Agents that sessions run.
-	Agent  string
-	Agents map[string]AgentSettings
+	// Coordinator names the entry of Agents that coordinators run, and
+	// Threads the one threads run; empty runs the coordinator's.
+	Coordinator, Threads string
+	Agents               map[string]AgentSettings
 }
 
 // AgentSettings configure one agent.
@@ -124,8 +125,10 @@ func ReadHubSettings(path string) (HubSettings, error) {
 			}
 		case "neoharness.notify":
 			s.Notify = text(v)
-		case "neoharness.agent":
-			s.Agent = text(v)
+		case "neoharness.coordinator":
+			s.Coordinator = text(v)
+		case "neoharness.threads":
+			s.Threads = text(v)
 		}
 	})
 	noop := L.NewFunction(func(*lua.LState) int { return 0 })
@@ -154,14 +157,24 @@ func ReadHubSettings(path string) (HubSettings, error) {
 	return s, nil
 }
 
-// Selected is the agent that sessions run, with its kind filled in.
-func (s HubSettings) Selected() (AgentSettings, error) {
-	a, ok := s.Agents[s.Agent]
-	if !ok {
-		return AgentSettings{}, fmt.Errorf("agent %q is not in require(\"neoharness.agents\").setup", s.Agent)
+// Kind is the adapter of the named agent: its kind, or else its name.
+func (s HubSettings) Kind(name string) string {
+	if k := s.Agents[name].Kind; k != "" {
+		return k
 	}
-	if a.Kind == "" {
-		a.Kind = s.Agent
+	return name
+}
+
+// Check says what is wrong with the agents the roles name.
+func (s HubSettings) Check() error {
+	names := []string{s.Coordinator}
+	if s.Threads != "" {
+		names = append(names, s.Threads)
 	}
-	return a, nil
+	for _, n := range names {
+		if _, ok := s.Agents[n]; !ok {
+			return fmt.Errorf("agent %q is not in require(\"neoharness.agents\").setup", n)
+		}
+	}
+	return nil
 }

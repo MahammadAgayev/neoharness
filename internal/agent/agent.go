@@ -171,13 +171,21 @@ type Agent interface {
 	Run(ctx context.Context, req Request) (Result, error)
 }
 
+// Settings are what one agent of the config runs.
+type Settings struct {
+	// Command runs the agent on this machine, RemoteCommand on ssh hosts.
+	// The local one may be a wrapper that exists only here.
+	Command, RemoteCommand []string
+}
+
 // Provider makes the agents of one kind, such as claude. It lives as long as
 // the hub, so it can keep things between turns that an Agent, made again for
-// each turn, cannot: a running process, for example.
+// each turn, cannot: a running process, for example. All agents of the kind
+// share it, so a session that changes agent finds what the old one kept.
 type Provider interface {
-	// Agent returns the agent for a session on this machine when host is
-	// empty, or on the ssh host in dir.
-	Agent(host, dir string) Agent
+	// Agent returns the agent with settings s for a session on this machine
+	// when host is empty, or on the ssh host in dir.
+	Agent(s Settings, host, dir string) Agent
 	// Close ends what the provider keeps. The hub calls it after its turns
 	// ended.
 	Close()

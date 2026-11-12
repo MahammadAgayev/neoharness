@@ -31,7 +31,7 @@ type cmdline struct {
 
 var commands = []string{
 	"allow", "always", "artifacts", "b", "buffer", "deny", "diffoff", "edit", "folder", "help", "ls", "messages", "new",
-	"only", "open", "q", "qa", "quit", "reopen", "resolve", "restore", "split", "threads",
+	"only", "open", "q", "qa", "quit", "reopen", "resolve", "restore", "setlocal", "split", "threads",
 	"vsplit", "workspace", "workspaces", "wq",
 }
 
@@ -149,6 +149,18 @@ func (a *App) complete(forward bool) {
 			pool = folderCompletions(word)
 		} else {
 			switch fields[0] {
+			case "setlocal":
+				for _, o := range localOptions {
+					for _, v := range a.workspaces {
+						if v.Name != a.workspace {
+							continue
+						}
+						for _, n := range v.AgentNames {
+							pool = append(pool, o+"="+n)
+						}
+					}
+					pool = append(pool, o+"&")
+				}
 			case "workspace", "new":
 				for _, p := range a.workspaces {
 					pool = append(pool, p.Name)
@@ -312,6 +324,10 @@ func (a *App) exec(line string) {
 		a.createWorkspace(arg(0), arg(1))
 	case "restore":
 		a.restoreWorkspace(arg(0))
+	case "setlocal":
+		if needWorkspace() {
+			a.setLocal(args)
+		}
 	case "folder":
 		if !needWorkspace() {
 			return
@@ -591,6 +607,8 @@ func (a *App) helpBuf() *Buffer {
 		sec("commands"),
 		row(":new <name> [folder]", "create a workspace; no folder opens a folder picker"),
 		row(":folder [folder]", "change the workspace's folder; no folder opens a folder picker"),
+		row(":setlocal coordinator=<agent>", "this workspace's coordinator runs that agent; threads= for its threads"),
+		row(":setlocal threads& / threads?", "back to the config / show; no argument shows both"),
 		row(":open <name> [where]", "open a thread: folder or host:dir"),
 		row(":resolve  :reopen", "close or bring back a thread"),
 		row(":allow :always :deny", "answer a permission (:deny <reason>)"),
@@ -613,7 +631,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<Plug>(neoharness-…)", "threads grep yank dismiss coordinator: actions with no ex command"),
 		row("neoharness.hl", "a color: Text Subtle Muted Iris Foam Gold Rose Pine Love Code …"),
 		row("neoharness.cmd", "run a command"),
-		row("require(\"neoharness\").setup", "hub settings; agent = the entry of require(\"neoharness.agents\").setup to run"),
+		row("require(\"neoharness\").setup", "hub settings; coordinator = and threads = name agents of require(\"neoharness.agents\").setup"),
 		row("notify = \"threads\"", "in the hub setup: every thread notifies you, not only the coordinator"),
 		{},
 		sec("edit an artifact"),

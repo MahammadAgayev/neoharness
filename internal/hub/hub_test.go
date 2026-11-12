@@ -50,7 +50,7 @@ func (f *fake) requests() []agent.Request {
 func newHub(t *testing.T, f *fake) *Hub {
 	t.Helper()
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
-	h, err := New(Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }, MCPPort: 4242})
+	h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }, MCPPort: 4242})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -554,7 +554,7 @@ func TestRestartReportsTheLostTurn(t *testing.T) {
 		return agent.Result{Text: "ok"}
 	}
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
-	factory := func(workspace.Workspace, workspace.Thread) agent.Agent { return f }
+	factory := func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }
 	h, err := New(Config{Factory: factory})
 	if err != nil {
 		t.Fatal(err)
@@ -596,7 +596,7 @@ func TestCloseDoesNotWaitForeverOnAStuckTurn(t *testing.T) {
 		return agent.Result{}
 	}}
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
-	h, err := New(Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }})
+	h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -639,7 +639,7 @@ func TestCompletionsCommandsFilesAndThreads(t *testing.T) {
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
 	lists := 0
 	h, err := New(Config{
-		Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f },
+		Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f },
 		Files: func(ctx context.Context, l model.Location, query string) ([]string, bool, error) {
 			lists++
 			return []string{"main.go", "go.mod"}, false, nil
@@ -767,7 +767,7 @@ func TestStatusUsageAddsCostAndReadsBranch(t *testing.T) {
 	}
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
 	h, err := New(Config{
-		Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f },
+		Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f },
 		Branch:  func(context.Context, model.Location) (string, error) { return "main", nil },
 	})
 	if err != nil {
@@ -839,7 +839,7 @@ func TestClearStartsANewSession(t *testing.T) {
 func TestModelAndEffortLastAcrossTurns(t *testing.T) {
 	h := newHub(t, &fake{})
 	f := &fake{}
-	h.cfg.Factory = func(workspace.Workspace, workspace.Thread) agent.Agent { return f }
+	h.cfg.Factory = func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }
 	pinned(t, h, "demo")
 	if err := h.Send("demo", model.User, model.Coordinator, "/effort huge"); err == nil {
 		t.Fatal("an unknown effort should fail")
@@ -950,7 +950,7 @@ func TestDeleteWorkspaceHidesItAndStopsTurns(t *testing.T) {
 	if len(ws) != 1 || !ws[0].Deleted {
 		t.Fatalf("the data should stay, marked deleted: %+v", ws)
 	}
-	h2, err := New(Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }})
+	h2, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1032,7 +1032,7 @@ func TestShellCommandRunsWithoutATurnAndReachesTheNextPrompt(t *testing.T) {
 	var ran []string
 	var mu sync.Mutex
 	h, err := New(Config{
-		Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f },
+		Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f },
 		MCPPort: 4242,
 		Shell: func(ctx context.Context, l model.Location, command string) (string, int, error) {
 			mu.Lock()
@@ -1377,7 +1377,8 @@ func TestALostConversationStartsANewOne(t *testing.T) {
 func TestConfigModelUnlessTheThreadChoseOne(t *testing.T) {
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
 	f := &fake{}
-	h, err := New(Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }, MCPPort: 4242, Model: "opus"})
+	h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }, MCPPort: 4242,
+		Agents: map[string]Defaults{"big": {Model: "opus"}, "small": {Model: "haiku"}}, Coordinator: "big", Threads: "small"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1396,6 +1397,83 @@ func TestConfigModelUnlessTheThreadChoseOne(t *testing.T) {
 	if !slices.Equal(got, []string{"opus", "sonnet", "opus"}) {
 		t.Fatalf("models = %q", got)
 	}
+	if err := h.OpenThread("demo", model.Coordinator, "lint", "work", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "lint", model.StateIdle)
+	if reqs := f.requests(); reqs[len(reqs)-1].Model != "haiku" {
+		t.Fatalf("thread model = %q, want the threads' setting", reqs[len(reqs)-1].Model)
+	}
+}
+
+// TestThreadsRunTheCoordinatorsAgentUnlessSet: an agent for the threads is
+// optional, in the config and in a workspace.
+func TestThreadsRunTheCoordinatorsAgentUnlessSet(t *testing.T) {
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	var names []string
+	var mu sync.Mutex
+	f := &fake{}
+	h, err := New(Config{MCPPort: 4242, Coordinator: "big",
+		Agents: map[string]Defaults{"big": {Model: "opus"}, "small": {Model: "haiku"}},
+		Factory: func(name string, _ workspace.Workspace, _ workspace.Thread) agent.Agent {
+			mu.Lock()
+			defer mu.Unlock()
+			names = append(names, name)
+			return f
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	pinned(t, h, "demo")
+	last := func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return names[len(names)-1]
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "lint", "work", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "lint", model.StateIdle)
+	if got := last(); got != "big" {
+		t.Fatalf("thread ran %q, want the coordinator's agent", got)
+	}
+
+	// The workspace's coordinator agent reaches its threads too.
+	if err := h.SetLocal("demo", "coordinator", "small"); err != nil {
+		t.Fatal(err)
+	}
+	_ = h.Send("demo", model.User, "lint", "again")
+	stateIs(t, h, "demo", "lint", model.StateIdle)
+	if got := last(); got != "small" {
+		t.Fatalf("thread ran %q after :setlocal coordinator=small", got)
+	}
+	if err := h.SetLocal("demo", "threads", "big"); err != nil {
+		t.Fatal(err)
+	}
+	_ = h.Send("demo", model.User, model.Coordinator, "hi")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if got := last(); got != "small" {
+		t.Fatalf("coordinator ran %q, want small", got)
+	}
+	_ = h.Send("demo", model.User, "lint", "more")
+	stateIs(t, h, "demo", "lint", model.StateIdle)
+	if got := last(); got != "big" {
+		t.Fatalf("thread ran %q after :setlocal threads=big", got)
+	}
+	if reqs := f.requests(); reqs[len(reqs)-1].Model != "opus" {
+		t.Fatalf("model %q, want big's", reqs[len(reqs)-1].Model)
+	}
+
+	if err := h.SetLocal("demo", "threads", "nope"); err == nil {
+		t.Error("an agent not in the config should be refused")
+	}
+	if err := h.SetLocal("demo", "coordinator", ""); err != nil {
+		t.Fatal(err)
+	}
+	if v := h.Workspaces()[0]; v.CoordinatorAgent != "big" || v.ThreadsAgent != "big" || !slices.Equal(v.AgentNames, []string{"big", "small"}) {
+		t.Fatalf("view = %+v", v)
+	}
 }
 
 func TestContextWindowSettingCapsTheModelsWindow(t *testing.T) {
@@ -1408,7 +1486,8 @@ func TestContextWindowSettingCapsTheModelsWindow(t *testing.T) {
 		f := &fake{script: func(ctx context.Context, req agent.Request) agent.Result {
 			return agent.Result{Text: "ok", Context: 1000, ContextWindow: tc.model}
 		}}
-		h, err := New(Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }, MCPPort: 4242, ContextWindow: tc.setting})
+		h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }, MCPPort: 4242,
+			Agents: map[string]Defaults{"claude": {ContextWindow: tc.setting}}, Coordinator: "claude"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1466,7 +1545,7 @@ func TestCompletionsSearchAFolderWithManyFiles(t *testing.T) {
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
 	var queries []string
 	h, err := New(Config{
-		Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return &fake{} },
+		Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return &fake{} },
 		Files: func(ctx context.Context, l model.Location, query string) ([]string, bool, error) {
 			queries = append(queries, query)
 			if query == "" {
@@ -1604,7 +1683,7 @@ func TestWakeMeStartsATurn(t *testing.T) {
 func TestAWakeUpOutlivesARestart(t *testing.T) {
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
 	f := &fake{}
-	cfg := Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }}
+	cfg := Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }}
 	h, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -1633,7 +1712,7 @@ func TestThreadTurnsWakeTheCoordinator(t *testing.T) {
 	reportDelay = 50 * time.Millisecond
 	f := &fake{}
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
-	h, err := New(Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return f }, Notify: true})
+	h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }, Notify: true})
 	if err != nil {
 		t.Fatal(err)
 	}

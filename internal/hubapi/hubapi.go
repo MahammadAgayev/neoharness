@@ -56,6 +56,10 @@ type (
 	Folder struct {
 		Pin string `json:"pin"`
 	}
+	Local struct {
+		Option string `json:"option"`
+		Agent  string `json:"agent"`
+	}
 	ArtifactText struct {
 		Artifact model.Artifact `json:"artifact"`
 		Text     string         `json:"text"`
@@ -111,6 +115,10 @@ func (c *Client) CreateWorkspace(name, pin string) error {
 
 func (c *Client) SetFolder(name, pin string) error {
 	return c.do("PUT", "/workspaces/"+esc(name)+"/folder", Folder{Pin: pin}, nil)
+}
+
+func (c *Client) SetLocal(name, option, agent string) error {
+	return c.do("PUT", "/workspaces/"+esc(name)+"/local", Local{Option: option, Agent: agent}, nil)
 }
 
 func (c *Client) DeleteWorkspace(name string) error {

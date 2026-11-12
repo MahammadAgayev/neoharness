@@ -39,7 +39,7 @@ func (w withToken) RoundTrip(r *http.Request) (*http.Response, error) {
 func setup(t *testing.T) (*hub.Hub, *httptest.Server) {
 	t.Helper()
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
-	h, err := hub.New(hub.Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return idle{} }})
+	h, err := hub.New(hub.Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return idle{} }})
 	if err != nil {
 		t.Fatal(err)
 	}

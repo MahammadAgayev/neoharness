@@ -28,7 +28,7 @@ func (echo) Run(ctx context.Context, req agent.Request) (agent.Result, error) {
 func TestClientServerRoundTrip(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("NEOHARNESS_HOME", home)
-	h, err := hub.New(hub.Config{Factory: func(workspace.Workspace, workspace.Thread) agent.Agent { return echo{} }})
+	h, err := hub.New(hub.Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return echo{} }})
 	if err != nil {
 		t.Fatal(err)
 	}

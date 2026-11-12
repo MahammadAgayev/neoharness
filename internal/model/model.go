@@ -227,6 +227,11 @@ type WorkspaceView struct {
 	Coordinator State `json:"coordinator,omitempty"`
 	// Activity is turns per hour over the last 24 hours, oldest first.
 	Activity []int `json:"activity"`
+	// CoordinatorAgent and ThreadsAgent are the agents the roles run here,
+	// and AgentNames every agent of the config, for :setlocal.
+	CoordinatorAgent string   `json:"coordinatorAgent,omitempty"`
+	ThreadsAgent     string   `json:"threadsAgent,omitempty"`
+	AgentNames       []string `json:"agentNames,omitempty"`
 }
 
 // UpdateKind classifies a hub update.

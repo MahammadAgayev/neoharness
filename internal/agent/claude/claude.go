@@ -44,20 +44,17 @@ func New(command ...string) *Agent {
 // Provider makes claude agents. Its agents share the sessions it keeps
 // between turns.
 type Provider struct {
-	command, remote []string
-	pool            *pool
+	pool *pool
 }
 
-// NewProvider runs command on this machine and remote on ssh hosts. The
-// local command may be a wrapper that exists only here. Empty means `claude`.
-func NewProvider(command, remote []string) *Provider {
-	return &Provider{command: command, remote: remote, pool: newPool()}
-}
+func NewProvider() *Provider { return &Provider{pool: newPool()} }
 
-func (p *Provider) Agent(host, dir string) agent.Agent {
-	a := New(p.command...)
+// Agent runs s.Command here, or s.RemoteCommand on host; empty means
+// `claude`.
+func (p *Provider) Agent(s agent.Settings, host, dir string) agent.Agent {
+	a := New(s.Command...)
 	if host != "" {
-		a = New(p.remote...)
+		a = New(s.RemoteCommand...)
 		a.Host, a.Dir = host, dir
 	}
 	a.pool = p.pool

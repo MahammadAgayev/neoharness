@@ -55,7 +55,8 @@ the hub starts: restart neoharness after a change.
 require("neoharness").setup({
   mcp_port = 47821,                     -- remote hosts reach the hub through a tunnel on it
   notify = "coordinator",               -- the coordinator decides what reaches you; "threads": every thread does
-  agent = "claude",                     -- the entry of agents that sessions run
+  coordinator = "claude",               -- the agent coordinators run
+  threads = "quick",                    -- the agent threads run; left out: the coordinator's
 })
 
 require("neoharness.agents").setup({
@@ -66,19 +67,20 @@ require("neoharness.agents").setup({
     effort = "high",                    -- low, medium, high, xhigh, max; leave out for claude's own
     context_window = 400000,            -- ctx % counts up to this; claude itself can go further
   },
+  quick = { kind = "claude", model = "sonnet" },
 })
 ```
 
 An agent has a name you choose. `kind` is the adapter that runs it; leave it
-out when the name is the kind. `claude` is the only kind for now. To run a
-second setup of claude, add an entry and select it:
+out when the name is the kind. `claude` is the only kind for now. By default
+the coordinator runs `claude` with opus, and threads run the coordinator's
+agent.
 
-```lua
-require("neoharness.agents").setup({
-  fast = { kind = "claude", model = "sonnet" },
-})
-require("neoharness").setup({ agent = "fast" })
-```
+In a workspace, `:setlocal coordinator=<agent>` and `threads=<agent>` choose
+other agents for it, from each session's next turn. `:setlocal threads&`
+goes back to the config, and `:setlocal` alone shows both. Threads with no
+agent of their own follow the coordinator's here too. A new model or command
+restarts claude with `--resume`, so the conversation goes on.
 
 `require("neoharness.claude").setup({...})` still works: it sets the entry
 `claude`.

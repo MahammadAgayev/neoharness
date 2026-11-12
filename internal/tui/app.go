@@ -32,6 +32,7 @@ type Client interface {
 	Workspaces() ([]model.WorkspaceView, error)
 	CreateWorkspace(name, pin string) error
 	SetFolder(name, pin string) error
+	SetLocal(name, option, agent string) error
 	DeleteWorkspace(name string) error
 	DeletedWorkspaces() ([]string, error)
 	RestoreWorkspace(name string) error
@@ -503,6 +504,53 @@ func (a *App) setFolder(dir string) {
 		return
 	}
 	a.notify(a.workspace+" now works in "+shortHome(dir), a.th.Pine)
+}
+
+// localOptions are the options :setlocal sets in a workspace: the agents its
+// roles run.
+var localOptions = []string{"coordinator", "threads"}
+
+// setLocal runs :setlocal in the open workspace, as Vim does: name=agent
+// sets an option, name& goes back to the config, and name or name? shows
+// it. No argument shows them all.
+func (a *App) setLocal(args []string) {
+	i := slices.IndexFunc(a.workspaces, func(p model.WorkspaceView) bool { return p.Name == a.workspace })
+	if i < 0 {
+		return
+	}
+	v := a.workspaces[i]
+	values := map[string]string{"coordinator": v.CoordinatorAgent, "threads": v.ThreadsAgent}
+	if len(args) == 0 {
+		args = localOptions
+	}
+	var shown, set []string
+	for _, w := range args {
+		name, agentName, assign := strings.Cut(w, "=")
+		if reset := strings.HasSuffix(w, "&"); reset {
+			name, agentName, assign = strings.TrimSuffix(w, "&"), "", true
+		}
+		if !assign {
+			name = strings.TrimSuffix(name, "?")
+			val, ok := values[name]
+			if !ok {
+				a.notify("no option "+name+"; the options are "+strings.Join(localOptions, ", "), a.th.Love)
+				return
+			}
+			shown = append(shown, name+"="+val)
+			continue
+		}
+		if err := a.c.SetLocal(a.workspace, name, agentName); err != nil {
+			a.notify(err.Error(), a.th.Love)
+			return
+		}
+		set = append(set, w)
+	}
+	switch {
+	case len(shown) > 0:
+		a.notify(strings.Join(shown, "  "), a.th.Text)
+	case len(set) > 0:
+		a.notify(a.workspace+": "+strings.Join(set, " "), a.th.Pine)
+	}
 }
 
 // dropWorkspace forgets a deleted workspace, and leaves it for the

@@ -36,6 +36,13 @@ func Handler(h *hub.Hub) http.Handler {
 		}
 		reply(w, nil, h.SetFolder(r.PathValue("p"), in.Pin))
 	})
+	mux.HandleFunc("PUT /workspaces/{p}/local", func(w http.ResponseWriter, r *http.Request) {
+		var in hubapi.Local
+		if !decode(w, r, &in) {
+			return
+		}
+		reply(w, nil, h.SetLocal(r.PathValue("p"), in.Option, in.Agent))
+	})
 	mux.HandleFunc("DELETE /workspaces/{p}", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, nil, h.DeleteWorkspace(r.PathValue("p")))
 	})

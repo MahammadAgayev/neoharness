@@ -496,9 +496,14 @@ func TestHarnessOnlyDropsTheOtherTools(t *testing.T) {
 
 // --- sessions that outlive a turn ---
 
+type fakeProvider struct {
+	*Provider
+	script string
+}
+
 // fakeSession writes a claude that answers each prompt on stdin with a
 // result, "slow" only when interrupted, and counts its starts in a file.
-func fakeSession(t *testing.T, exitAfterTurn bool) (provider *Provider, starts func() int) {
+func fakeSession(t *testing.T, exitAfterTurn bool) (provider *fakeProvider, starts func() int) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake claude is a shell script")
@@ -524,7 +529,7 @@ done
 	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	provider = NewProvider([]string{script}, nil)
+	provider = &fakeProvider{Provider: NewProvider(), script: script}
 	t.Cleanup(provider.Close)
 	return provider, func() int {
 		b, _ := os.ReadFile(count)
@@ -532,9 +537,9 @@ done
 	}
 }
 
-func turn(t *testing.T, p *Provider, ctx context.Context, req agent.Request) agent.Result {
+func turn(t *testing.T, p *fakeProvider, ctx context.Context, req agent.Request) agent.Result {
 	t.Helper()
-	res, err := p.Agent("", "").Run(ctx, req)
+	res, err := p.Agent(agent.Settings{Command: []string{p.script}}, "", "").Run(ctx, req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -625,6 +630,27 @@ func TestAnIdleProcessEnds(t *testing.T) {
 		t.Fatalf("%d idle sessions after idleFor", n)
 	}
 	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1", Resume: true})
+	if starts() != 2 {
+		t.Fatalf("%d starts, want 2", starts())
+	}
+}
+
+// TestAnotherAgentOfTheKindTakesOverTheSession: :setlocal can move a session
+// to another agent of the same kind. The old process must end, not wait for
+// its idle time next to the new one.
+func TestAnotherAgentOfTheKindTakesOverTheSession(t *testing.T) {
+	p, starts := fakeSession(t, false)
+	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1"})
+	old := p.pool.sessions["c1"]
+	other := agent.Settings{Command: []string{p.script, "--other"}}
+	if _, err := p.Agent(other, "", "").Run(context.Background(), agent.Request{Prompt: "hi", Conversation: "c1", Resume: true}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-old.lines:
+	case <-time.After(3 * time.Second):
+		t.Fatal("the old process is still up")
+	}
 	if starts() != 2 {
 		t.Fatalf("%d starts, want 2", starts())
 	}

@@ -29,6 +29,10 @@ type Workspace struct {
 	// Deleted hides the workspace. Its data stays, so the delete can be
 	// undone by hand.
 	Deleted bool `json:"deleted,omitempty"`
+	// Coordinator and Threads are agents :setlocal chose for the roles here;
+	// empty runs the config's.
+	Coordinator string `json:"coordinator,omitempty"`
+	Threads     string `json:"threads,omitempty"`
 }
 
 // Message is one queued input for a thread.

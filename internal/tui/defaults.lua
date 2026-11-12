@@ -17,13 +17,14 @@ neoharness.o.compactwarn = 80   -- past this context %, the status line says /co
 require("neoharness").setup({
   mcp_port = 47821,              -- remote hosts reach the hub through a tunnel on it
   notify = "coordinator",        -- the coordinator decides what reaches you; "threads": every thread does
-  agent = "claude",              -- the entry of agents below that sessions run
+  coordinator = "claude",        -- the agent below that coordinators run
+  -- threads = "claude",         -- the threads' agent; left out: the coordinator's
 })
 
 -- Agents, by a name you choose. kind is the adapter that runs one; leave it
--- out when the name is the kind. claude is the only kind for now. /model and
--- /effort change the model and effort per thread; "default" goes back to
--- these. Leave effort out for the agent's own.
+-- out when the name is the kind. claude is the only kind for now. Leave
+-- effort out for the agent's own. In a workspace, :setlocal coordinator=<name>
+-- and threads=<name> choose others; /model and /effort change one session.
 require("neoharness.agents").setup({
   claude = {
     command = "claude",          -- here; a wrapper works too

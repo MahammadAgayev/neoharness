@@ -26,6 +26,7 @@ type fakeClient struct {
 	resolved   []string
 	deleted    []string
 	folders    []string
+	locals     []string
 	gone       []string
 	docs       map[string]string
 	arts       []model.Artifact
@@ -43,6 +44,10 @@ func (f *fakeClient) CreateWorkspace(name, pin string) error {
 }
 func (f *fakeClient) SetFolder(name, pin string) error {
 	f.folders = append(f.folders, name+"="+pin)
+	return nil
+}
+func (f *fakeClient) SetLocal(name, option, agent string) error {
+	f.locals = append(f.locals, name+":"+option+"="+agent)
 	return nil
 }
 func (f *fakeClient) DeleteWorkspace(name string) error {
@@ -985,6 +990,31 @@ func TestStatusColorsAndPromptHeight(t *testing.T) {
 	}
 	if !strings.Contains(lines[status-3], "Message coordinator…") || h.a.cursorY != status-3 {
 		t.Fatalf("prompt at %d, cursor at %d, status at %d:\n%s", status-3, h.a.cursorY, status, strings.Join(lines[status-5:status+1], "\n"))
+	}
+}
+
+func TestSetlocalChoosesTheWorkspacesAgents(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	i := slices.IndexFunc(h.a.workspaces, func(p model.WorkspaceView) bool { return p.Name == "demo" })
+	h.a.workspaces[i].CoordinatorAgent, h.a.workspaces[i].ThreadsAgent = "big", "small"
+	h.a.workspaces[i].AgentNames = []string{"big", "small"}
+
+	h.press(":setlocal threads=small coordinator&", "<CR>")
+	if want := []string{"demo:threads=small", "demo:coordinator="}; !slices.Equal(h.hub.locals, want) {
+		t.Fatalf("locals = %q, want %q", h.hub.locals, want)
+	}
+	h.press(":setlocal", "<CR>")
+	if h.a.notice != "coordinator=big  threads=small" {
+		t.Fatalf("notice = %q", h.a.notice)
+	}
+	h.press(":setlocal threads?", "<CR>")
+	if h.a.notice != "threads=small" {
+		t.Fatalf("notice = %q", h.a.notice)
+	}
+	h.press(":setlocal threads=b", "<Tab>")
+	if got := string(h.a.cmd.text); got != "setlocal threads=big" {
+		t.Fatalf("completed to %q", got)
 	}
 }
 

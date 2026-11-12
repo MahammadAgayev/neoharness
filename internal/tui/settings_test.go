@@ -12,11 +12,11 @@ func TestHubSettingsDefaultToOpus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err := s.Selected()
-	if err != nil {
+	if err := s.Check(); err != nil {
 		t.Fatal(err)
 	}
-	if s.MCPPort != 47821 || a.Kind != "claude" || a.Model != "claude-opus-5-5[1m]" || a.Effort != "" || a.ContextWindow != 400000 ||
+	a := s.Agents[s.Coordinator]
+	if s.MCPPort != 47821 || s.Coordinator != "claude" || s.Threads != "" || s.Kind("claude") != "claude" || a.Model != "claude-opus-5-5[1m]" || a.Effort != "" || a.ContextWindow != 400000 ||
 		!slices.Equal(a.Command, []string{"claude"}) || !slices.Equal(a.RemoteCommand, []string{"claude"}) {
 		t.Fatalf("settings = %+v", s)
 	}
@@ -50,7 +50,7 @@ func TestInitLuaAddsAndSelectsAnAgent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "init.lua")
 	src := `
 require("neoharness.agents").setup({ fast = { kind = "claude", model = "sonnet" } })
-require("neoharness").setup({ agent = "fast" })
+require("neoharness").setup({ threads = "fast" })
 `
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
@@ -59,11 +59,11 @@ require("neoharness").setup({ agent = "fast" })
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err := s.Selected()
-	if err != nil {
+	if err := s.Check(); err != nil {
 		t.Fatal(err)
 	}
-	if a.Kind != "claude" || a.Model != "sonnet" || a.Command != nil {
+	a := s.Agents[s.Threads]
+	if s.Coordinator != "claude" || s.Kind("fast") != "claude" || a.Model != "sonnet" || a.Command != nil {
 		t.Fatalf("selected = %+v", a)
 	}
 	if s.Agents["claude"].Model != "claude-opus-5-5[1m]" {
@@ -72,9 +72,13 @@ require("neoharness").setup({ agent = "fast" })
 }
 
 func TestUnknownAgentIsAnError(t *testing.T) {
-	s := HubSettings{Agent: "codex", Agents: map[string]AgentSettings{"claude": {}}}
-	if _, err := s.Selected(); err == nil {
-		t.Fatal("want an error for an agent that is not set up")
+	for _, s := range []HubSettings{
+		{Coordinator: "codex", Agents: map[string]AgentSettings{"claude": {}}},
+		{Coordinator: "claude", Threads: "codex", Agents: map[string]AgentSettings{"claude": {}}},
+	} {
+		if err := s.Check(); err == nil {
+			t.Errorf("%+v: want an error for an agent that is not set up", s)
+		}
 	}
 }
 

@@ -44,8 +44,9 @@ const (
 	MaxReadTail = 200
 )
 
-// AgentFactory builds the agent that runs a thread's turns.
-type AgentFactory func(p workspace.Workspace, t workspace.Thread) agent.Agent
+// AgentFactory builds the agent that runs a thread's turns. name is the
+// agent the thread's role runs in its workspace.
+type AgentFactory func(name string, p workspace.Workspace, t workspace.Thread) agent.Agent
 
 // FileLister lists the files in a location, relative to its folder: all of
 // them, or with a query only those whose path holds it. many says there are
@@ -60,21 +61,30 @@ type BranchReader func(ctx context.Context, l model.Location) (string, error)
 // shell, and returns stdout and stderr together with the exit code.
 type ShellRunner func(ctx context.Context, l model.Location, command string) (out string, exit int, err error)
 
-// Config is how the hub is wired.
-type Config struct {
-	Factory AgentFactory
-	// MCPPort is where the MCP server listens, on 127.0.0.1 here and, through
-	// the ssh tunnel, on every remote host.
-	MCPPort int
-	// Model and Effort are for a thread with no /model or /effort of its
+// Defaults are an agent's settings for a session that chose none of its own.
+type Defaults struct {
+	// Model and Effort are for a session with no /model or /effort of its
 	// own. Empty leaves the agent's default.
 	Model, Effort string
 	// ContextWindow, when not 0, is the most of a model's window that
 	// counts: the context percentage is of this, so it warns in time to
 	// /compact.
 	ContextWindow int
-	MaxAgentTurns int
-	TurnTimeout   time.Duration
+}
+
+// Config is how the hub is wired.
+type Config struct {
+	Factory AgentFactory
+	// MCPPort is where the MCP server listens, on 127.0.0.1 here and, through
+	// the ssh tunnel, on every remote host.
+	MCPPort int
+	// Agents are the agents of the config, by name. Coordinator names the
+	// coordinator's agent, and Threads the threads'; empty is the
+	// coordinator's. A workspace can choose others with SetLocal.
+	Agents               map[string]Defaults
+	Coordinator, Threads string
+	MaxAgentTurns        int
+	TurnTimeout          time.Duration
 	// Files lists a thread's folder for `@` completion. Nil lists nothing.
 	Files FileLister
 	// Branch reads a thread's git branch for the status line. Nil reads
@@ -367,6 +377,46 @@ func (h *Hub) SetFolder(name, dir string) error {
 		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Folder changed to " + abs + ". New threads open there; open threads stay where they are."})
 		h.changed(ws, th)
 		h.readBranch(ws, th)
+	}
+	h.publishWorkspace(ws)
+	return nil
+}
+
+// SetLocal sets which agent the coordinator or the threads of a workspace
+// run, from their next turn. An empty agent goes back to the config's.
+func (h *Hub) SetLocal(name, option, agentName string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, err := h.workspace(name)
+	if err != nil {
+		return err
+	}
+	if _, ok := h.cfg.Agents[agentName]; agentName != "" && !ok {
+		return fmt.Errorf("no agent %q; the agents are %s", agentName, strings.Join(slices.Sorted(maps.Keys(h.cfg.Agents)), ", "))
+	}
+	p := ws.p
+	var who string
+	switch option {
+	case "coordinator":
+		p.Coordinator, who = agentName, "The coordinator runs"
+	case "threads":
+		p.Threads, who = agentName, "Threads run"
+	default:
+		return fmt.Errorf("no option %q; the options are coordinator and threads", option)
+	}
+	if err := workspace.Save(p); err != nil {
+		return err
+	}
+	ws.p = p
+	if th, ok := ws.threads[model.Coordinator]; ok {
+		co := h.agentOf(ws, th.t)
+		threads := h.agentOf(ws, &workspace.Thread{Role: model.RoleThread})
+		text := fmt.Sprintf("%s %s from the next turn.", who, co)
+		if option == "threads" {
+			text = fmt.Sprintf("%s %s from their next turn.", who, threads)
+		}
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: text})
+		h.changed(ws, th)
 	}
 	h.publishWorkspace(ws)
 	return nil
@@ -742,7 +792,7 @@ func (h *Hub) command(ws *space, th *thread, text string) (bool, error) {
 		}
 		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Model " + f[1] + " from the next turn."})
 	case f[0] == "/effort" && len(f) == 2:
-		if e, ok := h.cfg.Factory(ws.p, *t).(agent.Efforter); ok && len(e.Efforts()) > 0 && f[1] != "default" && !slices.Contains(e.Efforts(), f[1]) {
+		if e, ok := h.cfg.Factory(h.agentOf(ws, t), ws.p, *t).(agent.Efforter); ok && len(e.Efforts()) > 0 && f[1] != "default" && !slices.Contains(e.Efforts(), f[1]) {
 			return true, fmt.Errorf("effort is one of %s, or default", strings.Join(e.Efforts(), ", "))
 		}
 		t.Effort = f[1]
@@ -1436,8 +1486,8 @@ func (h *Hub) kick(ws *space, th *thread) {
 	}
 	req := agent.Request{
 		Prompt:       prompt,
-		Model:        cmp.Or(t.ModelChoice, h.cfg.Model),
-		Effort:       cmp.Or(t.Effort, h.cfg.Effort),
+		Model:        cmp.Or(t.ModelChoice, h.defaults(ws, t).Model),
+		Effort:       cmp.Or(t.Effort, h.defaults(ws, t).Effort),
 		SystemPrompt: h.systemPrompt(ws, th),
 		Conversation: t.SessionID,
 		Resume:       t.Started,
@@ -1448,7 +1498,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 		req.Cwd = t.Location.Dir
 	}
 	req.OnEvent = func(e agent.Event) { h.onAgentEvent(ws, th, e) }
-	ag := h.cfg.Factory(ws.p, *t)
+	ag := h.cfg.Factory(h.agentOf(ws, t), ws.p, *t)
 
 	h.wg.Add(1)
 	go func() {
@@ -1489,7 +1539,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	}
 	if res.Context > 0 {
 		t.Context, t.ContextWindow = res.Context, res.ContextWindow
-		if c := h.cfg.ContextWindow; c > 0 && c < t.ContextWindow {
+		if c := h.defaults(ws, t).ContextWindow; c > 0 && c < t.ContextWindow {
 			t.ContextWindow = c
 		}
 	}
@@ -1589,6 +1639,26 @@ func (h *Hub) readBranch(ws *space, th *thread) {
 			h.changed(ws, th)
 		}
 	}()
+}
+
+// agentOf names the agent of the thread's role: the workspace's choice, then
+// the config's. Threads that have none of their own run the coordinator's.
+// A name that is no longer in the config does not count.
+func (h *Hub) agentOf(ws *space, t *workspace.Thread) string {
+	names := []string{ws.p.Coordinator, h.cfg.Coordinator}
+	if t.Role != model.RoleCoordinator {
+		names = []string{ws.p.Threads, h.cfg.Threads, ws.p.Coordinator, h.cfg.Coordinator}
+	}
+	for _, n := range names {
+		if _, ok := h.cfg.Agents[n]; ok {
+			return n
+		}
+	}
+	return ""
+}
+
+func (h *Hub) defaults(ws *space, t *workspace.Thread) Defaults {
+	return h.cfg.Agents[h.agentOf(ws, t)]
 }
 
 func (h *Hub) systemPrompt(ws *space, th *thread) string {
@@ -1806,11 +1876,14 @@ func (h *Hub) views(ws *space) []model.ThreadView {
 
 func (h *Hub) summary(ws *space) model.WorkspaceView {
 	v := model.WorkspaceView{
-		Name:      ws.p.Name,
-		Pin:       ws.p.Pin,
-		CreatedAt: ws.p.CreatedAt,
-		Counts:    map[model.State]int{},
-		Activity:  make([]int, 24),
+		Name:             ws.p.Name,
+		Pin:              ws.p.Pin,
+		CreatedAt:        ws.p.CreatedAt,
+		Counts:           map[model.State]int{},
+		Activity:         make([]int, 24),
+		CoordinatorAgent: h.agentOf(ws, &workspace.Thread{Role: model.RoleCoordinator}),
+		ThreadsAgent:     h.agentOf(ws, &workspace.Thread{Role: model.RoleThread}),
+		AgentNames:       slices.Sorted(maps.Keys(h.cfg.Agents)),
 	}
 	now := time.Now()
 	for _, th := range ws.threads {
