@@ -861,6 +861,32 @@ func TestModelAndEffortLastAcrossTurns(t *testing.T) {
 	}
 }
 
+func TestBareModelAndEffortSayTheChoiceInsteadOfGoingToTheAgent(t *testing.T) {
+	h := newHub(t, &fake{})
+	f := &fake{}
+	h.cfg.Factory = func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }
+	pinned(t, h, "demo")
+	for _, m := range []string{"/model", "/effort"} {
+		if err := h.Send("demo", model.User, model.Coordinator, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if n := len(f.requests()); n != 0 {
+		t.Fatalf("%d turns, want 0: a bare /model is not a message to the agent", n)
+	}
+	evs, _ := h.Events("demo", model.Coordinator, 50)
+	var notes []string
+	for _, e := range evs {
+		if e.Kind == model.EventNote {
+			notes = append(notes, e.Text)
+		}
+	}
+	if len(notes) != 2 || !strings.Contains(notes[0], "/model <name>") || !strings.Contains(notes[1], "/effort <level>") {
+		t.Fatalf("notes = %q", notes)
+	}
+}
+
 func TestCompactStartsANewSessionFromASummary(t *testing.T) {
 	f := &fake{}
 	f.script = func(ctx context.Context, req agent.Request) agent.Result {

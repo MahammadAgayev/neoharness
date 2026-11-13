@@ -801,6 +801,11 @@ func (h *Hub) command(ws *space, th *thread, text string) (bool, error) {
 	}
 	t := th.t
 	switch {
+	case (f[0] == "/model" || f[0] == "/effort") && len(f) == 1:
+		// Claude Code shows a picker here; under --print the bare command
+		// would reach the agent as a message, so say the choice instead.
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: h.choice(ws, t, f[0])})
+		return true, nil
 	case f[0] == "/clear" && len(f) == 1:
 		return true, h.clear(ws, th)
 	case f[0] == "/model" && len(f) == 2:
@@ -1692,6 +1697,27 @@ func (h *Hub) agentOf(ws *space, t *workspace.Thread) string {
 		}
 	}
 	return ""
+}
+
+// choice is what a bare /model or /effort says: the value now, and how to
+// change it.
+func (h *Hub) choice(ws *space, t *workspace.Thread, cmd string) string {
+	a := h.cfg.Factory(h.agentOf(ws, t), ws.p, *t)
+	name, arg, now, names := "Model", "<name>", cmp.Or(t.ModelChoice, h.defaults(ws, t).Model, t.Model), []string(nil)
+	if m, ok := a.(agent.Modeler); ok {
+		names = m.Models()
+	}
+	if cmd == "/effort" {
+		name, arg, now, names = "Effort", "<level>", cmp.Or(t.Effort, h.defaults(ws, t).Effort), nil
+		if e, ok := a.(agent.Efforter); ok {
+			names = e.Efforts()
+		}
+	}
+	s := fmt.Sprintf("%s: %s. %s %s changes it from the next turn", name, cmp.Or(now, "the agent's default"), cmd, arg)
+	if len(names) > 0 {
+		s += ": " + strings.Join(names, ", ")
+	}
+	return s + "; " + cmd + " default goes back."
 }
 
 func (h *Hub) defaults(ws *space, t *workspace.Thread) Defaults {

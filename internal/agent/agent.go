@@ -130,6 +130,12 @@ type Efforter interface {
 	Efforts() []string
 }
 
+// Modeler is an Agent that names the models it takes, for a bare /model to
+// show the choice. Any name still goes to the agent.
+type Modeler interface {
+	Models() []string
+}
+
 // Result is what one invocation produced, and what it cost.
 type Result struct {
 	// Text is the agent's final prose.
