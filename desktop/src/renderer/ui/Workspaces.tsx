@@ -25,6 +25,7 @@ function Counts(props: { w: WorkspaceView }) {
   const c = props.w.counts
   const parts: [string, string, number][] = [
     ['◆', 'gold', (c.waiting ?? 0) + (props.w.coordinator === 'waiting' ? 1 : 0)],
+    ['✗', 'love', props.w.recap?.failed ?? 0],
     ['●', 'foam', (c.running ?? 0) + (props.w.coordinator === 'running' ? 1 : 0)],
     ['○', 'muted', c.idle ?? 0],
     ['✓', 'pine', c.resolved ?? 0],

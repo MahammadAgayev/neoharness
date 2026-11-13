@@ -950,6 +950,16 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* the workspace recap, above the coordinator's transcript: no label column */
+.recap-ws .recap-inner {
+  display: block;
+}
+.recap-line {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 .recap-words {
   display: -webkit-box;
   -webkit-box-orient: vertical;

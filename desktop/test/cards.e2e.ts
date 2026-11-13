@@ -762,6 +762,35 @@ test("a thread's recap shows under its row and at the top of its chat", async ()
   await expect(head.locator('.t-love')).toHaveText('the agent failed: boom')
 })
 
+test("the coordinator's chat starts with the workspace recap", async () => {
+  const at = new Date(Date.now() - 3600_000)
+  hub.setView(view('demo', 'db', { state: 'waiting', waiting: 'permission' }))
+  hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
+  const demo = hub.workspaces.find((w) => w.name === 'demo')!
+  hub.setWorkspace({
+    ...demo,
+    counts: { idle: 1, waiting: 1 },
+    recap: {
+      goal: 'Add a health check and keep /ping',
+      lines: ['answer db first: the health check needs its table'],
+      at: at.toISOString(),
+      overlaps: [{ path: 'server.go', threads: ['api', 'db'] }],
+      failed: 1,
+    },
+  })
+  const head = page.locator('.recap-ws')
+  await expect(head).toHaveCount(1)
+  await expect(head.locator('.recap-goal')).toHaveText('Add a health check and keep /ping')
+  await expect(head.locator('.recap-counts')).toHaveText('◆ 1 waits for you · ✗ 1 failed')
+  await expect(head.locator('.recap-counts .t-love')).toHaveText('✗ 1')
+  await expect(head).toContainText('api and db both edited server.go')
+  await expect(head).toContainText('answer db first: the health check needs its table')
+  const hhmm = at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+  await expect(head).toContainText(`as of ${hhmm} · 1 thread ended since`)
+  await expect(page.locator('.sb-item', { hasText: 'demo' }).locator('.sb-count.t-love')).toHaveText('✗ 1')
+  await shot('47-workspace-recap')
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

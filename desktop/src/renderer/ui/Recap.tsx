@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import type { Recap, ThreadView } from '../../shared/model'
+import type { Recap, ThreadView, WorkspaceRecap } from '../../shared/model'
 
 const counted = (n: number, what: string) => (n === 1 ? `1 ${what}` : `${n} ${what}s`)
 
@@ -103,6 +103,54 @@ export function RecapHead(props: { r?: Recap }) {
           ),
         )}
         {changed.length > 0 && row('changed', <span className="t-muted">{joined(changed)}</span>)}
+      </div>
+    </div>
+  )
+}
+
+const hhmm = (at: string) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
+// WorkspaceRecapHead is the workspace recap at the top of the coordinator's
+// chat: the goal, the counts, the files two threads edited, then the
+// coordinator's lines. It says only what no thread's row says, and shows
+// nothing while no thread is open.
+export function WorkspaceRecapHead(props: { r?: WorkspaceRecap; threads: ThreadView[] }) {
+  const { r } = props
+  const threads = props.threads.filter((v) => v.role === 'thread')
+  const waits = threads.filter((v) => v.state === 'waiting').length
+  const running = threads.filter((v) => v.state === 'running').length
+  const failed = threads.filter((v) => v.state === 'idle' && v.recap?.error).length
+  const idle = threads.filter((v) => v.state === 'idle' && !v.recap?.error).length
+  if (waits + running + failed + idle === 0) return null
+  const counts: ReactNode[] = []
+  if (waits) counts.push(<span key="w"><span className="t-gold">◆ {waits}</span> {waits === 1 ? 'waits' : 'wait'} for you</span>)
+  if (failed) counts.push(<span key="f"><span className="t-love">✗ {failed}</span> failed</span>)
+  if (running) counts.push(<span key="r"><span className="t-foam">● {running}</span> running</span>)
+  if (idle) counts.push(<span key="i">{idle} idle</span>)
+  const newer = r?.at ? threads.filter((v) => v.recap && v.recap.at > r.at!).length : 0
+  const names = (ts: string[]) =>
+    ts.length > 2 ? `${ts.slice(0, -1).join(', ')} and ${ts[ts.length - 1]} all` : `${ts[0]} and ${ts[1]} both`
+  return (
+    <div className="recap recap-ws">
+      <div className="recap-inner">
+        {r?.goal && <div className="recap-goal t-subtle">{r.goal}</div>}
+        <div className="recap-counts t-muted">{joined(counts)}</div>
+        {r?.overlaps?.map((o) => (
+          <div key={o.path} className="recap-body">
+            <span className="t-subtle">{names(o.threads)} edited </span>
+            <span className="t-text">{o.path}</span>
+          </div>
+        ))}
+        {r?.lines?.map((l, i) => (
+          <div key={i} className="recap-line t-text">
+            {l}
+          </div>
+        ))}
+        {!!r?.lines?.length && newer > 0 && (
+          <div className="t-muted">
+            as of {hhmm(r.at!)} · {newer === 1 ? '1 thread' : `${newer} threads`} ended since
+          </div>
+        )}
       </div>
     </div>
   )

@@ -48,6 +48,11 @@ splits, toasts, marks (`ma`, `'a`, `''`), and the ex commands (`:new`, `:open`, 
 completes the folder of `:new`, `:open` and `:folder` when it starts with
 `~/` or `/`; the app has no working folder for a relative one.
 
+Each thread's recap shows under its row and above its chat, and the
+coordinator's chat starts with the workspace recap, as in the TUI. The
+sidebar and the workspaces screen show `✗ N` beside a workspace whose
+threads failed.
+
 The app does not read `init.lua`; the hub settings in it apply to both.
 What the TUI takes from `init.lua` for itself is in Settings instead.
 

@@ -114,6 +114,7 @@ export function Sidebar(props: { folded: boolean }) {
                 className={`sb-icon ${waiting ? 't-gold' : running ? 't-foam pulse' : 't-muted'}`}
               />
               <span className="sb-label">{w.name}</span>
+              {!!w.recap?.failed && <span className="sb-count t-love">✗ {w.recap.failed}</span>}
               {waiting > 0 ? (
                 <span className="sb-count t-gold">{waiting}</span>
               ) : running > 0 ? (

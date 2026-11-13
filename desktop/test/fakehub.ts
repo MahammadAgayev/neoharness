@@ -60,6 +60,13 @@ export class FakeHub {
     this.threads[name] = ['coordinator', ...threads].map((t) => view(name, t))
   }
 
+  setWorkspace(w: WorkspaceView): void {
+    const i = this.workspaces.findIndex((x) => x.name === w.name)
+    if (i < 0) this.workspaces.push(w)
+    else this.workspaces[i] = w
+    this.push({ kind: 'workspace', workspace: w.name, summary: w })
+  }
+
   setView(v: ThreadView): void {
     const list = this.threads[v.workspace]
     const i = list.findIndex((x) => x.name === v.name)

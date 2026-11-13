@@ -9,7 +9,7 @@ import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
 import { CloseWindow } from './CloseWindow'
-import { RecapHead } from './Recap'
+import { RecapHead, WorkspaceRecapHead } from './Recap'
 
 const shellLines = 10
 
@@ -264,6 +264,9 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   const { workspace, thread: name } = store.at(thread)
   const peek = workspace !== open
   const v = useStore((s) => s.threads[thread])
+  const allThreads = useStore((s) => s.threads)
+  const threads = useMemo(() => Object.values(allThreads), [allThreads])
+  const wsRecap = useStore((s) => s.workspaces.find((w) => w.name === s.workspace)?.recap)
   const blocks = useStore((s) => s.chats[thread]) ?? []
   const folds = useStore((s) => s.folds)
   const artifactList = useStore((s) => s.artifacts)
@@ -525,7 +528,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           />
         </div>
       )}
-      <RecapHead r={v?.recap} />
+      {name === Coordinator && !peek ? <WorkspaceRecapHead r={wsRecap} threads={threads} /> : <RecapHead r={v?.recap} />}
       <div
         className="transcript"
         ref={scroller}

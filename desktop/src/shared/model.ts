@@ -82,6 +82,21 @@ export interface RecapCommand {
   failed?: boolean
 }
 
+// WorkspaceRecap is how a workspace stands: the coordinator's goal and
+// lines, and what the hub joins from the threads' recaps.
+export interface WorkspaceRecap {
+  goal?: string
+  lines?: string[]
+  at?: string
+  overlaps?: Overlap[]
+  failed?: number
+}
+
+export interface Overlap {
+  path: string
+  threads: string[]
+}
+
 export interface ThreadView {
   workspace: string
   name: string
@@ -176,6 +191,7 @@ export interface WorkspaceView {
   // What a resolved thread with a full context does when the coordinator
   // reopens it: compact, ask or off.
   reopenCompact?: string
+  recap?: WorkspaceRecap
 }
 
 export type UpdateKind = 'event' | 'thread' | 'workspace' | 'deleted' | 'artifact' | 'stopped'
