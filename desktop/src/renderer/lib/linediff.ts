@@ -48,3 +48,41 @@ export function lines(a: string[], b: string[]): Op[] {
   for (const text of a.slice(a.length - s)) out.push({ kind: ' ', text })
   return out
 }
+
+// Hunk is a change between mine, lines mFrom..mTo, and theirs, lines
+// tFrom..tTo; at is the index of its first op.
+export interface Hunk {
+  mFrom: number
+  mTo: number
+  tFrom: number
+  tTo: number
+  at: number
+}
+
+export function hunks(ops: Op[]): Hunk[] {
+  const out: Hunk[] = []
+  let i = 0
+  let j = 0
+  for (let k = 0; k < ops.length; ) {
+    if (ops[k].kind === ' ') {
+      i++
+      j++
+      k++
+      continue
+    }
+    const h: Hunk = { mFrom: i, mTo: i, tFrom: j, tTo: j, at: k }
+    for (; k < ops.length && ops[k].kind !== ' '; k++) {
+      if (ops[k].kind === '-') i++
+      else j++
+    }
+    h.mTo = i
+    h.tTo = j
+    out.push(h)
+  }
+  return out
+}
+
+// take is do: the change of h comes from theirs into mine.
+export function take(mine: string[], theirs: string[], h: Hunk): string[] {
+  return [...mine.slice(0, h.mFrom), ...theirs.slice(h.tFrom, h.tTo), ...mine.slice(h.mTo)]
+}

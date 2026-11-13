@@ -54,6 +54,11 @@ What the TUI takes from `init.lua` for itself is in Settings instead.
   (`:colorscheme rose-pine-dawn`), or Nothing, which turns a default off.
   Your keys win over the defaults.
 
+When a save is refused because the agent changed the same lines, the window
+shows your edit against the newer version change by change, as the TUI's
+diff mode: `]c` `[c` move, `do` (or `dp`, or the Take button) takes one
+change, `:w` saves the result, `:e!` takes all of the newer version.
+
 ## What the window adds
 
 - **Search everywhere**: `⌘K`, or `<leader><leader>`. It searches
@@ -100,7 +105,9 @@ The end-to-end tests make their own `NEOHARNESS_HOME` and MCP port and stop
 their hub after. They never touch `~/.neoharness`. `test/fakehub.ts` is the
 hub API with no model behind it: the card tests push permission requests,
 questions, artifacts and a stop through it. Another `NEOHARNESS_HOME` also
-gets its own app settings.
+gets its own app settings. The tests set `NEOHARNESS_DESKTOP_HIDDEN=1`: the
+app runs with no window on the screen, no Dock icon and no notifications, so
+a run never takes your focus.
 
 ## Rules
 

@@ -87,6 +87,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
     rows: [
       ['i a o  :e', 'edit the markdown'],
       [':w  ⌘S', 'save, merged with a newer version; the writer gets the diff'],
+      [']c [c  do dp', 'in a refused save: next / previous change, take the change of the newer version'],
       [':w!  :e!', 'save over a newer version, take the newer version'],
       ['<Esc>', 'back to the rendered document; an unsaved change shows [+]'],
       [':wq  :q!', 'save and close, drop the changes and close'],

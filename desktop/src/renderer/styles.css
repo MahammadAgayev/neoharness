@@ -1314,10 +1314,14 @@ kbd {
 }
 .conflict-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
   font-size: 13px;
+}
+.conflict-head .btn {
+  white-space: nowrap;
 }
 .diff {
   margin: 0;
@@ -1327,6 +1331,25 @@ kbd {
   line-height: 1.6;
   padding: 4px 0 10px;
   user-select: text;
+}
+.hunk {
+  position: relative;
+  border-left: 2px solid transparent;
+}
+.hunk.active {
+  border-left-color: var(--iris);
+}
+.hunk-take {
+  position: absolute;
+  top: 2px;
+  right: 14px;
+  font-family: var(--font-text);
+  opacity: 0;
+  transition: opacity 100ms var(--ease);
+}
+.hunk:hover .hunk-take,
+.hunk.active .hunk-take {
+  opacity: 1;
 }
 .diff-legend {
   padding: 0 14px 4px;

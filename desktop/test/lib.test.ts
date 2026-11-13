@@ -12,7 +12,7 @@ import type { Event, ThreadView } from '../src/shared/model'
 import { parseEx, words } from '../src/renderer/lib/ex'
 import { fuzzy, fuzzyScore, grep } from '../src/renderer/lib/fuzzy'
 import { keyName, Sequencer, split } from '../src/renderer/lib/keys'
-import { lines } from '../src/renderer/lib/linediff'
+import { hunks, lines, take } from '../src/renderer/lib/linediff'
 import { resolveScheme, schemes } from '../src/renderer/lib/themes'
 import { keep, viewToast, type Toast } from '../src/renderer/lib/toasts'
 import { addEvent, fromEvents, lastText, lastUserMessage, shortTool, type Block } from '../src/renderer/lib/transcript'
@@ -232,5 +232,19 @@ describe('folders', () => {
     expect(folders('~', home)).toEqual(['~/'])
     expect(folders('Doc', home)).toEqual([])
     fs.rmSync(home, { recursive: true })
+  })
+})
+
+describe('hunks', () => {
+  it('finds each change and takes one from theirs', () => {
+    const mine = ['a', 'B', 'c', 'd', 'E']
+    const theirs = ['a', 'b', 'c', 'd', 'e', 'f']
+    const hs = hunks(lines(mine, theirs))
+    expect(hs.map(({ mFrom, mTo, tFrom, tTo }) => [mFrom, mTo, tFrom, tTo])).toEqual([
+      [1, 2, 1, 2],
+      [4, 5, 4, 6],
+    ])
+    expect(take(mine, theirs, hs[1])).toEqual(['a', 'B', 'c', 'd', 'e', 'f'])
+    expect(take(take(mine, theirs, hs[1]), theirs, hs[0])).toEqual(theirs)
   })
 })

@@ -17,6 +17,7 @@ import {
   type WorkspaceView,
 } from '../shared/model'
 import { parseEx } from './lib/ex'
+import { hunks, lines, take } from './lib/linediff'
 import { schemeNames } from './lib/themes'
 import { errorToast, keep, noticeToast, viewToast, type Toast, type ToastSpec, type Tone } from './lib/toasts'
 import { addEvent, fromEvents, lastText, lastUserMessage, settle, type Block } from './lib/transcript'
@@ -983,9 +984,15 @@ class Store {
         force,
       })
     } catch (err) {
-      this.say(`${errText(err)} · :w! saves over it, :e! takes the newer version`, 'love')
+      this.say(`${errText(err)} · do takes a change, :w saves yours, :e! takes the newer version`, 'love')
+      await this.loadDoc(name)
+      // As the TUI: the edit now starts from the newer version, so the next
+      // :w saves what you made of both over it.
       const cur = this.state.docs[name]
-      if (cur) this.set({ docs: { ...this.state.docs, [name]: { ...cur, conflict: true } } })
+      if (cur?.edit) {
+        const edit = { ...cur.edit, base: cur.artifact.version, baseText: cur.text }
+        this.set({ docs: { ...this.state.docs, [name]: { ...cur, edit, conflict: true } } })
+      }
       return false
     }
     const merged = r.text !== d.edit.text
@@ -995,6 +1002,18 @@ class Store {
       'subtle',
     )
     return true
+  }
+
+  // takeHunk is do: one change of the newer version comes into the edit.
+  takeHunk(name: string, index: number): void {
+    const d = this.state.docs[name]
+    if (!d?.edit || !d.conflict) return
+    const mine = d.edit.text.split('\n')
+    const theirs = d.text.split('\n')
+    const h = hunks(lines(mine, theirs))[index]
+    if (!h) return this.say('no change here', 'muted')
+    const text = take(mine, theirs, h).join('\n')
+    this.set({ docs: { ...this.state.docs, [name]: { ...d, edit: { ...d.edit, text }, conflict: text !== d.text } } })
   }
 
   // revert is :e! (drop the changes, take the newest) and :q! on an artifact.

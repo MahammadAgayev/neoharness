@@ -40,7 +40,7 @@ test.beforeAll(async () => {
   app = await electron.launch({
     ...target,
     // The fake hub is up; false makes sure no real hub ever starts here.
-    env: { ...process.env, NEOHARNESS_HOME: tmp, NEOHARNESS_BIN: '/usr/bin/false' },
+    env: { ...process.env, NEOHARNESS_DESKTOP_HIDDEN: '1', NEOHARNESS_HOME: tmp, NEOHARNESS_BIN: '/usr/bin/false' },
   })
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
@@ -121,21 +121,33 @@ test('an artifact opens, edits, saves, and a newer version is merged or forced',
   await expect.poll(() => hub.calls.find((c) => c.method === 'PUT')?.body).toMatchObject({ base: 1, text: '# Plan\n\n- add /healthz\n- test it\n\n- ship it' })
   await expect(page.locator('.statusline .sl-name', { hasText: /^plan$/ })).toBeVisible()
 
-  // The agent writes v3 while you edit: the save is refused, :w! forces it.
+  // The agent writes v3 while you edit: the save is refused, and you take
+  // its changes one by one, then :w saves the result.
   await page.keyboard.press('i')
+  await page.keyboard.press('Meta+ArrowUp')
   await page.keyboard.type('x')
   await page.keyboard.press('Escape')
-  hub.artifact('demo', 'plan', 'Health check plan', '# Plan\n\nnew\n', 3)
+  const v2 = '# Plan\n\n- add /healthz\n- test it\n\n- ship it'
+  hub.artifact('demo', 'plan', 'Health check plan', v2 + '\n- deploy', 3)
   await expect(page.locator('.cmdline', { hasText: 'wrote v3 while you edit' })).toBeVisible()
   await page.keyboard.press('Meta+s')
-  await expect(page.locator('.cmdline', { hasText: ':w! saves over it' })).toBeVisible()
+  await expect(page.locator('.cmdline', { hasText: 'do takes a change' })).toBeVisible()
   await expect(page.locator('.conflict', { hasText: 'changed the same lines in v3' })).toBeVisible()
-  await expect(page.locator('.diff-line.d-del', { hasText: 'new' })).toBeVisible()
+  await expect(page.locator('.hunk')).toHaveCount(2)
+  await expect(page.locator('.hunk.active .diff-line.d-del')).toHaveText('-x# Plan')
+  await page.keyboard.press(']')
+  await page.keyboard.press('c')
+  await expect(page.locator('.hunk.active .diff-line.d-add')).toHaveText('+- deploy')
   await shot('25-artifact-conflict')
+  await page.keyboard.press('d')
+  await page.keyboard.press('o')
+  await expect(page.locator('.hunk')).toHaveCount(1)
   await page.keyboard.type(':')
-  await page.keyboard.type('w!')
+  await page.keyboard.type('w')
   await page.keyboard.press('Enter')
-  await expect.poll(() => hub.calls.filter((c) => c.method === 'PUT').pop()?.body).toMatchObject({ force: true })
+  await expect
+    .poll(() => hub.calls.filter((c) => c.method === 'PUT').pop()?.body)
+    .toMatchObject({ base: 3, force: false, text: 'x' + v2 + '\n- deploy' })
   await expect(page.locator('.conflict')).toHaveCount(0)
   await page.keyboard.press('Control+o')
   await expect(page.locator('.statusline .sl-name', { hasText: /^api$/ })).toBeVisible()
