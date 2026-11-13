@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-import { location } from '../../shared/model'
+import { Coordinator, location } from '../../shared/model'
 import { elapsed, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
@@ -121,6 +121,11 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
                   store.updateWin(win.id, { cursor: i })
                   open(i)
                 }}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  store.updateWin(win.id, { cursor: i })
+                  void threadMenu(v.name, v.state, (how) => open(i, how))
+                }}
               >
                 <span className={`t-${stateTone(v.state)} glyph ${v.state === 'running' ? 'pulse' : ''}`}>{stateGlyph(v.state)}</span>
                 <div className="list-main">
@@ -140,4 +145,26 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
       </div>
     </div>
   )
+}
+
+// threadMenu is the right click on a thread: what its keys and commands do.
+async function threadMenu(name: string, state: string, open: (how?: 'right' | 'above') => void): Promise<void> {
+  const own = name !== Coordinator
+  const id = await window.nh.menu([
+    { id: 'open', label: 'Open' },
+    { id: 'right', label: 'Open in a split on the right' },
+    { id: 'above', label: 'Open in a split above' },
+    { id: '-', label: '' },
+    ...(own ? [state === 'resolved' ? { id: 'reopen', label: 'Reopen' } : { id: 'resolve', label: 'Resolve' }] : []),
+    ...(state === 'running' ? [{ id: 'stop', label: 'Stop the turn' }] : []),
+    { id: 'copy', label: 'Copy the name' },
+    ...(own ? [{ id: '-', label: '' }, { id: 'delete', label: 'Delete…' }] : []),
+  ])
+  if (id === 'open') open()
+  else if (id === 'right' || id === 'above') open(id)
+  else if (id === 'resolve') void store.resolve(name)
+  else if (id === 'reopen') void store.reopen(name)
+  else if (id === 'stop') void store.stop(name)
+  else if (id === 'copy') window.nh.copy(name)
+  else if (id === 'delete') store.askDeleteThread(name)
 }

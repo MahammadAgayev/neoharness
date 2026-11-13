@@ -221,7 +221,7 @@ function MapRow(props: { map: UserMap; leader: string; set: (m: UserMap) => void
           onChange={(e) => props.set({ ...map, run: e.target.value.startsWith(':') ? e.target.value : ':' + e.target.value })}
         />
       )}
-      <button className="btn ghost icon" aria-label="remove" title="Remove" onClick={props.remove}>
+      <button className="btn ghost icon" aria-label="remove" data-tip="Remove" onClick={props.remove}>
         ×
       </button>
     </div>

@@ -71,7 +71,9 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
 - **A sidebar** of workspaces, each with what waits or runs in it. `⌘B` or
   `:set nosidebar` hides it.
 - **The mouse**: buttons on permission cards, a click on a thread, an
-  artifact or a queued message, drag the line between columns.
+  artifact or a queued message, drag the line between columns. A right
+  click on a thread or a block gives its actions (open in a split,
+  resolve, stop, copy, delete); hints show on hover.
 - **Color schemes**: `:colorscheme system` follows the macOS appearance;
   `rose-pine-moon` (the TUI's), `rose-pine` and `rose-pine-dawn` (light).
 - **macOS notifications**, quiet: only what needs you (a permission, a

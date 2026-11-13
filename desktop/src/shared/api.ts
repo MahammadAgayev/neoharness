@@ -132,6 +132,12 @@ export type Result<N extends CallName> = N extends keyof Results ? Results[N] : 
 // was asked to stop: the app does not start a new one by itself.
 export type HubStatus = 'connecting' | 'connected' | 'lost' | 'stopped'
 
+// MenuItem is a row of a context menu; the id "-" is a line between rows.
+export interface MenuItem {
+  id: string
+  label: string
+}
+
 // The bridge the preload script gives the page as window.nh.
 export interface Bridge {
   call<N extends CallName>(name: N, args: CallArgs<N>): Promise<Result<N>>
@@ -139,6 +145,8 @@ export interface Bridge {
   onStatus(fn: (s: HubStatus, detail: string) => void): () => void
   startHub(): Promise<void>
   pickFolder(): Promise<string | null>
+  // menu shows a native context menu and gives the id picked, or null.
+  menu(items: MenuItem[]): Promise<string | null>
   // folders completes a local folder for :new, :open and :folder.
   folders(word: string): Promise<string[]>
   openExternal(url: string): Promise<void>

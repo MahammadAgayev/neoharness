@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 
-import type { CallName } from '../shared/api'
+import type { CallName, MenuItem } from '../shared/api'
 import { folders } from './folders'
 import { call, Updates } from './hub'
 
@@ -100,6 +100,18 @@ ipcMain.handle('folder:pick', async () => {
   const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
   return r.canceled ? null : (r.filePaths[0] ?? null)
 })
+ipcMain.handle(
+  'menu',
+  (ev, items: MenuItem[]) =>
+    new Promise<string | null>((resolve) => {
+      const m = Menu.buildFromTemplate(
+        items.map((i) => (i.id === '-' ? { type: 'separator' as const } : { label: i.label, click: () => resolve(i.id) })),
+      )
+      // The menu closes before or after the click runs; a click that comes
+      // later still wins, as a promise resolves once.
+      m.popup({ window: BrowserWindow.fromWebContents(ev.sender) ?? undefined, callback: () => setTimeout(() => resolve(null), 100) })
+    }),
+)
 ipcMain.handle('folders', (_ev, word: string) => folders(word))
 ipcMain.handle('open:external', (_ev, url: string) => openExternal(url))
 ipcMain.on('clipboard:write', (_ev, text: string) => clipboard.writeText(text))

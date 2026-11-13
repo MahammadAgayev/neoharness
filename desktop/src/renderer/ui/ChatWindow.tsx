@@ -54,7 +54,7 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
       {wake && <span className="sl-dim">{wake}</span>}
       <span className="sl-fill" />
       {right.map((p, i) => (
-        <span key={i} className={`sl-part t-${focused || p.tone === 'love' ? p.tone : 'muted'}`} title={p.title}>
+        <span key={i} className={`sl-part t-${focused || p.tone === 'love' ? p.tone : 'muted'}`} data-tip={p.title}>
           {p.text}
         </span>
       ))}
@@ -225,7 +225,7 @@ const BlockView = memo(function BlockView(props: {
 
 function Queued(props: { e: Event; selected: boolean; onClick: () => void }) {
   return (
-    <div className={`row b-queued ${props.selected ? 'cursor' : ''}`} onClick={props.onClick} title="send it now: the running turn stops">
+    <div className={`row b-queued ${props.selected ? 'cursor' : ''}`} onClick={props.onClick} data-tip="Send it now: the running turn stops" data-keys="<CR>">
       <div className="b-label italic">{props.e.from === User ? 'queued' : `queued from ${props.e.from}`}</div>
       <div className="pre-wrap">{props.e.text}</div>
     </div>
@@ -530,6 +530,11 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
               onClick={() => {
                 if (!window.getSelection()?.toString()) store.updateWin(win.id, { cursor: i, follow: false })
               }}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                store.updateWin(win.id, { cursor: i, follow: false })
+                void blockMenu(b, (a) => handleRef.current(a, 1))
+              }}
             >
               <BlockView b={b} open={!!folds[b.key]} artifacts={artifacts} thread={thread} pendingPermission={b.key === permKey} />
             </div>
@@ -553,4 +558,14 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
       </div>
     </div>
   )
+}
+
+// blockMenu is the right click on a block: the keys that act on it.
+async function blockMenu(b: Block, act: (a: WinAction) => void): Promise<void> {
+  const items = [{ id: 'yank', label: window.getSelection()?.toString() ? 'Copy the selection' : 'Copy' }]
+  if (b.kind === 'artifact') items.push({ id: 'enter', label: 'Open the artifact' })
+  if (b.kind === 'tools' || b.kind === 'shell') items.push({ id: 'fold', label: 'Show or hide the tool calls' })
+  if (b.kind === 'message' && b.from === User) items.push({ id: 'enter', label: 'Edit and send again' })
+  const id = await window.nh.menu(items)
+  if (id) act(id as WinAction)
 }

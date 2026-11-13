@@ -6,6 +6,7 @@ import { ArtifactWindow } from './ArtifactWindow'
 import { ChatWindow } from './ChatWindow'
 import { CommandLine, HubBanner, Picker, Toasts } from './Overlays'
 import { Settings } from './Settings'
+import { Tooltip } from './Tooltip'
 import { HelpWindow, MessagesWindow } from './Panels'
 import { Sidebar } from './Sidebar'
 import { ThreadsList } from './ThreadsList'
@@ -111,7 +112,7 @@ function TitleBar() {
       </button>
       <div className="titlebar-right">
         {waiting > 0 && (
-          <button className="pill t-gold" onClick={() => store.openPicker('threads', true)} title="threads that wait for you">
+          <button className="pill t-gold" onClick={() => store.openPicker('threads', true)} data-tip="Threads that wait for you" data-keys="⌘P">
             ◆ {waiting}
           </button>
         )}
@@ -150,6 +151,7 @@ export function App() {
       <Toasts />
       <Picker />
       <Settings />
+      <Tooltip />
     </div>
   )
 }

@@ -38,7 +38,7 @@ export function Sidebar() {
               key={w.name}
               className={`sb-item ${w.name === open && screen === 'workspace' ? 'active' : ''}`}
               onClick={() => void store.openWorkspace(w.name)}
-              title={w.pin ? store.short(w.pin) : 'not pinned'}
+              data-tip={w.pin ? store.short(w.pin) : 'not pinned'}
             >
               <span className={`sb-icon ${waiting ? 't-gold' : running ? 't-foam pulse' : 't-muted'}`}>
                 {waiting ? '◆' : running ? '●' : '○'}

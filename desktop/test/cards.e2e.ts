@@ -257,6 +257,29 @@ test("ma marks a block; G goes away and 'a comes back", async () => {
   await expect(page.locator('.row.cursor')).not.toContainText('Which port')
 })
 
+test('a right click on a thread offers its actions, and a hint shows on hover', async () => {
+  // A native menu is out of Playwright's reach: a stub picks Resolve.
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('menu')
+    ipcMain.handle('menu', (_e, items: { label: string }[]) => {
+      ;(globalThis as { menuItems?: string[] }).menuItems = items.map((i) => i.label)
+      return 'resolve'
+    })
+  })
+  await page.keyboard.type(':')
+  await page.keyboard.type('threads')
+  await page.keyboard.press('Enter')
+  await page.locator('.window.threads .list-row', { hasText: 'api' }).click({ button: 'right' })
+  await expect.poll(() => hub.calls.some((c) => c.path.endsWith('/api/resolve'))).toBe(true)
+  const labels = await app.evaluate(() => (globalThis as { menuItems?: string[] }).menuItems)
+  expect(labels).toEqual(expect.arrayContaining(['Open', 'Open in a split on the right', 'Resolve', 'Copy the name', 'Delete…']))
+
+  await page.locator('.sb-item', { hasText: 'demo' }).hover()
+  await expect(page.locator('.tooltip')).toBeVisible()
+  await shot('29-tooltip')
+  await page.mouse.move(700, 400)
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()
