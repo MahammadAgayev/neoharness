@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -125,6 +126,8 @@ func (a *App) toastView(workspace string, old, v model.ThreadView, had bool) {
 	case old.State == model.StateResolved && v.State != model.StateResolved:
 		// The coordinator brings a thread back by writing to it.
 		toast(Span{"↺", a.th.Foam}, "reopened", a.th.Foam, 4*time.Second)
+	case old.State == model.StateRunning && v.State == model.StateIdle && a.showsError(workspace, v.Name):
+		// The error came just before the end of its turn, and says more.
 	case old.State == model.StateRunning && v.State == model.StateIdle:
 		var body string
 		life := 4 * time.Second
@@ -145,6 +148,12 @@ func (a *App) toastView(workspace string, old, v model.ThreadView, had bool) {
 		}
 		toast(Span{"✓", a.th.Pine}, body, a.th.Pine, life)
 	}
+}
+
+func (a *App) showsError(workspace, thread string) bool {
+	return slices.ContainsFunc(a.toasts, func(t *toast) bool {
+		return t.workspace == workspace && t.thread == thread && t.glyph.Text == "✗"
+	})
 }
 
 // pruneToasts drops toasts whose time is up, and waiting ones whose thread

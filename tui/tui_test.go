@@ -3441,3 +3441,20 @@ func TestColonClearsTheLastMessage(t *testing.T) {
 		t.Fatalf("after :threads the bottom line still says %q", h.a.notice)
 	}
 }
+
+// The hub sends a failed turn's error, then the idle view. The toast must
+// still say it failed.
+func TestFailedTurnToastStaysAnError(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: "auth-refactor",
+		Event: &model.Event{Kind: model.EventError, Text: "the agent failed: out of memory"}})
+	done := h.a.threads["auth-refactor"]
+	done.State = model.StateIdle
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: done.Name, View: &done})
+	h.a.draw()
+	h.see("the agent failed: out of memory")
+	if strings.Contains(h.screen(), "finished a turn") {
+		t.Fatalf("a failed turn shows as finished:\n%s", h.screen())
+	}
+}
