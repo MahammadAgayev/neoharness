@@ -168,6 +168,30 @@ test('without Vim, keys work as in Claude Code: ⌃S stashes, Esc takes your mes
   await page.keyboard.press('Enter')
 })
 
+test('v selects blocks and y yanks them to the clipboard', async () => {
+  // The clipboard is the person's: put back what was on it.
+  const saved = await app.evaluate(({ clipboard }) => clipboard.readText())
+  try {
+    await yankTwo()
+  } finally {
+    await app.evaluate(({ clipboard }, t) => clipboard.writeText(t), saved)
+  }
+})
+
+async function yankTwo() {
+  await page.locator('.b-ask').click()
+  await normal()
+  await page.locator('.b-ask').click()
+  await page.keyboard.press('v')
+  await page.keyboard.press('j')
+  await expect(page.locator('.row.selected')).toHaveCount(2)
+  await page.keyboard.press('y')
+  await expect(page.locator('.row.selected')).toHaveCount(0)
+  const clip = await app.evaluate(({ clipboard }) => clipboard.readText())
+  expect(clip).toContain('Which **port** should it listen on?')
+  expect(clip).toContain('8080')
+}
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

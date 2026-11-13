@@ -246,6 +246,8 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   const scroller = useRef<HTMLDivElement>(null)
   const [search, setSearch] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  // vstart is where v started: the blocks from it to the cursor are selected.
+  const [vstart, setVstart] = useState<number | null>(null)
   const total = blocks.length + pending.length
   const cursor = win.cursor
 
@@ -379,9 +381,23 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
         if (b && (b.kind === 'tools' || b.kind === 'shell')) store.toggleFold(b.key)
         return true
       }
+      case 'visual':
+        if (vstart !== null) setVstart(null)
+        else if (cursor >= 0 && cursor < blocks.length) setVstart(cursor)
+        return true
+      case 'escape':
+        if (vstart === null && !query) return false
+        setVstart(null)
+        setQuery('')
+        return true
       case 'yank': {
         const sel = window.getSelection()?.toString()
-        const text = sel || (blocks[cursor] ? blockText(blocks[cursor]) : '')
+        let text = sel || (blocks[cursor] ? blockText(blocks[cursor]) : '')
+        if (vstart !== null) {
+          const [a, b] = [Math.min(vstart, cursor), Math.max(vstart, cursor)]
+          text = blocks.slice(a, b + 1).map(blockText).join('\n\n')
+          setVstart(null)
+        }
         if (!text) return true
         yank.text = text
         window.nh.copy(text)
@@ -504,7 +520,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
             <div
               key={b.key}
               data-i={i}
-              className={`row k-${b.kind} ${focused && cursor === i ? 'cursor' : ''} ${matched.has(i) ? 'match' : ''}`}
+              className={`row k-${b.kind} ${focused && cursor === i ? 'cursor' : ''} ${matched.has(i) ? 'match' : ''} ${vstart !== null && i >= Math.min(vstart, cursor) && i <= Math.max(vstart, cursor) ? 'selected' : ''}`}
               onMouseDown={(e) => {
                 if (e.detail === 2) {
                   store.updateWin(win.id, { cursor: i, follow: false })

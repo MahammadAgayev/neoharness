@@ -66,7 +66,8 @@ function threadItems(local: boolean): Item[] {
   const items: Item[] = []
   for (const n of [Coordinator, ...store.listOrder()]) {
     const v = s.threads[n]
-    if (!v) continue
+    // Every workspace's list shows what is open; this one's, all of it.
+    if (!v || (!local && v.state === 'resolved')) continue
     items.push({
       key: `t:${s.workspace}:${n}`,
       section: 'Threads',
@@ -257,7 +258,7 @@ const perTabLimit = 8
 export function items(tab: Tab, q: string): Item[] {
   switch (tab) {
     case 'threads':
-      return fuzzy(threadItems(false), q)
+      return fuzzy(threadItems(!!store.state.picker?.local), q)
     case 'artifacts':
       return fuzzy(artifactItems(), q)
     case 'text':

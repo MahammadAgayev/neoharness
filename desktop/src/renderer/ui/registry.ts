@@ -30,6 +30,8 @@ export type WinAction =
   | 'search'
   | 'searchNext'
   | 'searchPrev'
+  | 'visual'
+  | 'escape'
 
 export type WinHandler = (a: WinAction, count: number) => boolean
 

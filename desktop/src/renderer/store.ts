@@ -78,6 +78,9 @@ export interface Picker {
   only: boolean
   // remote holds the threads of other workspaces once they load.
   remote: { workspace: string; view: ThreadView }[]
+  // local keeps the threads tab to this workspace, resolved ones too, as
+  // <leader>pl does.
+  local?: boolean
 }
 
 export interface Settings {
@@ -993,12 +996,13 @@ class Store {
 
   // --- pickers, the command line, settings ---
 
-  openPicker(tab: Tab, only = false): void {
+  openPicker(tab: Tab, only = false, local = false): void {
     if (['artifacts', 'text', 'outline'].includes(tab) && !this.state.workspace) {
       this.say('open a workspace first', 'muted')
       return
     }
-    this.set({ picker: { tab, query: '', index: 0, only, remote: [] }, cmdline: null })
+    if (local && !this.needWorkspace()) return
+    this.set({ picker: { tab, query: '', index: 0, only, remote: [], local }, cmdline: null })
     void this.loadRemoteThreads()
   }
 

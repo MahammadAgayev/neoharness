@@ -21,7 +21,7 @@ const appMaps: Record<string, Action> = {
   '<leader><leader>': c('everywhere'),
   '<leader>pb': c('buffers'),
   '<leader>pt': c('threads'),
-  '<leader>pl': { fn: () => store.openPicker('threads', true) },
+  '<leader>pl': c('local-threads'),
   '<leader>pa': c('artifacts'),
   '<leader>ps': c('grep'),
   '<leader>pm': c('notifications'),
@@ -42,6 +42,7 @@ const appMaps: Record<string, Action> = {
   '<C-w>c': c('close'),
   '<C-w>q': c('close'),
   '<C-w>o': c('only'),
+  '<C-w>=': { fn: () => document.dispatchEvent(new CustomEvent('nh:equal')) },
   '<C-w>w': c('next-window'),
   '<C-w>h': { move: 'h' },
   '<C-w>j': { move: 'j' },
@@ -96,6 +97,9 @@ const winMaps: Record<string, Action> = {
   '/': w('search'),
   n: w('searchNext'),
   N: w('searchPrev'),
+  v: w('visual'),
+  V: w('visual'),
+  '<Esc>': w('escape'),
 }
 
 // mac maps are the shortcuts of a macOS app; they work in every mode.

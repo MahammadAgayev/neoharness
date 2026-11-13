@@ -330,6 +330,9 @@ kbd {
   background: var(--hl-low);
   box-shadow: inset 2px 0 0 var(--iris);
 }
+.row.selected {
+  background: var(--hl-med);
+}
 .row.match {
   background: color-mix(in srgb, var(--gold) 12%, transparent);
 }

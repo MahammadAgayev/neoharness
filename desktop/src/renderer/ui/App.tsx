@@ -35,6 +35,12 @@ function Layout() {
     document.title = title ? `${workspace} · ${title}` : workspace || 'neoharness'
   }, [workspace, title])
   const [sizes, setSizes] = useState<Record<number, number>>({})
+  // <C-w>= gives the columns their own widths back.
+  useEffect(() => {
+    const on = () => setSizes({})
+    document.addEventListener('nh:equal', on)
+    return () => document.removeEventListener('nh:equal', on)
+  }, [])
   const drag = (colId: number, start: number, width: number) => (e: React.MouseEvent) => {
     e.preventDefault()
     const x0 = e.clientX
