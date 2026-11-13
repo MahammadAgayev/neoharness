@@ -87,6 +87,10 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   threads of every workspace, artifacts, workspaces, commands, notifications
   and the text of every transcript at once. `<Tab>` goes to one kind. The
   pickers (`<leader>pt`, `<leader>pa`, `<leader>ps`, …) open it on one kind.
+  Its tabs are all, threads, artifacts, text, commands, workspaces and
+  notifications. `:ls` and `<leader>pb` pick a thread of this workspace;
+  `gO` opens the outline of the window in front (its headings or your
+  messages) on its own.
   The footer shows only what the chosen result can do. `<CR>` on a thread
   of another workspace goes to that workspace; `<C-v>` and `<C-x>` show it
   in a split beside the one you work in, its workspace name in foam on its

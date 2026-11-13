@@ -65,7 +65,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
     ],
   },
   {
-    title: 'windows and buffers',
+    title: 'windows',
     rows: [
       ['<Tab>  <C-w>w', 'next window'],
       ['<C-h j k l>  <C-w>h…', 'window in a direction'],

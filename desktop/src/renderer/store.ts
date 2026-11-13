@@ -71,7 +71,7 @@ export interface Doc {
   conflict?: boolean
 }
 
-export type Tab = 'all' | 'threads' | 'artifacts' | 'text' | 'commands' | 'workspaces' | 'notifications' | 'buffers' | 'outline'
+export type Tab = 'all' | 'threads' | 'artifacts' | 'text' | 'commands' | 'workspaces' | 'notifications' | 'outline'
 
 export interface Picker {
   tab: Tab
@@ -1257,7 +1257,7 @@ class Store {
       case 'b':
       case 'buffer':
       case 'buf': {
-        if (!a[0]) return this.openPicker('buffers', true)
+        if (!a[0]) return this.openPicker('threads', true, true)
         const buf = this.findBuffer(a[0])
         if (!buf) return this.say(`no buffer ${a[0]}`, 'love')
         if (w) this.show(w.id, buf)
@@ -1265,7 +1265,7 @@ class Store {
       }
       case 'ls':
       case 'buffers':
-        return this.openPicker('buffers', true)
+        return this.openPicker('threads', true, true)
       case 'messages':
       case 'mes':
         if (w) this.show(w.id, { kind: 'messages' })

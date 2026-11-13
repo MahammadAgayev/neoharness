@@ -7,7 +7,7 @@ import { fuzzy, grep } from './lib/fuzzy'
 import { outline } from './lib/markdown'
 import { blockText } from './lib/transcript'
 import type { Tone } from './lib/toasts'
-import { store, type BufRef, type Tab } from './store'
+import { store, type Tab } from './store'
 
 export interface Item {
   key: string
@@ -33,7 +33,6 @@ export const tabs: { tab: Tab; title: string }[] = [
   { tab: 'commands', title: 'Commands' },
   { tab: 'workspaces', title: 'Workspaces' },
   { tab: 'notifications', title: 'Notifications' },
-  { tab: 'buffers', title: 'Buffers' },
   { tab: 'outline', title: 'Outline' },
 ]
 
@@ -177,37 +176,6 @@ function notificationItems(): Item[] {
     }))
 }
 
-function bufferItems(): Item[] {
-  const s = store.state
-  const show = (buf: BufRef) => () => {
-    const w = store.cur()
-    if (w) store.show(w.id, buf)
-  }
-  const items = s.workspace ? [...threadItems(true), ...artifactItems()] : []
-  for (const [label, buf] of [
-    ['threads', { kind: 'threads' }],
-    ['messages', { kind: 'messages' }],
-  ] as [string, BufRef][]) {
-    if (label === 'threads' && !s.workspace) continue
-    items.push({
-      key: `b:${label}`,
-      section: 'Buffers',
-      glyph: '≡',
-      tone: 'muted',
-      label,
-      run: () => {
-        show(buf)()
-        if (buf.kind === 'chat') store.focusPrompt()
-      },
-      split: (vert) => {
-        store.split(vert, buf)
-        if (buf.kind === 'chat') store.focusPrompt()
-      },
-    })
-  }
-  return items.map((it) => ({ ...it, section: 'Buffers' }))
-}
-
 // textItems search every transcript of the workspace as the query is typed.
 function textItems(q: string): Item[] {
   const s = store.state
@@ -298,8 +266,6 @@ export function items(tab: Tab, q: string): Item[] {
       return fuzzy(workspaceItems(), q)
     case 'notifications':
       return fuzzy(notificationItems(), q)
-    case 'buffers':
-      return fuzzy(bufferItems(), q)
     case 'outline':
       return fuzzy(outlineItems(), q)
     case 'all': {

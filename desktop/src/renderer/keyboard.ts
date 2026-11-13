@@ -20,7 +20,7 @@ const w = (win: WinAction): Action => ({ win })
 // app maps work everywhere outside Insert mode.
 const appMaps: Record<string, Action> = {
   '<leader><leader>': c('everywhere'),
-  '<leader>pb': c('buffers'),
+  '<leader>pb': c('local-threads'),
   '<leader>pt': c('threads'),
   '<leader>pl': c('local-threads'),
   '<leader>pa': c('artifacts'),

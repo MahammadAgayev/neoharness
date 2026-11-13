@@ -66,6 +66,7 @@ test('the whole app, populated', async () => {
     await expect(page.locator('.list-row .name', { hasText: 'ledger-migration' })).toBeVisible()
     await shot('31-show-workspace')
     await page.keyboard.press('Meta+k')
+    await expect(page.locator('.palette-tabs .tab')).toHaveText(['All', 'Threads', 'Artifacts', 'Text', 'Commands', 'Workspaces', 'Notifications'])
     await shot('32-show-search')
     await page.keyboard.type('ledger')
     await shot('33-show-search-query')

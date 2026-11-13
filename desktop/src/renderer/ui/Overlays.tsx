@@ -25,7 +25,9 @@ export function Picker() {
   const active = items[index] as Item | undefined
 
   // Artifacts, text, buffers and the outline are of the open workspace.
-  const usable = store.state.workspace ? tabs : tabs.filter((t) => !['artifacts', 'text', 'buffers', 'outline'].includes(t.tab))
+  // The outline is of the window in front, so gO opens it alone; it is no
+  // tab of search everywhere.
+  const usable = tabs.filter((t) => t.tab !== 'outline' && (store.state.workspace || !['artifacts', 'text'].includes(t.tab)))
   const shown = p.only ? tabs.filter((t) => t.tab === p.tab) : usable
   const choose = (it: Item | undefined, how?: 'right' | 'above') => {
     if (!it) return
