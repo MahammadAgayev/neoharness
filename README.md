@@ -49,7 +49,36 @@ the same workspaces and threads at the same time. It has:
 
 See [docs/desktop.md](docs/desktop.md).
 
-## Install
+## Download
+
+Every [release](https://github.com/MahammadAgayev/neoharness/releases) has
+the `neoharness` binary for macOS, Linux and Windows, and the macOS app for
+Apple silicon (`mac-arm64`) and Intel (`mac-x64`). You need `claude` on your
+PATH.
+
+1. Put the binary on your PATH, for example:
+
+   ```sh
+   tar -xzf neoharness-*-darwin-arm64.tar.gz
+   mkdir -p ~/.local/bin && mv neoharness-*/neoharness ~/.local/bin/
+   ```
+
+   The app runs this binary for the hub, so install it for the app too.
+2. For the app, unzip it and move `neoharness.app` to `~/Applications` or
+   `/Applications`. It is signed ad hoc, not notarized, so macOS blocks the
+   first open. Click Done, then System Settings → Privacy & Security → Open
+   Anyway. Or run once:
+
+   ```sh
+   xattr -dr com.apple.quarantine ~/Applications/neoharness.app
+   ```
+
+   A binary you downloaded with a browser may need the same command:
+   `xattr -d com.apple.quarantine ~/.local/bin/neoharness`.
+
+`checksums.txt` has the SHA-256 of each file.
+
+## Install from source
 
 You need Go 1.26 and `claude` on your PATH.
 

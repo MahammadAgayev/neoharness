@@ -9,6 +9,21 @@ go test -race ./...
 The tests need no model and no real terminal: they use a fake agent, a fake
 client and the tcell simulation screen.
 
+## Releases
+
+A tag `v*` makes a GitHub release (`.github/workflows/release.yml`):
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The workflow runs the Go and desktop unit tests. It then builds the binary
+for macOS, Linux and Windows on amd64 and arm64, and the macOS app for arm64
+and x64, with the tag as the app's version. It publishes them with
+`checksums.txt` and notes made from the commits. The app is signed ad hoc,
+not notarized; the README says how to open it the first time.
+
 ## Code map
 
 | Package | What it does |
