@@ -19,7 +19,7 @@ import {
 import { parseEx } from './lib/ex'
 import { hunks, lines, take } from './lib/linediff'
 import { schemeNames } from './lib/themes'
-import { errorToast, keep, noticeToast, viewToast, type Toast, type ToastSpec, type Tone } from './lib/toasts'
+import { endHidesError, errorToast, keep, noticeToast, viewToast, type Toast, type ToastSpec, type Tone } from './lib/toasts'
 import { addEvent, fromEvents, lastText, lastUserMessage, settle, type Block } from './lib/transcript'
 import { typeahead } from './ui/registry'
 
@@ -494,7 +494,7 @@ class Store {
   private toast(spec: ToastSpec): void {
     const s = this.state
     const shown = spec.workspace === s.workspace ? this.onScreen(spec.thread) : this.onScreen(`${spec.workspace}/${spec.thread}`)
-    if (shown && document.hasFocus()) return
+    if ((shown && document.hasFocus()) || endHidesError(s.toasts, spec)) return
     const now = Date.now()
     const t: Toast = { ...spec, id: nextId(), at: now, until: spec.life ? now + spec.life : 0 }
     const toasts = s.toasts.filter((o) => !(o.workspace === t.workspace && o.thread === t.thread))

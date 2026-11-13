@@ -14,7 +14,7 @@ import { fuzzy, fuzzyScore, grep } from '../src/renderer/lib/fuzzy'
 import { keyName, Sequencer, split } from '../src/renderer/lib/keys'
 import { hunks, lines, take } from '../src/renderer/lib/linediff'
 import { colors, contrast, ratios, resolveScheme, schemes } from '../src/renderer/lib/themes'
-import { keep, viewToast, type Toast } from '../src/renderer/lib/toasts'
+import { endHidesError, keep, viewToast, type Toast } from '../src/renderer/lib/toasts'
 import { addEvent, fromEvents, lastText, lastUserMessage, shortTool, type Block } from '../src/renderer/lib/transcript'
 
 const at = '2026-11-13T10:00:00Z'
@@ -119,6 +119,13 @@ describe('toasts', () => {
   it('keeps a quiet thread quiet unless it waits', () => {
     expect(viewToast('w', view({ state: 'running' }), view({ state: 'idle', quiet: true }), opts)).toBeNull()
     expect(viewToast('w', view({}), view({ state: 'waiting', quiet: true, waiting: 'which db?' }), opts)?.body).toBe('asks: which db?')
+  })
+
+  it('keeps the error of a failed turn over its turn end', () => {
+    const err: Toast = { id: 1, workspace: 'w', thread: 'api', glyph: '✗', tone: 'love', body: 'the agent failed', until: 9, at: 0 }
+    const end = viewToast('w', view({ state: 'running' }), view({ state: 'idle' }), opts)!
+    expect(endHidesError([err], end)).toBe(true)
+    expect(endHidesError([{ ...err, thread: 'docs' }], end)).toBe(false)
   })
 
   it('keeps a waiting toast only while the thread waits off screen', () => {

@@ -83,6 +83,12 @@ export function errorToast(workspace: string, thread: string, e: Event): ToastSp
   return { workspace, thread, glyph: '✗', tone: 'love', body: e.text ?? '', life: 8 * s, needsYou: true }
 }
 
+// endHidesError says spec is the end of a failed turn, whose error toast
+// came just before and says more.
+export function endHidesError(toasts: Toast[], spec: ToastSpec): boolean {
+  return spec.glyph === '✓' && spec.tone === 'pine' && toasts.some((o) => o.workspace === spec.workspace && o.thread === spec.thread && o.glyph === '✗')
+}
+
 // keep reports whether a toast still shows. onScreen says whether its
 // thread is in a window now; for another workspace only its summary is known.
 export function keep(
