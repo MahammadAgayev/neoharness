@@ -33,10 +33,11 @@ const defaultMCPPort = 47821
 // logOut is where the hub logs. Never the terminal: the TUI owns it.
 var logOut io.Writer = io.Discard
 
-// startHub runs the hub in this process: the local API on the socket, so a
-// second neoharness can share it, and MCP on the fixed port. stop cancels the
-// running turns and waits for them to end.
-func startHub() (stop func(), err error) {
+// startHub runs the hub in this process: the local API on the socket, which
+// every neoharness shares, and MCP on the fixed port. asked is called when a
+// client asks the hub to stop. stop cancels the running turns and waits for
+// them to end.
+func startHub(asked func()) (stop func(), err error) {
 	sock := hubapi.SocketPath()
 	if err := os.MkdirAll(filepath.Dir(sock), 0o755); err != nil {
 		return nil, err
@@ -116,7 +117,8 @@ func startHub() (stop func(), err error) {
 	mcpMux := http.NewServeMux()
 	mcpMux.Handle("/mcp", mcpserver.Handler(h))
 	mcpSrv := &http.Server{Handler: mcpMux}
-	apiSrv := &http.Server{Handler: hubserver.Handler(h)}
+	info := hubapi.Info{Version: version(), PID: os.Getpid(), Started: time.Now()}
+	apiSrv := &http.Server{Handler: hubserver.Handler(h, info, asked)}
 	go mcpSrv.Serve(mcpLn)
 	go apiSrv.Serve(apiLn)
 

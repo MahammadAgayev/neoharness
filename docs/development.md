@@ -13,7 +13,7 @@ client and the tcell simulation screen.
 
 | Package | What it does |
 |---|---|
-| `cmd/neoharness` | CLI: starts the hub in this process, opens the TUI, file lists and `!` commands, locally or over ssh |
+| `cmd/neoharness` | CLI: the `hub` commands, starts the hub in the background, opens the TUI, file lists and `!` commands, locally or over ssh |
 | `internal/model` | shared types; a leaf package |
 | `internal/workspace` | disk storage of workspaces, threads, transcripts, artifacts |
 | `internal/hub` | the core: queues, turns, state, routing, permissions, slash commands, artifacts |
@@ -60,5 +60,7 @@ test -S $T/home/hub.sock || echo "NOT the scratch hub — stop here"
 
 - If a hub answers on the real socket, a TUI with the real home uses it.
   Always check that the scratch socket exists before you type.
+- The scratch hub runs on after the TUI closes. Stop it when you are done:
+  `NEOHARNESS_HOME=$T/home neoharness hub stop`.
 - `:new` leaves you in Insert mode.
 - Use `send-keys -l` for text with special characters.

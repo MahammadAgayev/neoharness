@@ -931,26 +931,9 @@ func (a *App) closeCur(force bool) {
 	a.cur = to
 }
 
-// quitAll quits, unless that stops running turns and force is not set. The
-// hub lives in this process, so quitting ends every turn in flight.
+// quitAll quits, unless an artifact has unsaved changes and force is not set.
+// The hub runs on, so no turn stops.
 func (a *App) quitAll(force bool) {
-	// In the open workspace every thread is known, the coordinator too, and a
-	// thread at a permission card still has its turn in flight.
-	n := 0
-	for _, v := range a.threads {
-		if v.State == model.StateRunning || v.Permission != nil {
-			n++
-		}
-	}
-	for _, p := range a.workspaces {
-		if p.Name != a.workspace {
-			n += p.Counts[model.StateRunning]
-		}
-	}
-	if n > 0 && !force {
-		a.notify(fmt.Sprintf("%d running · :qa! stops them", n), a.th.Gold)
-		return
-	}
 	for _, b := range a.bufs {
 		if e := b.Edit; e != nil && e.Dirty && !force {
 			a.notify("unsaved changes in "+b.Artifact+" · :w saves, :qa! drops them", a.th.Gold)

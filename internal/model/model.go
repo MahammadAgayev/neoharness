@@ -246,6 +246,9 @@ const (
 	UpdateDeleted UpdateKind = "deleted"
 	// UpdateArtifact says an artifact was written.
 	UpdateArtifact UpdateKind = "artifact"
+	// UpdateStopped is the last update of a hub that was asked to stop. A
+	// client must not start a new hub for it.
+	UpdateStopped UpdateKind = "stopped"
 )
 
 // Update is one change pushed to subscribers.

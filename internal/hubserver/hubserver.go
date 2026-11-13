@@ -1,6 +1,6 @@
 // Package hubserver serves the hub's local API over a unix socket. It is the
 // server half of hubapi and holds no logic of its own: every route is one hub
-// call.
+// call, or one call to the process that runs the hub.
 package hubserver
 
 import (
@@ -15,9 +15,18 @@ import (
 	"github.com/MahammadAgayev/neoharness/internal/model"
 )
 
-// Handler routes the API.
-func Handler(h *hub.Hub) http.Handler {
+// Handler routes the API. stop asks the process that runs the hub to stop
+// it; it must not wait for that, because the stop waits for this request.
+func Handler(h *hub.Hub, info hubapi.Info, stop func()) http.Handler {
 	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /hub", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, info, nil)
+	})
+	mux.HandleFunc("POST /hub/stop", func(w http.ResponseWriter, r *http.Request) {
+		stop()
+		reply(w, nil, nil)
+	})
 
 	mux.HandleFunc("GET /workspaces", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, h.Workspaces(), nil)
@@ -151,6 +160,9 @@ func Handler(h *hub.Hub) http.Handler {
 				data, _ := json.Marshal(u)
 				fmt.Fprintf(w, "data: %s\n\n", data)
 				flusher.Flush()
+				if u.Kind == model.UpdateStopped {
+					return
+				}
 			case <-r.Context().Done():
 				return
 			}

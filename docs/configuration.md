@@ -51,7 +51,7 @@ transparent terminals stay transparent. `NO_COLOR` is supported.
 
 `setup()` calls set the hub and the agents. A call sets only the keys it
 names, so `init.lua` changes what `defaults.lua` set. They take effect when
-the hub starts: restart neoharness after a change.
+the hub starts: run `neoharness hub restart` after a change.
 
 ```lua
 require("neoharness").setup({
@@ -95,8 +95,9 @@ goes back to the setting.
 `NEOHARNESS_HOME` is the data folder, and the folder of `init.lua`, instead
 of `~/.neoharness`.
 
-The hub runs in the TUI's process, so it has your shell's environment
-(PATH, `SSH_AUTH_SOCK`, credentials).
+The hub gets the environment of the shell that started it (PATH,
+`SSH_AUTH_SOCK`, credentials). After you change them, run
+`neoharness hub restart` from a shell that has the new ones.
 
 ## Remote threads
 

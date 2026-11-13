@@ -24,9 +24,11 @@ Also:
 - Normal Vim motions, operators, search, marks, macros, splits and `:`
   commands. Configuration is in `init.lua`.
 
-neoharness is one program. The hub that runs the sessions lives in the TUI
-process: no daemon, no tmux. Agents talk to it through an MCP server that it
-adds to each session, so you change nothing in your Claude setup.
+neoharness is one program. The hub that runs the sessions is a background
+process, as the tmux server is: the first `neoharness` starts it, and turns
+run on when you close the TUI. `neoharness hub stop` stops it. Agents talk to
+it through an MCP server that it adds to each session, so you change nothing
+in your Claude setup.
 
 ## Install
 

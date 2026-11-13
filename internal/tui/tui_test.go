@@ -684,20 +684,15 @@ func TestQuitClosesLastWindow(t *testing.T) {
 	}
 }
 
-// TestQuitRefusesWhileThreadsRun: the hub lives in this process, so quitting
-// stops every running turn. Like unsaved changes in Vim, that needs a !.
-func TestQuitRefusesWhileThreadsRun(t *testing.T) {
-	h := start(t)
+// TestQuitWhileThreadsRun: the hub runs on after the TUI, so quitting stops
+// no turn and needs no !.
+func TestQuitWhileThreadsRun(t *testing.T) {
 	for _, cmd := range []string{":q", ":qa"} {
+		h := start(t)
 		h.press(cmd, "<CR>")
-		if h.a.quit {
-			t.Fatalf("%s quit with a thread running", cmd)
+		if !h.a.quit {
+			t.Fatalf("%s did not quit with a thread running", cmd)
 		}
-		h.see("1 running · :qa! stops them")
-	}
-	h.press(":qa!", "<CR>")
-	if !h.a.quit {
-		t.Fatal(":qa! should quit")
 	}
 }
 
@@ -2934,38 +2929,6 @@ func TestLineBreaksAndImages(t *testing.T) {
 				t.Error("an image should link to its file")
 			}
 		}
-	}
-}
-
-func TestQuitGuardsTheCoordinatorAndPermissionWaits(t *testing.T) {
-	h := start(t)
-	h.openDemo()
-	setState := func(name string, st model.State, perm *model.Permission) {
-		v := h.a.threads[name]
-		v.State, v.Permission = st, perm
-		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: name, View: &v})
-	}
-	for name := range h.a.threads {
-		setState(name, model.StateIdle, nil)
-	}
-	h.hub.workspaces[0].Counts = nil
-	h.a.loadWorkspaces()
-	setState(model.Coordinator, model.StateRunning, nil)
-	h.press(":qa", "<CR>")
-	if h.a.quit {
-		t.Fatal(":qa should not stop the coordinator's turn")
-	}
-	setState(model.Coordinator, model.StateIdle, nil)
-	setState("auth-refactor", model.StateWaiting, &model.Permission{Tool: "Bash"})
-	h.press(":qa", "<CR>")
-	if h.a.quit {
-		t.Fatal(":qa should not stop a turn that waits on a permission")
-	}
-	h.see("1 running · :qa! stops them")
-	setState("auth-refactor", model.StateIdle, nil)
-	h.press(":qa", "<CR>")
-	if !h.a.quit {
-		t.Fatal(":qa should quit when no turn is in flight")
 	}
 }
 

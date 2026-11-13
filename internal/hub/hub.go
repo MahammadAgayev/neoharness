@@ -259,6 +259,9 @@ func (h *Hub) Close() {
 	case <-done:
 	case <-time.After(closeWait):
 	}
+	h.mu.Lock()
+	h.publish(model.Update{Kind: model.UpdateStopped})
+	h.mu.Unlock()
 }
 
 // --- workspaces ---

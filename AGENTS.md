@@ -1,7 +1,8 @@
 # AGENTS.md
 
-neoharness is a Go TUI with a hub in the same process that runs many Claude
-Code sessions: a coordinator and threads per workspace, local or over ssh.
+neoharness is a Go TUI and a background hub, as tmux has a server, that runs
+many Claude Code sessions: a coordinator and threads per workspace, local or
+over ssh.
 
 Read first:
 

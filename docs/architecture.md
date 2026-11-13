@@ -1,7 +1,7 @@
 # Architecture
 
 ```
- neoharness (TUI) ──unix socket, HTTP + SSE──▶ hub (same process)
+ neoharness (TUI) ──unix socket, HTTP + SSE──▶ hub (background process)
                                                ├─ state of all workspaces and threads (only writer)
                                                ├─ one turn at a time per thread → a kept claude -p process (local or ssh)
                                                ├─ MCP server http://127.0.0.1:47821/mcp (token = which thread)
@@ -10,12 +10,16 @@
 
 ## The hub
 
-- The hub is the only part that runs Claude and writes state. It starts with
-  the TUI and stops with it. The TUI keeps no state of its own.
-- A second TUI uses the first one's hub through the socket. When the first
-  closes, the next one starts its own hub.
-- Closing stops running turns. SIGHUP and SIGTERM stop them first too, so no
-  `claude` process is left.
+- The hub is the only part that runs Claude and writes state. The TUI keeps
+  no state of its own.
+- The hub is a process of its own, as the tmux server is. When no hub
+  answers on the socket, neoharness starts `neoharness hub serve` in a new
+  session and waits for it. Every TUI shares that hub, and turns run on after
+  they close.
+- `neoharness hub stop` asks the hub over the socket to stop. It stops the
+  running turns, sends a last `stopped` update and exits; SIGHUP and SIGTERM
+  do the same. A TUI that gets `stopped` waits for a hub and does not start
+  one. A TUI that loses the hub without it starts a new one.
 - Reopening loses nothing. Each thread keeps its Claude session UUID on
   disk, and the next turn continues it with `--resume`.
 

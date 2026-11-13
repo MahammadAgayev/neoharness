@@ -147,6 +147,27 @@ to select text with the terminal.
 `:b <name>`, `:ls`, `:split`, `:vsplit`, `:only`, `:threads`, `:artifacts`,
 `:messages`, `:help`, `:q`, `:qa`, `:q!`, `:qa!`.
 
-`:q` on the last window and `:qa` refuse while threads run. `:qa!` stops
-them and quits. When you start again, each thread continues its Claude
-session.
+`:q` on the last window and `:qa` quit. The hub and its turns run on, so a
+thread that works keeps working, and the next `neoharness` shows where it
+is. `:qa!` also drops unsaved artifact changes.
+
+## The hub
+
+The hub runs the sessions in a background process, as the tmux server does.
+The first `neoharness` starts it, and every other one shares it.
+
+```
+neoharness hub start     start the hub in the background
+neoharness hub stop      stop the running turns and the hub
+neoharness hub restart   stop it and start a new one, e.g. after an upgrade or an init.lua change
+neoharness hub status    pid, uptime, running turns, version
+neoharness hub serve     run the hub in this terminal
+```
+
+- After `hub stop`, an open TUI says the hub stopped and waits. It does not
+  start a new one; `hub start` brings it back. If the hub goes away by
+  itself, the TUI starts a new one.
+- `hub status` says when the hub is from another build than this
+  neoharness: run `neoharness hub restart`.
+- Each thread keeps its Claude session, so a new hub continues every
+  conversation.

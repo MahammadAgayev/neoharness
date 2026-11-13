@@ -39,7 +39,7 @@ func TestClientServerRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &http.Server{Handler: Handler(h)}
+	srv := &http.Server{Handler: Handler(h, hubapi.Info{}, func() {})}
 	go srv.Serve(ln)
 	defer srv.Close()
 
@@ -127,5 +127,64 @@ func TestClientServerRoundTrip(t *testing.T) {
 	}
 	if ps, _ := c.Workspaces(); len(ps) != 0 {
 		t.Fatalf("workspaces after delete = %+v", ps)
+	}
+}
+
+// TestStopRequest checks what `neoharness hub stop` relies on: the request
+// reaches the process, and listeners get a last update that says the hub
+// stopped on purpose, so they do not start a new one.
+func TestStopRequest(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("NEOHARNESS_HOME", home)
+	h, err := hub.New(hub.Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return echo{} }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sock := filepath.Join(home, "hub.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	asked := make(chan struct{}, 1)
+	started := time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)
+	srv := &http.Server{Handler: Handler(h, hubapi.Info{Version: "abc", PID: 42, Started: started}, func() { asked <- struct{}{} })}
+	go srv.Serve(ln)
+	defer srv.Close()
+
+	c := hubapi.New(sock)
+	info, err := c.Info()
+	if err != nil || info.Version != "abc" || info.PID != 42 || !info.Started.Equal(started) {
+		t.Fatalf("info = %+v, %v", info, err)
+	}
+	updates, err := c.Updates(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.StopHub(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-asked:
+	case <-time.After(time.Second):
+		t.Fatal("the stop request did not reach the process")
+	}
+	h.Close()
+	timeout := time.After(3 * time.Second)
+	for {
+		select {
+		case u, ok := <-updates:
+			if !ok {
+				t.Fatal("the stream ended without a stopped update")
+			}
+			if u.Kind != model.UpdateStopped {
+				continue
+			}
+			if _, ok := <-updates; ok {
+				t.Fatal("the stream should end after the stopped update")
+			}
+			return
+		case <-timeout:
+			t.Fatal("no stopped update")
+		}
 	}
 }

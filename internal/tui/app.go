@@ -73,7 +73,7 @@ const (
 type (
 	evUpdate     struct{ u model.Update }
 	evResync     struct{}
-	evDisconnect struct{}
+	evDisconnect struct{ stopped bool }
 	evTick       struct{}
 	evKeyTimeout struct{ seq int }
 	evComplete   struct {
@@ -310,7 +310,11 @@ func (a *App) handle(ev tcell.Event) {
 	case evDisconnect:
 		if !a.offline {
 			a.offline = true
-			a.notify("lost the hub; reconnecting…", a.th.Love)
+			if ev.stopped {
+				a.notify("the hub stopped; neoharness hub start brings it back", a.th.Love)
+			} else {
+				a.notify("lost the hub; reconnecting…", a.th.Love)
+			}
 		}
 	case evRedraw:
 	case evTick:
@@ -334,23 +338,31 @@ func (a *App) handle(ev tcell.Event) {
 	}
 }
 
-// listen streams hub updates into the event loop, reconnecting forever.
+// listen streams hub updates into the event loop, reconnecting forever. A
+// hub that was stopped on purpose is not started again: `hub stop` would
+// mean nothing while a TUI is open.
 func (a *App) listen(ctx context.Context) {
+	stopped := false
 	for ctx.Err() == nil {
 		ch, err := a.c.Updates(ctx)
 		if err != nil {
-			_ = a.s.PostEvent(evDisconnect{})
-			if a.restart != nil {
+			_ = a.s.PostEvent(evDisconnect{stopped})
+			if a.restart != nil && !stopped {
 				_ = a.restart()
 			}
 			time.Sleep(time.Second)
 			continue
 		}
+		stopped = false
 		_ = a.s.PostEvent(evResync{})
 		for u := range ch {
+			if u.Kind == model.UpdateStopped {
+				stopped = true
+				continue
+			}
 			_ = a.s.PostEvent(evUpdate{u})
 		}
-		_ = a.s.PostEvent(evDisconnect{})
+		_ = a.s.PostEvent(evDisconnect{stopped})
 		time.Sleep(500 * time.Millisecond)
 	}
 }

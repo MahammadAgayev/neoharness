@@ -81,6 +81,13 @@ type (
 	Error struct {
 		Error string `json:"error"`
 	}
+	// Info is the hub process itself. Version is empty for a build without
+	// version control data.
+	Info struct {
+		Version string    `json:"version,omitempty"`
+		PID     int       `json:"pid"`
+		Started time.Time `json:"started"`
+	}
 )
 
 // Client talks to a hub.
@@ -102,6 +109,17 @@ func New(socket string) *Client {
 func (c *Client) Ping() error {
 	_, err := c.Workspaces()
 	return err
+}
+
+func (c *Client) Info() (Info, error) {
+	var out Info
+	return out, c.do("GET", "/hub", nil, &out)
+}
+
+// StopHub asks the hub to stop its turns and exit. It returns before the hub
+// is gone.
+func (c *Client) StopHub() error {
+	return c.do("POST", "/hub/stop", nil, nil)
 }
 
 func (c *Client) Workspaces() ([]model.WorkspaceView, error) {
