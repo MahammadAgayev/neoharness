@@ -29,5 +29,7 @@ app=$(ls -d dist/neoharness-darwin-*/neoharness.app | head -n 1)
 mkdir -p "$APPS"
 rm -rf "$APPS/neoharness.app"
 ditto "$app" "$APPS/neoharness.app"
+# Spotlight can take a long time to find a new copy on its own.
+mdimport "$APPS/neoharness.app" 2>/dev/null || true
 echo "installed $APPS/neoharness.app"
 echo "a hub that runs keeps the old binary until: neoharness hub stop"
