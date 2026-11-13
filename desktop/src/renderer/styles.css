@@ -23,6 +23,7 @@ body,
 }
 
 body {
+  tab-size: 4;
   background: var(--base);
   color: var(--text);
   font-family: var(--font-text);
@@ -672,6 +673,27 @@ kbd {
   color: var(--subtle);
   margin-left: 0;
 }
+.md blockquote.alert {
+  border-left-width: 3px;
+  color: var(--text);
+}
+.md .alert-title {
+  font-weight: 600;
+  margin-bottom: 0.2em;
+}
+.md .alert-title + p {
+  margin-top: 0;
+}
+.alert-note { border-left-color: var(--foam) !important; }
+.alert-note .alert-title { color: var(--foam); }
+.alert-tip { border-left-color: var(--pine) !important; }
+.alert-tip .alert-title { color: var(--pine); }
+.alert-important { border-left-color: var(--iris) !important; }
+.alert-important .alert-title { color: var(--iris); }
+.alert-warning { border-left-color: var(--gold) !important; }
+.alert-warning .alert-title { color: var(--gold); }
+.alert-caution { border-left-color: var(--love) !important; }
+.alert-caution .alert-title { color: var(--love); }
 .md table {
   border-collapse: collapse;
   display: block;

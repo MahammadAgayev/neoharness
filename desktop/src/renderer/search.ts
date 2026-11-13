@@ -253,12 +253,20 @@ function outlineItems(): Item[] {
   return items
 }
 
+// needYouFirst puts the threads that wait first while nothing is typed:
+// those are the ones you open search for.
+function needYouFirst(items: Item[], q: string): Item[] {
+  if (q) return items
+  const rank = (it: Item) => (it.glyph === '◆' ? 0 : it.glyph === '●' ? 1 : 2)
+  return items.slice().sort((a, b) => rank(a) - rank(b))
+}
+
 const perTabLimit = 8
 
 export function items(tab: Tab, q: string): Item[] {
   switch (tab) {
     case 'threads':
-      return fuzzy(threadItems(!!store.state.picker?.local), q)
+      return fuzzy(needYouFirst(threadItems(!!store.state.picker?.local), q), q)
     case 'artifacts':
       return fuzzy(artifactItems(), q)
     case 'text':
@@ -277,7 +285,7 @@ export function items(tab: Tab, q: string): Item[] {
       // With no query: what you most likely want, the threads that need you
       // and the commands. With one: the best of every tab, in groups.
       const groups = [
-        fuzzy(threadItems(false), q),
+        fuzzy(needYouFirst(threadItems(false), q), q),
         fuzzy(artifactItems(), q),
         fuzzy(workspaceItems(), q),
         fuzzy(commandItems(), q),

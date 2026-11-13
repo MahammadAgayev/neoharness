@@ -21,13 +21,27 @@ export function escapeHTML(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 }
 
+const alertTitles: Record<string, string> = {
+  NOTE: 'Note',
+  TIP: 'Tip',
+  IMPORTANT: 'Important',
+  WARNING: 'Warning',
+  CAUTION: 'Caution',
+}
+
 // render turns markdown into safe HTML. An inline code span that names an
 // artifact becomes a link to it, as <CR> on its name opens it in the TUI.
 export function render(md: string, artifacts?: Set<string>): string {
   let html = DOMPurify.sanitize(marked.parse(md, { async: false }) as string, {
-    FORBID_TAGS: ['style', 'form', 'input', 'iframe'],
+    // Task lists are disabled checkboxes; no form can send them anywhere.
+    FORBID_TAGS: ['style', 'form', 'iframe'],
     FORBID_ATTR: ['style'],
   })
+  // GitHub's alerts: a quote that starts with [!NOTE] and the like.
+  html = html.replace(
+    /<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/g,
+    (_m, kind: string) => `<blockquote class="alert alert-${kind.toLowerCase()}"><p class="alert-title">${alertTitles[kind]}</p><p>`,
+  )
   if (artifacts && artifacts.size > 0) {
     html = html.replace(/<code>([a-z0-9][a-z0-9-]{0,39})<\/code>/g, (m, name: string) =>
       artifacts.has(name) ? `<code class="artifact-link" data-artifact="${name}">${name}</code>` : m,
