@@ -21,6 +21,9 @@ func TestParseLocation(t *testing.T) {
 	if _, err := ParseLocation(" "); err == nil {
 		t.Error("empty location should fail")
 	}
+	if l, err := ParseLocation("-oProxyCommand=touch x:dir"); err == nil {
+		t.Errorf("a host that ssh reads as an option should fail, got %+v", l)
+	}
 }
 
 func TestValidName(t *testing.T) {

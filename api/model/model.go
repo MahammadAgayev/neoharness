@@ -80,6 +80,11 @@ func ParseLocation(s string) (Location, error) {
 	}
 	if i := strings.Index(s, ":"); i > 0 && !strings.Contains(s[:i], "/") && !drivePath(s) {
 		host, dir := s[:i], s[i+1:]
+		// ssh reads a host that starts with a dash as an option, such as
+		// -oProxyCommand, which runs a command here.
+		if strings.HasPrefix(host, "-") {
+			return Location{}, fmt.Errorf("host %q starts with a dash", host)
+		}
 		if dir == "" {
 			dir = "~"
 		}
