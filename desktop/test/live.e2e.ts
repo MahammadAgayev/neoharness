@@ -36,7 +36,7 @@ test('a thread runs a turn: tool calls, a reply in markdown, a finished toast', 
   if (!process.env.NEOHARNESS_BIN) execFileSync('go', ['build', '-o', bin, './cmd/neoharness'], { cwd: path.resolve(__dirname, '../..') })
   const app = await electron.launch({
     args: [path.join(__dirname, '..', 'out', 'main', 'index.js')],
-    env: { ...process.env, NEOHARNESS_HOME: home, NEOHARNESS_BIN: bin },
+    env: { ...process.env, NEOHARNESS_DESKTOP_HIDDEN: '1', NEOHARNESS_HOME: home, NEOHARNESS_BIN: bin },
   })
   const page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })

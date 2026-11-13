@@ -44,7 +44,7 @@ test('the whole app, populated', async () => {
 
   const app = await electron.launch({
     args: [path.join(__dirname, '..', 'out', 'main', 'index.js')],
-    env: { ...process.env, NEOHARNESS_HOME: tmp, NEOHARNESS_BIN: '/usr/bin/false' },
+    env: { ...process.env, NEOHARNESS_DESKTOP_HIDDEN: '1', NEOHARNESS_HOME: tmp, NEOHARNESS_BIN: '/usr/bin/false' },
   })
   const page = await app.firstWindow()
   await page.setViewportSize({ width: 1440, height: 900 })
