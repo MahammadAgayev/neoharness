@@ -109,7 +109,7 @@ export function Prompt(props: {
       if (text.trim()) {
         stashes.set(thread, text)
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
-        store.say('draft stashed · it comes back after you send · ⌃S again takes it back', 'muted')
+        store.say('draft stashed · it comes back after you send · Ctrl S again takes it back', 'muted')
       } else if (stashes.has(thread)) {
         view.dispatch({ changes: { from: 0, to: 0, insert: stashes.get(thread)! } })
         stashes.delete(thread)

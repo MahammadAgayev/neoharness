@@ -7,6 +7,7 @@ import { ChatWindow } from './ChatWindow'
 import { CommandLine, HubBanner, Picker, Toasts } from './Overlays'
 import { Settings } from './Settings'
 import { KeyHints } from './KeyHints'
+import { NewWorkspace } from './NewWorkspace'
 import { Tooltip } from './Tooltip'
 import { HelpWindow, MessagesWindow } from './Panels'
 import { Sidebar } from './Sidebar'
@@ -154,6 +155,7 @@ export function App() {
       <Settings />
       <Tooltip />
       <KeyHints />
+      <NewWorkspace />
     </div>
   )
 }

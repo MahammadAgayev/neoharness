@@ -131,13 +131,13 @@ export function Picker() {
                 <kbd>↵</kbd> open
               </span>
               <span>
-                <kbd>⌃V</kbd> split right
+                <kbd>Ctrl V</kbd> split right
               </span>
               <span>
-                <kbd>⌃X</kbd> split above
+                <kbd>Ctrl X</kbd> split above
               </span>
               <span>
-                <kbd>⌃D</kbd> delete
+                <kbd>Ctrl D</kbd> delete
               </span>
               <span>
                 <kbd>esc</kbd> close

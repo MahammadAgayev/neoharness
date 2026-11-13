@@ -88,8 +88,8 @@ export function Workspaces() {
       <div className="ws-inner">
         <div className="ws-head">
           <h1>Workspaces</h1>
-          <button className="btn primary" onClick={() => store.openCmdline('new ')}>
-            New workspace <kbd>:new</kbd>
+          <button className="btn primary" onClick={() => store.openNewWorkspace()}>
+            New workspace
           </button>
         </div>
         {workspaces.length === 0 && (

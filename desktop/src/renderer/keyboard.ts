@@ -35,6 +35,7 @@ const appMaps: Record<string, Action> = {
   '<leader>a': c('allow'),
   '<leader>A': c('always'),
   '<leader>x': c('deny'),
+  '<leader>s': c('settings'),
   '<leader>e': w('fold'),
   '<leader>y': w('yank'),
   gO: c('outline'),
@@ -344,7 +345,7 @@ export function onKey(e: KeyboardEvent): void {
     return
   }
   // The picker, the command line and the settings are inputs of their own.
-  if (s.picker || s.cmdline !== null || s.settingsOpen) return
+  if (s.picker || s.cmdline !== null || s.settingsOpen || s.newWorkspace) return
 
   const km = keymaps()
   if (key.startsWith('<D-')) {

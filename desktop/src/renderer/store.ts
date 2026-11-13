@@ -130,6 +130,7 @@ export interface State {
   insert: boolean
   settings: Settings
   settingsOpen: boolean
+  newWorkspace: boolean
   hints: Hint[] | null
   showResolved: boolean
   folds: Record<number, boolean>
@@ -180,6 +181,7 @@ class Store {
     insert: false,
     settings: loadSettings(),
     settingsOpen: false,
+    newWorkspace: false,
     hints: null,
     showResolved: false,
     folds: {},
@@ -489,21 +491,22 @@ class Store {
     })
   }
 
-  async createWorkspace(name: string, pin?: string): Promise<void> {
+  async createWorkspace(name: string, pin?: string): Promise<boolean> {
     const bad = validName(name)
     if (bad) {
       this.say(bad, 'love')
-      return
+      return false
     }
     if (pin === undefined) {
       const dir = await nh().pickFolder()
-      if (dir === null) return
+      if (dir === null) return false
       pin = dir
     }
-    if ((await this.try(this.call('createWorkspace', { name, pin }))) === undefined) return
+    if ((await this.try(this.call('createWorkspace', { name, pin }))) === undefined) return false
     await this.loadWorkspaces()
     await this.openWorkspace(name)
     this.focusPrompt()
+    return true
   }
 
   async setFolder(dir?: string): Promise<void> {
@@ -1089,6 +1092,10 @@ class Store {
     if (hints || this.state.hints) this.set({ hints })
   }
 
+  openNewWorkspace(open = true): void {
+    this.set({ newWorkspace: open, picker: null, cmdline: null })
+  }
+
   openSettings(open = true): void {
     this.set({ settingsOpen: open, picker: null, cmdline: null })
   }
@@ -1115,7 +1122,8 @@ class Store {
     switch (e.cmd) {
       case 'new':
         if (!a[0]) return this.say('usage: :new <name> [folder]', 'muted')
-        return this.createWorkspace(a[0], a[1])
+        void this.createWorkspace(a[0], a[1])
+        return
       case 'folder':
         return this.setFolder(a[0])
       case 'setlocal':

@@ -1,22 +1,13 @@
-import { useEffect, useState } from 'react'
-
 import { useStore } from '../store'
 
-// KeyHints is which-key: after a key that starts other maps, a pause shows
-// what can follow. Typing on before the pause never shows it.
+// KeyHints is which-key: after a key that starts other maps, what can follow
+// shows at once, so it is there before the next key.
 export function KeyHints() {
   const hints = useStore((s) => s.hints)
   const pending = useStore((s) => s.pending)
   const on = useStore((s) => s.settings.keyhints)
   const leader = useStore((s) => s.settings.leader)
-  const [shown, setShown] = useState(false)
-  useEffect(() => {
-    setShown(false)
-    if (!hints) return
-    const t = setTimeout(() => setShown(true), 300)
-    return () => clearTimeout(t)
-  }, [hints])
-  if (!on || !shown || !hints?.length) return null
+  if (!on || !hints?.length) return null
   return (
     <div className="keyhints">
       <div className="keyhints-head mono">{pending.startsWith(leader) ? '<leader>' + pending.slice(leader.length) : pending}</div>

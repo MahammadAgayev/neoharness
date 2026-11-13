@@ -1262,6 +1262,44 @@ kbd {
   margin-top: 4px;
 }
 
+/* dialogs */
+.dialog {
+  width: min(520px, 92vw);
+}
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px 6px;
+}
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+.dialog-field .field {
+  flex: 1;
+  font-size: 14px;
+  padding: 6px 10px;
+}
+.dialog-row {
+  display: flex;
+  gap: 8px;
+}
+.dialog-note {
+  font-size: 12px;
+}
+.dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px 16px;
+}
+.btn:disabled {
+  opacity: 0.5;
+}
+
 /* tooltips */
 .tooltip {
   position: fixed;
@@ -1296,7 +1334,6 @@ kbd {
   border-radius: 10px;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
   font-size: 12.5px;
-  animation: rise 120ms var(--ease);
 }
 .keyhints-head {
   color: var(--muted);
@@ -1533,7 +1570,8 @@ kbd {
   opacity: 0;
   transition: opacity 100ms var(--ease);
 }
-.sb-item:hover .sb-kbd {
+.sb-item:hover .sb-kbd,
+.sb-kbd.shown {
   opacity: 1;
 }
 .sb-new {

@@ -28,7 +28,7 @@ export const commands: Command[] = [
   { id: 'outline', title: 'Outline: messages or headings', keys: ['gO'], run: () => s.openPicker('outline', true) },
   { id: 'threads-pane', title: 'Threads list', keys: ['<leader>t', ':threads'], run: () => s.threadsPane() },
   { id: 'coordinator', title: 'Coordinator', keys: ['<leader>c'], run: () => s.coordinator() },
-  { id: 'new-workspace', title: 'New workspace…', keys: [':new <name> [folder]'], ex: 'new ', run: () => s.openCmdline('new ') },
+  { id: 'new-workspace', title: 'New workspace…', keys: [':new <name> [folder]'], run: () => s.openNewWorkspace() },
   { id: 'folder', title: "Change the workspace's folder…", keys: [':folder [folder]'], run: () => void s.setFolder() },
   { id: 'setlocal', title: "Set this workspace's agents…", keys: [':setlocal coordinator=<agent>'], run: () => s.openCmdline('setlocal ') },
   { id: 'restore', title: 'Restore a deleted workspace…', keys: [':restore [name]'], run: () => s.openCmdline('restore ') },
@@ -57,7 +57,7 @@ export const commands: Command[] = [
   { id: 'scheme', title: 'Color scheme…', keys: [':colorscheme <name>'], run: () => s.openCmdline('colorscheme ') },
   { id: 'vim', title: 'Vim mode on or off', keys: [':set vim', ':set novim'], run: () => s.setSettings({ vim: !s.state.settings.vim }) },
   { id: 'sidebar', title: 'Show or hide the sidebar', keys: ['⌘B', ':set nosidebar'], run: () => s.setSettings({ sidebar: !s.state.settings.sidebar }) },
-  { id: 'settings', title: 'Settings', keys: ['⌘,', ':settings'], run: () => s.openSettings() },
+  { id: 'settings', title: 'Settings', keys: ['<leader>s', '⌘,', ':settings'], run: () => s.openSettings() },
   { id: 'start-hub', title: 'Start the hub', keys: ['neoharness hub start'], run: () => void s.startHub() },
   { id: 'help', title: 'Keys and commands', keys: [':help', '⌘/'], run: () => void s.ex('help') },
 ]

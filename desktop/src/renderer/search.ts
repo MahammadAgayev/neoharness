@@ -75,8 +75,16 @@ function threadItems(local: boolean): Item[] {
       tone: stateTone(v.state),
       label: local ? n : `${s.workspace} · ${n}`,
       detail: threadDetail(v),
-      run: () => store.showThread(n),
-      split: (vert) => store.split(vert, { kind: 'chat', thread: n }),
+      // A thread you open is one you mean to write to: the caret goes to
+      // its prompt.
+      run: () => {
+        store.showThread(n)
+        store.focusPrompt()
+      },
+      split: (vert) => {
+        store.split(vert, { kind: 'chat', thread: n })
+        store.focusPrompt()
+      },
       del: () => store.askDeleteThread(n),
     })
   }
@@ -90,7 +98,7 @@ function threadItems(local: boolean): Item[] {
       tone: stateTone(v.state),
       label: `${workspace} · ${v.name}`,
       detail: threadDetail(v),
-      run: () => void store.goThread(workspace, v.name),
+      run: () => void store.goThread(workspace, v.name).then(() => store.focusPrompt()),
     })
   }
   return items
@@ -180,8 +188,14 @@ function bufferItems(): Item[] {
       glyph: '≡',
       tone: 'muted',
       label,
-      run: show(buf),
-      split: (vert) => store.split(vert, buf),
+      run: () => {
+        show(buf)()
+        if (buf.kind === 'chat') store.focusPrompt()
+      },
+      split: (vert) => {
+        store.split(vert, buf)
+        if (buf.kind === 'chat') store.focusPrompt()
+      },
     })
   }
   return items.map((it) => ({ ...it, section: 'Buffers' }))

@@ -114,6 +114,11 @@ export class FakeHub {
       }
       if (url.pathname === '/hub') return json({ pid: process.pid, started: now() })
       if (url.pathname === '/workspaces' && m === 'GET') return json(this.workspaces)
+      if (url.pathname === '/workspaces' && m === 'POST') {
+        this.workspace(body.name, [])
+        this.workspaces[this.workspaces.length - 1].pin = body.pin
+        return json({})
+      }
       if (url.pathname === '/deleted') return json([])
       const [, ws, kind, name, sub] = parts
       if (kind === 'threads' && !name && m === 'GET') return json(this.threads[ws] ?? [])

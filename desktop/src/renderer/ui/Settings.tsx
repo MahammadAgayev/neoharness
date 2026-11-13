@@ -101,7 +101,7 @@ export function Settings() {
               }}
             />
           </Row>
-          <Row title="Key hints" detail="After a key that starts others, as <leader>, a pause shows what can follow, as which-key.">
+          <Row title="Key hints" detail="After a key that starts others, as <leader>, show what can follow, as which-key.">
             <Toggle on={st.keyhints} set={(keyhints) => store.setSettings({ keyhints })} />
           </Row>
           <div className="maps">

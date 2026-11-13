@@ -280,7 +280,7 @@ test('a right click on a thread offers its actions, and a hint shows on hover', 
   await page.mouse.move(700, 400)
 })
 
-test('a pause after <leader> shows what can follow, as which-key', async () => {
+test('<leader> shows what can follow at once, as which-key, and <leader>s opens the settings', async () => {
   await page.keyboard.press('Space')
   const panel = page.locator('.keyhints')
   await expect(panel).toBeVisible()
@@ -289,6 +289,40 @@ test('a pause after <leader> shows what can follow, as which-key', async () => {
   await shot('36-keyhints')
   await page.keyboard.press('c')
   await expect(panel).toHaveCount(0)
+  await page.keyboard.press('Space')
+  await page.keyboard.press('s')
+  await expect(page.locator('.settings')).toBeVisible()
+  await page.keyboard.press('Escape')
+})
+
+test('Ctrl V in search opens the thread on the right, with the caret in its prompt', async () => {
+  const chats = page.locator('.window.chat')
+  const before = await chats.count()
+  await page.keyboard.press('Meta+k')
+  await page.keyboard.type('demo coordinator')
+  await page.keyboard.press('Control+v')
+  await expect(chats).toHaveCount(before + 1)
+  await expect(page.locator('.window.chat .prompt .cm-focused')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Control+w')
+  await page.keyboard.press('c')
+})
+
+test('New workspace opens a dialog: a name, a folder, Create', async () => {
+  await page.locator('.sb-new').click()
+  const dialog = page.locator('.dialog')
+  await expect(dialog).toBeVisible()
+  await page.keyboard.type('Bad Name!')
+  await expect(dialog.locator('.dialog-note.t-love')).toBeVisible()
+  await dialog.locator('input').first().fill('billing')
+  await expect(dialog.locator('button[type=submit]')).toBeDisabled()
+  await dialog.locator('input').nth(1).fill(tmp)
+  await shot('37-new-workspace')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => hub.calls.find((c) => c.method === 'POST' && c.path === '/workspaces')?.body).toEqual({ name: 'billing', pin: tmp })
+  await expect(dialog).toHaveCount(0)
+  await expect(page.locator('.sb-item.active', { hasText: 'billing' })).toBeVisible()
 })
 
 test('a hub that stops says so and offers to start it', async () => {

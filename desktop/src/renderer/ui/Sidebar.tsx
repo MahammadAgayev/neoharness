@@ -7,13 +7,15 @@ export function Sidebar() {
   const open = useStore((s) => s.workspace)
   const screen = useStore((s) => s.screen)
   const artifacts = useStore((s) => s.artifacts)
+  const leader = useStore((s) => s.settings.leader)
+  const lead = leader === '<Space>' ? '␣' : leader
   return (
     <nav className="sidebar">
       <div className="sb-section">
         <button className="sb-item" onClick={() => store.openPicker('all')}>
           <span className="sb-icon">⌕</span>
           <span className="sb-label">Search</span>
-          <kbd className="sb-kbd">⌘K</kbd>
+          <kbd className="sb-kbd shown">⌘K</kbd>
         </button>
         {open && artifacts.length > 0 && (
           <button className="sb-item" onClick={() => store.openPicker('artifacts', true)}>
@@ -57,7 +59,7 @@ export function Sidebar() {
             </button>
           )
         })}
-        <button className="sb-item sb-new" onClick={() => store.openCmdline('new ')}>
+        <button className="sb-item sb-new" onClick={() => store.openNewWorkspace()}>
           <span className="sb-icon">+</span>
           <span className="sb-label">New workspace</span>
         </button>
@@ -66,12 +68,12 @@ export function Sidebar() {
         <button className="sb-item" onClick={() => store.openSettings()}>
           <span className="sb-icon">⚙</span>
           <span className="sb-label">Settings</span>
-          <kbd className="sb-kbd">⌘,</kbd>
+          <kbd className="sb-kbd shown">{lead}s</kbd>
         </button>
         <button className="sb-item" onClick={() => void store.ex('help')}>
           <span className="sb-icon">?</span>
           <span className="sb-label">Keys and commands</span>
-          <kbd className="sb-kbd">⌘/</kbd>
+          <kbd className="sb-kbd shown">⌘/</kbd>
         </button>
       </div>
     </nav>
