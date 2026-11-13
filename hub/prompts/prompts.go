@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/MahammadAgayev/neoharness/api/model"
 )
 
 //go:embed coordinator.md
@@ -49,6 +47,11 @@ func Coordinator(in SessionInput) string {
 // note on each comes before it, as in every coordinator turn.
 func Reports(names []string) string {
 	return strings.Join(names, ", ") + " ended a turn. Decide whether the person needs to hear of it now."
+}
+
+// RecapDue wakes the coordinator to write the workspace recap.
+func RecapDue() string {
+	return "The threads that ran have ended their turns. Write your workspace recap with workspace_recap."
 }
 
 // Thread is the system prompt for a thread.
@@ -120,11 +123,23 @@ const (
 	boardFiles  = 5
 )
 
+// Recap is a thread's recap as the board shows it: its own words, then what
+// the hub saw its last turn do.
+type Recap struct {
+	Asked, Outcome, Open, Error string
+	// FromReply says Outcome is the first line of its reply.
+	FromReply bool
+	Ran       int
+	// Failed are the commands that failed.
+	Failed            []string
+	Edited, Artifacts []string
+}
+
 // BoardLine is one thread on the board: its state, and, when it ended a turn
 // since the coordinator's last turn, its recap: its own words, then what the
 // hub saw it do. A report from during that turn is old news then, so it goes
 // in only while the thread runs or has no recap.
-func BoardLine(name, state, progress string, r *model.Recap, ended bool) string {
+func BoardLine(name, state, progress string, r *Recap, ended bool) string {
 	s := "- " + name + ": " + state
 	if ended {
 		s += ", ended a turn"
@@ -154,7 +169,7 @@ func BoardLine(name, state, progress string, r *model.Recap, ended bool) string 
 
 // seen is what the hub saw a turn do, in short: the failed commands by name,
 // the others only counted, as they are what the coordinator acts on.
-func seen(r *model.Recap) string {
+func seen(r *Recap) string {
 	var parts []string
 	switch r.Ran {
 	case 0:
@@ -164,12 +179,10 @@ func seen(r *model.Recap) string {
 	default:
 		parts = append(parts, fmt.Sprintf("%d commands", r.Ran))
 	}
-	if n := r.Failed(); n > 0 {
+	if n := len(r.Failed); n > 0 {
 		var failed []string
-		for _, c := range r.Commands {
-			if c.Failed {
-				failed = append(failed, clip(c.Text, reportLimit))
-			}
+		for _, c := range r.Failed {
+			failed = append(failed, clip(c, reportLimit))
 		}
 		parts[0] += fmt.Sprintf(", %d failed: %s", n, strings.Join(failed, ", "))
 	}

@@ -2074,13 +2074,28 @@ func (h *Hub) board(ws *space, batch []workspace.Message) string {
 		}
 		ended := slices.Contains(ws.ended, n) &&
 			!slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From == n })
-		lines = append(lines, prompts.BoardLine(n, string(th.state), th.t.Progress, th.t.Recap, ended))
+		lines = append(lines, prompts.BoardLine(n, string(th.state), th.t.Progress, boardRecap(th.t.Recap), ended))
 	}
 	ws.ended = nil
 	if len(lines) == 0 {
 		return ""
 	}
 	return prompts.Board(lines)
+}
+
+// boardRecap is a thread's recap in the plain form the prompts take.
+func boardRecap(r *model.Recap) *prompts.Recap {
+	if r == nil {
+		return nil
+	}
+	b := &prompts.Recap{Asked: r.Asked, Outcome: r.Outcome, Open: r.Open, Error: r.Error, FromReply: r.FromReply,
+		Ran: r.Ran, Edited: r.Edited, Artifacts: r.Artifacts}
+	for _, c := range r.Commands {
+		if c.Failed {
+			b.Failed = append(b.Failed, c.Text)
+		}
+	}
+	return b
 }
 
 // --- state and updates ---
