@@ -107,7 +107,8 @@ export function Picker() {
             <div className="palette-empty t-muted">{p.tab === 'text' && p.query.length < 2 ? 'Type to search every transcript' : 'No results'}</div>
           )}
           {items.map((it, i) => {
-            const head = p.tab === 'all' && it.section !== section ? it.section : ''
+            const grouped = p.tab === 'all' || (p.tab === 'threads' && !p.query)
+            const head = grouped && it.section !== section ? it.section : ''
             section = it.section
             return (
               <div key={it.key}>

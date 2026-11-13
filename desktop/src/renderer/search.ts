@@ -250,12 +250,34 @@ function needYouFirst(items: Item[], q: string): Item[] {
   return items.slice().sort((a, b) => rank(a) - rank(b))
 }
 
+// byState groups threads as the threads pane does: what waits for you
+// first, then what runs, what is idle, and what is resolved.
+function byState(items: Item[]): Item[] {
+  const groups: [string, string][] = [
+    ['◆', 'waiting'],
+    ['●', 'running'],
+    ['○', 'idle'],
+    ['✓', 'resolved'],
+  ]
+  const rank = (it: Item) => groups.findIndex(([g]) => g === it.glyph)
+  return items
+    .slice()
+    .sort((a, b) => rank(a) - rank(b))
+    .map((it) => {
+      const state = groups[rank(it)]?.[1]
+      // The heading says the state; the row needs only the rest.
+      return state ? { ...it, section: state, detail: it.detail?.replace(new RegExp(`^${state}( · )?`), '') } : it
+    })
+}
+
 const perTabLimit = 8
 
 export function items(tab: Tab, q: string): Item[] {
   switch (tab) {
-    case 'threads':
-      return fuzzy(needYouFirst(threadItems(!!store.state.picker?.local), q), q)
+    case 'threads': {
+      const found = fuzzy(threadItems(!!store.state.picker?.local), q)
+      return q ? found : byState(found)
+    }
     case 'artifacts':
       return fuzzy(artifactItems(), q)
     case 'text':
