@@ -101,6 +101,10 @@ func Handler(h *hub.Hub, info hubapi.Info, stop func()) http.Handler {
 		c, err := h.Completions(r.PathValue("p"), r.PathValue("t"), r.URL.Query().Get("q"))
 		reply(w, c, err)
 	})
+	mux.HandleFunc("GET /workspaces/{p}/threads/{t}/choices", func(w http.ResponseWriter, r *http.Request) {
+		c, err := h.Choices(r.PathValue("p"), r.PathValue("t"))
+		reply(w, c, err)
+	})
 	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/messages", func(w http.ResponseWriter, r *http.Request) {
 		var in hubapi.Message
 		if !decode(w, r, &in) {

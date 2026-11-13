@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -653,5 +654,49 @@ func TestAnotherAgentOfTheKindTakesOverTheSession(t *testing.T) {
 	}
 	if starts() != 2 {
 		t.Fatalf("%d starts, want 2", starts())
+	}
+}
+
+func TestModelsComeFromClaudeAndAreAskedOnce(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake claude is a shell script")
+	}
+	dir := t.TempDir()
+	script := filepath.Join(dir, "claude")
+	body := `#!/bin/sh
+echo asked >> "` + dir + `/count"
+read line
+echo '{"type":"system","subtype":"init"}'
+printf '%s\n' '{"type":"control_response","response":{"subtype":"success","request_id":"models","response":{"models":[{"value":"default","resolvedModel":"model-b-2","displayName":"Default (recommended)","description":"Use the default model","supportedEffortLevels":["low","high"]},{"value":"big","resolvedModel":"model-a-1","displayName":"Big","description":"Needs \u001b]8;;https://example.com/x\u0007the group\u001b]8;;\u0007 access"}]}}}'
+`
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := New(script)
+	got := a.Models(context.Background())
+	want := []agent.Model{
+		{Name: "default", Label: "Default (recommended)", Version: "model-b-2", Description: "Use the default model", Efforts: []string{"low", "high"}},
+		{Name: "big", Label: "Big", Version: "model-a-1", Description: "Needs the group access"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("models = %+v\nwant %+v", got, want)
+	}
+	a.Models(context.Background())
+	if b, _ := os.ReadFile(filepath.Join(dir, "count")); strings.Count(string(b), "asked") != 1 {
+		t.Fatalf("claude asked %d times, want once", strings.Count(string(b), "asked"))
+	}
+}
+
+func TestModelsFallBackToTheAliasesWhenClaudeFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake claude is a shell script")
+	}
+	script := filepath.Join(t.TempDir(), "claude")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got := New(script).Models(context.Background())
+	if len(got) != 3 || got[0].Name != "opus" {
+		t.Fatalf("models = %+v, want the aliases", got)
 	}
 }

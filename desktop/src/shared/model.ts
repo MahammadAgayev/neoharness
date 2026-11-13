@@ -91,6 +91,23 @@ export interface Completions {
   query?: string
 }
 
+// Choices are what /model and /effort of a thread take; an empty model or
+// effort is the agent's default.
+export interface Choices {
+  model: string
+  effort: string
+  models: ModelChoice[]
+  efforts: string[]
+}
+
+export interface ModelChoice {
+  name: string
+  label?: string
+  version?: string
+  description?: string
+  efforts?: string[]
+}
+
 export interface WorkspaceView {
   name: string
   pin?: string

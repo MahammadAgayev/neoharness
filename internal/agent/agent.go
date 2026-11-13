@@ -131,9 +131,22 @@ type Efforter interface {
 }
 
 // Modeler is an Agent that names the models it takes, for a bare /model to
-// show the choice. Any name still goes to the agent.
+// show the choice. Any name still goes to the agent. Models can be slow: the
+// agent may ask its CLI.
 type Modeler interface {
-	Models() []string
+	Models(ctx context.Context) []Model
+}
+
+// Model is one choice of /model.
+type Model struct {
+	// Name is what /model takes, as "opus".
+	Name string
+	// Label is the name to show, and Version the model it runs now.
+	Label       string
+	Version     string
+	Description string
+	// Efforts are the levels the model takes; empty when it says nothing.
+	Efforts []string
 }
 
 // Result is what one invocation produced, and what it cost.

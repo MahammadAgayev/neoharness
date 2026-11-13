@@ -1,25 +1,30 @@
 import { useEffect, useState } from 'react'
 
+import type { Choices } from '../../shared/model'
 import { store, useStore } from '../store'
 import { Icon } from './Icon'
 
-// The choices of Claude Code's /model and /effort pickers. The hub takes
-// any name; these are the ones worth a row.
-const options = {
-  model: [
-    { name: 'opus', detail: 'the most capable' },
-    { name: 'sonnet', detail: 'fast and capable' },
-    { name: 'haiku', detail: 'the fastest' },
-    { name: 'default', detail: 'what the workspace sets' },
-  ],
-  effort: [
-    { name: 'low', detail: '' },
-    { name: 'medium', detail: '' },
-    { name: 'high', detail: '' },
-    { name: 'xhigh', detail: '' },
-    { name: 'max', detail: '' },
-    { name: 'default', detail: 'what the workspace sets' },
-  ],
+interface Row {
+  name: string
+  label: string
+  detail: string
+}
+
+// rows are the choices the agent gives, as its own picker shows them, and
+// default, which goes back to what the workspace sets.
+function rows(kind: 'model' | 'effort', c: Choices): Row[] {
+  const def = { name: 'default', label: 'default', detail: 'what the workspace sets' }
+  if (kind === 'model') {
+    const out = c.models.map((m) => ({
+      name: m.name,
+      label: m.label || m.name,
+      detail: [m.version !== m.name && m.version, m.description].filter(Boolean).join(' · '),
+    }))
+    return out.some((r) => r.name === 'default') ? out : [...out, def]
+  }
+  // The levels of the model the thread runs, when the agent says them.
+  const levels = c.models.find((m) => m.name === (c.model || 'default'))?.efforts ?? c.efforts
+  return [...levels.map((l) => ({ name: l, label: l, detail: '' })), def]
 }
 
 // Choice is the picker of a bare /model or /effort, or of a click on the
@@ -27,15 +32,28 @@ const options = {
 // for the thread from its next turn.
 export function Choice() {
   const c = useStore((s) => s.choice)
-  const view = useStore((s) => (c ? s.threads[c.thread] : undefined))
+  const [got, setGot] = useState<Choices | null>(null)
+  const [failed, setFailed] = useState(false)
   const [index, setIndex] = useState(0)
-  const rows = c ? options[c.kind] : []
-  const now = c?.kind === 'model' ? rows.findIndex((r) => view?.model?.includes(r.name)) : -1
+  const list = c && got ? rows(c.kind, got) : []
+  const now = c && got ? list.findIndex((r) => r.name === ((c.kind === 'model' ? got.model : got.effort) || 'default')) : -1
 
   useEffect(() => {
-    if (c) setIndex(Math.max(now, 0))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setGot(null)
+    setFailed(false)
+    if (!c) return
+    let live = true
+    // The agent may ask its CLI the first time: the list comes in a moment.
+    store
+      .choices(c.thread)
+      .then((r) => live && setGot(r))
+      .catch(() => live && setFailed(true))
+    return () => {
+      live = false
+    }
   }, [c])
+
+  useEffect(() => setIndex(Math.max(now, 0)), [got, now])
 
   if (!c) return null
   const close = () => {
@@ -43,13 +61,14 @@ export function Choice() {
     store.focusPrompt()
   }
   const pick = (i: number) => {
+    if (!list[i]) return
     close()
-    void store.send(c.thread, `/${c.kind} ${rows[i].name}`)
+    void store.send(c.thread, `/${c.kind} ${list[i].name}`)
   }
   const onKey = (e: React.KeyboardEvent) => {
     const k = e.key
     if (k === 'Escape') close()
-    else if (k === 'ArrowDown' || k === 'j' || (e.ctrlKey && k === 'n')) setIndex((i) => Math.min(i + 1, rows.length - 1))
+    else if (k === 'ArrowDown' || k === 'j' || (e.ctrlKey && k === 'n')) setIndex((i) => Math.min(i + 1, list.length - 1))
     else if (k === 'ArrowUp' || k === 'k' || (e.ctrlKey && k === 'p')) setIndex((i) => Math.max(i - 1, 0))
     else if (k === 'Enter') pick(index)
     else return
@@ -64,7 +83,8 @@ export function Choice() {
           <span className="t-muted">for {store.at(c.thread).thread}, from its next turn</span>
         </div>
         <div className="palette-list">
-          {rows.map((r, i) => (
+          {!got && <div className="palette-empty t-muted">{failed ? 'the hub did not answer' : 'asking the agent…'}</div>}
+          {list.map((r, i) => (
             <div
               key={r.name}
               className={`palette-row ${i === index ? 'active' : ''}`}
@@ -72,7 +92,7 @@ export function Choice() {
               onClick={() => pick(i)}
             >
               <span className="glyph t-iris">{i === now && <Icon name="check" size={14} />}</span>
-              <span className="palette-label">{r.name}</span>
+              <span className="palette-label">{r.label}</span>
               {r.detail && <span className="palette-detail">{r.detail}</span>}
             </div>
           ))}

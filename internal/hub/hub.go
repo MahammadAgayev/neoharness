@@ -804,7 +804,7 @@ func (h *Hub) command(ws *space, th *thread, text string) (bool, error) {
 	case (f[0] == "/model" || f[0] == "/effort") && len(f) == 1:
 		// Claude Code shows a picker here; under --print the bare command
 		// would reach the agent as a message, so say the choice instead.
-		h.event(ws, th, model.Event{Kind: model.EventNote, Text: h.choice(ws, t, f[0])})
+		h.sayChoice(ws, th, f[0])
 		return true, nil
 	case f[0] == "/clear" && len(f) == 1:
 		return true, h.clear(ws, th)
@@ -1699,25 +1699,60 @@ func (h *Hub) agentOf(ws *space, t *workspace.Thread) string {
 	return ""
 }
 
-// choice is what a bare /model or /effort says: the value now, and how to
-// change it.
-func (h *Hub) choice(ws *space, t *workspace.Thread, cmd string) string {
-	a := h.cfg.Factory(h.agentOf(ws, t), ws.p, *t)
-	name, arg, now, names := "Model", "<name>", cmp.Or(t.ModelChoice, h.defaults(ws, t).Model, t.Model), []string(nil)
-	if m, ok := a.(agent.Modeler); ok {
-		names = m.Models()
+// Choices are what /model and /effort of a thread take. The agent may ask
+// its CLI for the models, so this runs outside the lock.
+func (h *Hub) Choices(workspaceName, threadName string) (model.Choices, error) {
+	h.mu.Lock()
+	ws, th, err := h.lookup(workspaceName, threadName)
+	if err != nil {
+		h.mu.Unlock()
+		return model.Choices{}, err
 	}
-	if cmd == "/effort" {
-		name, arg, now, names = "Effort", "<level>", cmp.Or(t.Effort, h.defaults(ws, t).Effort), nil
-		if e, ok := a.(agent.Efforter); ok {
-			names = e.Efforts()
+	t := *th.t
+	d := h.defaults(ws, &t)
+	a := h.cfg.Factory(h.agentOf(ws, &t), ws.p, t)
+	h.mu.Unlock()
+	c := model.Choices{Model: cmp.Or(t.ModelChoice, d.Model), Effort: cmp.Or(t.Effort, d.Effort), Models: []model.ModelChoice{}, Efforts: []string{}}
+	if m, ok := a.(agent.Modeler); ok {
+		ctx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
+		defer cancel()
+		for _, x := range m.Models(ctx) {
+			c.Models = append(c.Models, model.ModelChoice{Name: x.Name, Label: x.Label, Version: x.Version, Description: x.Description, Efforts: x.Efforts})
 		}
 	}
-	s := fmt.Sprintf("%s: %s. %s %s changes it from the next turn", name, cmp.Or(now, "the agent's default"), cmd, arg)
-	if len(names) > 0 {
-		s += ": " + strings.Join(names, ", ")
+	if e, ok := a.(agent.Efforter); ok {
+		c.Efforts = append(c.Efforts, e.Efforts()...)
 	}
-	return s + "; " + cmd + " default goes back."
+	return c, nil
+}
+
+// sayChoice is what a bare /model or /effort says: the value now, and how
+// to change it. The models can take a while, so the note comes after.
+func (h *Hub) sayChoice(ws *space, th *thread, cmd string) {
+	go func() {
+		c, err := h.Choices(ws.p.Name, th.t.Name)
+		if err != nil {
+			return
+		}
+		name, arg, now, names := "Model", "<name>", cmp.Or(c.Model, th.t.Model), []string{}
+		for _, m := range c.Models {
+			n := m.Name
+			if m.Version != "" && m.Version != m.Name {
+				n += " (" + m.Version + ")"
+			}
+			names = append(names, n)
+		}
+		if cmd == "/effort" {
+			name, arg, now, names = "Effort", "<level>", c.Effort, c.Efforts
+		}
+		s := fmt.Sprintf("%s: %s. %s %s changes it from the next turn", name, cmp.Or(now, "the agent's default"), cmd, arg)
+		if len(names) > 0 {
+			s += ": " + strings.Join(names, ", ")
+		}
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: s + "; " + cmd + " default goes back."})
+	}()
 }
 
 func (h *Hub) defaults(ws *space, t *workspace.Thread) Defaults {

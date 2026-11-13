@@ -996,6 +996,10 @@ class Store {
     return this.call('completions', { ...this.at(thread), query })
   }
 
+  choices(thread: string) {
+    return this.call('choices', this.at(thread))
+  }
+
   // promptRequest asks the chat window in focus to take the keys; the
   // window's prompt listens for it.
   promptRequest = 0

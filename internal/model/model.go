@@ -217,6 +217,24 @@ type Completions struct {
 	Query string `json:"query,omitempty"`
 }
 
+// Choices are what /model and /effort of a thread take, and what it has now.
+// Empty Model or Effort is the agent's default.
+type Choices struct {
+	Model   string        `json:"model"`
+	Effort  string        `json:"effort"`
+	Models  []ModelChoice `json:"models"`
+	Efforts []string      `json:"efforts"`
+}
+
+// ModelChoice is one model of /model. Version is the model it runs now.
+type ModelChoice struct {
+	Name        string   `json:"name"`
+	Label       string   `json:"label,omitempty"`
+	Version     string   `json:"version,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Efforts     []string `json:"efforts,omitempty"`
+}
+
 // WorkspaceView is a workspace with a summary of its threads.
 type WorkspaceView struct {
 	Name      string        `json:"name"`

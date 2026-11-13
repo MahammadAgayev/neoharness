@@ -5,6 +5,7 @@
 import type {
   Artifact,
   ArtifactText,
+  Choices,
   Completions,
   Decision,
   Event,
@@ -78,6 +79,10 @@ export const calls = {
     method: 'GET',
     path: `${th(a.workspace, a.thread)}/completions?q=${e(a.query)}`,
   }),
+  choices: (a: { workspace: string; thread: string }): Req => ({
+    method: 'GET',
+    path: `${th(a.workspace, a.thread)}/choices`,
+  }),
   send: (a: { workspace: string; thread: string; text: string; now?: boolean }): Req => ({
     method: 'POST',
     path: `${th(a.workspace, a.thread)}/messages`,
@@ -124,6 +129,7 @@ export interface Results {
   threads: ThreadView[]
   events: Event[]
   completions: Completions
+  choices: Choices
 }
 
 export type Result<N extends CallName> = N extends keyof Results ? Results[N] : void

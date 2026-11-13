@@ -100,8 +100,10 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   the window, `⌘\` split, `⌘1`…`⌘9` workspaces, `⌘/` help (also `<leader>h`, as `<leader>s` is settings), `⌘[` `⌘]` back and forward (`<C-o>` `<C-i>`).
   Help opens as a dialog, as the settings do: Esc closes it, j and k scroll it.
 - **`/model` and `/effort`** with no name open a picker, as in Claude Code;
-  a click on the model under the prompt opens it too. The choice holds for
-  the thread from its next turn.
+  a click on the model under the prompt opens it too. The models, their
+  versions and descriptions are Claude Code's own: the hub asks `claude`
+  once and keeps the answer. The effort levels are those of the model the
+  thread runs. The choice holds for the thread from its next turn.
 - **Window keys from Insert**: `<C-w>` followed by a window key (`h j k l w c
   s v o q =`) leaves Insert and acts on the window, so a doc you write in is
   no trap. `<C-w>` alone, or followed by any other key, still deletes a word.

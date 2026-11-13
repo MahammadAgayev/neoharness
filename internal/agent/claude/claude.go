@@ -84,9 +84,6 @@ var env = []string{"MCP_TOOL_TIMEOUT=86400000"}
 // Efforts are the levels `claude --effort` takes.
 func (a *Agent) Efforts() []string { return []string{"low", "medium", "high", "xhigh", "max"} }
 
-// Models are the aliases `claude --model` takes; a full model name works too.
-func (a *Agent) Models() []string { return []string{"opus", "sonnet", "haiku"} }
-
 // Run executes one turn.
 func (a *Agent) Run(ctx context.Context, req agent.Request) (agent.Result, error) {
 	res, err := a.run(ctx, req)

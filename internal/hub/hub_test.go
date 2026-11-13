@@ -27,6 +27,10 @@ func (f *fake) Name() string { return "fake" }
 
 func (f *fake) Efforts() []string { return []string{"low", "high"} }
 
+func (f *fake) Models(context.Context) []agent.Model {
+	return []agent.Model{{Name: "big", Label: "Big", Version: "model-a-1"}, {Name: "small"}}
+}
+
 func (f *fake) Run(ctx context.Context, req agent.Request) (agent.Result, error) {
 	f.mu.Lock()
 	f.reqs = append(f.reqs, req)
@@ -866,24 +870,47 @@ func TestBareModelAndEffortSayTheChoiceInsteadOfGoingToTheAgent(t *testing.T) {
 	f := &fake{}
 	h.cfg.Factory = func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }
 	pinned(t, h, "demo")
+	notes := func() []string {
+		evs, _ := h.Events("demo", model.Coordinator, 50)
+		var out []string
+		for _, e := range evs {
+			if e.Kind == model.EventNote {
+				out = append(out, e.Text)
+			}
+		}
+		return out
+	}
 	for _, m := range []string{"/model", "/effort"} {
+		n := len(notes())
 		if err := h.Send("demo", model.User, model.Coordinator, m); err != nil {
 			t.Fatal(err)
 		}
+		eventually(t, m+" note", func() bool { return len(notes()) == n+1 })
 	}
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
 	if n := len(f.requests()); n != 0 {
 		t.Fatalf("%d turns, want 0: a bare /model is not a message to the agent", n)
 	}
-	evs, _ := h.Events("demo", model.Coordinator, 50)
-	var notes []string
-	for _, e := range evs {
-		if e.Kind == model.EventNote {
-			notes = append(notes, e.Text)
-		}
+	got := notes()
+	if !strings.Contains(got[0], "/model <name>") || !strings.Contains(got[0], "big (model-a-1), small") || !strings.Contains(got[1], "next turn: low, high") {
+		t.Fatalf("notes = %q", got)
 	}
-	if len(notes) != 2 || !strings.Contains(notes[0], "/model <name>") || !strings.Contains(notes[1], "/effort <level>") {
-		t.Fatalf("notes = %q", notes)
+}
+
+func TestChoicesListTheAgentsModelsAndWhatTheThreadHas(t *testing.T) {
+	h := newHub(t, &fake{})
+	f := &fake{}
+	h.cfg.Factory = func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }
+	pinned(t, h, "demo")
+	if err := h.Send("demo", model.User, model.Coordinator, "/model big"); err != nil {
+		t.Fatal(err)
+	}
+	c, err := h.Choices("demo", model.Coordinator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Model != "big" || len(c.Models) != 2 || c.Models[0].Version != "model-a-1" || len(c.Efforts) != 2 {
+		t.Fatalf("choices = %+v", c)
 	}
 }
 

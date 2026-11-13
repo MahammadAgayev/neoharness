@@ -490,8 +490,10 @@ test('/model picks from a list, as in Claude Code, and so does a click on the mo
   await page.keyboard.press('Enter')
   const choice = page.locator('.choice')
   await expect(choice).toBeVisible()
-  await expect(choice.locator('.palette-row.active')).toContainText('opus')
-  await expect(choice.locator('.palette-row', { hasText: 'opus' }).locator('.icon')).toHaveCount(1)
+  await expect(choice.locator('.palette-row.active')).toContainText('Opus')
+  await expect(choice.locator('.palette-row.active')).toContainText('model-a-1 · The most capable')
+  await expect(choice.locator('.palette-row', { hasText: 'Opus' }).locator('.icon')).toHaveCount(1)
+  await expect(choice.locator('.palette-row')).toHaveCount(3)
   await shot('42-model-choice')
   await page.keyboard.press('j')
   await page.keyboard.press('Enter')
@@ -500,6 +502,15 @@ test('/model picks from a list, as in Claude Code, and so does a click on the mo
 
   await page.locator('.pane.focused .prompt-info .pick').click()
   await expect(choice).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(choice).toHaveCount(0)
+
+  // The prompt is back in Insert. The effort levels are those of the model
+  // the thread runs.
+  await page.keyboard.type('/effort')
+  await page.keyboard.press('Enter')
+  await expect(choice.locator('.palette-row')).toHaveText(['low', 'high', 'max', /default/])
+  await expect(choice.locator('.palette-row.active')).toContainText('default')
   await page.keyboard.press('Escape')
   await expect(choice).toHaveCount(0)
 })

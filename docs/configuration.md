@@ -88,7 +88,8 @@ restarts claude with `--resume`, so the conversation goes on.
 `claude`.
 
 `/model` and `/effort` change a thread's model and effort; `/model default`
-goes back to the setting.
+goes back to the setting. With no name they list the choices: the models
+come from `claude` itself, with the version each runs now.
 
 ## Environment
 

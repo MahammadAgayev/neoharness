@@ -1791,7 +1791,7 @@ kbd {
   text-underline-offset: 3px;
 }
 .choice {
-  width: 420px;
+  width: 560px;
 }
 .choice:focus {
   outline: none;
