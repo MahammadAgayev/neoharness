@@ -1132,13 +1132,26 @@ func (a *App) renderWorkspaces() {
 			{pad(p.Name, nameW+3), th.Text},
 			{pad(truncate(displayPin(p.Pin), pinW), pinW+3), th.Muted},
 		}
-		spans = append(spans, countSpans(p.Counts, th)...)
+		failed := 0
+		if p.Recap != nil {
+			failed = p.Recap.Failed
+		}
+		spans = append(spans, countSpans(p.Counts, failed, th)...)
 		lines = append(lines, Line{Prefix: []Span{{"  ", th.Text}}, Spans: spans, Item: p.Name})
 	}
 	if len(a.workspaces) == 0 {
 		lines = append(lines, Line{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{":new <name> [folder]", th.Muted}}})
 	}
 	a.workspacesBuf.SetLines(lines)
+}
+
+// workspaceRecap is the open workspace's recap, or nil.
+func (a *App) workspaceRecap() *model.WorkspaceRecap {
+	i := slices.IndexFunc(a.workspaces, func(p model.WorkspaceView) bool { return p.Name == a.workspace })
+	if i < 0 {
+		return nil
+	}
+	return a.workspaces[i].Recap
 }
 
 // wakeLabel says when an idle thread wakes, if it asked to be woken.
@@ -1156,11 +1169,14 @@ func displayPin(pin string) string {
 	return shortHome(pin)
 }
 
-func countSpans(c map[model.State]int, th *Theme) []Span {
+func countSpans(c map[model.State]int, failed int, th *Theme) []Span {
 	var out []Span
 	for _, s := range []model.State{model.StateRunning, model.StateWaiting, model.StateResolved} {
 		if n := c[s]; n > 0 {
 			out = append(out, Span{fmt.Sprintf("%s %d  ", stateGlyph(s), n), th.state(s)})
+		}
+		if s == model.StateWaiting && failed > 0 {
+			out = append(out, Span{fmt.Sprintf("✗ %d  ", failed), th.Love})
 		}
 	}
 	if len(out) == 0 {

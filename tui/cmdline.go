@@ -693,7 +693,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<leader>pm", "pick a notification; it opens its thread, in any workspace"),
 		row("<leader>pv", "workspaces screen"),
 		row("<leader>t", "threads list: goes to it, or opens it in a new column on the right; <CR> opens a thread in its place"),
-		row("<leader>c", "coordinator"),
+		row("<leader>c", "coordinator; its window starts with the workspace recap"),
 		row("<leader>nc  <leader>nh", "dismiss notifications, their history"),
 		row("<leader>a A x", "allow, allow always (what the card names), deny a permission"),
 		{},

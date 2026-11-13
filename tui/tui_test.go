@@ -3531,3 +3531,50 @@ func TestARecapShowsUnderItsRowAndAtTheTopOfTheThread(t *testing.T) {
 	h.see("failed   the agent failed: boom")
 	h.see("✗ the agent failed: boom")
 }
+
+func TestTheCoordinatorsWindowStartsWithTheWorkspaceRecap(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	// With threads open and no recap yet, the counts show.
+	h.see("  ● 1 running · 1 idle")
+	at := time.Now().Add(-time.Hour)
+	ws := h.a.workspaces[0]
+	ws.Recap = &model.WorkspaceRecap{
+		Goal:     "Move auth into sessions, keep the public API",
+		Lines:    []string{"answer lint first: migr waits on its API choice"},
+		At:       at,
+		Overlaps: []model.Overlap{{Path: "user/lookup.go", Threads: []string{"auth-refactor", "api-tests"}}},
+	}
+	h.a.apply(model.Update{Kind: model.UpdateWorkspace, Workspace: "demo", Summary: &ws})
+	for _, n := range []string{"migr", "flaky"} {
+		v := model.ThreadView{Workspace: "demo", Name: n, Role: model.RoleThread, State: model.StateIdle, CreatedAt: time.Now()}
+		if n == "migr" {
+			v.State, v.Waiting = model.StateWaiting, "permission"
+		} else {
+			v.Recap = &model.Recap{Error: "the agent failed: boom", At: at.Add(time.Minute)}
+		}
+		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: n, View: &v})
+	}
+	h.a.draw()
+	h.see("  Move auth into sessions, keep the public API")
+	h.see("  ◆ 1 waits for you · ✗ 1 failed · ● 1 running · 1 idle")
+	h.see("  auth-refactor and api-tests both edited user/lookup.go")
+	h.see("  answer lint first: migr waits on its API choice")
+	h.see("  as of " + at.Local().Format("15:04") + " · 1 thread ended since")
+
+	// In a short window only the counts stay.
+	h.s.SetSize(120, 13)
+	h.a.draw()
+	h.see("◆ 1 waits for you")
+	if s := h.screen(); strings.Contains(s, "answer lint first") || strings.Contains(s, "Move auth into") {
+		t.Errorf("a short window keeps only the counts:\n%s", s)
+	}
+
+	// The workspaces screen counts the failed threads too.
+	h.s.SetSize(120, 36)
+	ws.Counts = map[model.State]int{model.StateWaiting: 1, model.StateIdle: 2}
+	ws.Recap.Failed = 1
+	h.a.apply(model.Update{Kind: model.UpdateWorkspace, Workspace: "demo", Summary: &ws})
+	h.press(":workspaces", "<CR>")
+	h.see("✗ 1")
+}

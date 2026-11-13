@@ -146,3 +146,96 @@ func recapHead(r *model.Recap, th *Theme, w int) []Line {
 	}
 	return out
 }
+
+// workspaceLineRows is how many rows each of the coordinator's lines may take
+// at the top of its window.
+const workspaceLineRows = 2
+
+// workspaceHead is the workspace recap at the top of the coordinator's
+// window w cells wide: the goal, the counts, the files two threads edited,
+// then the coordinator's lines. It says only what no thread's row says, and
+// shows nothing while no thread is open. full false keeps only the counts,
+// for a short window.
+func workspaceHead(r *model.WorkspaceRecap, threads map[string]model.ThreadView, th *Theme, w int, full bool) []Line {
+	var waits, failed, running, idle, newer int
+	for _, v := range threads {
+		if v.Role != model.RoleThread {
+			continue
+		}
+		if r != nil && v.Recap != nil && !r.At.IsZero() && v.Recap.At.After(r.At) {
+			newer++
+		}
+		switch {
+		case v.State == model.StateWaiting:
+			waits++
+		case v.State == model.StateRunning:
+			running++
+		case v.State == model.StateIdle && v.Recap != nil && v.Recap.Error != "":
+			failed++
+		case v.State == model.StateIdle:
+			idle++
+		}
+	}
+	if waits+failed+running+idle == 0 {
+		return nil
+	}
+	pre := []Span{{"  ", th.Text}}
+	var counts []Span
+	add := func(spans ...Span) {
+		if len(counts) > 0 {
+			counts = append(counts, Span{" · ", th.Muted})
+		}
+		counts = append(counts, spans...)
+	}
+	if waits > 0 {
+		verb := " wait for you"
+		if waits == 1 {
+			verb = " waits for you"
+		}
+		add(Span{fmt.Sprintf("◆ %d", waits), th.state(model.StateWaiting)}, Span{verb, th.Muted})
+	}
+	if failed > 0 {
+		add(Span{fmt.Sprintf("✗ %d", failed), th.Love}, Span{" failed", th.Muted})
+	}
+	if running > 0 {
+		add(Span{fmt.Sprintf("● %d", running), th.state(model.StateRunning)}, Span{" running", th.Muted})
+	}
+	if idle > 0 {
+		add(Span{fmt.Sprintf("%d idle", idle), th.Muted})
+	}
+	countRow := Line{Prefix: pre, Spans: counts}
+	if !full {
+		return []Line{countRow}
+	}
+	var out []Line
+	if r != nil && r.Goal != "" {
+		out = append(out, Line{Prefix: pre, Spans: []Span{{r.Goal, th.Subtle}}})
+	}
+	out = append(out, countRow)
+	if r == nil {
+		return out
+	}
+	for _, o := range r.Overlaps {
+		names := o.Threads[0] + " and " + o.Threads[1] + " both"
+		if n := len(o.Threads); n > 2 {
+			names = strings.Join(o.Threads[:n-1], ", ") + " and " + o.Threads[n-1] + " all"
+		}
+		out = append(out, Line{Prefix: pre, Spans: []Span{{names + " edited ", th.Subtle}, {o.Path, th.Text}}})
+	}
+	for _, l := range r.Lines {
+		rows := wrap([]Span{{l, th.Text}}, w, pre, pre)
+		if len(rows) > workspaceLineRows {
+			rows = rows[:workspaceLineRows]
+			rows[workspaceLineRows-1].Spans = append(rows[workspaceLineRows-1].Spans, Span{" …", th.Muted})
+		}
+		out = append(out, rows...)
+	}
+	if len(r.Lines) > 0 && newer > 0 {
+		ended := "1 thread ended since"
+		if newer > 1 {
+			ended = fmt.Sprintf("%d threads ended since", newer)
+		}
+		out = append(out, Line{Prefix: pre, Spans: []Span{{"as of " + r.At.Local().Format("15:04") + " · " + ended, th.Muted}}})
+	}
+	return out
+}

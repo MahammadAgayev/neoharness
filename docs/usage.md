@@ -55,6 +55,17 @@ thread yourself:
   thread's window it shows in full, the newest commands first. When the
   thread wrote none, the first line of its reply stands in, labeled `reply`,
   and `no commands` says that nothing was checked.
+- The coordinator's window starts with the workspace recap, so you learn how
+  the whole workspace stands without opening a thread: the goal, then
+  `◆ 1 waits for you · ✗ 1 failed · ● 2 running · 3 idle`, the files that
+  two threads both edited, and up to three lines from the coordinator on
+  what the threads' work means together. Each thread's own outcome stays on
+  its row. When threads ended after the coordinator wrote its lines, `as of
+  23:04 · 2 threads ended since` says so. The coordinator writes them ahead
+  of time: once the threads that ran have ended, the hub wakes it for that
+  (`workspace_recap = false` in the hub setup turns this off). In a short
+  window only the counts stay. The workspaces screen shows `✗ N` for the
+  threads that failed.
 - To delete a thread, press `<C-d>` on it in a picker, then `y`. This cannot
   be undone. The coordinator cannot be deleted.
 - A thread runs at most 20 turns in a row that you did not start. Then it

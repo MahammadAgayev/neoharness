@@ -116,7 +116,15 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	// A thread's recap stays at the top of its window, so the person reads
 	// what the work produced before its transcript.
 	if b.Kind == KindChat {
-		if head := recapHead(a.threads[b.Thread].Recap, a.th, r.W-2); len(head) > 0 && r.H-len(head) > minTranscript {
+		head := recapHead(a.threads[b.Thread].Recap, a.th, r.W-2)
+		// The coordinator's window holds the whole workspace's recap.
+		if b.Thread == model.Coordinator {
+			head = workspaceHead(a.workspaceRecap(), a.threads, a.th, r.W-2, true)
+			if r.H-len(head) <= minTranscript {
+				head = workspaceHead(a.workspaceRecap(), a.threads, a.th, r.W-2, false)
+			}
+		}
+		if len(head) > 0 && r.H-len(head) > minTranscript {
 			for i, l := range head {
 				a.drawCut(r.X, top+i, right, l)
 			}
