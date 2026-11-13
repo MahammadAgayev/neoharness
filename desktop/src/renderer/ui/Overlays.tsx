@@ -205,7 +205,13 @@ async function complete(line: string): Promise<string[]> {
   else if (cmd === 'set') names = ['vim', 'novim', 'fontsize=', 'compactwarn=']
   else if (cmd === 'setlocal') {
     const agents = s.workspaces.find((w) => w.name === s.workspace)?.agentNames ?? []
-    names = ['coordinator&', 'threads&', ...agents.flatMap((a) => [`coordinator=${a}`, `threads=${a}`])]
+    names = [
+      'coordinator&',
+      'threads&',
+      'reopen_compact&',
+      ...agents.flatMap((a) => [`coordinator=${a}`, `threads=${a}`]),
+      ...['compact', 'ask', 'off'].map((m) => `reopen_compact=${m}`),
+    ]
   }
   return names.filter((n) => n.startsWith(word)).map((n) => head + n)
 }

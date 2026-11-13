@@ -106,7 +106,7 @@ func startHub(asked func()) (stop func(), err error) {
 	tunnels := tunnel.New(port)
 	h, err := hub.New(hub.Config{MCPPort: port, Agents: defaults, Coordinator: cfg.Coordinator, Threads: cfg.Threads,
 		Factory: agentFactory(tunnels, agents), Files: listFiles, Branch: gitBranch, Shell: runShell,
-		Notify: cfg.Notify == "coordinator"})
+		Notify: cfg.Notify == "coordinator", ReopenCompact: cfg.ReopenCompact, CompactWarn: cfg.CompactWarn})
 	if err != nil {
 		apiLn.Close()
 		mcpLn.Close()

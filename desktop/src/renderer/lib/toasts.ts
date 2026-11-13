@@ -63,6 +63,8 @@ export function viewToast(
     return t('◆', 'gold', body, 0, true)
   }
   if (v.state === 'resolved' && old?.state !== 'resolved') return t('✓', 'muted', 'resolved', 4 * s)
+  // The coordinator brings a thread back by writing to it.
+  if (old?.state === 'resolved' && v.state !== 'resolved') return t('↺', 'foam', 'reopened', 4 * s)
   if (old?.state === 'running' && v.state === 'idle') {
     // You are less likely to be looking at a workspace that is not open.
     const body = plain(opts.reply) || (opts.away ? plain(v.progress ?? '') : '') || 'finished a turn'

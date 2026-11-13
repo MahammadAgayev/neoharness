@@ -599,8 +599,12 @@ class Store {
     if (!this.needWorkspace()) return
     const v = this.state.workspaces.find((w) => w.name === this.state.workspace)
     if (!v) return
-    const options = ['coordinator', 'threads']
-    const values: Record<string, string> = { coordinator: v.coordinatorAgent ?? '', threads: v.threadsAgent ?? '' }
+    const options = ['coordinator', 'threads', 'reopen_compact']
+    const values: Record<string, string> = {
+      coordinator: v.coordinatorAgent ?? '',
+      threads: v.threadsAgent ?? '',
+      reopen_compact: v.reopenCompact ?? '',
+    }
     const shown: string[] = []
     const set: string[] = []
     for (const w of args.length ? args : options) {

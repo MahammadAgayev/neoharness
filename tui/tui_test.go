@@ -1043,13 +1043,14 @@ func TestSetlocalChoosesTheWorkspacesAgents(t *testing.T) {
 	i := slices.IndexFunc(h.a.workspaces, func(p model.WorkspaceView) bool { return p.Name == "demo" })
 	h.a.workspaces[i].CoordinatorAgent, h.a.workspaces[i].ThreadsAgent = "big", "small"
 	h.a.workspaces[i].AgentNames = []string{"big", "small"}
+	h.a.workspaces[i].ReopenCompact = "ask"
 
 	h.press(":setlocal threads=small coordinator&", "<CR>")
 	if want := []string{"demo:threads=small", "demo:coordinator="}; !slices.Equal(h.hub.locals, want) {
 		t.Fatalf("locals = %q, want %q", h.hub.locals, want)
 	}
 	h.press(":setlocal", "<CR>")
-	if h.a.notice != "coordinator=big  threads=small" {
+	if h.a.notice != "coordinator=big  threads=small  reopen_compact=ask" {
 		t.Fatalf("notice = %q", h.a.notice)
 	}
 	h.press(":setlocal threads?", "<CR>")
@@ -1058,6 +1059,10 @@ func TestSetlocalChoosesTheWorkspacesAgents(t *testing.T) {
 	}
 	h.press(":setlocal threads=b", "<Tab>")
 	if got := string(h.a.cmd.text); got != "setlocal threads=big" {
+		t.Fatalf("completed to %q", got)
+	}
+	h.press("<Esc>", ":setlocal reopen_compact=c", "<Tab>")
+	if got := string(h.a.cmd.text); got != "setlocal reopen_compact=compact" {
 		t.Fatalf("completed to %q", got)
 	}
 }
@@ -1293,6 +1298,16 @@ func TestToastsForThreadsOffScreen(t *testing.T) {
 	}
 	h.press("<Space>nh")
 	h.see("auth-refactor: Moved the store.")
+
+	// A resolved thread the coordinator writes to comes back.
+	h.press(":q", "<CR>")
+	gone := h.a.threads["auth-refactor"]
+	gone.State = model.StateResolved
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: gone.Name, View: &gone})
+	gone.State = model.StateRunning
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: gone.Name, View: &gone})
+	h.a.draw()
+	h.see("reopened")
 }
 
 func TestStoppedTurnStopsSpinning(t *testing.T) {

@@ -288,6 +288,9 @@ type WorkspaceView struct {
 	CoordinatorAgent string   `json:"coordinatorAgent,omitempty"`
 	ThreadsAgent     string   `json:"threadsAgent,omitempty"`
 	AgentNames       []string `json:"agentNames,omitempty"`
+	// ReopenCompact is what a resolved thread with a full context does when
+	// the coordinator reopens it: compact, ask or off.
+	ReopenCompact string `json:"reopenCompact,omitempty"`
 }
 
 // UpdateKind classifies a hub update.

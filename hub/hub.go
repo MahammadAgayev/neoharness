@@ -95,7 +95,21 @@ type Config struct {
 	// Notify makes the coordinator the one that notifies the person: thread
 	// turns wake it, and it decides with notify what reaches them.
 	Notify bool
+	// ReopenCompact is what happens when the coordinator writes to a resolved
+	// thread whose context is past CompactWarn percent: one of the Reopen
+	// constants; empty is ReopenAsk. A workspace can choose another with
+	// SetLocal. CompactWarn 0 never compacts.
+	ReopenCompact string
+	CompactWarn   int
 }
+
+// What a reopened thread with a full context does before the coordinator's
+// message: compact first, ask the person, or nothing.
+const (
+	ReopenCompact = "compact"
+	ReopenAsk     = "ask"
+	ReopenOff     = "off"
+)
 
 // Hub is the running state of every workspace.
 type Hub struct {
@@ -387,17 +401,30 @@ func (h *Hub) SetFolder(name, dir string) error {
 
 // SetLocal sets which agent the coordinator or the threads of a workspace
 // run, from their next turn. An empty agent goes back to the config's.
-func (h *Hub) SetLocal(name, option, agentName string) error {
+func (h *Hub) SetLocal(name, option, value string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	ws, err := h.workspace(name)
 	if err != nil {
 		return err
 	}
+	p := ws.p
+	if option == "reopen_compact" {
+		if value != "" && value != ReopenCompact && value != ReopenAsk && value != ReopenOff {
+			return fmt.Errorf("reopen_compact is %s, %s or %s", ReopenCompact, ReopenAsk, ReopenOff)
+		}
+		p.ReopenCompact = value
+		if err := workspace.Save(p); err != nil {
+			return err
+		}
+		ws.p = p
+		h.publishWorkspace(ws)
+		return nil
+	}
+	agentName := value
 	if _, ok := h.cfg.Agents[agentName]; agentName != "" && !ok {
 		return fmt.Errorf("no agent %q; the agents are %s", agentName, strings.Join(slices.Sorted(maps.Keys(h.cfg.Agents)), ", "))
 	}
-	p := ws.p
 	var who string
 	switch option {
 	case "coordinator":
@@ -405,7 +432,7 @@ func (h *Hub) SetLocal(name, option, agentName string) error {
 	case "threads":
 		p.Threads, who = agentName, "Threads run"
 	default:
-		return fmt.Errorf("no option %q; the options are coordinator and threads", option)
+		return fmt.Errorf("no option %q; the options are coordinator, threads and reopen_compact", option)
 	}
 	if err := workspace.Save(p); err != nil {
 		return err
@@ -701,7 +728,7 @@ func (h *Hub) SendNow(workspaceName, to, text string) error {
 		}
 		// Stopped with messages queued: nothing runs, so they start now.
 		if err == nil && th.t.Paused {
-			th.t.Paused = false
+			th.t.Paused, th.t.Asking = false, ""
 			h.changed(ws, th)
 			h.kick(ws, th)
 			return nil
@@ -771,9 +798,13 @@ func (h *Hub) send(workspaceName, from, to, text string) (*thread, error) {
 	switch {
 	case th.t.Resolved && from == model.User:
 		// Writing to it says the person wants it back.
-		h.reopen(ws, th)
+		h.reopen(ws, th, "")
+	case th.t.Resolved && from == model.Coordinator:
+		// The coordinator brings it back for more of the same work.
+		h.reopen(ws, th, from)
+		h.compactReopened(ws, th)
 	case th.t.Resolved:
-		return nil, fmt.Errorf("thread %q is resolved; reopen it first", to)
+		return nil, fmt.Errorf("thread %q is resolved; only the coordinator or the person can reopen it", to)
 	}
 	if from == model.User {
 		if done, err := h.command(ws, th, text); done {
@@ -831,7 +862,9 @@ func (h *Hub) command(ws *space, th *thread, text string) (bool, error) {
 		}
 		focus := strings.Join(f[1:], " ")
 		t.AgentTurns, t.Paused, t.Asking = 0, false, ""
-		t.Queue = append(t.Queue, workspace.Message{From: model.User, Text: focus, At: time.Now().UTC(), Compact: true, Shown: true})
+		// Before what is queued: the agent has not read it yet, so it goes to
+		// the compacted session, as a held message of a reopened thread does.
+		t.Queue = append([]workspace.Message{{From: model.User, Text: focus, At: time.Now().UTC(), Compact: true, Shown: true}}, t.Queue...)
 		h.event(ws, th, model.Event{Kind: model.EventMessage, From: model.User, Text: strings.TrimSpace(text)})
 		h.changed(ws, th)
 		h.kick(ws, th)
@@ -988,16 +1021,56 @@ func (h *Hub) Reopen(workspaceName, name string) error {
 		return err
 	}
 	if th.t.Resolved {
-		h.reopen(ws, th)
+		h.reopen(ws, th, "")
 	}
 	return nil
 }
 
-func (h *Hub) reopen(ws *space, th *thread) {
+// reopen brings a resolved thread back; by names who did, empty for the
+// person.
+func (h *Hub) reopen(ws *space, th *thread, by string) {
 	th.t.Resolved = false
 	th.t.AgentTurns = 0
-	h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Reopened"})
+	text := "Reopened"
+	if by != "" {
+		text = "Reopened by " + by
+	}
+	h.event(ws, th, model.Event{Kind: model.EventNote, Text: text})
 	h.changed(ws, th)
+}
+
+// reopenMode is the workspace's ReopenCompact, else the config's.
+func (h *Hub) reopenMode(ws *space) string {
+	for _, m := range []string{ws.p.ReopenCompact, h.cfg.ReopenCompact} {
+		if m != "" {
+			return m
+		}
+	}
+	return ReopenAsk
+}
+
+// compactReopened readies a thread the coordinator reopened, before its
+// message is queued. Every turn sends the whole context again, so a session
+// past CompactWarn is costly to go on with: it compacts first, or the
+// message waits for the person to choose.
+func (h *Hub) compactReopened(ws *space, th *thread) {
+	t := th.t
+	if h.cfg.CompactWarn <= 0 || t.ContextWindow <= 0 || !t.Started || th.busy {
+		return
+	}
+	pct := t.Context * 100 / t.ContextWindow
+	if pct < h.cfg.CompactWarn {
+		return
+	}
+	switch h.reopenMode(ws) {
+	case ReopenOff:
+	case ReopenCompact:
+		t.Queue = append(t.Queue, workspace.Message{From: model.User, At: time.Now().UTC(), Compact: true, Shown: true})
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: fmt.Sprintf("Context %d%% full: compacting before the coordinator's message.", pct)})
+	default:
+		t.Paused = true
+		t.Asking = fmt.Sprintf("context %d%% full · /compact first, or send the message as is", pct)
+	}
 }
 
 // ReportProgress sets a thread's progress line.
@@ -1985,6 +2058,7 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 		CoordinatorAgent: h.agentOf(ws, &workspace.Thread{Role: model.RoleCoordinator}),
 		ThreadsAgent:     h.agentOf(ws, &workspace.Thread{Role: model.RoleThread}),
 		AgentNames:       slices.Sorted(maps.Keys(h.cfg.Agents)),
+		ReopenCompact:    h.reopenMode(ws),
 	}
 	now := time.Now()
 	for _, th := range ws.threads {

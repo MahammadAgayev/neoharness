@@ -215,13 +215,17 @@ func (a *App) complete(forward bool) {
 			switch fields[0] {
 			case "setlocal":
 				for _, o := range localOptions {
-					for _, v := range a.workspaces {
-						if v.Name != a.workspace {
-							continue
+					values := []string{"compact", "ask", "off"}
+					if o != "reopen_compact" {
+						values = nil
+						for _, v := range a.workspaces {
+							if v.Name == a.workspace {
+								values = v.AgentNames
+							}
 						}
-						for _, n := range v.AgentNames {
-							pool = append(pool, o+"="+n)
-						}
+					}
+					for _, n := range values {
+						pool = append(pool, o+"="+n)
 					}
 					pool = append(pool, o+"&")
 				}
@@ -696,9 +700,10 @@ func (a *App) helpBuf() *Buffer {
 		row(":new <name> [folder]", "create a workspace; no folder opens a folder picker"),
 		row(":folder [folder]", "change the workspace's folder; no folder opens a folder picker"),
 		row(":setlocal coordinator=<agent>", "this workspace's coordinator runs that agent; threads= for its threads"),
-		row(":setlocal threads& / threads?", "back to the config / show; no argument shows both"),
+		row(":setlocal reopen_compact=ask", "when the coordinator reopens a thread past compactwarn: compact first, ask you, or off"),
+		row(":setlocal threads& / threads?", "back to the config / show; no argument shows all"),
 		row(":open <name> [where]", "open a thread: folder or host:dir"),
-		row(":resolve  :reopen", "close or bring back a thread; your message to one brings it back too"),
+		row(":resolve  :reopen", "close or bring back a thread; your message or the coordinator's brings it back too"),
 		row(":allow :always :deny", "answer a permission (:deny <reason>)"),
 		row(":b <name>  :ls", "switch buffer"),
 		row(":vsplit :split [name]", "split with a buffer"),

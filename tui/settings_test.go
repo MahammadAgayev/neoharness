@@ -16,7 +16,7 @@ func TestHubSettingsDefaultToOpus(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := s.Agents[s.Coordinator]
-	if s.MCPPort != 47821 || s.Notify != "threads" || s.Coordinator != "claude" || s.Threads != "" || s.Kind("claude") != "claude" || a.Model != "claude-opus-5-5[1m]" || a.Effort != "" || a.ContextWindow != 400000 ||
+	if s.MCPPort != 47821 || s.Notify != "threads" || s.ReopenCompact != "ask" || s.CompactWarn != 80 || s.Coordinator != "claude" || s.Threads != "" || s.Kind("claude") != "claude" || a.Model != "claude-opus-5-5[1m]" || a.Effort != "" || a.ContextWindow != 400000 ||
 		!slices.Equal(a.Command, []string{"claude"}) || !slices.Equal(a.RemoteCommand, []string{"claude"}) {
 		t.Fatalf("settings = %+v", s)
 	}
@@ -43,6 +43,28 @@ require("neoharness.claude").setup({ command = "authwrap agent run claude", mode
 		!slices.Equal(a.Command, []string{"authwrap", "agent", "run", "claude"}) ||
 		!slices.Equal(a.RemoteCommand, []string{"claude"}) {
 		t.Fatalf("settings = %+v", s)
+	}
+}
+
+func TestInitLuaSetsReopenCompact(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "init.lua")
+	src := `
+neoharness.o.compactwarn = 70
+require("neoharness").setup({ reopen_compact = "compact" })
+`
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := ReadHubSettings(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.ReopenCompact != "compact" || s.CompactWarn != 70 {
+		t.Fatalf("settings = %+v", s)
+	}
+	s.ReopenCompact = "sometimes"
+	if err := s.Check(); err == nil {
+		t.Fatal("reopen_compact takes compact, ask or off")
 	}
 }
 

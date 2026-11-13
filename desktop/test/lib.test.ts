@@ -111,6 +111,11 @@ describe('toasts', () => {
     expect(t).toMatchObject({ glyph: '✓', body: 'Done with it', life: 4000 })
   })
 
+  it('says a resolved thread came back', () => {
+    const t = viewToast('w', view({ state: 'resolved' }), view({ state: 'running' }), opts)
+    expect(t).toMatchObject({ glyph: '↺', body: 'reopened', tone: 'foam' })
+  })
+
   it('keeps a quiet thread quiet unless it waits', () => {
     expect(viewToast('w', view({ state: 'running' }), view({ state: 'idle', quiet: true }), opts)).toBeNull()
     expect(viewToast('w', view({}), view({ state: 'waiting', quiet: true, waiting: 'which db?' }), opts)?.body).toBe('asks: which db?')

@@ -21,6 +21,11 @@ type HubSettings struct {
 	// Threads the one threads run; empty runs the coordinator's.
 	Coordinator, Threads string
 	Agents               map[string]AgentSettings
+	// ReopenCompact is what a thread the coordinator reopens does when its
+	// context is past CompactWarn percent, neoharness.o.compactwarn: compact,
+	// ask or off.
+	ReopenCompact string
+	CompactWarn   int
 }
 
 // AgentSettings configure one agent.
@@ -129,6 +134,8 @@ func ReadHubSettings(path string) (HubSettings, error) {
 			s.Coordinator = text(v)
 		case "neoharness.threads":
 			s.Threads = text(v)
+		case "neoharness.reopen_compact":
+			s.ReopenCompact = text(v)
 		}
 	})
 	noop := L.NewFunction(func(*lua.LState) int { return 0 })
@@ -136,7 +143,8 @@ func ReadHubSettings(path string) (HubSettings, error) {
 	L.SetField(keymap, "set", noop)
 	L.SetField(keymap, "del", noop)
 	L.SetField(nh, "keymap", keymap)
-	L.SetField(nh, "o", L.NewTable())
+	o := L.NewTable()
+	L.SetField(nh, "o", o)
 	L.SetField(nh, "hl", noop)
 	L.SetField(nh, "cmd", noop)
 	L.SetGlobal("neoharness", nh)
@@ -153,6 +161,9 @@ func ReadHubSettings(path string) (HubSettings, error) {
 		if err := L.DoString(string(src)); err != nil {
 			return HubSettings{}, fmt.Errorf("%s: %w", path, err)
 		}
+	}
+	if n, ok := L.GetField(o, "compactwarn").(lua.LNumber); ok {
+		s.CompactWarn = int(n)
 	}
 	return s, nil
 }
@@ -175,6 +186,11 @@ func (s HubSettings) Check() error {
 		if _, ok := s.Agents[n]; !ok {
 			return fmt.Errorf("agent %q is not in require(\"neoharness.agents\").setup", n)
 		}
+	}
+	switch s.ReopenCompact {
+	case "", "compact", "ask", "off":
+	default:
+		return fmt.Errorf("reopen_compact is compact, ask or off, not %q", s.ReopenCompact)
 	}
 	return nil
 }

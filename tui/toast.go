@@ -122,6 +122,9 @@ func (a *App) toastView(workspace string, old, v model.ThreadView, had bool) {
 		toast(Span{"◆", a.th.Gold}, body, a.th.Gold, 0)
 	case v.State == model.StateResolved && old.State != model.StateResolved:
 		toast(Span{"✓", a.th.Muted}, "resolved", a.th.Muted, 4*time.Second)
+	case old.State == model.StateResolved && v.State != model.StateResolved:
+		// The coordinator brings a thread back by writing to it.
+		toast(Span{"↺", a.th.Foam}, "reopened", a.th.Foam, 4*time.Second)
 	case old.State == model.StateRunning && v.State == model.StateIdle:
 		var body string
 		life := 4 * time.Second

@@ -496,8 +496,8 @@ func TestResolveRefusesMessagesAndReopenKeepsSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	stateIs(t, h, "demo", "docs", model.StateResolved)
-	if err := h.Send("demo", model.Coordinator, "docs", "more"); err == nil {
-		t.Fatal("a resolved thread must refuse the coordinator's messages")
+	if err := h.Send("demo", "api", "docs", "more"); err == nil {
+		t.Fatal("a resolved thread must refuse another thread's messages")
 	}
 	if err := h.Resolve("demo", model.User, model.Coordinator); err == nil {
 		t.Fatal("the coordinator cannot be resolved")
@@ -1935,7 +1935,8 @@ func TestOnlyTheCoordinatorNotifies(t *testing.T) {
 }
 
 // TestYourMessageReopensAResolvedThread: writing to a resolved thread means
-// you want it back; a thread or the coordinator still has to reopen it.
+// you want it back; the coordinator's message brings it back too, a
+// thread's does not.
 func TestYourMessageReopensAResolvedThread(t *testing.T) {
 	f := &fake{}
 	h := newHub(t, f)
@@ -1947,15 +1948,121 @@ func TestYourMessageReopensAResolvedThread(t *testing.T) {
 	if err := h.Resolve("demo", model.Coordinator, "docs"); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.Send("demo", model.Coordinator, "docs", "more"); err == nil {
-		t.Fatal("the coordinator's message should not reopen it")
-	}
 	if err := h.Send("demo", model.User, "docs", "one more thing"); err != nil {
 		t.Fatal(err)
 	}
 	stateIs(t, h, "demo", "docs", model.StateIdle)
 	if reqs := f.requests(); !strings.Contains(reqs[len(reqs)-1].Prompt, "one more thing") {
 		t.Fatalf("last prompt = %q, want your message to run", reqs[len(reqs)-1].Prompt)
+	}
+
+	if err := h.Resolve("demo", model.Coordinator, "docs"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Send("demo", model.Coordinator, "docs", "and the tests"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	if reqs := f.requests(); !strings.Contains(reqs[len(reqs)-1].Prompt, "and the tests") {
+		t.Fatalf("last prompt = %q, want the coordinator's message to run", reqs[len(reqs)-1].Prompt)
+	}
+	if evs, _ := h.Events("demo", "docs", 0); !slices.ContainsFunc(evs, func(e model.Event) bool { return e.Text == "Reopened by coordinator" }) {
+		t.Fatal("the thread should say the coordinator reopened it")
+	}
+}
+
+// fullThread opens docs in demo, fills its context to 90% and resolves it.
+// The fake answers a summary request with a summary.
+func fullThread(t *testing.T, mode string) (*Hub, *fake) {
+	t.Helper()
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if strings.Contains(req.Prompt, "Reply with only the summary") {
+			return agent.Result{Text: "SUMMARY", Context: 100, ContextWindow: 1000}
+		}
+		return agent.Result{Text: "ok", Context: 900, ContextWindow: 1000}
+	}
+	h := newHub(t, f)
+	h.cfg.CompactWarn, h.cfg.ReopenCompact = 80, mode
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "docs", "work", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	if err := h.Resolve("demo", model.Coordinator, "docs"); err != nil {
+		t.Fatal(err)
+	}
+	return h, f
+}
+
+func TestReopenedFullThreadCompactsFirst(t *testing.T) {
+	h, f := fullThread(t, ReopenCompact)
+	if err := h.Send("demo", model.Coordinator, "docs", "more work"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	r := f.requests()
+	if len(r) != 3 || !strings.Contains(r[1].Prompt, "Reply with only the summary") {
+		t.Fatalf("want the summary turn before the message: %+v", r)
+	}
+	if !strings.Contains(r[2].Prompt, "SUMMARY") || !strings.HasSuffix(r[2].Prompt, "more work") {
+		t.Fatalf("the message should start the compacted session: %q", r[2].Prompt)
+	}
+}
+
+func TestReopenedFullThreadAsksFirst(t *testing.T) {
+	h, f := fullThread(t, "")
+	if err := h.Send("demo", model.Coordinator, "docs", "more work"); err != nil {
+		t.Fatal(err)
+	}
+	v := view(t, h, "demo", "docs")
+	if v.State != model.StateWaiting || !strings.Contains(v.Waiting, "90% full") || v.Queued != 1 {
+		t.Fatalf("want the message held and a question: %+v", v)
+	}
+	if len(f.requests()) != 1 {
+		t.Fatal("no turn should run before the person chooses")
+	}
+	// /compact: the summary first, then the held message.
+	if err := h.Send("demo", model.User, "docs", "/compact"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	r := f.requests()
+	if len(r) != 3 || !strings.Contains(r[1].Prompt, "Reply with only the summary") || !strings.HasSuffix(r[2].Prompt, "more work") {
+		t.Fatalf("turns = %+v", r)
+	}
+
+	// Or send it as it is.
+	h, f = fullThread(t, "")
+	_ = h.Send("demo", model.Coordinator, "docs", "more work")
+	if err := h.SendNow("demo", "docs", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	if r := f.requests(); len(r) != 2 || !r[1].Resume || !strings.HasSuffix(r[1].Prompt, "more work") {
+		t.Fatalf("turns = %+v", r)
+	}
+	if v := view(t, h, "demo", "docs"); v.Waiting != "" {
+		t.Fatalf("the question should go: %+v", v)
+	}
+}
+
+func TestReopenCompactOffAndSetlocal(t *testing.T) {
+	h, f := fullThread(t, ReopenCompact)
+	if err := h.SetLocal("demo", "reopen_compact", "never"); err == nil {
+		t.Fatal("reopen_compact takes compact, ask or off")
+	}
+	if err := h.SetLocal("demo", "reopen_compact", ReopenOff); err != nil {
+		t.Fatal(err)
+	}
+	ws := h.Workspaces()
+	if ws[0].ReopenCompact != ReopenOff {
+		t.Fatalf("workspace view = %+v", ws[0])
+	}
+	_ = h.Send("demo", model.Coordinator, "docs", "more work")
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	if r := f.requests(); len(r) != 2 || !strings.HasSuffix(r[1].Prompt, "more work") {
+		t.Fatalf("off sends the message as it is: %+v", r)
 	}
 }
 

@@ -224,7 +224,7 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			return text("Opened " + in.Name + "."), nil, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "resolve_thread", Description: "Close a thread whose work is finished. The person can reopen it."},
+	mcp.AddTool(s, &mcp.Tool{Name: "resolve_thread", Description: "Close a thread whose work is finished. A message from you or the person reopens it."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in resolveIn) (*mcp.CallToolResult, any, error) {
 			if err := h.Resolve(p, me, in.Name); err != nil {
 				return nil, nil, err

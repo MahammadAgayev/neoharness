@@ -6,7 +6,8 @@
 :new <name> [folder]    create a workspace and open it; no folder opens a folder picker
 :folder [folder]        change the folder; the coordinator moves and keeps its conversation
 :setlocal coordinator=<agent>   this workspace's coordinator runs that agent; threads=<agent> for its threads
-:setlocal threads&      back to the config; threads? shows it; no argument shows both
+:setlocal reopen_compact=ask    a thread the coordinator reopens past compactwarn: compact first, ask you, or off
+:setlocal threads&      back to the config; threads? shows it; no argument shows all
 :workspace [name]       switch; no name opens the picker (also <leader>w)
 :workspaces             the workspaces screen (also <leader>pv)
 :restore [name]         bring back a deleted workspace; no name lists them
@@ -40,7 +41,7 @@ thread yourself:
 | idle | nothing to do |
 | running | a turn runs, or messages wait in the queue |
 | waiting | a permission request, a question to you, or the loop guard paused it |
-| resolved | closed; `:reopen` or a message from you brings it back |
+| resolved | closed; `:reopen`, or a message from you or the coordinator, brings it back |
 
 - The threads pane groups threads by state. Resolved threads fold into
   `▸ N resolved`.

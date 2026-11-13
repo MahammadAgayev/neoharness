@@ -56,6 +56,9 @@ type (
 	Folder struct {
 		Pin string `json:"pin"`
 	}
+	// Local is a :setlocal. Agent is the option's value: an agent's name,
+	// or for reopen_compact compact, ask or off. Empty goes back to the
+	// config's.
 	Local struct {
 		Option string `json:"option"`
 		Agent  string `json:"agent"`
@@ -141,8 +144,8 @@ func (c *Client) SetFolder(name, pin string) error {
 	return c.do("PUT", "/workspaces/"+esc(name)+"/folder", Folder{Pin: pin}, nil)
 }
 
-func (c *Client) SetLocal(name, option, agent string) error {
-	return c.do("PUT", "/workspaces/"+esc(name)+"/local", Local{Option: option, Agent: agent}, nil)
+func (c *Client) SetLocal(name, option, value string) error {
+	return c.do("PUT", "/workspaces/"+esc(name)+"/local", Local{Option: option, Agent: value}, nil)
 }
 
 func (c *Client) DeleteWorkspace(name string) error {

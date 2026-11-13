@@ -553,8 +553,8 @@ func (a *App) setFolder(dir string) {
 }
 
 // localOptions are the options :setlocal sets in a workspace: the agents its
-// roles run.
-var localOptions = []string{"coordinator", "threads"}
+// roles run, and what a reopened thread with a full context does.
+var localOptions = []string{"coordinator", "threads", "reopen_compact"}
 
 // setLocal runs :setlocal in the open workspace, as Vim does: name=agent
 // sets an option, name& goes back to the config, and name or name? shows
@@ -565,7 +565,7 @@ func (a *App) setLocal(args []string) {
 		return
 	}
 	v := a.workspaces[i]
-	values := map[string]string{"coordinator": v.CoordinatorAgent, "threads": v.ThreadsAgent}
+	values := map[string]string{"coordinator": v.CoordinatorAgent, "threads": v.ThreadsAgent, "reopen_compact": v.ReopenCompact}
 	if len(args) == 0 {
 		args = localOptions
 	}

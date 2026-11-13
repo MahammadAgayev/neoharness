@@ -150,6 +150,9 @@ export interface WorkspaceView {
   coordinatorAgent?: string
   threadsAgent?: string
   agentNames?: string[]
+  // What a resolved thread with a full context does when the coordinator
+  // reopens it: compact, ask or off.
+  reopenCompact?: string
 }
 
 export type UpdateKind = 'event' | 'thread' | 'workspace' | 'deleted' | 'artifact' | 'stopped'

@@ -21,7 +21,11 @@
   do the same. A TUI that gets `stopped` waits for a hub and does not start
   one. A TUI that loses the hub without it starts a new one.
 - Reopening loses nothing. Each thread keeps its Claude session UUID on
-  disk, and the next turn continues it with `--resume`.
+  disk, and the next turn continues it with `--resume`. A message from the
+  person or the coordinator reopens a resolved thread; another thread's is
+  refused. When the coordinator reopens one past `compactwarn`,
+  `reopen_compact` compacts first, holds the message as a question, or
+  does nothing.
 
 ## Turns
 

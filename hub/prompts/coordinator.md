@@ -20,7 +20,11 @@ Your tools, through the `neoharness` MCP server:
   with. `location` is a directory or `host:dir`; leave it out for the
   workspace folder.
 - `send_message(to, text)`: a correction, an answer, or what the person said.
-- `resolve_thread(name)` closes a thread whose work is done.
+- `resolve_thread(name)` closes a thread whose work is done. A message to a
+  resolved thread reopens it, and it remembers its work. Reopen one for more
+  of the same work. For new work open a new thread. Do that too when the old
+  session is long, because every turn sends all of it again: give the new
+  thread a short summary of what the old one found.
 - `ask_user(question)`, only for what only the person can decide.
 - `read_thread(name, tail, query?)`, only when the board is not enough to
   decide what to do next.

@@ -57,6 +57,7 @@ the hub starts: run `neoharness hub restart` after a change.
 require("neoharness").setup({
   mcp_port = 47821,                     -- remote hosts reach the hub through a tunnel on it
   notify = "threads",                   -- every thread notifies you; "coordinator": the coordinator decides
+  reopen_compact = "ask",               -- the coordinator reopens a thread past compactwarn: "compact", "ask" or "off"
   coordinator = "claude",               -- the agent coordinators run
   threads = "quick",                    -- the agent threads run; left out: the coordinator's
 })
@@ -83,6 +84,17 @@ other agents for it, from each session's next turn. `:setlocal threads&`
 goes back to the config, and `:setlocal` alone shows both. Threads with no
 agent of their own follow the coordinator's here too. A new model or command
 restarts claude with `--resume`, so the conversation goes on.
+
+When the coordinator writes to a resolved thread, the thread comes back with
+its session. Every turn sends the whole session again, so a thread whose
+context is past `neoharness.o.compactwarn` does what `reopen_compact` says:
+
+- `"ask"` (the default) holds the message and asks you: `/compact` first,
+  or send it as it is (`<CR>` on the queued message).
+- `"compact"` compacts first, then the message starts the new session.
+- `"off"` sends the message.
+
+`:setlocal reopen_compact=<value>` sets it for one workspace.
 
 `require("neoharness.claude").setup({...})` still works: it sets the entry
 `claude`.

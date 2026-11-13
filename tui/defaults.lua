@@ -17,6 +17,7 @@ neoharness.o.compactwarn = 80   -- past this context %, the status line says /co
 require("neoharness").setup({
   mcp_port = 47821,              -- remote hosts reach the hub through a tunnel on it
   notify = "threads",            -- every thread notifies you; "coordinator": the coordinator decides
+  reopen_compact = "ask",        -- the coordinator reopens a thread past compactwarn: "compact" first, "ask" you, or "off"
   coordinator = "claude",        -- the agent below that coordinators run
   -- threads = "claude",         -- the threads' agent; left out: the coordinator's
 })

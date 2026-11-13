@@ -33,6 +33,9 @@ type Workspace struct {
 	// empty runs the config's.
 	Coordinator string `json:"coordinator,omitempty"`
 	Threads     string `json:"threads,omitempty"`
+	// ReopenCompact is the :setlocal reopen_compact here; empty is the
+	// config's.
+	ReopenCompact string `json:"reopenCompact,omitempty"`
 }
 
 // Message is one queued input for a thread.

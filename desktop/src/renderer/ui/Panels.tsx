@@ -106,6 +106,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       [':new <name> [folder]', 'create a workspace; no folder opens a folder picker; <Tab> completes a ~/ or / folder'],
       [':folder [folder]', "change the workspace's folder"],
       [':setlocal coordinator=<agent>', "this workspace's coordinator runs that agent; threads= for its threads"],
+      [':setlocal reopen_compact=ask', 'when the coordinator reopens a thread past compactwarn: compact first, ask you, or off'],
       [':open <name> [where]', 'open a thread: folder or host:dir'],
       [':resolve  :reopen  :stop', 'close or bring back a thread, stop its turn'],
       [':allow :always :deny', 'answer a permission (:deny <reason>)'],
