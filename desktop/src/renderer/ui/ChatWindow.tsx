@@ -49,7 +49,7 @@ function PromptInfo(props: { v: ThreadView | undefined; focused: boolean }) {
   )
 }
 
-function StatusLine(props: { v: ThreadView | undefined; focused: boolean; workspace: string; name: string }) {
+function StatusLine(props: { v: ThreadView | undefined; focused: boolean; workspace: string; name: string; peek: boolean }) {
   const { v, focused } = props
   const [, tick] = useState(0)
   useEffect(() => {
@@ -60,7 +60,7 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
   const wake = v && v.state === 'idle' && v.wakeAt ? `wakes at ${new Date(v.wakeAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''
   return (
     <div className={`statusline ${focused ? 'focused' : ''}`}>
-      <span className="sl-ws">{props.workspace} · </span>
+      <span className={`sl-ws ${props.peek ? 'peek' : ''}`}>{props.workspace} · </span>
       <span className="sl-name">{props.name}</span>
       {v && (
         <span className={`sl-state t-${stateTone(v.state)}`}>
@@ -222,7 +222,7 @@ const BlockView = memo(function BlockView(props: {
     }
     case 'artifact':
       return (
-        <div className="b-line b-artifact" onClick={() => void store.openArtifact(b.name)}>
+        <div className="b-line b-artifact" onClick={() => void store.openArtifactOf(props.thread, b.name)}>
           <span className="glyph t-foam">◇</span>
           <span className="link">{b.title}</span>
           <span className="t-muted">
@@ -246,12 +246,15 @@ function Queued(props: { e: Event; selected: boolean; onClick: () => void }) {
 export function ChatWindow(props: { win: Win; focused: boolean }) {
   const { win, focused } = props
   const thread = win.buf.kind === 'chat' ? win.buf.thread : Coordinator
-  const workspace = useStore((s) => s.workspace)
+  const open = useStore((s) => s.workspace)
+  const { workspace, thread: name } = store.at(thread)
+  const peek = workspace !== open
   const v = useStore((s) => s.threads[thread])
   const blocks = useStore((s) => s.chats[thread]) ?? []
   const folds = useStore((s) => s.folds)
   const artifactList = useStore((s) => s.artifacts)
-  const artifacts = useMemo(() => new Set(artifactList.map((a) => a.name)), [artifactList])
+  // A peek's artifacts are of its workspace: they open from their blocks.
+  const artifacts = useMemo(() => new Set(peek ? [] : artifactList.map((a) => a.name)), [artifactList, peek])
   const pending = v?.pending ?? []
   const working = v?.state === 'running' && !blocks.some((b) => 'live' in b && b.live)
   const scroller = useRef<HTMLDivElement>(null)
@@ -378,7 +381,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           return true
         }
         const b = blocks[cursor]
-        if (b.kind === 'artifact') void store.openArtifact(b.name)
+        if (b.kind === 'artifact') void store.openArtifactOf(thread, b.name)
         else if (b.kind === 'tools' || b.kind === 'shell') store.toggleFold(b.key)
         else if (b.kind === 'message' && b.from === User) {
           // As Claude Code's message list: your message back to the prompt.
@@ -481,7 +484,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
 
   return (
     <div className="window chat" onMouseDown={() => store.focus(win.id)}>
-      <StatusLine v={v} focused={focused} workspace={workspace} name={thread} />
+      <StatusLine v={v} focused={focused} workspace={workspace} name={name} peek={peek} />
       {search !== null && (
         <div className="findbar">
           <span className="t-iris">/</span>

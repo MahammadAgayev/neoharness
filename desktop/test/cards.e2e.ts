@@ -352,19 +352,31 @@ test('New doc starts a document beside the chat, ready to write', async () => {
     .toMatchObject({ base: 1, text: '# Launch plan\n\n- [ ] write the API' })
 })
 
-test('search offers only what a thread of another workspace can do', async () => {
+test('Ctrl V on a thread of another workspace shows it beside this one, and you write to it there', async () => {
   // billing is open now: demo's threads are of another workspace.
   await normal()
   await page.keyboard.press('Meta+k')
   await page.keyboard.type('demo coordinator')
   const foot = page.locator('.palette-foot')
   await expect(foot).toContainText('go to demo')
-  await expect(foot).not.toContainText('split right')
+  await expect(foot).toContainText('split right')
   await page.keyboard.press('Control+v')
-  await expect(page.locator('.palette')).toBeVisible()
+  const peek = page.locator('.window.chat', { has: page.locator('.sl-ws.peek', { hasText: 'demo' }) })
+  await expect(peek).toHaveCount(1)
   await expect(page.locator('.sb-item.active', { hasText: 'billing' })).toBeVisible()
-  await shot('39-search-other-workspace')
-  await page.keyboard.press('Escape')
+  await expect(peek.locator('.prompt .cm-focused')).toBeVisible()
+  await expect(peek.locator('.cm-placeholder')).toHaveText(/^write to demo · coordinator/)
+  await page.keyboard.type('hello from billing')
+  await page.keyboard.press('Enter')
+  await expect
+    .poll(() => hub.calls.filter((c) => c.path.endsWith('/messages')).pop())
+    .toMatchObject({ path: '/workspaces/demo/threads/coordinator/messages', body: { text: 'hello from billing' } })
+  await expect(peek.locator('.b-user', { hasText: 'hello from billing' })).toBeVisible()
+  await shot('39-peek')
+  await normal()
+  await page.keyboard.press('Control+w')
+  await page.keyboard.press('c')
+  await expect(peek).toHaveCount(0)
 })
 
 test('a hub that stops says so and offers to start it', async () => {

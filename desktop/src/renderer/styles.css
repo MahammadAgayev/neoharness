@@ -272,6 +272,10 @@ kbd {
   color: var(--muted);
   margin-right: -6px;
 }
+/* A thread of another workspace: where your words go is not the sidebar's. */
+.statusline .sl-ws.peek {
+  color: var(--foam);
+}
 .statusline .sl-name {
   color: var(--subtle);
 }

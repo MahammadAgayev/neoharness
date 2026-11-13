@@ -79,7 +79,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
     rows: [
       ['<Tab>  ⇧<Tab>', 'next / previous tab: all, threads, artifacts, text, commands, …'],
       ['<C-n> <C-p>  ↑ ↓', 'next / previous result'],
-      ['<CR>  <C-v>  <C-x>', 'open, split right, split above'],
+      ['<CR>  <C-v>  <C-x>', 'open, split right, split above; a split keeps your workspace'],
       ['<leader>pt  <leader>pa  <leader>ps', 'open on threads, artifacts, text'],
     ],
   },

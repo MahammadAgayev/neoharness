@@ -86,9 +86,10 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   threads of every workspace, artifacts, workspaces, commands, notifications
   and the text of every transcript at once. `<Tab>` goes to one kind. The
   pickers (`<leader>pt`, `<leader>pa`, `<leader>ps`, …) open it on one kind.
-  The footer shows only what the chosen result can do: a thread of another
-  workspace says "go to" that workspace and has no split, as windows are of
-  the open workspace.
+  The footer shows only what the chosen result can do. `<CR>` on a thread
+  of another workspace goes to that workspace; `<C-v>` and `<C-x>` show it
+  in a split beside the one you work in, its workspace name in foam on its
+  status line, so you answer it without leaving.
 - **macOS shortcuts** next to the Vim keys: `⌘P` threads, `⌘⇧F` search the
   transcripts, `⌘.` stop the turn, `⌘N` open a thread, `⌘S` save, `⌘W` close
   the window, `⌘\` split, `⌘1`…`⌘9` workspaces, `⌘/` help.

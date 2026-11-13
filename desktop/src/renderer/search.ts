@@ -103,6 +103,8 @@ function threadItems(local: boolean): Item[] {
       detail: threadDetail(v),
       open: `go to ${workspace}`,
       run: () => void store.goThread(workspace, v.name).then(() => store.focusPrompt()),
+      // A split keeps this workspace: the thread shows beside it.
+      split: (vert) => void store.peek(vert, workspace, v.name).then(() => store.focusPrompt()),
     })
   }
   return items
@@ -171,6 +173,7 @@ function notificationItems(): Item[] {
       hint: new Date(t.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       open: t.workspace === store.state.workspace ? undefined : `go to ${t.workspace}`,
       run: () => void store.goThread(t.workspace, t.thread),
+      split: (vert: boolean) => void store.peek(vert, t.workspace, t.thread).then(() => store.focusPrompt()),
     }))
 }
 

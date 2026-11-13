@@ -29,6 +29,8 @@ const toastsShown = 3
 
 export type MsgTone = Tone | 'text' | 'subtle'
 
+// A chat's thread is a name of the open workspace, or workspace/name for a
+// thread of another workspace on screen beside it: a peek. Names have no /.
 export type BufRef =
   | { kind: 'chat'; thread: string }
   | { kind: 'threads' }
@@ -303,6 +305,46 @@ class Store {
     if (name !== this.state.workspace) return
     this.set({ threads, order, chats, artifacts })
     for (const [n, d] of Object.entries(this.state.docs)) if (!d.edit) void this.loadDoc(n)
+    for (const w of this.wins()) if (w.buf.kind === 'chat' && w.buf.thread.includes('/')) await this.loadPeek(w.buf.thread)
+  }
+
+  // at is the workspace and the name of a chat's thread.
+  at(key: string): { workspace: string; thread: string } {
+    const i = key.indexOf('/')
+    return i < 0 ? { workspace: this.state.workspace, thread: key } : { workspace: key.slice(0, i), thread: key.slice(i + 1) }
+  }
+
+  private async loadPeek(key: string): Promise<boolean> {
+    const { workspace, thread } = this.at(key)
+    const vs = await this.try(this.call('threads', { workspace }))
+    const v = vs?.find((x) => x.name === thread)
+    if (!v) return false
+    const evs = await this.call('events', { workspace, thread, tail: historyTail }).catch(() => [] as Event[])
+    const s = this.state
+    this.set({ threads: { ...s.threads, [key]: v }, chats: { ...s.chats, [key]: fromEvents(evs, v.state === 'running') } })
+    return true
+  }
+
+  // peek shows a thread of another workspace in a split, so you answer it
+  // without leaving the one you work in.
+  async peek(vertical: boolean, workspace: string, thread: string): Promise<void> {
+    if (workspace === this.state.workspace) {
+      this.split(vertical, { kind: 'chat', thread })
+      return
+    }
+    const key = `${workspace}/${thread}`
+    if (!this.state.threads[key] && !(await this.loadPeek(key))) return
+    const there = this.wins().find((w) => w.buf.kind === 'chat' && w.buf.thread === key)
+    if (there) this.focus(there.id)
+    else this.split(vertical, { kind: 'chat', thread: key })
+  }
+
+  // openArtifactOf opens an artifact a chat names: one of another
+  // workspace opens there.
+  async openArtifactOf(thread: string, name: string): Promise<void> {
+    const { workspace } = this.at(thread)
+    if (workspace !== this.state.workspace) await this.openWorkspace(workspace)
+    await this.openArtifact(name)
   }
 
   // --- updates ---
@@ -327,7 +369,10 @@ class Store {
       case 'thread':
         if (!u.view) return
         if (u.workspace === s.workspace) this.onView(u.view)
-        else this.awayView(u.workspace, u.view)
+        else {
+          this.peekView(`${u.workspace}/${u.view.name}`, u.view)
+          this.awayView(u.workspace, u.view)
+        }
         return
       case 'event': {
         const e = u.event
@@ -338,8 +383,10 @@ class Store {
           // A held event may be in the history that loaded with it already.
           if (replay && this.loaded[u.thread]?.some((x) => JSON.stringify(x) === JSON.stringify(e))) return
           this.set({ chats: { ...s.chats, [u.thread]: addEvent(s.chats[u.thread] ?? [], e) } })
-        } else if (e.kind === 'text' && u.thread) {
-          this.awayText[`${u.workspace}\0${u.thread}`] = (e.text ?? '').trim().split('\n')[0] ?? ''
+        } else if (u.thread) {
+          const key = `${u.workspace}/${u.thread}`
+          if (s.chats[key]) this.set({ chats: { ...s.chats, [key]: addEvent(s.chats[key], e) } })
+          if (e.kind === 'text') this.awayText[`${u.workspace}\0${u.thread}`] = (e.text ?? '').trim().split('\n')[0] ?? ''
         }
         return
       }
@@ -358,6 +405,7 @@ class Store {
       case 'deleted':
         if (!u.thread) this.dropWorkspace(u.workspace)
         else if (u.workspace === s.workspace) this.dropThread(u.thread)
+        else this.dropThread(`${u.workspace}/${u.thread}`)
         return
     }
   }
@@ -374,6 +422,14 @@ class Store {
     const spec = viewToast(s.workspace, old, v, { reply: lastText(chat), away: false, home: nh().home() })
     if (!old && this.opening.delete(v.name)) return
     if (spec) this.toast(spec)
+  }
+
+  private peekView(key: string, v: ThreadView): void {
+    const s = this.state
+    if (!s.threads[key]) return
+    let chat = s.chats[key] ?? []
+    if (v.state === 'idle' || v.state === 'resolved') chat = settle(chat, false)
+    this.set({ threads: { ...s.threads, [key]: v }, chats: { ...s.chats, [key]: chat } })
   }
 
   private awayView(workspace: string, v: ThreadView): void {
@@ -408,6 +464,7 @@ class Store {
     const s = this.state
     delete this.layouts[name]
     this.set({ workspaces: s.workspaces.filter((w) => w.name !== name) })
+    for (const k of Object.keys(s.threads)) if (k.startsWith(`${name}/`)) this.dropThread(k)
     if (s.workspace === name) {
       this.set({ workspace: '', threads: {}, order: [], chats: {}, artifacts: [], docs: {}, screen: 'workspaces' })
       localStorage.removeItem('workspace')
@@ -423,7 +480,8 @@ class Store {
 
   private toast(spec: ToastSpec): void {
     const s = this.state
-    if (spec.workspace === s.workspace && this.onScreen(spec.thread) && document.hasFocus()) return
+    const shown = spec.workspace === s.workspace ? this.onScreen(spec.thread) : this.onScreen(`${spec.workspace}/${spec.thread}`)
+    if (shown && document.hasFocus()) return
     const now = Date.now()
     const t: Toast = { ...spec, id: nextId(), at: now, until: spec.life ? now + spec.life : 0 }
     const toasts = s.toasts.filter((o) => !(o.workspace === t.workspace && o.thread === t.thread))
@@ -474,7 +532,7 @@ class Store {
     }
     this.saveLayout()
     // The threads of the workspace left behind keep toasting.
-    for (const [n, v] of Object.entries(s.threads)) this.away[`${s.workspace}\0${n}`] = v
+    for (const [n, v] of Object.entries(s.threads)) if (!n.includes('/')) this.away[`${s.workspace}\0${n}`] = v
     const layout = this.layouts[name] ?? {
       cols: [
         { id: nextId(), wins: [this.win({ kind: 'chat', thread: Coordinator })] },
@@ -823,11 +881,11 @@ class Store {
   }
 
   async resolve(name = this.target()): Promise<void> {
-    if (this.needWorkspace() && name) await this.try(this.call('resolve', { workspace: this.state.workspace, thread: name }))
+    if (this.needWorkspace() && name) await this.try(this.call('resolve', this.at(name)))
   }
 
   async reopen(name = this.target()): Promise<void> {
-    if (this.needWorkspace() && name) await this.try(this.call('reopen', { workspace: this.state.workspace, thread: name }))
+    if (this.needWorkspace() && name) await this.try(this.call('reopen', this.at(name)))
   }
 
   async stop(name = this.target()): Promise<void> {
@@ -837,7 +895,7 @@ class Store {
       this.say(`${name} has no turn running`, 'muted')
       return
     }
-    if ((await this.try(this.call('stop', { workspace: this.state.workspace, thread: name }))) !== undefined)
+    if ((await this.try(this.call('stop', this.at(name)))) !== undefined)
       this.say(`stopped ${name}`, 'muted')
   }
 
@@ -866,7 +924,7 @@ class Store {
   async send(thread: string, text: string): Promise<boolean> {
     const t = text.trim()
     if (!t) return false
-    const ok = await this.try(this.call('send', { workspace: this.state.workspace, thread, text: t }))
+    const ok = await this.try(this.call('send', { ...this.at(thread), text: t }))
     if (ok === undefined) return false
     const w = this.cur()
     if (w) this.updateWin(w.id, { follow: true, cursor: -1 })
@@ -874,7 +932,7 @@ class Store {
   }
 
   async sendQueuedNow(thread: string): Promise<void> {
-    await this.try(this.call('send', { workspace: this.state.workspace, thread, text: '', now: true }))
+    await this.try(this.call('send', { ...this.at(thread), text: '', now: true }))
   }
 
   // takeBack is u with an empty prompt, as Esc in Claude Code: your last
@@ -886,12 +944,12 @@ class Store {
     const bs = this.state.chats[thread] ?? []
     const queued = (v?.pending ?? []).filter((e) => e.from === User).pop()
     if (queued) {
-      const ok = await this.try(this.call('unqueue', { workspace: this.state.workspace, thread, at: queued.at }))
+      const ok = await this.try(this.call('unqueue', { ...this.at(thread), at: queued.at }))
       return ok === undefined ? '' : (queued.text ?? '')
     }
     const last = lastUserMessage(bs)
     if (last >= 0 && (v?.state === 'running' || v?.state === 'waiting')) {
-      const ok = await this.try(this.call('stop', { workspace: this.state.workspace, thread }))
+      const ok = await this.try(this.call('stop', this.at(thread)))
       const b = bs[last]
       return ok === undefined || b.kind !== 'message' ? '' : b.text
     }
@@ -915,13 +973,13 @@ class Store {
     const v = this.state.threads[name]
     if (!v?.permission) return
     const ok = await this.try(
-      this.call('answer', { workspace: this.state.workspace, thread: name, id: v.permission.id, decision: d, message: msg }),
+      this.call('answer', { ...this.at(name), id: v.permission.id, decision: d, message: msg }),
     )
     if (ok !== undefined) this.say(`${d} · ${v.permission.tool} · ${name}`, 'pine')
   }
 
   completions(thread: string, query: string) {
-    return this.call('completions', { workspace: this.state.workspace, thread, query })
+    return this.call('completions', { ...this.at(thread), query })
   }
 
   // promptRequest asks the chat window in focus to take the keys; the
