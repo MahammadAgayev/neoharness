@@ -405,6 +405,16 @@ export function onKey(e: KeyboardEvent): void {
     // Without Vim an editor keeps every key; its own <Esc> leaves it.
     if (!s.settings.vim) return
     if (vimState(ed)?.insertMode && insertCtrlW(ed, key, e)) return
+    // Back and forward are the app's in Insert too, over Vim's one Normal
+    // command: a doc you write in still goes back where you came from.
+    if (vimState(ed)?.insertMode && (key === '<C-o>' || key === '<C-i>')) {
+      e.preventDefault()
+      e.stopPropagation()
+      const cm = getCM(ed)
+      if (cm) Vim.exitInsertMode(cm as never)
+      command(key === '<C-o>' ? 'back' : 'forward').run()
+      return
+    }
     if (vimBusy(ed)) return
     if (editorKeys.get(ed)?.(key, false)) {
       e.preventDefault()

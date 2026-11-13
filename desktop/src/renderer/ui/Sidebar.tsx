@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { store, useStore } from '../store'
 import { Icon } from './Icon'
@@ -6,9 +6,13 @@ import { Icon } from './Icon'
 const minWidth = 160
 const maxWidth = 400
 
+const railWidth = 48
+
 // Sidebar lists the workspaces and what in each needs you, so a thread that
-// waits in another workspace is one look away. ⌘B hides it for focus.
-export function Sidebar() {
+// waits in another workspace is one look away. ⌘B folds it to a rail of
+// icons, as Chrome's vertical tabs: the mouse on the rail shows it whole,
+// over the windows, until the mouse leaves.
+export function Sidebar(props: { folded: boolean }) {
   const workspaces = useStore((s) => s.workspaces)
   const open = useStore((s) => s.workspace)
   const screen = useStore((s) => s.screen)
@@ -38,14 +42,29 @@ export function Sidebar() {
     window.addEventListener('mousemove', move)
     window.addEventListener('mouseup', up)
   }
-  return (
-    <nav className="sidebar" style={{ flexBasis: width }}>
-      <div
-        className="sb-resizer"
-        onMouseDown={drag}
-        onDoubleClick={() => store.setSettings({ sidebarWidth: 216 })}
-        data-tip="Drag to resize · double-click resets"
-      />
+  const [over, setOver] = useState(false)
+  const wait = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // A short wait, so a mouse on its way to the title bar does not open it.
+  const hover = (on: boolean) => {
+    if (wait.current) clearTimeout(wait.current)
+    wait.current = on ? setTimeout(() => setOver(true), 150) : null
+    if (!on) setOver(false)
+  }
+  const nav = (
+    <nav
+      className={`sidebar ${props.folded ? (over ? 'peek' : 'rail') : ''}`}
+      style={props.folded ? { width: over ? width : railWidth } : { flexBasis: width }}
+      onMouseEnter={props.folded ? () => hover(true) : undefined}
+      onMouseLeave={props.folded ? () => hover(false) : undefined}
+    >
+      {!props.folded && (
+        <div
+          className="sb-resizer"
+          onMouseDown={drag}
+          onDoubleClick={() => store.setSettings({ sidebarWidth: 216 })}
+          data-tip="Drag to resize · double-click resets"
+        />
+      )}
       <div className="sb-section">
         {open && artifacts.length > 0 && (
           <button className="sb-item" onClick={() => store.openPicker('artifacts', true)}>
@@ -116,4 +135,5 @@ export function Sidebar() {
       </div>
     </nav>
   )
+  return props.folded ? <div className="sb-slot">{nav}</div> : nav
 }

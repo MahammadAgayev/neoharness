@@ -94,9 +94,42 @@ function TitleBar() {
   const screen = useStore((s) => s.screen)
   const workspaces = useStore((s) => s.workspaces)
   const waiting = workspaces.reduce((n, w) => n + (w.counts.waiting ?? 0) + (w.coordinator === 'waiting' ? 1 : 0), 0)
+  const sidebar = useStore((s) => s.settings.sidebar)
+  const win = useStore((s) => s.layout.cols.flatMap((c) => c.wins).find((w) => w.id === s.layout.focus))
+  // The buttons keep the focus where it is, as the keys do.
+  const keep = (e: React.MouseEvent) => e.preventDefault()
   return (
     <div className="titlebar">
       <div className="titlebar-left">
+        <button
+          className="nav-btn"
+          onMouseDown={keep}
+          onClick={() => store.setSettings({ sidebar: !sidebar })}
+          data-tip={sidebar ? 'Fold the sidebar' : 'Unfold the sidebar'}
+          data-keys="⌘B"
+        >
+          <Icon name="panel-left" size={15} />
+        </button>
+        <button
+          className="nav-btn nav-back"
+          disabled={screen !== 'workspace' || !win?.back.length}
+          onMouseDown={keep}
+          onClick={() => store.goBack()}
+          data-tip="Back"
+          data-keys="⌘[  <C-o>"
+        >
+          <Icon name="arrow-left" size={15} />
+        </button>
+        <button
+          className="nav-btn nav-fwd"
+          disabled={screen !== 'workspace' || !win?.fwd.length}
+          onMouseDown={keep}
+          onClick={() => store.goForward()}
+          data-tip="Forward"
+          data-keys="⌘]  <C-i>"
+        >
+          <Icon name="arrow-right" size={15} />
+        </button>
         <button className="crumb" onClick={() => store.showWorkspaces()}>
           neoharness
         </button>
@@ -150,7 +183,7 @@ export function App() {
       <TitleBar />
       <HubBanner />
       <main className="main">
-        {sidebar && <Sidebar />}
+        <Sidebar folded={!sidebar} />
         {screen === 'workspaces' ? <Workspaces /> : <Layout />}
       </main>
       <CommandLine />

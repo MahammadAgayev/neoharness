@@ -552,6 +552,31 @@ test('the sidebar resizes by its edge, keeps the width, and a double-click reset
   await page.mouse.move(700, 400)
 })
 
+test('⌘B folds the sidebar to a rail; the mouse on the rail shows it whole over the windows', async () => {
+  await normal()
+  const bar = page.locator('.sidebar')
+  const layout = page.locator('.layout')
+  const x0 = (await layout.boundingBox())!.x
+  await page.keyboard.press('Meta+b')
+  await expect(bar).toHaveClass(/rail/)
+  await expect.poll(async () => Math.round((await bar.boundingBox())!.width)).toBe(48)
+  await expect(bar.locator('.sb-label', { hasText: 'demo' })).toBeHidden()
+  const x1 = (await layout.boundingBox())!.x
+  expect(x1).toBeLessThan(x0)
+  await bar.hover({ position: { x: 20, y: 200 } })
+  await expect(bar).toHaveClass(/peek/)
+  await expect.poll(async () => Math.round((await bar.boundingBox())!.width)).toBe(216)
+  await expect(bar.locator('.sb-label', { hasText: 'demo' })).toBeVisible()
+  // Over the windows: they do not move.
+  expect((await layout.boundingBox())!.x).toBe(x1)
+  await shot('44-sidebar-peek')
+  await page.mouse.move(700, 400)
+  await expect(bar).toHaveClass(/rail/)
+  await page.locator('.titlebar .nav-btn').first().click()
+  await expect(bar).not.toHaveClass(/rail|peek/)
+  await page.mouse.move(700, 400)
+})
+
 test('<C-w>h and <C-w>l move between a doc and the chat beside it, from Normal or Insert', async () => {
   await normal()
   await page.keyboard.press('Space')
@@ -585,6 +610,40 @@ test('<C-w>h and <C-w>l move between a doc and the chat beside it, from Normal o
   await page.keyboard.press('l')
   await page.keyboard.press('Control+w')
   await page.keyboard.press('c')
+})
+
+test('a doc opened from the coordinator goes back with <C-o> and the back button, and forward with <C-i>', async () => {
+  await normal()
+  await page.keyboard.press('Meta+1')
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  hub.artifact('demo', 'notes', 'Release notes', '# Notes\n\n- one\n')
+  hub.event('demo', 'coordinator', { kind: 'artifact', detail: 'notes', text: 'Release notes', version: 1 })
+  await page.locator('.pane.focused .b-artifact', { hasText: 'Release notes' }).click()
+  const name = page.locator('.statusline.focused .sl-name')
+  await expect(name).toHaveText(/^notes/)
+  await page.keyboard.press('Control+o')
+  await expect(name).toHaveText('coordinator')
+  await page.keyboard.press('Control+i')
+  await expect(name).toHaveText(/^notes/)
+  // From Insert in the doc too.
+  await page.keyboard.press('i')
+  await page.keyboard.press('Control+o')
+  await expect(name).toHaveText('coordinator')
+
+  const back = page.locator('.titlebar .nav-back')
+  const fwd = page.locator('.titlebar .nav-fwd')
+  await expect(fwd).toBeEnabled()
+  await fwd.hover()
+  await expect(page.locator('.tooltip')).toContainText('Forward')
+  await expect(page.locator('.tooltip')).toContainText('⌘]')
+  await fwd.click()
+  await expect(name).toHaveText(/^notes/)
+  await expect(fwd).toBeDisabled()
+  await back.click()
+  await expect(name).toHaveText('coordinator')
+  await shot('43-back-forward')
+  await page.mouse.move(700, 400)
 })
 
 test('a hub that stops says so and offers to start it', async () => {

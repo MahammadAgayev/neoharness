@@ -120,6 +120,28 @@ kbd {
   justify-content: flex-end;
   gap: 8px;
 }
+.nav-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--subtle);
+  cursor: default;
+  transition: background-color 80ms var(--ease), color 80ms var(--ease);
+}
+.nav-btn:hover:not(:disabled) {
+  background: var(--hl-low);
+  color: var(--text);
+}
+.nav-btn:disabled {
+  color: var(--hl-high);
+}
+.nav-fwd {
+  margin-right: 6px;
+}
 .crumb {
   background: none;
   border: 0;
@@ -1795,6 +1817,37 @@ kbd {
 }
 .choice:focus {
   outline: none;
+}
+
+/* The folded sidebar: a rail in the layout, and the sidebar over the
+   windows while the mouse is on it. */
+.sb-slot {
+  position: relative;
+  flex: 0 0 48px;
+}
+.sb-slot > .sidebar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  overflow: hidden;
+  transition: width 140ms var(--ease), box-shadow 140ms var(--ease);
+}
+.sidebar.peek {
+  box-shadow: 0 10px 32px rgb(0 0 0 / 0.28), 1px 0 0 var(--line);
+}
+.sidebar.rail .sb-label,
+.sidebar.rail .sb-count,
+.sidebar.rail .sb-kbd {
+  display: none;
+}
+.sidebar.rail .sb-head {
+  font-size: 0;
+  height: 1px;
+  padding: 0;
+  margin: 10px 8px;
+  background: var(--line);
 }
 
 .sb-resizer {

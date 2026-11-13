@@ -98,6 +98,8 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
 - **macOS shortcuts** next to the Vim keys: `⌘P` threads, `⌘⇧F` search the
   transcripts, `⌘.` stop the turn, `⌘N` open a thread, `⌘S` save, `⌘W` close
   the window, `⌘\` split, `⌘1`…`⌘9` workspaces, `⌘/` help (also `<leader>h`, as `<leader>s` is settings), `⌘[` `⌘]` back and forward (`<C-o>` `<C-i>`).
+  The arrows at the top left go back and forward too, as in Slack; their
+  tooltips show the keys.
   Help opens as a dialog, as the settings do: Esc closes it, j and k scroll it.
 - **`/model` and `/effort`** with no name open a picker, as in Claude Code;
   a click on the model under the prompt opens it too. The models, their
@@ -107,11 +109,13 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
 - **Window keys from Insert**: `<C-w>` followed by a window key (`h j k l w c
   s v o q =`) leaves Insert and acts on the window, so a doc you write in is
   no trap. `<C-w>` alone, or followed by any other key, still deletes a word.
-  In a doc, `<C-o>` and `<C-i>` are the app's back and forward, and `:w`
-  saves from Visual mode too.
-- **A sidebar** of workspaces, each with what waits or runs in it. `⌘B` or
-  `:set nosidebar` hides it. Drag its edge to resize it; a double-click on
-  the edge resets it. The work sits on a raised panel beside it, and
+  `<C-o>` and `<C-i>` are the app's back and forward in Insert too, over
+  Vim's one Normal command, and `:w` saves from Visual mode too.
+- **A sidebar** of workspaces, each with what waits or runs in it. `⌘B`,
+  `:set nosidebar` or the button at the top left folds it to a rail of
+  icons, as Chrome's vertical tabs: the mouse on the rail shows it whole,
+  over the windows. Drag its edge to resize it; a double-click on the edge
+  resets it. The work sits on a raised panel beside it, and
   icons are Lucide's line icons (ISC). The Rosé Pine text is drawn a step
   closer to black or white than the TUI's, so it reads sharp in a window.
 - **The mouse**: buttons on permission cards, a click on a thread, an
