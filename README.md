@@ -1,8 +1,12 @@
 # neoharness
 
-Run several Claude Code sessions at once: a coordinator splits your work into
-threads, local or over ssh. Use it from a macOS app, or from a terminal UI
-with Vim keys.
+neoharness is an engineering tool for working with coding agents. It is
+built around a few concepts: a **workspace** for each piece of work, a
+**coordinator** you talk to, **threads** that do the work in parallel, here
+or over ssh, and **artifacts**, the plans and reports you and the agents
+share.
+
+Use it from a macOS app, or from a terminal UI with Vim keys.
 
 ## Desktop app
 
