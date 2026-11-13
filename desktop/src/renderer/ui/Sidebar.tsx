@@ -10,11 +10,6 @@ export function Sidebar() {
   return (
     <nav className="sidebar">
       <div className="sb-section">
-        <button className={`sb-item ${screen === 'workspaces' ? 'active' : ''}`} onClick={() => store.showWorkspaces()}>
-          <span className="sb-icon">▦</span>
-          <span className="sb-label">Workspaces</span>
-          <kbd className="sb-kbd">␣pv</kbd>
-        </button>
         <button className="sb-item" onClick={() => store.openPicker('all')}>
           <span className="sb-icon">⌕</span>
           <span className="sb-label">Search</span>
@@ -28,7 +23,15 @@ export function Sidebar() {
           </button>
         )}
       </div>
-      <div className="sb-head">Workspaces</div>
+      {/* The heading opens the overview of every workspace; the list marks the open one. */}
+      <button
+        className={`sb-head ${screen === 'workspaces' ? 'active' : ''}`}
+        onClick={() => store.showWorkspaces()}
+        data-tip="All workspaces"
+        data-keys="␣pv"
+      >
+        Workspaces
+      </button>
       <div className="sb-section sb-scroll">
         {workspaces.map((w, i) => {
           const waiting = (w.counts.waiting ?? 0) + (w.coordinator === 'waiting' ? 1 : 0)

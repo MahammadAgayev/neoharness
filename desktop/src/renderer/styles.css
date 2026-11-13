@@ -1471,9 +1471,19 @@ kbd {
   min-height: 0;
 }
 .sb-head {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
   font-size: 11.5px;
   color: var(--muted);
   padding: 14px 8px 4px;
+  cursor: default;
+}
+.sb-head:hover,
+.sb-head.active {
+  color: var(--text);
 }
 .sb-item {
   display: flex;
