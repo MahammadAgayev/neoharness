@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gdamore/tcell/v2"
+
 	"github.com/MahammadAgayev/neoharness/api/model"
 )
 
@@ -69,31 +71,44 @@ func counted(n int, what string) string {
 	return fmt.Sprintf("%d %ss", n, what)
 }
 
-// recapHead is a thread's recap at the top of its window, one row per part:
-// the thread's words, then what the hub saw.
-func recapHead(r *model.Recap, th *Theme) []Line {
+// recapWords is how many rows each of the thread's words may take at the
+// top of its window.
+const recapWords = 3
+
+// recapHead is a thread's recap at the top of a window w cells wide: the
+// thread's words, wrapped, then what the hub saw, one row each.
+func recapHead(r *model.Recap, th *Theme, w int) []Line {
 	if r == nil {
 		return nil
 	}
-	row := func(label string, spans ...Span) Line {
-		return Line{Prefix: []Span{{"  " + pad(label, 9), th.Muted}}, Spans: spans}
+	label := func(s string) []Span { return []Span{{"  " + pad(s, 9), th.Muted}} }
+	row := func(name string, spans ...Span) Line {
+		return Line{Prefix: label(name), Spans: spans}
 	}
 	var out []Line
+	words := func(name, text string, st tcell.Style) {
+		rows := wrap([]Span{{text, st}}, w, label(name), label(""))
+		if len(rows) > recapWords {
+			rows = rows[:recapWords]
+			rows[recapWords-1].Spans = append(rows[recapWords-1].Spans, Span{" …", th.Muted})
+		}
+		out = append(out, rows...)
+	}
 	if r.Asked != "" {
-		out = append(out, row("asked", Span{r.Asked, th.Subtle}))
+		words("asked", r.Asked, th.Subtle)
 	}
 	if r.Outcome != "" {
-		label := "outcome"
+		name := "outcome"
 		if r.FromReply {
-			label = "reply"
+			name = "reply"
 		}
-		out = append(out, row(label, Span{r.Outcome, th.Text}))
+		words(name, r.Outcome, th.Text)
 	}
 	if r.Error != "" {
-		out = append(out, row("failed", Span{r.Error, th.Love}))
+		words("failed", r.Error, th.Love)
 	}
 	if r.Open != "" {
-		out = append(out, row("open", Span{r.Open, th.Text}))
+		words("open", r.Open, th.Text)
 	}
 	// The newest first: the last commands are most often the checks, and a
 	// long row is cut at its end.

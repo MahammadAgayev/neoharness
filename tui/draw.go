@@ -116,7 +116,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	// A thread's recap stays at the top of its window, so the person reads
 	// what the work produced before its transcript.
 	if b.Kind == KindChat {
-		if head := recapHead(a.threads[b.Thread].Recap, a.th); len(head) > 0 && r.H-len(head) > minTranscript {
+		if head := recapHead(a.threads[b.Thread].Recap, a.th, r.W-2); len(head) > 0 && r.H-len(head) > minTranscript {
 			for i, l := range head {
 				a.drawCut(r.X, top+i, right, l)
 			}

@@ -3510,6 +3510,15 @@ func TestARecapShowsUnderItsRowAndAtTheTopOfTheThread(t *testing.T) {
 	h.see("ran      ✗ golangci-lint run · go test ./... · +1 earl…")
 	h.see("changed  api_test.go · ◇ test-plan")
 
+	long := strings.Repeat("word ", 60)
+	v.Recap = &model.Recap{Asked: "write the api tests", Outcome: long + "END"}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("outcome  word word")
+	if rows := strings.Count(h.screen(), "         word word"); rows != 2 || strings.Contains(h.screen(), "END") {
+		t.Errorf("a long outcome wraps to 3 rows at most, the last cut; %d more rows:\n%s", rows, h.screen())
+	}
+
 	v.Recap = &model.Recap{Asked: "write the api tests", Outcome: "All tests pass.", FromReply: true}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()

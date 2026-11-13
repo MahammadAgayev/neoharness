@@ -57,10 +57,11 @@ export function RecapRows(props: { v: ThreadView }) {
 export function RecapHead(props: { r?: Recap }) {
   const r = props.r
   if (!r) return null
-  const row = (label: string, body: ReactNode) => (
+  // The thread's words wrap to a few lines; what the hub saw keeps to one.
+  const row = (label: string, body: ReactNode, words = false) => (
     <>
       <span className="recap-label">{label}</span>
-      <span className="recap-body">{body}</span>
+      <span className={words ? 'recap-words' : 'recap-body'}>{body}</span>
     </>
   )
   const commands = r.commands ?? []
@@ -77,10 +78,10 @@ export function RecapHead(props: { r?: Recap }) {
   return (
     <div className="recap">
       <div className="recap-inner">
-        {r.asked && row('asked', <span className="t-subtle">{r.asked}</span>)}
-        {r.outcome && row(r.fromReply ? 'reply' : 'outcome', <span className="t-text">{r.outcome}</span>)}
-        {r.error && row('failed', <span className="t-love">{r.error}</span>)}
-        {r.open && row('open', <span className="t-text">{r.open}</span>)}
+        {r.asked && row('asked', <span className="t-subtle">{r.asked}</span>, true)}
+        {r.outcome && row(r.fromReply ? 'reply' : 'outcome', <span className="t-text">{r.outcome}</span>, true)}
+        {r.error && row('failed', <span className="t-love">{r.error}</span>, true)}
+        {r.open && row('open', <span className="t-text">{r.open}</span>, true)}
         {row(
           'ran',
           commands.length === 0 ? (

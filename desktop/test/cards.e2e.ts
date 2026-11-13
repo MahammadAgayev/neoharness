@@ -749,6 +749,12 @@ test("a thread's recap shows under its row and at the top of its chat", async ()
   await expect(head).toContainText('◇ health-plan')
   await shot('27-recap')
 
+  hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', outcome: 'word '.repeat(200), at: new Date().toISOString() } }))
+  const words = head.locator('.recap-words').nth(1)
+  await expect(words).toContainText('word word')
+  // Three lines at most: the rest is cut.
+  expect(await words.evaluate((el) => el.clientHeight / parseFloat(getComputedStyle(el).lineHeight))).toBeLessThanOrEqual(3.01)
+  await shot('28-recap-long')
   hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', outcome: 'All tests pass.', fromReply: true, at: new Date().toISOString() } }))
   await expect(head).toContainText('reply')
   await expect(head).toContainText('no commands')
