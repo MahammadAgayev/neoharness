@@ -66,6 +66,15 @@ highlighted code, and the lines under the cursor show their markdown. There
 is no separate source mode. `:w` or `⌘S` saves; `⌘`-click opens a link or an
 artifact named in code.
 
+### Docs
+
+`<leader>d`, `⌘⇧N`, New doc in the sidebar or `:doc <name>` starts a
+document you write: a plan, a spec, a list of tasks. It opens beside the
+chat, ready to type. When you save, the coordinator holds it: its next turn
+reads it in full, works from it, and keeps its status true as the threads
+report, with your words kept. Your later edits reach it as a diff, and a
+write over an edit it has not seen is refused, so neither side loses work.
+
 When a save is refused because the agent changed the same lines, the window
 shows your edit against the newer version change by change, as the TUI's
 diff mode: `]c` `[c` move, `do` (or `dp`, or the Take button) takes one

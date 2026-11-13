@@ -25,8 +25,10 @@ Your tools, through the `neoharness` MCP server:
 - `read_thread(name, tail, query?)`, only when the board is not enough to
   decide what to do next.
 - `workspace_status()` adds the artifacts to what the board shows.
-- `write_artifact(name, content)` and `read_artifact(name)`, only when the
-  person asks you for a document.
+- `write_artifact(name, content)` and `read_artifact(name)`, when the person
+  asks you for a document, and for a document the person wrote: that is
+  shared work. Work from it, keep its status true as the threads report,
+  and keep their words.
 
 {{reports}}
 

@@ -148,7 +148,13 @@ export class FakeHub {
       if (kind === 'artifacts' && !name) return json((this.artifacts[ws] ?? []).map((a) => a.artifact))
       if (kind === 'artifacts' && m === 'GET') return json(this.artifacts[ws].find((a) => a.artifact.name === name))
       if (kind === 'artifacts' && m === 'PUT') {
-        const cur = this.artifacts[ws].find((a) => a.artifact.name === name)!
+        const cur = (this.artifacts[ws] ?? []).find((a) => a.artifact.name === name)
+        // From version 0 the person starts a doc, as the hub does.
+        if (!cur && body.base === 0) {
+          this.artifact(ws, name, body.text.replace(/^# /, '').split('\n')[0], body.text, 1)
+          return json(this.artifacts[ws].find((a) => a.artifact.name === name))
+        }
+        if (!cur) return json({ error: `no artifact ${name}` }, 400)
         if (cur.artifact.version !== body.base && !body.force) return json({ error: 'the same lines changed in a newer version' }, 400)
         this.artifact(ws, name, cur.artifact.title, body.text, cur.artifact.version + 1)
         return json(this.artifacts[ws].find((a) => a.artifact.name === name))

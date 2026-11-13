@@ -106,5 +106,10 @@ command.
 ~/.neoharness/workspaces/<workspace>/artifacts/<name>.md / .json   artifact text / metadata
 ```
 
+An artifact belongs to the session that wrote it last. The person's edit
+reaches that session as a diff before its next message. A save from version
+0 to a new name starts a document the person writes: the coordinator holds
+it and reads it in full on its next turn.
+
 A thread's state is not stored. The hub calculates it from the stored
 fields each time, so it cannot drift.

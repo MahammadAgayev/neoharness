@@ -36,6 +36,7 @@ const appMaps: Record<string, Action> = {
   '<leader>A': c('always'),
   '<leader>x': c('deny'),
   '<leader>s': c('settings'),
+  '<leader>d': c('new-doc'),
   '<leader>e': w('fold'),
   '<leader>y': w('yank'),
   gO: c('outline'),
@@ -123,6 +124,7 @@ const macMaps: Record<string, Action> = {
   '<D-[>': c('back'),
   '<D-b>': c('sidebar'),
   '<D-,>': c('settings'),
+  '<D-S-n>': c('new-doc'),
 }
 
 // marks are per buffer: the block of a chat or the row of the threads list
@@ -345,7 +347,7 @@ export function onKey(e: KeyboardEvent): void {
     return
   }
   // The picker, the command line and the settings are inputs of their own.
-  if (s.picker || s.cmdline !== null || s.settingsOpen || s.newWorkspace) return
+  if (s.picker || s.cmdline !== null || s.settingsOpen || s.newWorkspace || s.newDoc) return
 
   const km = keymaps()
   if (key.startsWith('<D-')) {

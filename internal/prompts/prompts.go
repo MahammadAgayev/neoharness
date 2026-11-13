@@ -100,6 +100,17 @@ func ArtifactEdited(name string, from, to int, diff string, sections []string, a
 	return head + " The change, as a unified diff:\n\n```diff\n" + diff + "\n```\n\nKeep their changes when you write it again."
 }
 
+// ArtifactStarted tells the coordinator the person started a document: the
+// plan they write for the workspace. text is empty when it is too long to
+// send.
+func ArtifactStarted(name, text string) string {
+	head := fmt.Sprintf("The person started the artifact %s. It is their document for this workspace: work from it, and keep it true as the work moves, what is done, what is in progress, what is next. Keep their words when you write it again.", name)
+	if text == "" {
+		return head + " Read it with read_artifact."
+	}
+	return head + "\n\n```markdown\n" + text + "\n```"
+}
+
 // Limits keep the board short: it starts every coordinator turn.
 const (
 	reportLimit = 150

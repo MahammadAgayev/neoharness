@@ -131,6 +131,7 @@ export interface State {
   settings: Settings
   settingsOpen: boolean
   newWorkspace: boolean
+  newDoc: boolean
   hints: Hint[] | null
   showResolved: boolean
   folds: Record<number, boolean>
@@ -182,6 +183,7 @@ class Store {
     settings: loadSettings(),
     settingsOpen: false,
     newWorkspace: false,
+    newDoc: false,
     hints: null,
     showResolved: false,
     folds: {},
@@ -189,6 +191,8 @@ class Store {
     pending: '',
   }
   private listeners = new Set<() => void>()
+  // writeDoc is a new doc whose editor opens ready to write.
+  writeDoc = ''
   private layouts: Record<string, Layout> = {}
   // away are the threads of workspaces that are not open, as last seen, so
   // their changes still toast.
@@ -1096,6 +1100,30 @@ class Store {
     if (hints || this.state.hints) this.set({ hints })
   }
 
+  openNewDoc(open = true): void {
+    if (open && !this.needWorkspace()) return
+    this.set({ newDoc: open, picker: null, cmdline: null })
+  }
+
+  // newDoc starts a document the person writes, beside the window in focus.
+  // The coordinator holds it and works from it.
+  async newDoc(name: string): Promise<boolean> {
+    if (!this.needWorkspace()) return false
+    const bad = validName(name)
+    if (bad) {
+      this.say(bad, 'love')
+      return false
+    }
+    const title = name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ')
+    const text = `# ${title}\n\n`
+    const r = await this.try(this.call('editArtifact', { workspace: this.state.workspace, name, text, base: 0, baseText: '', force: false }))
+    if (!r) return false
+    this.writeDoc = name
+    this.split(true)
+    await this.openArtifact(name)
+    return true
+  }
+
   openNewWorkspace(open = true): void {
     this.set({ newWorkspace: open, picker: null, cmdline: null })
   }
@@ -1222,6 +1250,10 @@ class Store {
         return this.setOption(a)
       case 'settings':
         return this.openSettings()
+      case 'doc':
+        if (!a[0]) return this.openNewDoc()
+        void this.newDoc(a[0])
+        return
       default:
         this.say(`not a command: ${e.cmd}`, 'love')
     }

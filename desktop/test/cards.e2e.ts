@@ -286,7 +286,7 @@ test('<leader> shows what can follow at once, as which-key, and <leader>s opens 
   await page.keyboard.press('Space')
   const panel = page.locator('.keyhints')
   await expect(panel).toBeVisible()
-  await expect(panel.locator('.keyhint', { hasText: 'Coordinator' })).toBeVisible()
+  await expect(panel.locator('.keyhint', { hasText: /^cCoordinator$/ })).toBeVisible()
   await expect(panel.locator('.keyhint', { hasText: /^p\+pick · \d+$/ })).toBeVisible()
   await shot('36-keyhints')
   await page.keyboard.press('c')
@@ -325,6 +325,31 @@ test('New workspace opens a dialog: a name, a folder, Create', async () => {
   await expect.poll(() => hub.calls.find((c) => c.method === 'POST' && c.path === '/workspaces')?.body).toEqual({ name: 'billing', pin: tmp })
   await expect(dialog).toHaveCount(0)
   await expect(page.locator('.sb-item.active', { hasText: 'billing' })).toBeVisible()
+})
+
+test('New doc starts a document beside the chat, ready to write', async () => {
+  // The workspace made before leaves you writing to its coordinator.
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('d')
+  const dialog = page.locator('.dialog', { hasText: 'New doc' })
+  await expect(dialog).toBeVisible()
+  await page.keyboard.type('launch plan')
+  await expect(dialog.locator('input')).toHaveValue('launch-plan')
+  await page.keyboard.press('Enter')
+  await expect
+    .poll(() => hub.calls.find((c) => c.method === 'PUT' && c.path.endsWith('/artifacts/launch-plan'))?.body)
+    .toMatchObject({ base: 0, text: '# Launch plan\n\n' })
+  const doc = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'launch-plan' }) })
+  await expect(doc.locator('.cm-focused')).toBeVisible()
+  await page.keyboard.type('- [ ] write the API')
+  await expect(doc.locator('.sl-name', { hasText: 'launch-plan [+]' })).toBeVisible()
+  await shot('38-new-doc')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Meta+s')
+  await expect
+    .poll(() => hub.calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/artifacts/launch-plan')).pop()?.body)
+    .toMatchObject({ base: 1, text: '# Launch plan\n\n- [ ] write the API' })
 })
 
 test('a hub that stops says so and offers to start it', async () => {

@@ -57,4 +57,5 @@ export const exCommands = [
   'colorscheme',
   'set',
   'settings',
+  'doc',
 ]

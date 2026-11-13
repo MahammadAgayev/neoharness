@@ -1058,7 +1058,15 @@ func (h *Hub) EditArtifact(workspaceName, name, text, baseText string, base int,
 	}
 	a, old, err := workspace.Artifact(workspaceName, name)
 	if errors.Is(err, os.ErrNotExist) {
-		return a, "", fmt.Errorf("no artifact %q in %s", name, workspaceName)
+		if base != 0 {
+			return a, "", fmt.Errorf("no artifact %q in %s", name, workspaceName)
+		}
+		// From version 0 the person starts a document. The coordinator holds
+		// it, so its next turn reads it as the person's edit.
+		if err := model.ValidName(name); err != nil {
+			return a, "", err
+		}
+		a = model.Artifact{Name: name, Thread: model.Coordinator, CreatedAt: time.Now().UTC()}
 	} else if err != nil {
 		return a, "", err
 	}
@@ -1117,6 +1125,12 @@ func (h *Hub) editNotes(ws *space, t *workspace.Thread) []string {
 
 // editNote is the diff from what a thread saw to the artifact now.
 func editNote(name string, seen workspace.Edit, now string, version int) string {
+	if seen.Version == 0 {
+		if len(now) > diffLimit {
+			now = ""
+		}
+		return prompts.ArtifactStarted(name, now)
+	}
 	diff, sections, added, removed := unifiedDiff(seen.Text, now)
 	if len(diff) > diffLimit {
 		diff = ""

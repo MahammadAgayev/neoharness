@@ -1172,6 +1172,32 @@ func TestPersonEditsReachTheWriterAsOneDiff(t *testing.T) {
 	}
 }
 
+func TestPersonStartsADocTheCoordinatorWorksFrom(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	doc := "# Launch\n\n- [ ] write the API\n- [ ] ship it\n"
+	a, text, err := h.EditArtifact("demo", "launch", doc, "", 0, false)
+	if err != nil || a.Version != 1 || a.Thread != model.Coordinator || !a.UserEdit || text != doc {
+		t.Fatalf("start = %+v, %q, %v", a, text, err)
+	}
+	if _, _, err := h.EditArtifact("demo", "other", doc, "", 3, false); err == nil {
+		t.Error("an edit of a missing artifact from a version should be refused")
+	}
+	if _, _, err := h.EditArtifact("demo", "Bad Name", doc, "", 0, false); err == nil {
+		t.Error("a bad name should be refused")
+	}
+	if len(f.requests()) != 0 {
+		t.Fatal("starting a doc should not start a turn")
+	}
+	_ = h.Send("demo", model.User, model.Coordinator, "go")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	reqs := f.requests()
+	if len(reqs) != 1 || !strings.HasPrefix(reqs[0].Prompt, "The person started the artifact launch.") || !strings.Contains(reqs[0].Prompt, "- [ ] ship it") {
+		t.Fatalf("prompt = %q", reqs[0].Prompt)
+	}
+}
+
 func TestWriteOverAnUnseenEditIsRefused(t *testing.T) {
 	h := newHub(t, &fake{})
 	pinned(t, h, "demo")

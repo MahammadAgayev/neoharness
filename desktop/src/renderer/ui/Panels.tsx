@@ -86,6 +86,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
   {
     title: 'an artifact',
     rows: [
+      ['<leader>d  ⌘⇧N  :doc <name>', 'start a doc you write; the coordinator works from it and keeps its status'],
       ['i a o', 'write in it: it shows rendered, and the markdown only on the lines under the cursor'],
       ['⌘-click', 'open an artifact named in code, or a link'],
       [':w  ⌘S', 'save, merged with a newer version; the writer gets the diff'],

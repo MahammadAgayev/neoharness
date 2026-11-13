@@ -24,6 +24,13 @@ export function Sidebar() {
             <span className="sb-count">{artifacts.length}</span>
           </button>
         )}
+        {open && (
+          <button className="sb-item" onClick={() => store.openNewDoc()}>
+            <span className="sb-icon">✎</span>
+            <span className="sb-label">New doc</span>
+            <kbd className="sb-kbd shown">{lead}d</kbd>
+          </button>
+        )}
       </div>
       {/* The heading opens the overview of every workspace; the list marks the open one. */}
       <button

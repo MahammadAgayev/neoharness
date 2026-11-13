@@ -210,6 +210,13 @@ function DocEditor(props: {
       }
     }
     document.addEventListener('nh:heading', onHeading)
+    // A new doc opens ready to write: the cursor at its end, in Insert.
+    if (store.writeDoc === props.name) {
+      store.writeDoc = ''
+      view.focus()
+      view.dispatch({ selection: { anchor: view.state.doc.length }, scrollIntoView: true })
+      if (cm && store.state.settings.vim) Vim.handleKey(cm as never, 'i', 'mapping')
+    }
     return () => {
       document.removeEventListener('nh:heading', onHeading)
       cm?.off('vim-mode-change', onMode)
