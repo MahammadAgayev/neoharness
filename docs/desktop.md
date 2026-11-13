@@ -189,6 +189,7 @@ npm test           # unit tests: transcript, toasts, keys, search, themes
 npm run e2e        # the app on a scratch hub and on a fake hub, with screenshots in test-results/
 NEOHARNESS_APP=dist/neoharness-darwin-arm64/neoharness.app/Contents/MacOS/neoharness npx playwright test cards   # the packaged app
 NEOHARNESS_LIVE=1 npx playwright test live   # one real turn with haiku
+NEOHARNESS_DEMO=1 npx playwright test demo   # records docs/demo/desktop.gif on the fake hub; needs ffmpeg
 ```
 
 The end-to-end tests make their own `NEOHARNESS_HOME` and MCP port and stop

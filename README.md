@@ -35,7 +35,11 @@ in your Claude setup.
 ## Desktop app
 
 The macOS app in `desktop/` shares the same hub, so the TUI and the app show
-the same workspaces and threads at the same time. It has:
+the same workspaces and threads at the same time.
+
+![the app: a coordinator opens three threads, you allow one to run a migration, and its plan opens](docs/demo/desktop.gif)
+
+It has:
 
 - the same Vim keys and `:` commands, or keys as in Claude Code if you turn
   Vim off;
