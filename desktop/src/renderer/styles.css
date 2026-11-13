@@ -928,9 +928,9 @@ kbd {
   font-style: italic;
 }
 
-/* a thread's recap, above its transcript */
+/* a thread's recap, between its transcript and its prompt */
 .recap {
-  border-bottom: 1px solid var(--hl-med);
+  border-top: 1px solid var(--hl-med);
   padding: 10px 24px;
   font-size: var(--fs-secondary);
 }

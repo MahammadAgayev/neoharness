@@ -3555,7 +3555,7 @@ func TestARecapShowsUnderItsRowAndAtTheTopOfTheThread(t *testing.T) {
 	h.see("✗ the agent failed: boom")
 }
 
-func TestTheCoordinatorsWindowStartsWithTheWorkspaceRecap(t *testing.T) {
+func TestTheCoordinatorsWindowShowsTheWorkspaceRecapAboveItsPrompt(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	// With threads open and no recap yet, the counts show.
@@ -3584,6 +3584,21 @@ func TestTheCoordinatorsWindowStartsWithTheWorkspaceRecap(t *testing.T) {
 	h.see("  auth-refactor and api-tests both edited user/lookup.go")
 	h.see("  answer lint first: migr waits on its API choice")
 	h.see("  as of " + at.Local().Format("15:04") + " · 1 thread ended since")
+	// It sits under the transcript, just above the prompt.
+	rows := strings.Split(h.screen(), "\n")
+	row := func(text string) int {
+		return slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, text) })
+	}
+	if t1, r1, p1 := row("Opened auth-refactor"), row("answer lint first"), row("›"); !(t1 < r1 && r1 < p1) {
+		t.Errorf("transcript %d, recap %d, prompt %d: want the recap between them:\n%s", t1, r1, p1, h.screen())
+	}
+	// :recap hides it, and again shows it.
+	h.press(":recap", "<CR>")
+	if strings.Contains(h.screen(), "answer lint first") {
+		t.Fatalf(":recap did not hide the recap:\n%s", h.screen())
+	}
+	h.press(":recap", "<CR>")
+	h.see("answer lint first")
 
 	// In a short window only the counts stay.
 	h.s.SetSize(120, 13)

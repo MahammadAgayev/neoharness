@@ -112,6 +112,8 @@ export interface Settings {
   sidebarWidth: number
   // cost shows what each workspace cost in the sidebar.
   cost: boolean
+  // recap shows the recaps above the prompts.
+  recap: boolean
 }
 
 export interface State {
@@ -155,7 +157,7 @@ let ids = 1
 const nextId = () => ids++
 
 function loadSettings(): Settings {
-  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true, sidebarWidth: 216, cost: true }
+  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true, sidebarWidth: 216, cost: true, recap: true }
   try {
     return { ...d, ...JSON.parse(localStorage.getItem('settings') || '{}') }
   } catch {
@@ -945,10 +947,11 @@ class Store {
 
   // --- writing ---
 
-  async send(thread: string, text: string): Promise<boolean> {
+  // images are base64, named in the text as [image 1] and so on.
+  async send(thread: string, text: string, images: string[] = []): Promise<boolean> {
     const t = text.trim()
-    if (!t) return false
-    const ok = await this.try(this.call('send', { ...this.at(thread), text: t }))
+    if (!t && !images.length) return false
+    const ok = await this.try(this.call('send', { ...this.at(thread), text: t, images }))
     if (ok === undefined) return false
     const w = this.cur()
     if (w) this.updateWin(w.id, { follow: true, cursor: -1 })
@@ -1361,6 +1364,8 @@ class Store {
         return this.say('the hub commands here: :hub restart', 'love')
       case 'cost':
         return this.openCost(a[0] === 'all' ? 'all' : 'workspace')
+      case 'recap':
+        return this.setSettings({ recap: !this.state.settings.recap })
       case 'w':
       case 'write':
         if (!art) return this.say('nothing to write here; :w saves an artifact', 'muted')
@@ -1414,7 +1419,7 @@ class Store {
 
   private setOption(args: string[]): void {
     const s = this.state.settings
-    if (!args.length) return this.say(`vim=${s.vim} sidebar=${s.sidebar} cost=${s.cost} fontsize=${s.fontSize} compactwarn=${s.compactwarn} colorscheme=${s.scheme}`)
+    if (!args.length) return this.say(`vim=${s.vim} sidebar=${s.sidebar} cost=${s.cost} recap=${s.recap} fontsize=${s.fontSize} compactwarn=${s.compactwarn} colorscheme=${s.scheme}`)
     for (const arg of args) {
       const [k, v] = arg.split('=', 2)
       switch (k) {
@@ -1436,6 +1441,12 @@ class Store {
         case 'nocost':
           this.setSettings({ cost: false })
           break
+        case 'recap':
+          this.setSettings({ recap: true })
+          break
+        case 'norecap':
+          this.setSettings({ recap: false })
+          break
         case 'fontsize':
         case 'fs':
           if (Number(v) >= 9 && Number(v) <= 28) this.setSettings({ fontSize: Number(v) })
@@ -1446,7 +1457,7 @@ class Store {
           else return this.say('compactwarn is 0 to 100', 'love')
           break
         default:
-          return this.say(`no option ${k}; the options are vim novim sidebar nosidebar cost nocost fontsize compactwarn`, 'love')
+          return this.say(`no option ${k}; the options are vim novim sidebar nosidebar cost nocost recap norecap fontsize compactwarn`, 'love')
       }
     }
   }

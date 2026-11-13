@@ -48,8 +48,9 @@ splits, toasts, marks (`ma`, `'a`, `''`), and the ex commands (`:new`, `:open`, 
 completes the folder of `:new`, `:open` and `:folder` when it starts with
 `~/` or `/`; the app has no working folder for a relative one.
 
-Each thread's recap shows under its row and above its chat, and the
-coordinator's chat starts with the workspace recap, as in the TUI. The
+Each thread's recap shows under its row and above its prompt, and the
+coordinator's chat shows the workspace recap above its prompt, as in the
+TUI. `:recap` or `:set norecap` hides them; Settings has it too. The
 sidebar and the workspaces screen show `✗ N` beside a workspace whose
 threads failed.
 

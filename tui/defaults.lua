@@ -12,6 +12,7 @@
 neoharness.o.leader = " "
 neoharness.o.equalalways = true -- after a split or a close, windows get the same size
 neoharness.o.compactwarn = 80   -- past this context %, the status line says /compact; 0 never
+neoharness.o.recap = true       -- recaps show above the prompt; :recap turns them over
 
 -- The hub. Its settings take effect when it starts.
 require("neoharness").setup({

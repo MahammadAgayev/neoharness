@@ -267,6 +267,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   const allThreads = useStore((s) => s.threads)
   const threads = useMemo(() => Object.values(allThreads), [allThreads])
   const wsRecap = useStore((s) => s.workspaces.find((w) => w.name === s.workspace)?.recap)
+  const showRecap = useStore((s) => s.settings.recap)
   const blocks = useStore((s) => s.chats[thread]) ?? []
   const folds = useStore((s) => s.folds)
   const artifactList = useStore((s) => s.artifacts)
@@ -529,7 +530,6 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           />
         </div>
       )}
-      {name === Coordinator && !peek ? <WorkspaceRecapHead r={wsRecap} threads={threads} /> : <RecapHead r={v?.recap} />}
       <div
         className="transcript"
         ref={scroller}
@@ -585,6 +585,11 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           ))}
         </div>
       </div>
+      {/* The recap sits above the prompt, where the person looks; a card that
+          waits for them takes its place. */}
+      {showRecap &&
+        v?.state !== 'waiting' &&
+        (name === Coordinator && !peek ? <WorkspaceRecapHead r={wsRecap} threads={threads} /> : <RecapHead r={v?.recap} />)}
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>
         <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
       </div>

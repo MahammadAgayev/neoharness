@@ -165,6 +165,8 @@ type App struct {
 	mouseDown              bool
 	lastClick              time.Time
 	lastClickX, lastClickY int
+	// recapSet says :recap chose whether recaps show, recapShown.
+	recapSet, recapShown bool
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key

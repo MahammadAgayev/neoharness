@@ -733,7 +733,7 @@ test('<leader>$ shows what the workspace cost, the sidebar each workspace\'s cos
   await expect(demo.locator('.sb-cost')).toHaveText('$24.75')
 })
 
-test("a thread's recap shows under its row and at the top of its chat", async () => {
+test("a thread's recap shows under its row and above its prompt", async () => {
   const row = page.locator('.list-row', { hasText: 'api' })
   hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
   await expect(row.locator('.list-recap.t-love')).toHaveText('✗ the agent failed: boom')
@@ -779,7 +779,7 @@ test("a thread's recap shows under its row and at the top of its chat", async ()
   await expect(head.locator('.t-love')).toHaveText('the agent failed: boom')
 })
 
-test("the coordinator's chat starts with the workspace recap", async () => {
+test("the coordinator's chat shows the workspace recap above its prompt", async () => {
   const at = new Date(Date.now() - 3600_000)
   hub.setView(view('demo', 'db', { state: 'waiting', waiting: 'permission' }))
   hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
@@ -805,7 +805,21 @@ test("the coordinator's chat starts with the workspace recap", async () => {
   const hhmm = at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
   await expect(head).toContainText(`as of ${hhmm} · 1 thread ended since`)
   await expect(page.locator('.sb-item', { hasText: 'demo' }).locator('.sb-count.t-love')).toHaveText('✗ 1')
+  // It sits under the transcript, just above the prompt.
+  const order = await head.evaluate((el) => [el.previousElementSibling?.className, el.nextElementSibling?.className])
+  expect(order[0]).toContain('transcript')
+  expect(order[1]).toContain('prompt')
   await shot('47-workspace-recap')
+  // :recap hides the recaps, and again shows them.
+  await page.keyboard.press('Escape')
+  await page.keyboard.type(':')
+  await page.keyboard.type('recap')
+  await page.keyboard.press('Enter')
+  await expect(head).toHaveCount(0)
+  await page.keyboard.type(':')
+  await page.keyboard.type('recap')
+  await page.keyboard.press('Enter')
+  await expect(head).toHaveCount(1)
 })
 
 test('a hub that stops says so and offers to start it', async () => {

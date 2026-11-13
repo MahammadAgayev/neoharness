@@ -104,6 +104,9 @@ export function Settings() {
           <Row title="Cost in the sidebar" detail="What each workspace cost, beside its name. <leader>$ shows the breakdown.">
             <Toggle on={st.cost} set={(cost) => store.setSettings({ cost })} />
           </Row>
+          <Row title="Recaps" detail="Above the prompt: what a thread's work produced, or how the workspace stands. :recap turns them over.">
+            <Toggle on={st.recap} set={(recap) => store.setSettings({ recap })} />
+          </Row>
           <Row title="Key hints" detail="After a key that starts others, as <leader>, show what can follow, as which-key.">
             <Toggle on={st.keyhints} set={(keyhints) => store.setSettings({ keyhints })} />
           </Row>

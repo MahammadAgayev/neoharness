@@ -13,6 +13,7 @@ table.
 neoharness.o.leader = ","                                 -- default <Space>
 neoharness.o.equalalways = false                          -- default true
 neoharness.o.compactwarn = 60                             -- default 80; 0 never
+neoharness.o.recap = false                                -- default true
 neoharness.keymap.set("n", "<leader>t", ":threads<CR>")   -- keys or an ex command
 neoharness.keymap.set("n", "gt", function() neoharness.cmd("threads") end)
 neoharness.keymap.set("n", "Q", "<leader>t", { remap = true })
@@ -25,6 +26,7 @@ neoharness.cmd("workspace demo")                          -- runs after start
 |---|---|
 | `neoharness.o.leader` | the leader; it moves the default maps |
 | `neoharness.o.equalalways` | a split or a close makes the windows the same size |
+| `neoharness.o.recap` | recaps show above the prompt; `:recap` turns them over |
 | `neoharness.o.compactwarn` | past this context percent, the status line shows `ctx 82% · /compact` in red: every turn sends the whole context again, so `/compact` then saves tokens |
 | `neoharness.keymap.set(mode, lhs, rhs, opts)` | `n`, `x` or `i`; `rhs` is keys, an ex command or a function; `{ remap = true }` |
 | `neoharness.keymap.del(mode, lhs)` | removes a map |

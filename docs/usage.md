@@ -51,12 +51,12 @@ thread yourself:
   do: the commands it ran and which failed, the files it edited, the
   artifacts it wrote, or why the turn failed. Under an idle or waiting row
   the pane shows it in short, one row each: the outcome, the facts
-  (`3 commands, 1 failed · 1 file edited`), and `open: …`; at the top of the
-  thread's window it shows in full, the newest commands first. When the
-  thread wrote none, the first line of its reply stands in, labeled `reply`,
-  and `no commands` says that nothing was checked.
-- The coordinator's window starts with the workspace recap, so you learn how
-  the whole workspace stands without opening a thread: the goal, then
+  (`3 commands, 1 failed · 1 file edited`), and `open: …`; in the thread's
+  window it shows in full just above the prompt, the newest commands first.
+  When the thread wrote none, the first line of its reply stands in, labeled
+  `reply`, and `no commands` says that nothing was checked.
+- The coordinator's window shows the workspace recap above its prompt, so you
+  learn how the whole workspace stands without opening a thread: the goal, then
   `◆ 1 waits for you · ✗ 1 failed · ● 2 running · 3 idle`, the files that
   two threads both edited, and up to three lines from the coordinator on
   what the threads' work means together. Each thread's own outcome stays on
@@ -66,6 +66,9 @@ thread yourself:
   (`workspace_recap = false` in the hub setup turns this off). In a short
   window only the counts stay. The workspaces screen shows `✗ N` for the
   threads that failed.
+- `:recap` hides the recaps above the prompts, and shows them again.
+  `neoharness.o.recap = false` in `init.lua` starts with them hidden. A
+  permission or question card takes the recap's place while it waits.
 - To delete a thread, press `<C-d>` on it in a picker, then `y`. This cannot
   be undone. The coordinator cannot be deleted.
 - A thread runs at most 20 turns in a row that you did not start. Then it

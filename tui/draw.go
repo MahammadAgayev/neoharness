@@ -113,27 +113,6 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	right := r.X + r.W
 	top := r.Y
 	status := r.Y + r.H - 1
-	// A thread's recap stays at the top of its window, so the person reads
-	// what the work produced before its transcript.
-	if b.Kind == KindChat {
-		head := recapHead(a.threads[b.Thread].Recap, a.th, r.W-2)
-		// The coordinator's window holds the whole workspace's recap.
-		if b.Thread == model.Coordinator {
-			head = workspaceHead(a.workspaceRecap(), a.threads, a.th, r.W-2, true)
-			if r.H-len(head) <= minTranscript {
-				head = workspaceHead(a.workspaceRecap(), a.threads, a.th, r.W-2, false)
-			}
-		}
-		if len(head) > 0 && r.H-len(head) > minTranscript {
-			for i, l := range head {
-				a.drawCut(r.X, top+i, right, l)
-			}
-			a.put(r.X, top+len(head), right, strings.Repeat("─", r.W), a.th.Muted)
-			top += len(head) + 1
-		}
-	}
-	w.headH = top - r.Y
-
 	// The prompt sits at the bottom of a chat window, above the statusline.
 	var promptLines []Line
 	promptTop, promptCur, promptFirst := status, -1, 0
@@ -147,8 +126,21 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	}
 	// The transcript ends above the card, so the card hides none of it.
 	cardBottom := textBottom
-	if title, body, _ := a.card(w); title != "" && textBottom-len(body)-2 > top {
+	title, body, _ := a.card(w)
+	if title != "" && textBottom-len(body)-2 > top {
 		textBottom -= len(body) + 2
+	}
+	// The recap sits between the transcript and the prompt, where the person
+	// looks; a card that waits for them takes its place.
+	w.recapY, w.recapH = 0, 0
+	if head := a.recapRows(w, textBottom-top); title == "" && len(head) > 0 {
+		y := textBottom - len(head)
+		a.put(r.X, y-1, right, strings.Repeat("─", r.W), a.th.Muted)
+		for i, l := range head {
+			a.drawCut(r.X, y+i, right, l)
+		}
+		w.recapY, w.recapH = y-1-r.Y, len(head)+1
+		textBottom = y - 1
 	}
 	h := max(textBottom-top, 1)
 	w.textH = h
@@ -401,9 +393,38 @@ func (a *App) matchCols(w *Window, li int, l Line) [][2]int {
 	return cols
 }
 
-// minTranscript is the fewest rows a chat window keeps for its transcript,
-// prompt and status line before its recap gives way.
-const minTranscript = 8
+// minTranscript is the fewest rows a chat window keeps for its transcript
+// before its recap gives way.
+const minTranscript = 4
+
+// recapRows are the recap of a chat window with room rows for its transcript
+// and recap: the thread's, or in the coordinator's window the workspace's.
+// None when the person hid recaps or the window is too short.
+func (a *App) recapRows(w *Window, room int) []Line {
+	if w.Buf.Kind != KindChat || !a.recapOn() {
+		return nil
+	}
+	width := w.rect.W - 2
+	head := recapHead(a.threads[w.Buf.Thread].Recap, a.th, width)
+	if w.Buf.Thread == model.Coordinator {
+		head = workspaceHead(a.workspaceRecap(), a.threads, a.th, width, true)
+		if room-len(head)-1 < minTranscript {
+			head = workspaceHead(a.workspaceRecap(), a.threads, a.th, width, false)
+		}
+	}
+	if room-len(head)-1 < minTranscript {
+		return nil
+	}
+	return head
+}
+
+// recapOn says recaps show: neoharness.o.recap, until :recap turns them over.
+func (a *App) recapOn() bool {
+	if a.recapSet {
+		return a.recapShown
+	}
+	return a.opt("recap") != lua.LFalse
+}
 
 // drawCut draws a line and marks with … a row that does not fit.
 func (a *App) drawCut(x, y, maxX int, l Line) {
