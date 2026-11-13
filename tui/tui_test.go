@@ -111,11 +111,11 @@ func (f *fakeClient) Completions(p, t, query string) (model.Completions, error) 
 		Threads:  []string{"auth-refactor", "api-tests"},
 	}, nil
 }
-func (f *fakeClient) Send(p, t, text string) error {
+func (f *fakeClient) Send(p, t, text string, images ...[]byte) error {
 	f.sent = append(f.sent, t+": "+text)
 	return nil
 }
-func (f *fakeClient) SendNow(p, t, text string) error {
+func (f *fakeClient) SendNow(p, t, text string, images ...[]byte) error {
 	f.sent = append(f.sent, "now "+t+": "+text)
 	return nil
 }

@@ -2477,3 +2477,64 @@ func TestTheRecapWakeIsOffWhenTheSettingIs(t *testing.T) {
 		}
 	}
 }
+
+var (
+	pngImage = []byte("\x89PNG\r\n\x1a\none")
+	gifImage = []byte("GIF89atwo")
+)
+
+// TestImagesGoWithTheMessage: each message numbers its own images; a turn
+// that reads two of them must not show the agent two `[image 1]`s.
+func TestImagesGoWithTheMessage(t *testing.T) {
+	gate := make(chan struct{}, 2)
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		<-gate
+		return agent.Result{Text: "ok"}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.Send("demo", model.User, model.Coordinator, "start"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
+	if err := h.Send("demo", model.User, model.Coordinator, "see [image 1]", pngImage); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Send("demo", model.User, model.Coordinator, "and [image 1]", gifImage); err != nil {
+		t.Fatal(err)
+	}
+	if p := view(t, h, "demo", model.Coordinator).Pending; len(p) != 2 || p[0].Text != "see [image 1]" {
+		t.Fatalf("pending = %+v, want the messages as the person wrote them", p)
+	}
+	gate <- struct{}{}
+	gate <- struct{}{}
+	eventually(t, "the second turn", func() bool { return len(f.requests()) == 2 })
+	req := f.requests()[1]
+	if len(req.Images) != 2 || req.Images[0].Type != "image/png" || string(req.Images[1].Data) != string(gifImage) {
+		t.Fatalf("images = %+v, want the png then the gif", req.Images)
+	}
+	if !strings.Contains(req.Prompt, "see [image 1]") || !strings.Contains(req.Prompt, "and [image 2]") {
+		t.Errorf("prompt = %q, want the second message's image as [image 2]", req.Prompt)
+	}
+}
+
+func TestImagesAreChecked(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	for what, send := range map[string]func() error{
+		"not an image": func() error { return h.Send("demo", model.User, model.Coordinator, "x", []byte("<svg/>")) },
+		"too many": func() error {
+			return h.Send("demo", model.User, model.Coordinator, "x", slices.Repeat([][]byte{pngImage}, model.MaxImages+1)...)
+		},
+		"with a command": func() error { return h.Send("demo", model.User, model.Coordinator, "/model big", pngImage) },
+		"from an agent":  func() error { return h.Send("demo", "api", model.Coordinator, "x", pngImage) },
+	} {
+		if err := send(); err == nil {
+			t.Errorf("%s: want an error", what)
+		}
+	}
+	if err := h.Send("demo", model.User, model.Coordinator, "", pngImage); err != nil {
+		t.Errorf("an image alone is a message: %v", err)
+	}
+}

@@ -9,12 +9,14 @@ package workspace
 import (
 	"bufio"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"time"
 
@@ -51,6 +53,8 @@ type Message struct {
 	// Shown says the message is in the transcript: it goes there when the
 	// turn that reads it starts, not when it is queued.
 	Shown bool `json:"shown,omitempty"`
+	// Images are the names SaveImage gave the message's images, in order.
+	Images []string `json:"images,omitempty"`
 }
 
 // Edit is an artifact as a thread last saw it.
@@ -229,6 +233,33 @@ func Artifacts(workspace string) ([]model.Artifact, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
 	return out, nil
+}
+
+func imageDir(workspace, thread string) string {
+	return filepath.Join(ThreadDir(workspace, thread), "images")
+}
+
+var imageNameRE = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
+// SaveImage keeps an image a thread was sent, named by its content, and
+// returns the name. The caller checked it with model.ImageType.
+func SaveImage(workspace, thread string, data []byte) (string, error) {
+	dir := imageDir(workspace, thread)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	name := hex.EncodeToString(sum[:16])
+	return name, writeFile(filepath.Join(dir, name), data, 0o600)
+}
+
+// Image reads an image SaveImage kept.
+func Image(workspace, thread, name string) ([]byte, error) {
+	// The name comes from thread.json; a path in it would read other files.
+	if !imageNameRE.MatchString(name) {
+		return nil, fmt.Errorf("bad image name %q", name)
+	}
+	return os.ReadFile(filepath.Join(imageDir(workspace, thread), name))
 }
 
 func threadFile(workspace, thread string) string {

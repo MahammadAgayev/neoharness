@@ -92,3 +92,23 @@ func TestMigrateFromProjects(t *testing.T) {
 		t.Fatalf("second run: %v", err)
 	}
 }
+
+func TestImagesAreKeptByContent(t *testing.T) {
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	data := []byte("\x89PNG\r\n\x1a\npicture")
+	a, err := SaveImage("demo", "api", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := SaveImage("demo", "api", data)
+	if a != b {
+		t.Errorf("the same image got two names, %q and %q", a, b)
+	}
+	got, err := Image("demo", "api", a)
+	if err != nil || string(got) != string(data) {
+		t.Fatalf("Image = %q, %v", got, err)
+	}
+	if _, err := Image("demo", "api", "../../other/thread.json"); err == nil {
+		t.Error("a path as an image name should fail")
+	}
+}

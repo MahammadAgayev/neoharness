@@ -756,3 +756,47 @@ func TestToolCallsSayWhatTheyDo(t *testing.T) {
 		}
 	}
 }
+
+// TestImagesGoAsContentBlocks: images go in-band on stdin, so a remote
+// session gets them through ssh with nothing copied to its host.
+func TestImagesGoAsContentBlocks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake claude is a shell script")
+	}
+	dir := t.TempDir()
+	script, input := filepath.Join(dir, "claude"), filepath.Join(dir, "input")
+	body := "#!/bin/sh\nhead -n 1 > " + input + "\necho '{\"type\":\"result\",\"result\":\"seen\",\"is_error\":false}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	png := []byte("\x89PNG\r\n\x1a\npicture")
+	_, err := New(script).Run(context.Background(), agent.Request{
+		Prompt: "what is in [image 1]?",
+		Images: []agent.Image{{Type: "image/png", Data: png}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(input)
+	var got struct {
+		Message struct {
+			Content []struct {
+				Type   string `json:"type"`
+				Text   string `json:"text"`
+				Source struct {
+					Type      string `json:"type"`
+					MediaType string `json:"media_type"`
+					Data      []byte `json:"data"`
+				} `json:"source"`
+			} `json:"content"`
+		} `json:"message"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("stdin %q: %v", raw, err)
+	}
+	c := got.Message.Content
+	if len(c) != 2 || c[0].Type != "image" || c[0].Source.Type != "base64" || c[0].Source.MediaType != "image/png" ||
+		string(c[0].Source.Data) != string(png) || c[1].Type != "text" || c[1].Text != "what is in [image 1]?" {
+		t.Fatalf("content = %+v, want the image then the text", c)
+	}
+}

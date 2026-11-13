@@ -756,23 +756,23 @@ func (h *Hub) addThread(ws *space, name string, role model.Role, l model.Locatio
 
 // Send queues a message for a thread. from is model.User, the coordinator, or
 // another thread's name. A message from the user also answers any question the
-// thread asked and lifts a loop-guard pause.
-func (h *Hub) Send(workspaceName, from, to, text string) error {
+// thread asked and lifts a loop-guard pause. Only the user sends images.
+func (h *Hub) Send(workspaceName, from, to, text string, images ...[]byte) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	_, err := h.send(workspaceName, from, to, text)
+	_, err := h.send(workspaceName, from, to, text, images)
 	return err
 }
 
 // SendNow sends a message from the user and stops the running turn, so the
 // message starts the next turn at once. With no text, the messages already
 // queued go now. Claude keeps the work of the stopped turn in its session.
-func (h *Hub) SendNow(workspaceName, to, text string) error {
+func (h *Hub) SendNow(workspaceName, to, text string, images ...[]byte) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	var th *thread
 	var err error
-	if strings.TrimSpace(text) == "" {
+	if strings.TrimSpace(text) == "" && len(images) == 0 {
 		var ws *space
 		ws, th, err = h.lookup(workspaceName, to)
 		if err == nil && len(th.t.Queue) == 0 {
@@ -786,7 +786,7 @@ func (h *Hub) SendNow(workspaceName, to, text string) error {
 			return nil
 		}
 	} else {
-		th, err = h.send(workspaceName, model.User, to, text)
+		th, err = h.send(workspaceName, model.User, to, text, images)
 	}
 	if err != nil {
 		return err
@@ -836,9 +836,12 @@ func (h *Hub) Unqueue(workspaceName, name string, at time.Time) error {
 	return nil
 }
 
-func (h *Hub) send(workspaceName, from, to, text string) (*thread, error) {
-	if strings.TrimSpace(text) == "" {
+func (h *Hub) send(workspaceName, from, to, text string, images [][]byte) (*thread, error) {
+	if strings.TrimSpace(text) == "" && len(images) == 0 {
 		return nil, errors.New("empty message")
+	}
+	if err := checkImages(from, text, images); err != nil {
+		return nil, err
 	}
 	ws, th, err := h.lookup(workspaceName, to)
 	if err != nil {
@@ -873,8 +876,35 @@ func (h *Hub) send(workspaceName, from, to, text string) (*thread, error) {
 		th.interrupted = true
 		th.cancel()
 	}
-	h.enqueue(ws, th, from, text)
+	var names []string
+	for _, data := range images {
+		name, err := workspace.SaveImage(ws.p.Name, th.t.Name, data)
+		if err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	h.enqueue(ws, th, from, text, names...)
 	return th, nil
+}
+
+func checkImages(from, text string, images [][]byte) error {
+	switch {
+	case len(images) == 0:
+		return nil
+	case from != model.User:
+		return errors.New("only the person sends images")
+	case len(images) > model.MaxImages:
+		return fmt.Errorf("a message takes at most %d images", model.MaxImages)
+	case strings.HasPrefix(strings.TrimSpace(text), "/"), strings.HasPrefix(strings.TrimSpace(text), "!"):
+		return errors.New("images go with a message, not with a command")
+	}
+	for _, data := range images {
+		if _, err := model.ImageType(data); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // command runs the slash commands that do not work under --print: each turn
@@ -990,7 +1020,7 @@ func (h *Hub) clear(ws *space, th *thread) error {
 	return nil
 }
 
-func (h *Hub) enqueue(ws *space, th *thread, from, text string) {
+func (h *Hub) enqueue(ws *space, th *thread, from, text string, images ...string) {
 	t := th.t
 	if from == model.User {
 		t.AgentTurns = 0
@@ -999,7 +1029,7 @@ func (h *Hub) enqueue(ws *space, th *thread, from, text string) {
 	}
 	// The message goes into the transcript when its turn starts (kick), so
 	// the transcript shows what the agent read in the order it read it.
-	t.Queue = append(t.Queue, workspace.Message{From: from, Text: text, At: time.Now().UTC()})
+	t.Queue = append(t.Queue, workspace.Message{From: from, Text: text, At: time.Now().UTC(), Images: images})
 	h.changed(ws, th)
 	h.kick(ws, th)
 }
@@ -1821,6 +1851,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 	}
 	req := agent.Request{
 		Prompt:       prompt,
+		Images:       h.images(ws, th, batch),
 		Model:        cmp.Or(t.ModelChoice, h.defaults(ws, t).Model),
 		Effort:       cmp.Or(t.Effort, h.defaults(ws, t).Effort),
 		SystemPrompt: h.systemPrompt(ws, th),
@@ -2091,9 +2122,11 @@ func (h *Hub) systemPrompt(ws *space, th *thread) string {
 func compose(batch []workspace.Message, threads map[string]*thread) string {
 	parts := make([]string, 0, len(batch))
 	var named []string
+	images := 0
 	for _, m := range batch {
 		if m.From == model.User {
-			parts = append(parts, m.Text)
+			parts = append(parts, renumber(m.Text, len(m.Images), images))
+			images += len(m.Images)
 		} else {
 			parts = append(parts, "Message from "+m.From+":\n"+m.Text)
 		}
@@ -2111,6 +2144,36 @@ func compose(batch []workspace.Message, threads map[string]*thread) string {
 		prompt += "\n\n@" + n + " is the thread " + n + " in this workspace. Read its transcript with read_thread if you need it."
 	}
 	return prompt
+}
+
+// renumber moves a message's image tokens up by offset, the images of the
+// turn's messages before it. From the last down, so no token is moved twice.
+func renumber(text string, n, offset int) string {
+	if offset == 0 {
+		return text
+	}
+	for i := n; i >= 1; i-- {
+		text = strings.ReplaceAll(text, model.ImageToken(i), model.ImageToken(i+offset))
+	}
+	return text
+}
+
+// images reads the batch's images for the agent, in order. One that cannot
+// be read is left out; its token still says the person sent it.
+func (h *Hub) images(ws *space, th *thread, batch []workspace.Message) []agent.Image {
+	var out []agent.Image
+	for _, m := range batch {
+		for _, name := range m.Images {
+			data, err := workspace.Image(ws.p.Name, th.t.Name, name)
+			if err != nil {
+				continue
+			}
+			if typ, err := model.ImageType(data); err == nil {
+				out = append(out, agent.Image{Type: typ, Data: data})
+			}
+		}
+	}
+	return out
 }
 
 // board is every open thread, for the start of a coordinator turn, so the

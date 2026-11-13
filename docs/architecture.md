@@ -49,6 +49,13 @@ UUID.
 
 - Messages that arrive while a thread is busy wait in a queue. All of them
   go into the next turn as one prompt.
+- The person's message can hold images: png, jpeg, gif or webp, at most 5
+  per message and 3.75 MB each (5 MB as base64). The hub reads the type from
+  the bytes and keeps each image in the thread's `images/` folder. The text
+  names them `[image 1]`, `[image 2]`; when one turn reads several messages,
+  the hub numbers them again for the whole turn. The Claude adapter sends
+  them as image content blocks before the text, on the session's stdin, so
+  a remote thread gets them through ssh.
 - Every coordinator turn starts with the board: each open thread, its state,
   its last report while it runs, and its recap if it ended a turn since the
   coordinator's last one. With `notify = "coordinator"`, a
@@ -149,6 +156,7 @@ command.
 ~/.neoharness/workspaces/<workspace>/workspace.json                name, folder, deleted
 ~/.neoharness/workspaces/<workspace>/threads/<name>/thread.json    state, queue, session (0600: it holds the MCP token)
 ~/.neoharness/workspaces/<workspace>/threads/<name>/events.jsonl   transcript, append-only
+~/.neoharness/workspaces/<workspace>/threads/<name>/images/        images the person sent, named by content
 ~/.neoharness/workspaces/<workspace>/artifacts/<name>.md / .json   artifact text / metadata
 ~/.neoharness/workspaces/<workspace>/costs.jsonl                   one line per paid turn: when, thread, model, cost
 ```

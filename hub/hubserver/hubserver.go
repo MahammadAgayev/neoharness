@@ -115,10 +115,10 @@ func Handler(h *hub.Hub, info hubapi.Info, stop func()) http.Handler {
 			return
 		}
 		if in.Now {
-			reply(w, nil, h.SendNow(r.PathValue("p"), r.PathValue("t"), in.Text))
+			reply(w, nil, h.SendNow(r.PathValue("p"), r.PathValue("t"), in.Text, in.Images...))
 			return
 		}
-		reply(w, nil, h.Send(r.PathValue("p"), model.User, r.PathValue("t"), in.Text))
+		reply(w, nil, h.Send(r.PathValue("p"), model.User, r.PathValue("t"), in.Text, in.Images...))
 	})
 	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/stop", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, nil, h.Stop(r.PathValue("p"), r.PathValue("t")))

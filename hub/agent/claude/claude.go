@@ -128,7 +128,7 @@ func (a *Agent) turn(ctx context.Context, s *session, req agent.Request, reused 
 	}
 	acc := &accumulator{onEvent: req.OnEvent}
 	// A failed write means the process is gone; the read below sees it.
-	_ = s.prompt(req.Prompt)
+	_ = s.prompt(req.Prompt, req.Images)
 	read, exited := 0, false
 	stopped, kill := ctx.Done(), (<-chan time.Time)(nil)
 	for !acc.ended && !exited {

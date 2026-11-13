@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MahammadAgayev/neoharness/hub/agent"
 	"github.com/MahammadAgayev/neoharness/hub/procgroup"
 )
 
@@ -81,8 +82,20 @@ func (s *session) send(v any) error {
 	return err
 }
 
-func (s *session) prompt(text string) error {
-	return s.send(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": text}})
+func (s *session) prompt(text string, images []agent.Image) error {
+	var content any = text
+	if len(images) > 0 {
+		// Images first: the model reads a picture better before the words
+		// about it.
+		blocks := []map[string]any{}
+		for _, im := range images {
+			blocks = append(blocks, map[string]any{"type": "image", "source": map[string]any{
+				"type": "base64", "media_type": im.Type, "data": im.Data,
+			}})
+		}
+		content = append(blocks, map[string]any{"type": "text", "text": text})
+	}
+	return s.send(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": content}})
 }
 
 func (s *session) interrupt() error {

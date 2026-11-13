@@ -44,8 +44,8 @@ type Client interface {
 	Events(workspace, thread string, tail int) ([]model.Event, error)
 	Completions(workspace, thread, query string) (model.Completions, error)
 	Info() (hubapi.Info, error)
-	Send(workspace, thread, text string) error
-	SendNow(workspace, thread, text string) error
+	Send(workspace, thread, text string, images ...[]byte) error
+	SendNow(workspace, thread, text string, images ...[]byte) error
 	Stop(workspace, thread string) error
 	Unqueue(workspace, thread string, at time.Time) error
 	Resolve(workspace, thread string) error

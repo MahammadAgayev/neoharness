@@ -90,6 +90,9 @@ type Event struct {
 type Request struct {
 	// Prompt is the user-role instruction for this turn.
 	Prompt string
+	// Images go with the prompt, in order; the prompt names them as
+	// `[image 1]` and so on.
+	Images []Image
 	// SystemPrompt is added to the CLI's own system prompt: who this session
 	// is in the workspace.
 	SystemPrompt string
@@ -115,6 +118,12 @@ type Request struct {
 	// OnEvent receives events as they arrive. Called from the adapter's read
 	// goroutine, one at a time, never concurrently. May be nil.
 	OnEvent func(Event)
+}
+
+// Image is a picture with its media type, such as image/png.
+type Image struct {
+	Type string
+	Data []byte
 }
 
 // Harness is an MCP server over HTTP, reached with a bearer token.

@@ -50,6 +50,8 @@ type (
 	}
 	Message struct {
 		Text string `json:"text"`
+		// Images go with the text, which names them `[image 1]` and so on.
+		Images [][]byte `json:"images,omitempty"`
 		// Now stops the running turn so the message goes at once.
 		Now bool `json:"now,omitempty"`
 	}
@@ -202,12 +204,12 @@ func (c *Client) Completions(workspace, thread, query string) (model.Completions
 	return out, c.do("GET", threadPath(workspace, thread)+"/completions?q="+url.QueryEscape(query), nil, &out)
 }
 
-func (c *Client) Send(workspace, thread, text string) error {
-	return c.do("POST", threadPath(workspace, thread)+"/messages", Message{Text: text}, nil)
+func (c *Client) Send(workspace, thread, text string, images ...[]byte) error {
+	return c.do("POST", threadPath(workspace, thread)+"/messages", Message{Text: text, Images: images}, nil)
 }
 
-func (c *Client) SendNow(workspace, thread, text string) error {
-	return c.do("POST", threadPath(workspace, thread)+"/messages", Message{Text: text, Now: true}, nil)
+func (c *Client) SendNow(workspace, thread, text string, images ...[]byte) error {
+	return c.do("POST", threadPath(workspace, thread)+"/messages", Message{Text: text, Images: images, Now: true}, nil)
 }
 
 func (c *Client) Stop(workspace, thread string) error {

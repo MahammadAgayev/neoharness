@@ -19,7 +19,11 @@ type echo struct{}
 
 func (echo) Name() string { return "echo" }
 func (echo) Run(ctx context.Context, req agent.Request) (agent.Result, error) {
-	req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "echo: " + req.Prompt})
+	text := "echo: " + req.Prompt
+	for _, im := range req.Images {
+		text += " +" + im.Type
+	}
+	req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: text})
 	return agent.Result{Text: "ok"}, nil
 }
 
@@ -71,6 +75,18 @@ func TestClientServerRoundTrip(t *testing.T) {
 			got = u.Kind == model.UpdateEvent && u.Thread == "api-tests" && u.Event.Kind == model.EventText && u.Event.Text == "echo: hello"
 		case <-timeout:
 			t.Fatal("no echo over the update stream")
+		}
+	}
+
+	if err := c.Send("demo", "api-tests", "see [image 1]", []byte("\x89PNG\r\n\x1a\n")); err != nil {
+		t.Fatal(err)
+	}
+	for got := false; !got; {
+		select {
+		case u := <-updates:
+			got = u.Kind == model.UpdateEvent && u.Event.Kind == model.EventText && u.Event.Text == "echo: see [image 1] +image/png"
+		case <-timeout:
+			t.Fatal("the image did not reach the agent")
 		}
 	}
 
