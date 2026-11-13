@@ -65,24 +65,36 @@ export async function ping(): Promise<boolean> {
   }
 }
 
-// startHub runs `neoharness hub start`. An app opened from Finder has none
-// of the shell's PATH or environment, and the hub's agents need both, so it
-// runs in a login shell unless NEOHARNESS_BIN names the binary.
-export function startHub(): Promise<void> {
+// neoharness runs the installed binary with args. An app opened from Finder
+// has none of the shell's PATH or environment, and the hub's agents need
+// both, so it runs in a login shell unless NEOHARNESS_BIN names the binary.
+function neoharness(args: string[], timeout = 30_000): Promise<string> {
   const bin = process.env.NEOHARNESS_BIN
-  const [file, args] = bin
-    ? [bin, ['hub', 'start']]
-    : [process.env.SHELL || '/bin/zsh', ['-lic', 'exec neoharness hub start']]
+  const [file, argv] = bin
+    ? [bin, args]
+    : [process.env.SHELL || '/bin/zsh', ['-lic', `exec neoharness ${args.join(' ')}`]]
   return new Promise((resolve, reject) => {
-    execFile(file, args, { timeout: 30_000, cwd: os.homedir() }, (err, _stdout, stderr) => {
+    execFile(file, argv, { timeout, cwd: os.homedir() }, (err, stdout, stderr) => {
       if (err) {
         const last = stderr.trim().split('\n').pop() || err.message
         reject(new Error(last.includes('not found') ? 'neoharness is not on your PATH; install it with ./install.sh' : last))
         return
       }
-      resolve()
+      resolve(stdout)
     })
   })
+}
+
+export async function startHub(): Promise<void> {
+  await neoharness(['hub', 'start'])
+}
+
+// installedVersion is the commit of the neoharness on the PATH, which an
+// update replaces under a hub that still runs the old one; '' when unknown.
+export async function installedVersion(): Promise<string> {
+  const out = await neoharness(['version']).catch(() => '')
+  const v = out.trim().split('\n').pop() ?? ''
+  return v === 'unknown' ? '' : v
 }
 
 // Updates streams the hub's updates and keeps the connection: a hub that went
@@ -116,6 +128,15 @@ export class Updates {
     this.stopped = false
     this.set('connecting', '')
     await startHub()
+    if (this.timer) clearTimeout(this.timer)
+    void this.connect()
+  }
+
+  // restart stops the hub and starts the installed one, after an update.
+  async restart(): Promise<void> {
+    this.set('connecting', '')
+    await neoharness(['hub', 'restart'], 60_000)
+    this.stopped = false
     if (this.timer) clearTimeout(this.timer)
     void this.connect()
   }

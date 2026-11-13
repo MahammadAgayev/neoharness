@@ -5,7 +5,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, Notification, she
 
 import type { CallName, MenuItem } from '../shared/api'
 import { folders } from './folders'
-import { call, Updates } from './hub'
+import { call, installedVersion, Updates } from './hub'
 
 let win: BrowserWindow | null = null
 let updates: Updates | null = null
@@ -95,6 +95,8 @@ function menu(): void {
 
 ipcMain.handle('hub:call', (_ev, name: CallName, args: unknown) => call(name, args))
 ipcMain.handle('hub:start', () => updates?.start())
+ipcMain.handle('hub:restart', () => updates?.restart())
+ipcMain.handle('hub:version', () => installedVersion())
 ipcMain.handle('folder:pick', async () => {
   const opts: Electron.OpenDialogOptions = { properties: ['openDirectory', 'createDirectory'], defaultPath: os.homedir() }
   const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)

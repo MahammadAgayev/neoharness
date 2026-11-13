@@ -9,6 +9,7 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 )
@@ -21,6 +22,7 @@ const usage = `neoharness — many Claude Code sessions, in the terminal
   neoharness hub restart   stop the hub and start a new one, e.g. after an upgrade
   neoharness hub status    pid, uptime, running turns, version
   neoharness hub serve     run the hub in this terminal
+  neoharness version       the commit this neoharness was built from
   neoharness help          this text
 
 Workspaces and threads live in ~/.neoharness/. The hub log is ~/.neoharness/hub.log.
@@ -31,6 +33,9 @@ func main() {
 		switch os.Args[1] {
 		case "-h", "--help", "help":
 			fmt.Print(usage)
+			return
+		case "version":
+			fmt.Println(cmp.Or(version(), "unknown"))
 			return
 		case "hub":
 			if err := cmdHub(os.Args[2:]); err != nil {

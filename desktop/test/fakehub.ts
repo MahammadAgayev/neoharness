@@ -36,6 +36,8 @@ export class FakeHub {
   events: Record<string, Event[]> = {}
   artifacts: Record<string, { artifact: Artifact; text: string }[]> = {}
   calls: Call[] = []
+  // version is the commit the hub says it runs.
+  version = ''
   private streams = new Set<http.ServerResponse>()
   private server: http.Server
 
@@ -112,7 +114,7 @@ export class FakeHub {
         res.on('close', () => this.streams.delete(res))
         return
       }
-      if (url.pathname === '/hub') return json({ pid: process.pid, started: now() })
+      if (url.pathname === '/hub') return json({ pid: process.pid, started: now(), version: this.version || undefined })
       if (url.pathname === '/workspaces' && m === 'GET') return json(this.workspaces)
       if (url.pathname === '/workspaces' && m === 'POST') {
         this.workspace(body.name, [])

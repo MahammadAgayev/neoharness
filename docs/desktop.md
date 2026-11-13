@@ -32,6 +32,12 @@ The app starts the hub when none answers, as `neoharness` does. It runs
 environment even when the app opens from Finder. `NEOHARNESS_BIN` names the
 binary instead; `NEOHARNESS_HOME` picks another home, as for the TUI.
 
+After an update the hub still runs the old binary. On connect the app
+compares the hub's version with `neoharness version`. If they differ, it
+restarts the hub on the new one: at once when no turn runs, else when the
+turns end, so an update cuts no turn. `:hub restart` (or Restart the hub in
+search) does it by hand, after a yes when turns run.
+
 ## What is the same as the TUI
 
 Everything the TUI does is here, with the same keys: workspaces, the

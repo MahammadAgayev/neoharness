@@ -156,6 +156,10 @@ export interface Bridge {
   onUpdate(fn: (u: import('./model').Update) => void): () => void
   onStatus(fn: (s: HubStatus, detail: string) => void): () => void
   startHub(): Promise<void>
+  // restartHub stops the hub and starts the installed neoharness.
+  restartHub(): Promise<void>
+  // installedVersion is the commit of the neoharness on the PATH; '' when unknown.
+  installedVersion(): Promise<string>
   pickFolder(): Promise<string | null>
   // menu shows a native context menu and gives the id picked, or null.
   menu(items: MenuItem[]): Promise<string | null>

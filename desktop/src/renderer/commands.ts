@@ -63,6 +63,7 @@ export const commands: Command[] = [
   { id: 'help', title: 'Keys and commands', keys: ['<leader>h', '⌘/', ':help'], run: () => void s.ex('help') },
   { id: 'cost', title: 'Cost: what this workspace cost', keys: ['<leader>$', ':cost'], run: () => s.openCost('workspace') },
   { id: 'cost-all', title: 'Cost of every workspace', keys: [':cost all'], run: () => s.openCost('all') },
+  { id: 'restart-hub', title: 'Restart the hub, as after an update', keys: [':hub restart'], run: () => s.askRestartHub() },
 ]
 
 export function command(id: string): Command {

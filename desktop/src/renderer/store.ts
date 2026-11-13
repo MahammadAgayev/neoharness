@@ -255,7 +255,7 @@ class Store {
   start(): void {
     nh().onStatus((s, detail) => {
       this.set({ status: s, statusDetail: detail })
-      if (s === 'connected') void this.reload()
+      if (s === 'connected') void this.reload().then(() => this.checkVersion())
       if (s !== 'connected') this.connected = false
     })
     nh().onUpdate((u) => this.apply(u))
@@ -376,6 +376,7 @@ class Store {
         else workspaces[i] = u.summary
         this.set({ workspaces })
         this.badge()
+        this.restartWhenIdle()
         return
       }
       case 'thread':
@@ -1241,6 +1242,40 @@ class Store {
     await this.try(nh().startHub())
   }
 
+  // newer is the installed neoharness while the hub runs an older one: the
+  // hub restarts on it as soon as no turn runs, so an update cuts no turn.
+  private newer = ''
+
+  private async checkVersion(): Promise<void> {
+    const [info, own] = await Promise.all([this.call('info', undefined).catch(() => null), nh().installedVersion().catch(() => '')])
+    this.newer = info?.version && own && info.version !== own ? own : ''
+    if (!this.newer) return
+    if (this.running() > 0) this.say('a new neoharness is installed; the hub restarts on it when the turns end', 'muted')
+    this.restartWhenIdle()
+  }
+
+  private running(): number {
+    return this.state.workspaces.reduce((n, w) => n + (w.counts.running ?? 0) + (w.coordinator === 'running' ? 1 : 0), 0)
+  }
+
+  private restartWhenIdle(): void {
+    if (!this.newer || this.running() > 0) return
+    this.newer = ''
+    void this.restartHub('the hub restarts on the new neoharness')
+  }
+
+  async restartHub(why = 'restarting the hub…'): Promise<void> {
+    this.say(why, 'muted')
+    await this.try(nh().restartHub())
+  }
+
+  // askRestartHub restarts the hub, after a yes when turns run: they stop.
+  askRestartHub(): void {
+    const n = this.running()
+    if (!n) return void this.restartHub()
+    this.set({ confirm: { text: `${n} turn${n === 1 ? '' : 's'} running stop with the hub. Restart it? (y/n)`, run: () => void this.restartHub() } })
+  }
+
   // --- ex commands ---
 
   async ex(line: string): Promise<void> {
@@ -1317,6 +1352,9 @@ class Store {
       case 'help':
       case 'h':
         return this.openHelp(true)
+      case 'hub':
+        if (a[0] === 'restart') return this.askRestartHub()
+        return this.say('the hub commands here: :hub restart', 'love')
       case 'cost':
         return this.openCost(a[0] === 'all' ? 'all' : 'workspace')
       case 'w':

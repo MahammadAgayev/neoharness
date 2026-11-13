@@ -121,6 +121,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       [':set fontsize=15  compactwarn=80', 'text size; the context % that says /compact'],
       [':settings  <leader>s  ⌘,', 'theme, text size, Vim keys, the leader and your own keys'],
       [':cost  :cost all  <leader>$', 'what this workspace, or every workspace, cost: by day, thread and model, and the turns that cost the most'],
+      [':hub restart', 'restart the hub on the installed neoharness; after an update it does so on its own once no turn runs'],
       [':q', 'close the window; ⌘Q quits, and the hub and its turns run on'],
     ],
   },
