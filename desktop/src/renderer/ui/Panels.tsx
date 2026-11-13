@@ -58,6 +58,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['y  <leader>y', 'yank the block, or the selection, to the clipboard'],
       ['v V  then j k  y', 'select blocks, then yank them; <Esc> ends it'],
       ['x', 'stop the running turn'],
+      ["m{a-z}  '{a-z}  ''", 'mark a block or a thread row, go to the mark, go back'],
     ],
   },
   {

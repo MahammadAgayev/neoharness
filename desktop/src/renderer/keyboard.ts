@@ -123,6 +123,41 @@ const macMaps: Record<string, Action> = {
   '<D-,>': c('settings'),
 }
 
+// marks are per buffer: the block of a chat or the row of the threads list
+// a letter names, as m{a-z} and '{a-z} in the TUI. ' is where the last
+// jump came from. An editor has Vim's own marks.
+const marks = new Map<string, Record<string, number>>()
+
+function mark(op: 'm' | "'", r: string): void {
+  const w = store.cur()
+  if (store.state.screen !== 'workspace' || !w || (w.buf.kind !== 'chat' && w.buf.kind !== 'threads')) {
+    store.say('marks are for a chat or the threads list', 'muted')
+    return
+  }
+  const k = `${store.state.workspace}\0${w.buf.kind === 'chat' ? w.buf.thread : ''}`
+  const m = marks.get(k) ?? {}
+  marks.set(k, m)
+  if (op === 'm') {
+    m[r] = w.cursor
+    return
+  }
+  const to = m[r]
+  if (to === undefined) {
+    if (r !== "'") store.say('mark not set', 'muted')
+    return
+  }
+  m["'"] = w.cursor
+  store.updateWin(w.id, to < 0 ? { cursor: -1, follow: true } : { cursor: to, follow: false })
+}
+
+for (const r of 'abcdefghijklmnopqrstuvwxyz') {
+  winMaps['m' + r] = { fn: () => mark('m', r) }
+  winMaps["'" + r] = { fn: () => mark("'", r) }
+  winMaps['`' + r] = { fn: () => mark("'", r) }
+}
+winMaps["''"] = { fn: () => mark("'", "'") }
+winMaps['``'] = { fn: () => mark("'", "'") }
+
 function userAction(run: string): Action | null {
   if (run === '') return { fn: () => {} }
   if (run === ':') return null

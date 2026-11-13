@@ -32,7 +32,7 @@ binary instead; `NEOHARNESS_HOME` picks another home, as for the TUI.
 Everything the TUI does is here, with the same keys: workspaces, the
 coordinator and the threads list, the chat with its queue, permission cards,
 questions, `!` commands, `/` and `@` completion, artifacts with merge on save,
-splits, toasts, and the ex commands (`:new`, `:open`, `:resolve`, `:setlocal`,
+splits, toasts, marks (`ma`, `'a`, `''`), and the ex commands (`:new`, `:open`, `:resolve`, `:setlocal`,
 `:restore`, `:allow`, `:w`, `:e!`, …). `:help` lists them all. `<Tab>`
 completes the folder of `:new`, `:open` and `:folder` when it starts with
 `~/` or `/`; the app has no working folder for a relative one.

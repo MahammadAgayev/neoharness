@@ -240,6 +240,23 @@ test('<Tab> completes a folder in :new, one level at a time', async () => {
   await page.keyboard.press('Escape')
 })
 
+test("ma marks a block; G goes away and 'a comes back", async () => {
+  await page.locator('.b-ask').click()
+  await normal()
+  await page.locator('.b-ask').click()
+  await page.keyboard.press('m')
+  await page.keyboard.press('a')
+  await page.keyboard.press('g')
+  await page.keyboard.press('g')
+  await expect(page.locator('.row.cursor')).not.toContainText('Which port')
+  await page.keyboard.press("'")
+  await page.keyboard.press('a')
+  await expect(page.locator('.row.cursor')).toContainText('Which port')
+  await page.keyboard.press("'")
+  await page.keyboard.press("'")
+  await expect(page.locator('.row.cursor')).not.toContainText('Which port')
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()
