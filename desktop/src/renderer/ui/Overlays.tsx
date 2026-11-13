@@ -228,7 +228,7 @@ export function CommandLine() {
 
   if (cmdline !== null) {
     return (
-      <div className="cmdline">
+      <div className="cmdline typing">
         <span className="t-iris">:</span>
         <input
           ref={input}

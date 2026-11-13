@@ -242,8 +242,13 @@ kbd {
   background: var(--shell);
   min-width: 0;
 }
+/* As in Vim, what you type starts right after the colon. */
+.cmdline.typing {
+  gap: 0;
+}
 .cmdline input {
   flex: 1;
+  padding: 0;
   background: none;
   border: 0;
   outline: none;
