@@ -2114,3 +2114,19 @@ func TestCostAddsUpTurnsByThreadModelDayAndWorkspace(t *testing.T) {
 		t.Fatal("an unknown workspace should fail")
 	}
 }
+
+func TestReadArtifactStaysInItsWorkspace(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	pinned(t, h, "other")
+	if _, err := h.WriteArtifact("other", model.Coordinator, "secret", "# Secret\n"); err != nil {
+		t.Fatal(err)
+	}
+	name := "../../other/artifacts/secret"
+	if text, err := h.ReadArtifactAs("demo", model.Coordinator, name); err == nil {
+		t.Errorf("ReadArtifactAs(%q) read another workspace: %q", name, text)
+	}
+	if _, text, err := h.ReadArtifact("demo", name); err == nil {
+		t.Errorf("ReadArtifact(%q) read another workspace: %q", name, text)
+	}
+}

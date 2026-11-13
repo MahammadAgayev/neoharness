@@ -196,6 +196,11 @@ func SaveArtifact(workspace string, a model.Artifact, text string) error {
 // os.ErrNotExist.
 func Artifact(workspace, name string) (model.Artifact, string, error) {
 	var a model.Artifact
+	// The name comes from sessions too; a path in it would read other
+	// workspaces.
+	if err := model.ValidName(name); err != nil {
+		return a, "", err
+	}
 	if err := readJSON(filepath.Join(artifactDir(workspace), name+".json"), &a); err != nil {
 		return a, "", err
 	}
