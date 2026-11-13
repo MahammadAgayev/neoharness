@@ -68,7 +68,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
     title: 'windows',
     rows: [
       ['<Tab>  <C-w>w', 'next window'],
-      ['<C-h j k l>  <C-w>h…', 'window in a direction'],
+      ['<C-h j k l>  <C-w>h…', 'window in a direction; <C-w>h works from Insert too'],
       ['<C-w>v  <C-w>s', 'split right / above'],
       ['<C-w>c  <C-w>o  <C-w>=', 'close, only, equal sizes'],
       [']b [b  <C-^>', 'next / previous thread, alternate'],

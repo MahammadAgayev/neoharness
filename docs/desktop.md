@@ -102,6 +102,9 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
 - **`/model` and `/effort`** with no name open a picker, as in Claude Code;
   a click on the model under the prompt opens it too. The choice holds for
   the thread from its next turn.
+- **Window keys from Insert**: `<C-w>` followed by a window key (`h j k l w c
+  s v o q =`) leaves Insert and acts on the window, so a doc you write in is
+  no trap. `<C-w>` alone, or followed by any other key, still deletes a word.
 - **A sidebar** of workspaces, each with what waits or runs in it. `⌘B` or
   `:set nosidebar` hides it. Drag its edge to resize it; a double-click on
   the edge resets it. The work sits on a raised panel beside it, and

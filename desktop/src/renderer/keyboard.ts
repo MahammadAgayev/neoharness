@@ -3,7 +3,8 @@
 // the prompt shares them with the app (: and <leader> are the app's); and
 // otherwise the window in focus and the app take them.
 
-import { getCM } from '@replit/codemirror-vim'
+import { deleteGroupBackward } from '@codemirror/commands'
+import { getCM, Vim } from '@replit/codemirror-vim'
 import type { EditorView } from '@codemirror/view'
 
 import { command, commands } from './commands'
@@ -307,6 +308,39 @@ function vimBusy(v: EditorView): boolean {
   return st.insertMode || st.visualMode || !!st.inputState.operator || st.inputState.keyBuffer.length > 0
 }
 
+// In Insert, <C-w> deletes a word, as in Vim, but a window key right after
+// it moves to a window instead: a doc you write in is no trap. The word
+// goes when another key comes, or after a pause.
+const windowKeys = new Set(['h', 'j', 'k', 'l', 'w', 'W', 'c', 'q', 'o', 's', 'v', '='])
+let insertCW: { ed: EditorView; timer: ReturnType<typeof setTimeout> } | null = null
+
+function insertCtrlW(ed: EditorView, key: string, e: KeyboardEvent): boolean {
+  if (insertCW && insertCW.ed !== ed) insertCW = null
+  if (key === '<C-w>' && !insertCW) {
+    e.preventDefault()
+    e.stopPropagation()
+    insertCW = { ed, timer: setTimeout(() => {
+      insertCW = null
+      deleteGroupBackward(ed)
+    }, 600) }
+    return true
+  }
+  if (!insertCW) return false
+  clearTimeout(insertCW.timer)
+  insertCW = null
+  if (!windowKeys.has(key)) {
+    deleteGroupBackward(ed)
+    return false
+  }
+  e.preventDefault()
+  e.stopPropagation()
+  const cm = getCM(ed)
+  if (cm) Vim.exitInsertMode(cm as never)
+  feed(keymaps().prompt, '<C-w>')
+  feed(keymaps().prompt, key)
+  return true
+}
+
 function feed(seq: Sequencer<Action>, key: string): boolean {
   if (timer) clearTimeout(timer)
   const m = seq.feed(key)
@@ -370,6 +404,7 @@ export function onKey(e: KeyboardEvent): void {
   if (ed) {
     // Without Vim an editor keeps every key; its own <Esc> leaves it.
     if (!s.settings.vim) return
+    if (vimState(ed)?.insertMode && insertCtrlW(ed, key, e)) return
     if (vimBusy(ed)) return
     if (editorKeys.get(ed)?.(key, false)) {
       e.preventDefault()

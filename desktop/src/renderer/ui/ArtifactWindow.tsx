@@ -239,9 +239,12 @@ function DocEditor(props: {
     viewRef.current?.dispatch({ effects: comp.current.reconfigure(vimOn ? vim({ status: false }) : []) })
   }, [vimOn])
 
-  // The window in focus has the cursor in its document.
+  // The window in focus has the cursor in its document; a window that
+  // loses focus gives the keys back, or they would still type here.
   useEffect(() => {
-    if (props.focused && !viewRef.current?.hasFocus) viewRef.current?.focus()
+    const v = viewRef.current
+    if (props.focused && !v?.hasFocus) v?.focus()
+    else if (!props.focused && v?.hasFocus) v.contentDOM.blur()
   }, [props.focused])
 
   return <div className="doc-editor" ref={host} />
