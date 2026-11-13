@@ -14,15 +14,11 @@ function shortModel(m: string): string {
   return m.replace(/^claude-/, '').replace('[', ' ').replace(/\]$/, '')
 }
 
-function StatusLine(props: { v: ThreadView | undefined; focused: boolean; workspace: string; name: string }) {
+// PromptInfo is under the prompt, where Claude Code shows it: what the
+// next message goes with, and what the turns cost.
+function PromptInfo(props: { v: ThreadView | undefined; focused: boolean }) {
   const { v, focused } = props
   const warn = useStore((s) => s.settings.compactwarn)
-  const [, tick] = useState(0)
-  useEffect(() => {
-    if (v?.state !== 'running' && v?.state !== 'waiting') return
-    const t = setInterval(() => tick((n) => n + 1), 1000)
-    return () => clearInterval(t)
-  }, [v?.state])
   const right: { text: string; tone: string; title?: string }[] = []
   if (v) {
     if (v.queued > 0) right.push({ text: `+${v.queued} queued`, tone: 'muted' })
@@ -40,6 +36,26 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
     }
     if (v.cost) right.push({ text: `$${v.cost.toFixed(2)}`, tone: 'pine', title: 'cost of every turn' })
   }
+  if (!right.length) return null
+  return (
+    <div className="prompt-info">
+      {right.map((p, i) => (
+        <span key={i} className={`sl-part t-${focused || p.tone === 'love' ? p.tone : 'muted'}`} data-tip={p.title}>
+          {p.text}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function StatusLine(props: { v: ThreadView | undefined; focused: boolean; workspace: string; name: string }) {
+  const { v, focused } = props
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (v?.state !== 'running' && v?.state !== 'waiting') return
+    const t = setInterval(() => tick((n) => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [v?.state])
   const wake = v && v.state === 'idle' && v.wakeAt ? `wakes at ${new Date(v.wakeAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''
   return (
     <div className={`statusline ${focused ? 'focused' : ''}`}>
@@ -52,12 +68,6 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
       )}
       {v && v.state !== 'idle' && v.since && <span className="sl-dim">{elapsed(v.since)}</span>}
       {wake && <span className="sl-dim">{wake}</span>}
-      <span className="sl-fill" />
-      {right.map((p, i) => (
-        <span key={i} className={`sl-part t-${focused || p.tone === 'love' ? p.tone : 'muted'}`} data-tip={p.title}>
-          {p.text}
-        </span>
-      ))}
     </div>
   )
 }
@@ -556,6 +566,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
         <span className="prompt-mark">›</span>
         <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
       </div>
+      <PromptInfo v={v} focused={focused} />
     </div>
   )
 }

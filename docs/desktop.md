@@ -49,7 +49,7 @@ What the TUI takes from `init.lua` for itself is in Settings instead.
 - **Theme**: System follows the macOS appearance; Moon (the TUI's), Night
   and Dawn (light). `:colorscheme` sets it too.
 - **Text size**, the **sidebar**, **Vim keys**, and the **compact warning**:
-  the context % at which the status line says `/compact`.
+  the context % at which the line under the prompt says `/compact`.
 - **Leader**: click it and press a key; `<Space>` by default.
 - **Your keys**: click the keys field and press the keys, as `<leader>z`
   or `⌘⇧L`; Backspace takes one back. Then pick a command, an ex command

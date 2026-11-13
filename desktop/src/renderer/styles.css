@@ -546,6 +546,18 @@ kbd {
   border-color: color-mix(in srgb, var(--iris) 60%, transparent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--iris) 14%, transparent);
 }
+.prompt-info {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  max-width: 860px;
+  width: calc(100% - 32px);
+  margin: -8px auto 8px;
+  padding: 0 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
 .prompt-mark {
   color: var(--iris);
   line-height: 1.55;
