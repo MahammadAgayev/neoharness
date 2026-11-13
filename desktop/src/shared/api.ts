@@ -139,6 +139,8 @@ export interface Bridge {
   onStatus(fn: (s: HubStatus, detail: string) => void): () => void
   startHub(): Promise<void>
   pickFolder(): Promise<string | null>
+  // folders completes a local folder for :new, :open and :folder.
+  folders(word: string): Promise<string[]>
   openExternal(url: string): Promise<void>
   notify(title: string, body: string, target: { workspace: string; thread: string }): void
   onOpenTarget(fn: (t: { workspace: string; thread: string }) => void): () => void

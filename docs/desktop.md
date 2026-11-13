@@ -33,7 +33,9 @@ Everything the TUI does is here, with the same keys: workspaces, the
 coordinator and the threads list, the chat with its queue, permission cards,
 questions, `!` commands, `/` and `@` completion, artifacts with merge on save,
 splits, toasts, and the ex commands (`:new`, `:open`, `:resolve`, `:setlocal`,
-`:restore`, `:allow`, `:w`, `:e!`, …). `:help` lists them all.
+`:restore`, `:allow`, `:w`, `:e!`, …). `:help` lists them all. `<Tab>`
+completes the folder of `:new`, `:open` and `:folder` when it starts with
+`~/` or `/`; the app has no working folder for a relative one.
 
 The app does not read `init.lua`; the hub settings in it apply to both.
 What the TUI takes from `init.lua` for itself is in Settings instead.

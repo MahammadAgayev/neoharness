@@ -4,6 +4,7 @@ import path from 'node:path'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 
 import type { CallName } from '../shared/api'
+import { folders } from './folders'
 import { call, Updates } from './hub'
 
 let win: BrowserWindow | null = null
@@ -94,6 +95,7 @@ ipcMain.handle('folder:pick', async () => {
   const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
   return r.canceled ? null : (r.filePaths[0] ?? null)
 })
+ipcMain.handle('folders', (_ev, word: string) => folders(word))
 ipcMain.handle('open:external', (_ev, url: string) => openExternal(url))
 ipcMain.on('clipboard:write', (_ev, text: string) => clipboard.writeText(text))
 ipcMain.on('badge', (_ev, n: number) => app.dock?.setBadge(n > 0 ? String(n) : ''))

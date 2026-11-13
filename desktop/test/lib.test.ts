@@ -1,4 +1,10 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
 import { describe, expect, it } from 'vitest'
+
+import { folders } from '../src/main/folders'
 
 import { parseLine } from '../src/main/hub'
 import { calls } from '../src/shared/api'
@@ -210,5 +216,21 @@ describe('linediff', () => {
   it('handles empty texts', () => {
     expect(lines([], ['a']).map((o) => o.kind)).toEqual(['+'])
     expect(lines(['a'], []).map((o) => o.kind)).toEqual(['-'])
+  })
+})
+
+describe('folders', () => {
+  it('completes folders in the form typed, hides dot folders, and skips relative words', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'nhfold-'))
+    for (const d of ['Documents', 'Downloads', '.config', 'Desktop/x']) fs.mkdirSync(path.join(home, d), { recursive: true })
+    fs.writeFileSync(path.join(home, 'Dfile'), '')
+    expect(folders('~/Do', home)).toEqual(['~/Documents/', '~/Downloads/'])
+    expect(folders('~/', home)).toEqual(['~/Desktop/', '~/Documents/', '~/Downloads/'])
+    expect(folders('~/.c', home)).toEqual(['~/.config/'])
+    expect(folders('~/Desktop/', home)).toEqual(['~/Desktop/x/'])
+    expect(folders(home + '/Doc', home)).toEqual([home + '/Documents/'])
+    expect(folders('~', home)).toEqual(['~/'])
+    expect(folders('Doc', home)).toEqual([])
+    fs.rmSync(home, { recursive: true })
   })
 })

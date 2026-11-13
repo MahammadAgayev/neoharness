@@ -14,6 +14,7 @@ const bridge: Bridge = {
   onStatus: (fn) => listen('hub:status', fn),
   startHub: () => ipcRenderer.invoke('hub:start'),
   pickFolder: () => ipcRenderer.invoke('folder:pick'),
+  folders: (word) => ipcRenderer.invoke('folders', word),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
   notify: (title, body, target) => ipcRenderer.send('notify', title, body, target),
   onOpenTarget: (fn) => listen('open:target', fn),

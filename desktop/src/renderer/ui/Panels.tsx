@@ -95,7 +95,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
   {
     title: 'commands',
     rows: [
-      [':new <name> [folder]', 'create a workspace; no folder opens a folder picker'],
+      [':new <name> [folder]', 'create a workspace; no folder opens a folder picker; <Tab> completes a ~/ or / folder'],
       [':folder [folder]', "change the workspace's folder"],
       [':setlocal coordinator=<agent>', "this workspace's coordinator runs that agent; threads= for its threads"],
       [':open <name> [where]', 'open a thread: folder or host:dir'],

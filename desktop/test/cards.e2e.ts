@@ -216,6 +216,18 @@ test('⌘, opens the settings: a theme, and a key you record runs an ex command'
   await expect.poll(base).toBe('#232136')
 })
 
+test('<Tab> completes a folder in :new, one level at a time', async () => {
+  fs.mkdirSync(path.join(tmp, 'projects', 'api'), { recursive: true })
+  await page.keyboard.type(':')
+  await page.keyboard.type(`new x ${tmp}/pro`)
+  const line = page.locator('.cmdline input')
+  await page.keyboard.press('Tab')
+  await expect(line).toHaveValue(`new x ${tmp}/projects/`)
+  await page.keyboard.press('Tab')
+  await expect(line).toHaveValue(`new x ${tmp}/projects/api/`)
+  await page.keyboard.press('Escape')
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

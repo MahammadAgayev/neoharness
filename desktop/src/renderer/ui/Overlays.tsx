@@ -169,7 +169,7 @@ export function Toasts() {
 
 // complete is <Tab> on the command line: ex command names, then thread,
 // workspace and artifact names.
-function complete(line: string): string[] {
+async function complete(line: string): Promise<string[]> {
   const s = store.state
   const m = /^(\w*)$/.exec(line)
   if (m) return exCommands.filter((c) => c.startsWith(m[1])).map((c) => c + ' ')
@@ -177,6 +177,10 @@ function complete(line: string): string[] {
   const word = rest[rest.length - 1] ?? ''
   const head = line.slice(0, line.length - word.length)
   let names: string[] = []
+  // host:dir is a folder on another machine; only local ones complete.
+  if (((cmd === 'new' || cmd === 'open') && rest.length === 2) || (cmd === 'folder' && rest.length === 1)) {
+    return /^[^/~]*:/.test(word) ? [] : (await window.nh.folders(word)).map((f) => head + f)
+  }
   if (['workspace', 'restore'].includes(cmd)) names = s.workspaces.map((w) => w.name)
   else if (['b', 'buffer', 'split', 'vsplit', 'sp', 'vs', 'resolve', 'reopen', 'stop'].includes(cmd)) names = [...s.order, ...s.artifacts.map((a) => a.name)]
   else if (cmd === 'colorscheme' || cmd === 'colo') names = ['system', 'rose-pine-moon', 'rose-pine', 'rose-pine-dawn']
@@ -232,11 +236,24 @@ export function CommandLine() {
               void store.ex(cmdline)
             } else if (e.key === 'Tab') {
               e.preventDefault()
-              if (!comp.current) comp.current = { list: complete(cmdline), i: -1 }
-              const c = comp.current
-              if (!c.list.length) return
-              c.i = (c.i + (e.shiftKey ? -1 : 1) + c.list.length) % c.list.length
-              store.setCmdline(c.list[c.i])
+              const back = e.shiftKey
+              void (async () => {
+                if (!comp.current) {
+                  const list = await complete(cmdline)
+                  if (store.state.cmdline !== cmdline) return
+                  comp.current = { list, i: -1 }
+                }
+                const c = comp.current
+                if (!c.list.length) {
+                  comp.current = null
+                  return
+                }
+                c.i = (c.i + (back ? -1 : 1) + c.list.length) % c.list.length
+                store.setCmdline(c.list[c.i])
+                // With one candidate there is nothing to cycle: the next <Tab>
+                // starts from the new text, so a folder goes one level deeper.
+                if (c.list.length === 1) comp.current = null
+              })()
             } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) {
               e.preventDefault()
               hi.current = Math.min(hi.current + 1, hist.current.length - 1)
