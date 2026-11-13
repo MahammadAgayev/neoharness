@@ -1181,15 +1181,22 @@ func (p *Prompt) insert(r rune) {
 
 func (a *App) send() {
 	b := a.cur.Buf
-	text := strings.TrimSpace(string(b.Prompt.Text))
-	if text == "" {
+	p := b.Prompt
+	text, images := withImages(strings.TrimSpace(string(p.Text)), p.Images)
+	if text == "" && len(images) == 0 {
 		return
 	}
-	if err := a.c.Send(b.Workspace, b.Thread, text); err != nil {
+	if err := a.c.Send(b.Workspace, b.Thread, text, images...); err != nil {
 		a.notify(err.Error(), a.th.Love)
 		return
 	}
-	b.Prompt.Text, b.Prompt.Cur, b.Prompt.ed = nil, 0, nil
+	if len(images) > 0 {
+		p.sent = sentImages{text: text, images: map[int][]byte{}}
+		for i, data := range images {
+			p.sent.images[i+1] = data
+		}
+	}
+	p.Text, p.Cur, p.ed, p.Images = nil, 0, nil, nil
 	if a.cur.inPrompt {
 		a.cur.Cur, a.cur.Col = 0, width(" › ")
 	}

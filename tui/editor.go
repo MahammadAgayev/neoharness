@@ -1135,6 +1135,9 @@ func (a *App) takeBack(w *Window) bool {
 	}
 	b.Prompt.Text, b.Prompt.ed = []rune(text), nil
 	b.Prompt.Cur = len(b.Prompt.Text)
+	if s := b.Prompt.sent; s.text == text && len(b.Prompt.Images) == 0 {
+		b.Prompt.Images = s.images
+	}
 	if w.inPrompt {
 		a.leavePrompt(w)
 	}

@@ -80,8 +80,18 @@ type block struct {
 type Prompt struct {
 	Text []rune
 	Cur  int
+	// Images are the pictures :image put in, by the number of their token;
+	// sent is the last message that went with images, so taking it back
+	// brings them back.
+	Images map[int][]byte
+	sent   sentImages
 	// ed runs Normal mode changes on the text, with their undo.
 	ed *Editor
+}
+
+type sentImages struct {
+	text   string
+	images map[int][]byte
 }
 
 // Buffer is a named, append-mostly list of blocks.

@@ -30,7 +30,7 @@ type cmdline struct {
 }
 
 var commands = []string{
-	"allow", "always", "artifacts", "b", "buffer", "deny", "diffoff", "edit", "folder", "help", "hub", "ls", "messages", "new",
+	"allow", "always", "artifacts", "b", "buffer", "deny", "diffoff", "edit", "folder", "help", "hub", "image", "ls", "messages", "new",
 	"only", "open", "q", "qa", "quit", "recap", "reopen", "resolve", "restore", "cost", "setlocal", "split", "threads",
 	"vsplit", "workspace", "workspaces", "wq",
 }
@@ -458,6 +458,8 @@ func (a *App) exec(line string) {
 		a.cur.Follow = true
 	case "cost":
 		a.showCost(arg(0) == "all")
+	case "image":
+		a.attachImage(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), cmd)))
 	case "recap":
 		a.recapShown, a.recapSet = !a.recapOn(), true
 	case "hub":
@@ -714,6 +716,7 @@ func (a *App) helpBuf() *Buffer {
 		row(":artifacts", "pick an artifact; <CR> on ◇ in a chat opens it too"),
 		row(":messages", "notice history"),
 		row(":hub restart", "restart the hub on this neoharness; after an update it does so on its own once no turn runs"),
+		row(":image [file]", "put the clipboard's picture, or a file's, in the prompt as [image 1]; it goes with the message"),
 		row(":recap", "hide or show the recaps above the prompts"),
 		row(":cost  :cost all", "what this workspace, or every workspace, cost: by day, thread and model; <CR> opens a thread"),
 		row(":workspaces  :workspace <n>", "workspace list, switch workspace"),

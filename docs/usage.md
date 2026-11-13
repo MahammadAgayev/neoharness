@@ -86,6 +86,14 @@ thread yourself:
 - `u` with an empty prompt is Esc in Claude Code: your last message comes
   back to the prompt to edit, while the agent has not answered it yet. A
   queued one leaves the queue; a running turn stops.
+- `:image` puts the picture on the clipboard in the prompt, after the
+  cursor, as `[image 1]`; `:image <file>` takes a file. A terminal cannot
+  paste a picture, so this does it. The picture goes to the agent with the
+  message, as in Claude Code; delete the token and it does not go. Up to 5
+  per message, png, jpeg, gif or webp; a big one is made smaller first, to
+  1568 pixels on its long side. On macOS the clipboard is read with
+  `osascript`, on Linux with `wl-paste` or `xclip`. `u` that takes a message
+  back brings its pictures back too. In the app, paste it (`⌘V`).
 - `/` at the start completes slash commands. `@` completes threads and files.
 - `!<command>` at the start runs a shell command in the thread's folder. The
   output goes to Claude with your next message.

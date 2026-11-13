@@ -37,6 +37,9 @@ type fakeClient struct {
 	queries    []string
 	// merged is what an edit from an old version merges to; empty refuses.
 	merged string
+
+	// images are what each Send carried, by the index of its sent line.
+	images map[int][][]byte
 }
 
 func (f *fakeClient) Info() (hubapi.Info, error)                 { return hubapi.Info{Version: f.version}, nil }
@@ -112,6 +115,12 @@ func (f *fakeClient) Completions(p, t, query string) (model.Completions, error) 
 	}, nil
 }
 func (f *fakeClient) Send(p, t, text string, images ...[]byte) error {
+	if len(images) > 0 {
+		if f.images == nil {
+			f.images = map[int][][]byte{}
+		}
+		f.images[len(f.sent)] = images
+	}
 	f.sent = append(f.sent, t+": "+text)
 	return nil
 }
