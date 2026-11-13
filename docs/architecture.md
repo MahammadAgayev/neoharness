@@ -99,6 +99,15 @@ When the thread wrote no recap, the first line of its reply stands in, marked
 as such. A turn that wrote none and did nothing keeps the old recap. The
 recap is kept in `thread.json` and sent as `ThreadView.Recap`.
 
+The workspace recap says how the whole workspace stands, as
+`WorkspaceView.Recap`. It holds only what no thread's recap says:
+
+- **The goal**: the first line of the person's first message to the
+  coordinator, kept in `workspace.json`.
+- **What the hub joins** from the open threads' recaps, at no cost: the files
+  that two or more threads edited (each path joined back to its thread's
+  folder) and how many idle threads failed their last turn.
+
 ## Permissions
 
 When Claude asks for approval, it calls `permission_prompt`. The hub holds

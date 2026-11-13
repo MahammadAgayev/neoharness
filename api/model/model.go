@@ -221,6 +221,29 @@ func (r *Recap) Failed() int {
 	return n
 }
 
+// WorkspaceRecap is how a workspace stands, for the person to read without
+// any transcript: what it is for and what its threads' work means together.
+// The thread recaps hold each thread's own part.
+type WorkspaceRecap struct {
+	// Goal and Lines are the coordinator's words. Until it writes a goal,
+	// Goal is the first line of the person's first message to it.
+	Goal  string   `json:"goal,omitempty"`
+	Lines []string `json:"lines,omitempty"`
+	// At is when the coordinator wrote Lines.
+	At time.Time `json:"at,omitempty"`
+	// Overlaps are files that the last recaps of two or more open threads
+	// edited.
+	Overlaps []Overlap `json:"overlaps,omitempty"`
+	// Failed counts the idle threads whose last turn failed.
+	Failed int `json:"failed,omitempty"`
+}
+
+// Overlap is a file that more than one thread edited.
+type Overlap struct {
+	Path    string   `json:"path"`
+	Threads []string `json:"threads"`
+}
+
 // ThreadView is a thread as the API shows it.
 type ThreadView struct {
 	Workspace string   `json:"workspace"`
@@ -338,6 +361,8 @@ type WorkspaceView struct {
 	// ReopenCompact is what a resolved thread with a full context does when
 	// the coordinator reopens it: compact, ask or off.
 	ReopenCompact string `json:"reopenCompact,omitempty"`
+	// Recap is nil until there is something to say.
+	Recap *WorkspaceRecap `json:"recap,omitempty"`
 }
 
 // UpdateKind classifies a hub update.

@@ -857,6 +857,9 @@ func (h *Hub) send(workspaceName, from, to, text string) (*thread, error) {
 		if done, err := h.command(ws, th, text); done {
 			return th, err
 		}
+		if to == model.Coordinator && (ws.p.Recap == nil || ws.p.Recap.Goal == "") {
+			h.setGoal(ws, oneLine(firstLine(text), recapLimit))
+		}
 	}
 	// The thread asked and ended its reply; what still runs (background
 	// tasks) must not hold the answer back. Checked before enqueue, which may
@@ -1364,6 +1367,25 @@ func (h *Hub) Recap(workspaceName, name, asked, outcome, open string) error {
 	}
 	th.recap = &model.Recap{Asked: oneLine(asked, recapLimit), Outcome: oneLine(outcome, recapLimit), Open: oneLine(open, recapLimit)}
 	return nil
+}
+
+// setGoal keeps what the workspace is for. Callers hold h.mu.
+func (h *Hub) setGoal(ws *space, goal string) {
+	if goal == "" {
+		return
+	}
+	p := ws.p
+	r := model.WorkspaceRecap{}
+	if p.Recap != nil {
+		r = *p.Recap
+	}
+	r.Goal = goal
+	p.Recap = &r
+	if err := workspace.Save(p); err != nil {
+		return
+	}
+	ws.p = p
+	h.publishWorkspace(ws)
 }
 
 // recapOf is a thread's recap after a turn: what the thread wrote, or else
@@ -2209,7 +2231,60 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 			}
 		}
 	}
+	v.Recap = h.workspaceRecap(ws)
 	return v
+}
+
+// workspaceRecap joins the stored goal and lines with what the open threads'
+// recaps say together: the files more than one edited, and the failures.
+func (h *Hub) workspaceRecap(ws *space) *model.WorkspaceRecap {
+	var r model.WorkspaceRecap
+	if ws.p.Recap != nil {
+		r = *ws.p.Recap
+	}
+	type file struct {
+		path    string
+		threads []string
+	}
+	var files []*file
+	byKey := map[string]*file{}
+	for _, n := range slices.Sorted(maps.Keys(ws.threads)) {
+		th := ws.threads[n]
+		t := th.t
+		if t.Role != model.RoleThread || th.deleted || t.Resolved || t.Recap == nil {
+			continue
+		}
+		if t.Recap.Error != "" && th.state == model.StateIdle {
+			r.Failed++
+		}
+		for _, f := range t.Recap.Edited {
+			// A recap names a file inside the thread's folder relative to it.
+			if !filepath.IsAbs(f) {
+				f = filepath.Join(t.Location.Dir, f)
+			}
+			key := t.Location.Host + ":" + f
+			if byKey[key] == nil {
+				shown := f
+				if rel, err := filepath.Rel(ws.p.Pin, f); err == nil && ws.p.Pin != "" && !t.Location.Remote() && !strings.HasPrefix(rel, "..") {
+					shown = rel
+				} else if t.Location.Remote() {
+					shown = t.Location.Host + ":" + f
+				}
+				byKey[key] = &file{path: shown}
+				files = append(files, byKey[key])
+			}
+			byKey[key].threads = append(byKey[key].threads, n)
+		}
+	}
+	for _, f := range files {
+		if len(f.threads) > 1 {
+			r.Overlaps = append(r.Overlaps, model.Overlap{Path: f.path, Threads: f.threads})
+		}
+	}
+	if r.Goal == "" && len(r.Lines) == 0 && len(r.Overlaps) == 0 && r.Failed == 0 {
+		return nil
+	}
+	return &r
 }
 
 func (h *Hub) workspace(name string) (*space, error) {

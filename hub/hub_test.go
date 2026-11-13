@@ -2286,3 +2286,81 @@ func TestTheRecapKeepsTheLastCommandsAndShortPathsThroughALink(t *testing.T) {
 		t.Errorf("edited = %v", r.Edited)
 	}
 }
+
+func workspaceView(t *testing.T, h *Hub, name string) model.WorkspaceView {
+	t.Helper()
+	for _, v := range h.Workspaces() {
+		if v.Name == name {
+			return v
+		}
+	}
+	t.Fatalf("no workspace %s", name)
+	return model.WorkspaceView{}
+}
+
+func TestTheWorkspaceRecapNamesFilesTwoThreadsEditedAndCountsFailures(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	pin := view(t, h, "demo", model.Coordinator).Location.Dir
+	sub := filepath.Join(pin, "internal")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		switch {
+		case req.HarnessOnly:
+			return agent.Result{Text: "ok"}
+		case strings.Contains(req.Prompt, "crash"):
+			return agent.Result{ExitCode: 1, Stderr: "fake: crashed on purpose"}
+		}
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActEdit, Detail: pin + "/internal/user/lookup.go", ID: "e1"})
+		if strings.Contains(req.Prompt, "auth") {
+			req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActEdit, Detail: pin + "/auth.go", ID: "e2"})
+		}
+		return agent.Result{Text: "done"}
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "auth", "move auth", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "cache", "add a cache", sub); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "flaky", "crash", ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"auth", "cache", "flaky"} {
+		eventually(t, n+"'s recap", func() bool { return view(t, h, "demo", n).Recap != nil })
+		stateIs(t, h, "demo", n, model.StateIdle)
+	}
+	r := workspaceView(t, h, "demo").Recap
+	if r == nil {
+		t.Fatal("no workspace recap")
+	}
+	want := []model.Overlap{{Path: "internal/user/lookup.go", Threads: []string{"auth", "cache"}}}
+	if !slices.EqualFunc(r.Overlaps, want, func(a, b model.Overlap) bool { return a.Path == b.Path && slices.Equal(a.Threads, b.Threads) }) {
+		t.Errorf("overlaps = %+v, want %+v", r.Overlaps, want)
+	}
+	if r.Failed != 1 {
+		t.Errorf("failed = %d, want 1", r.Failed)
+	}
+}
+
+func TestThePersonsFirstMessageIsTheGoalUntilTheCoordinatorWritesOne(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	if r := workspaceView(t, h, "demo").Recap; r != nil {
+		t.Fatalf("a new workspace has no recap: %+v", r)
+	}
+	if err := h.Send("demo", model.User, model.Coordinator, "\nMove auth into sessions\nand keep the API"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if err := h.Send("demo", model.User, model.Coordinator, "also plan the docs"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if r := workspaceView(t, h, "demo").Recap; r == nil || r.Goal != "Move auth into sessions" {
+		t.Fatalf("goal = %+v, want the first line of the first message", r)
+	}
+}

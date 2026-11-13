@@ -36,6 +36,9 @@ type Workspace struct {
 	// ReopenCompact is the :setlocal reopen_compact here; empty is the
 	// config's.
 	ReopenCompact string `json:"reopenCompact,omitempty"`
+	// Recap holds the goal and the coordinator's lines; the hub works out
+	// the rest of the workspace recap when it shows it.
+	Recap *model.WorkspaceRecap `json:"recap,omitempty"`
 }
 
 // Message is one queued input for a thread.
