@@ -24,7 +24,7 @@ export function Sidebar() {
           <button className="sb-item" onClick={() => store.openNewDoc()}>
             <Icon name="file-plus" className="sb-icon" />
             <span className="sb-label">New doc</span>
-            <kbd className="sb-kbd shown">{lead} D</kbd>
+            <kbd className="sb-kbd shown">{lead} d</kbd>
           </button>
         )}
       </div>
@@ -33,7 +33,7 @@ export function Sidebar() {
         className={`sb-head ${screen === 'workspaces' ? 'active' : ''}`}
         onClick={() => store.showWorkspaces()}
         data-tip="All workspaces"
-        data-keys={`${lead} P V`}
+        data-keys={`${lead} p v`}
       >
         Workspaces
       </button>
@@ -72,12 +72,12 @@ export function Sidebar() {
         <button className="sb-item" onClick={() => store.openSettings()}>
           <Icon name="settings" className="sb-icon" />
           <span className="sb-label">Settings</span>
-          <kbd className="sb-kbd shown">{lead} S</kbd>
+          <kbd className="sb-kbd shown">{lead} s</kbd>
         </button>
         <button className="sb-item" onClick={() => void store.ex('help')}>
           <Icon name="keyboard" className="sb-icon" />
           <span className="sb-label">Keys and commands</span>
-          <kbd className="sb-kbd shown">{lead} H</kbd>
+          <kbd className="sb-kbd shown">{lead} h</kbd>
         </button>
       </div>
     </nav>
