@@ -124,7 +124,7 @@ export function Settings() {
           </div>
 
           <h2>Conversation</h2>
-          <Row title="Compact warning" detail="The context use, in percent, at which the line under the prompt says /compact. 0 is off.">
+          <Row title="Compact warning" detail="The context use, in percent, at which the prompt says /compact. 0 is off.">
             <input
               type="number"
               className="field small"

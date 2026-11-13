@@ -49,7 +49,7 @@ What the TUI takes from `init.lua` for itself is in Settings instead.
 - **Theme**: System follows the macOS appearance; Moon (the TUI's), Night
   and Dawn (light). `:colorscheme` sets it too.
 - **Text size**, the **sidebar**, **Vim keys**, and the **compact warning**:
-  the context % at which the line under the prompt says `/compact`.
+  the context % at which the prompt says `/compact`.
 - **Leader**: click it and press a key; `<Space>` by default.
 - **Key hints**: after a key that starts others, as `<leader>`, `<C-w>` or
   `g`, what can follow shows at once, as which-key does in Neovim. The keys
@@ -86,6 +86,9 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   threads of every workspace, artifacts, workspaces, commands, notifications
   and the text of every transcript at once. `<Tab>` goes to one kind. The
   pickers (`<leader>pt`, `<leader>pa`, `<leader>ps`, …) open it on one kind.
+  The footer shows only what the chosen result can do: a thread of another
+  workspace says "go to" that workspace and has no split, as windows are of
+  the open workspace.
 - **macOS shortcuts** next to the Vim keys: `⌘P` threads, `⌘⇧F` search the
   transcripts, `⌘.` stop the turn, `⌘N` open a thread, `⌘S` save, `⌘W` close
   the window, `⌘\` split, `⌘1`…`⌘9` workspaces, `⌘/` help.

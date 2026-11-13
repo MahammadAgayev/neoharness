@@ -14,8 +14,9 @@ function shortModel(m: string): string {
   return m.replace(/^claude-/, '').replace('[', ' ').replace(/\]$/, '')
 }
 
-// PromptInfo is under the prompt, where Claude Code shows it: what the
-// next message goes with, and what the turns cost.
+// PromptInfo is at the right of the prompt, as in Linear's comment box:
+// what the next message goes with, and what the turns cost, with no row
+// of its own.
 function PromptInfo(props: { v: ThreadView | undefined; focused: boolean }) {
   const { v, focused } = props
   const warn = useStore((s) => s.settings.compactwarn)
@@ -565,8 +566,8 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>
         <span className="prompt-mark">›</span>
         <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
+        <PromptInfo v={v} focused={focused} />
       </div>
-      <PromptInfo v={v} focused={focused} />
     </div>
   )
 }

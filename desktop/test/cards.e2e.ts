@@ -352,6 +352,21 @@ test('New doc starts a document beside the chat, ready to write', async () => {
     .toMatchObject({ base: 1, text: '# Launch plan\n\n- [ ] write the API' })
 })
 
+test('search offers only what a thread of another workspace can do', async () => {
+  // billing is open now: demo's threads are of another workspace.
+  await normal()
+  await page.keyboard.press('Meta+k')
+  await page.keyboard.type('demo coordinator')
+  const foot = page.locator('.palette-foot')
+  await expect(foot).toContainText('go to demo')
+  await expect(foot).not.toContainText('split right')
+  await page.keyboard.press('Control+v')
+  await expect(page.locator('.palette')).toBeVisible()
+  await expect(page.locator('.sb-item.active', { hasText: 'billing' })).toBeVisible()
+  await shot('39-search-other-workspace')
+  await page.keyboard.press('Escape')
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

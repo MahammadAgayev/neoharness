@@ -532,7 +532,7 @@ kbd {
   gap: 8px;
   max-width: 860px;
   width: calc(100% - 32px);
-  margin: 4px auto 14px;
+  margin: 4px auto 12px;
   padding: 10px 14px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -547,14 +547,15 @@ kbd {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--iris) 14%, transparent);
 }
 .prompt-info {
+  flex: 0 1 auto;
+  align-self: flex-end;
   display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  max-width: 860px;
-  width: calc(100% - 32px);
-  margin: -8px auto 8px;
-  padding: 0 4px;
+  gap: 10px;
+  min-width: 0;
+  position: sticky;
+  bottom: 0;
   font-size: 12px;
+  line-height: 1.9;
   white-space: nowrap;
   overflow: hidden;
 }

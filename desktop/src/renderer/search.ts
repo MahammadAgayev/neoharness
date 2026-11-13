@@ -17,6 +17,9 @@ export interface Item {
   label: string
   detail?: string
   hint?: string
+  // open names what Enter does when it is more than open, as a switch of
+  // workspace.
+  open?: string
   run: () => void
   split?: (vertical: boolean) => void
   del?: () => void
@@ -98,6 +101,7 @@ function threadItems(local: boolean): Item[] {
       tone: stateTone(v.state),
       label: `${workspace} · ${v.name}`,
       detail: threadDetail(v),
+      open: `go to ${workspace}`,
       run: () => void store.goThread(workspace, v.name).then(() => store.focusPrompt()),
     })
   }
@@ -165,6 +169,7 @@ function notificationItems(): Item[] {
       label: `${t.workspace} · ${t.thread}`,
       detail: t.body,
       hint: new Date(t.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      open: t.workspace === store.state.workspace ? undefined : `go to ${t.workspace}`,
       run: () => void store.goThread(t.workspace, t.thread),
     }))
 }

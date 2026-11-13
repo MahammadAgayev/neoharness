@@ -21,12 +21,14 @@ export function Picker() {
     list.current?.querySelector(`[data-i="${index}"]`)?.scrollIntoView({ block: 'nearest' })
   }, [index])
   if (!p) return null
+  const active = items[index] as Item | undefined
 
   // Artifacts, text, buffers and the outline are of the open workspace.
   const usable = store.state.workspace ? tabs : tabs.filter((t) => !['artifacts', 'text', 'buffers', 'outline'].includes(t.tab))
   const shown = p.only ? tabs.filter((t) => t.tab === p.tab) : usable
   const choose = (it: Item | undefined, how?: 'right' | 'above') => {
     if (!it) return
+    if (how && !it.split) return
     store.closePicker()
     if (how && it.split) it.split(how === 'right')
     else it.run()
@@ -128,17 +130,23 @@ export function Picker() {
           ) : (
             <>
               <span>
-                <kbd>↵</kbd> open
+                <kbd>↵</kbd> {active?.open ?? 'open'}
               </span>
-              <span>
-                <kbd>Ctrl V</kbd> split right
-              </span>
-              <span>
-                <kbd>Ctrl X</kbd> split above
-              </span>
-              <span>
-                <kbd>Ctrl D</kbd> delete
-              </span>
+              {active?.split && (
+                <>
+                  <span>
+                    <kbd>Ctrl V</kbd> split right
+                  </span>
+                  <span>
+                    <kbd>Ctrl X</kbd> split above
+                  </span>
+                </>
+              )}
+              {active?.del && (
+                <span>
+                  <kbd>Ctrl D</kbd> delete
+                </span>
+              )}
               <span>
                 <kbd>esc</kbd> close
               </span>
