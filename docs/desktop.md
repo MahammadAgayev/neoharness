@@ -94,7 +94,9 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   transcripts, `⌘.` stop the turn, `⌘N` open a thread, `⌘S` save, `⌘W` close
   the window, `⌘\` split, `⌘1`…`⌘9` workspaces, `⌘/` help.
 - **A sidebar** of workspaces, each with what waits or runs in it. `⌘B` or
-  `:set nosidebar` hides it.
+  `:set nosidebar` hides it. The work sits on a raised panel beside it, and
+  icons are Lucide's line icons (ISC). The Rosé Pine text is drawn a step
+  closer to black or white than the TUI's, so it reads sharp in a window.
 - **The mouse**: buttons on permission cards, a click on a thread, an
   artifact or a queued message, drag the line between columns. A right
   click on a thread or a block gives its actions (open in a split,

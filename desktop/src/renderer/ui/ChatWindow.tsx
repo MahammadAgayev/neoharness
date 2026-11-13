@@ -7,6 +7,7 @@ import { store, useStore, type Win } from '../store'
 import { Markdown } from './Markdown'
 import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
+import { Glyph } from './Icon'
 
 const shellLines = 10
 
@@ -64,7 +65,7 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
       <span className="sl-name">{props.name}</span>
       {v && (
         <span className={`sl-state t-${stateTone(v.state)}`}>
-          {stateGlyph(v.state)} {v.state}
+          <Glyph g={stateGlyph(v.state)} size={12} /> {v.state}
         </span>
       )}
       {v && v.state !== 'idle' && v.since && <span className="sl-dim">{elapsed(v.since)}</span>}

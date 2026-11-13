@@ -104,8 +104,7 @@ kbd {
   align-items: center;
   padding: 0 12px 0 84px;
   -webkit-app-region: drag;
-  border-bottom: 1px solid var(--line-soft);
-  background: color-mix(in srgb, var(--surface) 55%, var(--base));
+  background: var(--shell);
 }
 .titlebar button {
   -webkit-app-region: no-drag;
@@ -146,11 +145,16 @@ kbd {
   padding: 4px 6px 4px 12px;
   border-radius: 7px;
   border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--base) 60%, transparent);
+  background: var(--panel);
   color: var(--muted);
   font-size: 12.5px;
   cursor: default;
   transition: border-color 120ms var(--ease), color 120ms var(--ease);
+}
+.search-pill > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .search-pill:hover {
   border-color: var(--hl-high);
@@ -182,6 +186,20 @@ kbd {
   flex: 1;
   min-height: 0;
   display: flex;
+  background: var(--shell);
+  padding: 0 8px 8px 0;
+}
+.main:not(:has(.sidebar)) {
+  padding-left: 8px;
+}
+/* The work sits on a raised panel, as Linear's, over the shell. */
+.main > .layout,
+.main > .workspaces-screen {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 8%, transparent);
 }
 
 .cmdline {
@@ -192,8 +210,7 @@ kbd {
   padding: 0 14px;
   font-family: var(--font-mono);
   font-size: 12.5px;
-  border-top: 1px solid var(--line-soft);
-  background: color-mix(in srgb, var(--surface) 55%, var(--base));
+  background: var(--shell);
   min-width: 0;
 }
 .cmdline input {
@@ -288,6 +305,9 @@ kbd {
 }
 .sl-state {
   margin-left: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .statusline:not(.focused) .sl-state {
   color: var(--muted);
@@ -384,7 +404,14 @@ kbd {
   flex: 0 0 auto;
   width: 14px;
   text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon {
+  flex: none;
   display: inline-block;
+  vertical-align: -2px;
 }
 .indent {
   padding-left: 22px;
@@ -1621,9 +1648,8 @@ kbd {
   flex: 0 0 216px;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--line-soft);
-  background: color-mix(in srgb, var(--surface) 55%, var(--base));
-  padding: 8px 8px 6px;
+  background: var(--shell);
+  padding: 4px 8px 6px;
   min-height: 0;
 }
 .sb-section {
@@ -1660,8 +1686,9 @@ kbd {
   border: 0;
   border-radius: 6px;
   background: none;
-  color: var(--subtle);
+  color: var(--text);
   font-size: 13px;
+  font-weight: 500;
   text-align: left;
   cursor: default;
   transition: background-color 80ms var(--ease), color 80ms var(--ease);
@@ -1673,13 +1700,12 @@ kbd {
 .sb-item.active {
   background: var(--hl-med);
   color: var(--text);
-  font-weight: 550;
 }
 .sb-icon {
-  width: 14px;
-  text-align: center;
-  flex: 0 0 14px;
-  font-size: 12px;
+  flex: 0 0 15px;
+}
+.sb-icon:not([class*='t-']) {
+  color: var(--subtle);
 }
 .sb-label {
   flex: 1;
@@ -1692,6 +1718,7 @@ kbd {
   font-size: 12px;
 }
 .sb-kbd {
+  background: var(--panel);
   opacity: 0;
   transition: opacity 100ms var(--ease);
 }
@@ -1700,10 +1727,9 @@ kbd {
   opacity: 1;
 }
 .sb-new {
-  color: var(--muted);
+  color: var(--subtle);
   margin-top: 4px;
 }
 .sb-foot {
-  border-top: 1px solid var(--line-soft);
   padding-top: 6px;
 }

@@ -92,13 +92,19 @@ export function resolveScheme(name: string, systemDark: boolean): Palette {
 }
 
 export function applyScheme(p: Palette, root: HTMLElement): void {
+  // Rosé Pine keeps its text soft; a window of work reads sharper with the
+  // text a step closer to black or white, and the muted text a step up.
+  const ink = p.dark ? '#fff' : '#000'
   const vars: Record<string, string> = {
     '--base': p.base,
     '--surface': p.surface,
     '--overlay': p.overlay,
-    '--muted': p.muted,
-    '--subtle': p.subtle,
-    '--text': p.text,
+    // The shell (title bar, sidebar) sits under the panel the work is on.
+    '--shell': p.dark ? `color-mix(in srgb, ${p.base} 70%, #000)` : p.overlay,
+    '--panel': p.dark ? p.base : p.surface,
+    '--muted': `color-mix(in srgb, ${p.muted} 55%, ${p.subtle})`,
+    '--subtle': `color-mix(in srgb, ${p.subtle} 85%, ${ink})`,
+    '--text': `color-mix(in srgb, ${p.text} ${p.dark ? 88 : 75}%, ${ink})`,
     '--love': p.love,
     '--gold': p.gold,
     '--rose': p.rose,

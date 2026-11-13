@@ -4,6 +4,7 @@ import { Coordinator, location } from '../../shared/model'
 import { elapsed, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
+import { Glyph } from './Icon'
 
 export function ThreadsList(props: { win: Win; focused: boolean }) {
   const { win, focused } = props
@@ -128,7 +129,7 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
                   void threadMenu(v.name, v.state, (how) => open(i, how))
                 }}
               >
-                <span className={`t-${stateTone(v.state)} glyph ${v.state === 'running' ? 'pulse' : ''}`}>{stateGlyph(v.state)}</span>
+                <span className={`t-${stateTone(v.state)} glyph ${v.state === 'running' ? 'pulse' : ''}`}><Glyph g={stateGlyph(v.state)} /></span>
                 <div className="list-main">
                   <div className="list-title">
                     <span className="name">{v.name}</span>

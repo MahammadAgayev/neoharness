@@ -11,6 +11,7 @@ import { NewDoc } from './NewDoc'
 import { NewWorkspace } from './NewWorkspace'
 import { Tooltip } from './Tooltip'
 import { HelpWindow, MessagesWindow } from './Panels'
+import { Icon } from './Icon'
 import { Sidebar } from './Sidebar'
 import { ThreadsList } from './ThreadsList'
 import { Workspaces } from './Workspaces'
@@ -110,7 +111,10 @@ function TitleBar() {
         )}
       </div>
       <button className="search-pill" onClick={() => store.openPicker('all')}>
-        <span>Search everywhere</span>
+        <span>
+          <Icon name="search" size={13} />
+          Search everywhere
+        </span>
         <kbd>⌘K</kbd>
       </button>
       <div className="titlebar-right">

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { exCommands } from '../lib/ex'
 import { items as searchItems, tabs, type Item } from '../search'
 import { store, useStore } from '../store'
+import { Glyph } from './Icon'
 
 export function Picker() {
   const p = useStore((s) => s.picker)
@@ -115,7 +116,9 @@ export function Picker() {
                   onMouseMove={() => i !== index && store.setPicker({ index: i })}
                   onClick={() => choose(it)}
                 >
-                  <span className={`glyph t-${it.tone}`}>{it.glyph}</span>
+                  <span className={`glyph t-${it.tone}`}>
+                    <Glyph g={it.glyph} />
+                  </span>
                   <span className="palette-label">{it.label}</span>
                   {it.detail && <span className="palette-detail">{it.detail}</span>}
                   {it.hint && <kbd className="palette-hint">{it.hint}</kbd>}
@@ -166,7 +169,9 @@ export function Toasts() {
       {shown.map((t) => (
         <div key={t.id} className={`toast b-${t.tone}`} onClick={() => void store.goThread(t.workspace, t.thread)}>
           <div className="toast-head">
-            <span className={`t-${t.tone}`}>{t.glyph}</span>
+            <span className={`glyph t-${t.tone}`}>
+              <Glyph g={t.glyph} />
+            </span>
             <span className="t-subtle">{t.workspace} ·</span>
             <span className="name">{t.thread}</span>
           </div>

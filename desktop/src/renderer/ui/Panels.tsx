@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { commands } from '../commands'
 import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
+import { Glyph } from './Icon'
 
 function useScrollKeys(win: Win, el: React.RefObject<HTMLDivElement | null>) {
   const handle = (a: WinAction, count: number): boolean => {
@@ -179,7 +180,9 @@ export function MessagesWindow(props: { win: Win; focused: boolean }) {
           .reverse()
           .map((t) => (
             <div key={t.id} className="list-row" onClick={() => void store.goThread(t.workspace, t.thread)}>
-              <span className={`glyph t-${t.tone}`}>{t.glyph}</span>
+              <span className={`glyph t-${t.tone}`}>
+                <Glyph g={t.glyph} />
+              </span>
               <div className="list-main">
                 <div className="list-title">
                   <span className="t-subtle">{t.workspace} · </span>
