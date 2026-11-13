@@ -511,6 +511,22 @@ test('with the list open, Enter and Tab take the command, and a half-typed one i
   await normal()
 })
 
+test('the sidebar resizes by its edge, keeps the width, and a double-click resets it', async () => {
+  const bar = page.locator('.sidebar')
+  const before = (await bar.boundingBox())!.width
+  const edge = (await page.locator('.sb-resizer').boundingBox())!
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + 200)
+  await page.mouse.down()
+  await page.mouse.move(edge.x + edge.width / 2 + 80, edge.y + 200, { steps: 4 })
+  await page.mouse.up()
+  await expect.poll(async () => Math.round((await bar.boundingBox())!.width)).toBe(Math.round(before + 80))
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('settings') || '{}').sidebarWidth)
+  expect(saved).toBe(Math.round(before + 80))
+  await page.locator('.sb-resizer').dblclick()
+  await expect.poll(async () => Math.round((await bar.boundingBox())!.width)).toBe(216)
+  await page.mouse.move(700, 400)
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

@@ -1,5 +1,10 @@
+import { useState } from 'react'
+
 import { store, useStore } from '../store'
 import { Icon } from './Icon'
+
+const minWidth = 160
+const maxWidth = 400
 
 // Sidebar lists the workspaces and what in each needs you, so a thread that
 // waits in another workspace is one look away. ⌘B hides it for focus.
@@ -10,8 +15,37 @@ export function Sidebar() {
   const artifacts = useStore((s) => s.artifacts)
   const leader = useStore((s) => s.settings.leader)
   const lead = leader === '<Space>' ? 'Space' : leader.replace(/^<|>$/g, '')
+  const saved = useStore((s) => s.settings.sidebarWidth)
+  // While a drag runs the width is local; it is saved when the drag ends.
+  const [dragged, setDragged] = useState<number | null>(null)
+  const width = dragged ?? saved
+  const drag = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const x0 = e.clientX
+    let w = width
+    const move = (ev: MouseEvent) => {
+      w = Math.min(Math.max(width + ev.clientX - x0, minWidth), maxWidth)
+      setDragged(w)
+    }
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      document.body.classList.remove('resizing')
+      store.setSettings({ sidebarWidth: w })
+      setDragged(null)
+    }
+    document.body.classList.add('resizing')
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
   return (
-    <nav className="sidebar">
+    <nav className="sidebar" style={{ flexBasis: width }}>
+      <div
+        className="sb-resizer"
+        onMouseDown={drag}
+        onDoubleClick={() => store.setSettings({ sidebarWidth: 216 })}
+        data-tip="Drag to resize · double-click resets"
+      />
       <div className="sb-section">
         {open && artifacts.length > 0 && (
           <button className="sb-item" onClick={() => store.openPicker('artifacts', true)}>
@@ -76,7 +110,7 @@ export function Sidebar() {
         </button>
         <button className="sb-item" onClick={() => void store.ex('help')}>
           <Icon name="keyboard" className="sb-icon" />
-          <span className="sb-label">Keys and commands</span>
+          <span className="sb-label">Help</span>
           <kbd className="sb-kbd shown">{lead} h</kbd>
         </button>
       </div>

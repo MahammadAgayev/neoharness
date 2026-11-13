@@ -103,7 +103,8 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   a click on the model under the prompt opens it too. The choice holds for
   the thread from its next turn.
 - **A sidebar** of workspaces, each with what waits or runs in it. `⌘B` or
-  `:set nosidebar` hides it. The work sits on a raised panel beside it, and
+  `:set nosidebar` hides it. Drag its edge to resize it; a double-click on
+  the edge resets it. The work sits on a raised panel beside it, and
   icons are Lucide's line icons (ISC). The Rosé Pine text is drawn a step
   closer to black or white than the TUI's, so it reads sharp in a window.
 - **The mouse**: buttons on permission cards, a click on a thread, an

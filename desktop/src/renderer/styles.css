@@ -1687,7 +1687,9 @@ kbd {
 
 /* sidebar */
 .sidebar {
+  position: relative;
   flex: 0 0 216px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--shell);
@@ -1793,4 +1795,17 @@ kbd {
 }
 .choice:focus {
   outline: none;
+}
+
+.sb-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -4px;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.sb-resizer:hover {
+  background: linear-gradient(to right, transparent 3px, color-mix(in srgb, var(--iris) 40%, transparent) 3px, transparent 5px);
 }
