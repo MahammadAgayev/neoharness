@@ -62,7 +62,16 @@ const theme = EditorView.theme({
   '.cm-fat-cursor': { background: 'var(--iris) !important', color: 'var(--base) !important' },
   // Only the editor with focus shows a cursor: one place to type.
   '&:not(.cm-focused) .cm-cursorLayer': { display: 'none' },
-  '.cm-placeholder': { color: 'var(--muted)' },
+  // One line, cut short in a narrow column, so the box keeps its height.
+  '.cm-placeholder': {
+    color: 'var(--muted)',
+    display: 'inline-block',
+    maxWidth: '100%',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    verticalAlign: 'top',
+  },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': { background: 'var(--hl-med) !important' },
   '.cm-tooltip': { background: 'var(--surface)', border: '1px solid var(--overlay)', borderRadius: '8px', overflow: 'hidden' },
   '.cm-tooltip-autocomplete ul li[aria-selected]': { background: 'var(--hl-med)', color: 'var(--text)' },

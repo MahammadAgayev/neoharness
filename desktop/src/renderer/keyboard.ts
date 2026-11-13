@@ -36,6 +36,7 @@ const appMaps: Record<string, Action> = {
   '<leader>A': c('always'),
   '<leader>x': c('deny'),
   '<leader>s': c('settings'),
+  '<leader>h': c('help'),
   '<leader>d': c('new-doc'),
   '<leader>e': w('fold'),
   '<leader>y': w('yank'),

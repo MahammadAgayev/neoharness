@@ -588,7 +588,7 @@ kbd {
   gap: 8px;
   max-width: 860px;
   width: calc(100% - 32px);
-  margin: 4px auto 12px;
+  margin: 4px auto 0;
   padding: 10px 14px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -598,22 +598,39 @@ kbd {
   cursor: text;
   transition: border-color 120ms var(--ease), box-shadow 120ms var(--ease);
 }
+.prompt:last-child {
+  margin-bottom: 12px;
+}
 .prompt.active:focus-within {
   border-color: color-mix(in srgb, var(--iris) 60%, transparent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--iris) 14%, transparent);
 }
+/* Under the box, close to it, one line. The parts come most important
+   first and lay out from the right: what does not fit wraps to a hidden
+   second line, so a narrow column drops the host before the cost. */
 .prompt-info {
-  flex: 0 1 auto;
-  align-self: flex-end;
   display: flex;
-  gap: 10px;
-  min-width: 0;
-  position: sticky;
-  bottom: 0;
+  flex-direction: row-reverse;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  height: calc(1.4em + 3px);
+  gap: 0 10px;
+  max-width: 860px;
+  width: calc(100% - 32px);
+  margin: 0 auto 6px;
+  padding: 3px 4px 0;
   font-size: 12px;
-  line-height: 1.9;
+  line-height: 1.4;
   white-space: nowrap;
   overflow: hidden;
+}
+.prompt-info .sl-part + .sl-part::before {
+  content: none;
+}
+.prompt-info .sl-part + .sl-part::after {
+  content: '·';
+  color: var(--muted);
+  margin-left: 10px;
 }
 .prompt-mark {
   color: var(--iris);

@@ -16,9 +16,9 @@ function shortModel(m: string): string {
   return m.replace(/^claude-/, '').replace('[', ' ').replace(/\]$/, '')
 }
 
-// PromptInfo is at the right of the prompt, as in Linear's comment box:
-// what the next message goes with, and what the turns cost, with no row
-// of its own.
+// PromptInfo is the line under the prompt, as in Claude Code: what the next
+// message goes with, and what the turns cost. It has a line of its own, so
+// a narrow column never squeezes the text you write.
 function PromptInfo(props: { v: ThreadView | undefined; focused: boolean }) {
   const { v, focused } = props
   const warn = useStore((s) => s.settings.compactwarn)
@@ -42,7 +42,7 @@ function PromptInfo(props: { v: ThreadView | undefined; focused: boolean }) {
   if (!right.length) return null
   return (
     <div className="prompt-info">
-      {right.map((p, i) => (
+      {right.reverse().map((p, i) => (
         <span key={i} className={`sl-part t-${focused || p.tone === 'love' ? p.tone : 'muted'}`} data-tip={p.title}>
           {p.text}
         </span>
@@ -572,8 +572,8 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>
         <span className="prompt-mark">›</span>
         <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
-        <PromptInfo v={v} focused={focused} />
       </div>
+      <PromptInfo v={v} focused={focused} />
     </div>
   )
 }

@@ -77,7 +77,7 @@ export function Sidebar() {
         <button className="sb-item" onClick={() => void store.ex('help')}>
           <Icon name="keyboard" className="sb-icon" />
           <span className="sb-label">Keys and commands</span>
-          <kbd className="sb-kbd shown">⌘/</kbd>
+          <kbd className="sb-kbd shown">{lead} H</kbd>
         </button>
       </div>
     </nav>

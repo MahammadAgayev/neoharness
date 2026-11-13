@@ -295,6 +295,10 @@ test('<leader> shows what can follow at once, as which-key, and <leader>s opens 
   await page.keyboard.press('s')
   await expect(page.locator('.settings')).toBeVisible()
   await page.keyboard.press('Escape')
+  await page.keyboard.press('Space')
+  await page.keyboard.press('h')
+  await expect(page.locator('.window.help')).toBeVisible()
+  await page.keyboard.press('Control+o')
 })
 
 test('Ctrl V in search opens the thread on the right, with the caret in its prompt', async () => {
@@ -405,6 +409,35 @@ test('without Vim a window closes with ⌘W from its prompt, or with the × on i
   await page.keyboard.type(':')
   await page.keyboard.type('set vim')
   await page.keyboard.press('Enter')
+})
+
+test('in a narrow column the prompt keeps its width and one line, the model and cost under it', async () => {
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  hub.setView(
+    view('billing', 'coordinator', {
+      location: { dir: '/tmp/fake', host: 'build-box.example.com' },
+      model: 'claude-opus-5-5[1m]',
+      context: 9000,
+      contextWindow: 1000000,
+      cost: 0.75,
+      branch: 'main',
+    }),
+  )
+  await page.keyboard.press('Meta+Backslash')
+  await page.keyboard.press('Meta+Backslash')
+  const prompts = page.locator('.pane .prompt')
+  await expect(page.locator('.pane .prompt-info').first()).toContainText('opus-5-5')
+  for (const p of await prompts.all()) {
+    const editor = await p.locator('.prompt-editor').boundingBox()
+    const box = await p.boundingBox()
+    expect(editor!.width).toBeGreaterThan(box!.width * 0.6)
+    expect(box!.height).toBeLessThan(60)
+  }
+  await shot('41-narrow-prompt')
+  await page.keyboard.press('Meta+w')
+  await page.keyboard.press('Meta+w')
 })
 
 test('a hub that stops says so and offers to start it', async () => {

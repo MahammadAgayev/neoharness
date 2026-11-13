@@ -60,7 +60,7 @@ export const commands: Command[] = [
   { id: 'new-doc', title: 'New doc', keys: ['<leader>d', '⌘⇧N', ':doc <name>'], run: () => s.openNewDoc() },
   { id: 'settings', title: 'Settings', keys: ['<leader>s', '⌘,', ':settings'], run: () => s.openSettings() },
   { id: 'start-hub', title: 'Start the hub', keys: ['neoharness hub start'], run: () => void s.startHub() },
-  { id: 'help', title: 'Keys and commands', keys: [':help', '⌘/'], run: () => void s.ex('help') },
+  { id: 'help', title: 'Keys and commands', keys: ['<leader>h', '⌘/', ':help'], run: () => void s.ex('help') },
 ]
 
 export function command(id: string): Command {
