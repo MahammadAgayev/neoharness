@@ -490,6 +490,27 @@ test('/model picks from a list, as in Claude Code, and so does a click on the mo
   await expect(choice).toHaveCount(0)
 })
 
+test('with the list open, Enter and Tab take the command, and a half-typed one is never sent', async () => {
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  await page.keyboard.press('i')
+  const sent = hub.calls.filter((c) => c.path.endsWith('/messages')).length
+  const prompt = page.locator('.pane.focused .prompt .cm-content')
+  await page.keyboard.type('/mod')
+  await expect(page.locator('.cm-tooltip-autocomplete', { hasText: 'model' })).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(prompt).toHaveText(/^\/model/)
+  expect(hub.calls.filter((c) => c.path.endsWith('/messages')).length).toBe(sent)
+  await page.keyboard.press('Control+u')
+  await page.keyboard.type('/comp')
+  await expect(page.locator('.cm-tooltip-autocomplete', { hasText: 'compact' })).toBeVisible()
+  await page.keyboard.press('Tab')
+  await expect(prompt).toHaveText(/^\/compact/)
+  await page.keyboard.press('Control+u')
+  await normal()
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

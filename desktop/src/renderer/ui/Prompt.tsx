@@ -1,4 +1,4 @@
-import { autocompletion, completionKeymap, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
+import { acceptCompletion, autocompletion, completionKeymap, completionStatus, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
 import { defaultKeymap, deleteGroupBackward, deleteToLineStart, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
@@ -156,7 +156,10 @@ export function Prompt(props: {
           vimComp.current.of(store.state.settings.vim ? vim({ status: false }) : []),
           Prec.highest(
             keymap.of([
-              { key: 'Enter', run: send },
+              // With the list open, Enter and Tab take the chosen item, as in
+              // Claude Code: a half-typed /mod is never sent.
+              { key: 'Enter', run: (v) => (completionStatus(v.state) === 'active' ? acceptCompletion(v) : send(v)) },
+              { key: 'Tab', run: acceptCompletion },
               { key: 'Mod-Enter', run: send },
               { key: 'Shift-Enter', run: newline },
               { key: 'Ctrl-j', run: (v) => (insertMode(v) ? newline(v) : false) },
