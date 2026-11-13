@@ -26,6 +26,7 @@ client and the tcell simulation screen.
 | `internal/prompts` | system prompts and notes for agents |
 | `internal/linediff` | line diff for the artifact merge and diff mode |
 | `internal/architecture` | tests that enforce the import rules |
+| `desktop/` | the macOS app (Electron, React); a hub API client like the TUI, see [desktop.md](desktop.md) |
 
 Import rules, enforced by tests:
 

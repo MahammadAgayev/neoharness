@@ -12,6 +12,8 @@ Read first:
   to run a scratch hub end to end.
 - [docs/usage.md](docs/usage.md) and [docs/configuration.md](docs/configuration.md):
   what the person sees and sets.
+- [docs/desktop.md](docs/desktop.md): the macOS app in `desktop/`, on the
+  same hub. When a TUI key or command changes, change the app's too.
 
 ## Build and test
 

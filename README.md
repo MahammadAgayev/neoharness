@@ -30,6 +30,10 @@ run on when you close the TUI. `neoharness hub stop` stops it. Agents talk to
 it through an MCP server that it adds to each session, so you change nothing
 in your Claude setup.
 
+A macOS desktop app in `desktop/` shares the same hub: the same keys, a
+search over everything, color schemes, and keys as in Claude Code for those
+who do not use Vim. See [docs/desktop.md](docs/desktop.md).
+
 ## Install
 
 You need Go 1.26 and `claude` on your PATH.
