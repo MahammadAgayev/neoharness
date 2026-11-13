@@ -3430,3 +3430,14 @@ func TestCompactWarning(t *testing.T) {
 		t.Fatal("the warning belongs in the status line, not a toast")
 	}
 }
+
+// An old message must not read as the answer to the next command.
+func TestColonClearsTheLastMessage(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.a.notify("allow · Bash · api", h.a.th.Pine)
+	h.press(":threads", "<CR>")
+	if h.a.notice != "" {
+		t.Fatalf("after :threads the bottom line still says %q", h.a.notice)
+	}
+}

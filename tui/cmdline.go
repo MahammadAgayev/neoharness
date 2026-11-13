@@ -40,6 +40,7 @@ func (a *App) startCmd(prefix rune) {
 		a.cmd.history = map[rune][]string{}
 	}
 	a.cmd.prefix = prefix
+	a.notice = ""
 	a.cmd.text, a.cmd.cur = nil, 0
 	a.cmd.hidx = len(a.cmd.history[prefix])
 	a.cmd.comp = nil
