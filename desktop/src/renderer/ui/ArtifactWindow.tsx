@@ -30,7 +30,7 @@ const docTheme = EditorView.theme({
   '&.cm-focused': { outline: 'none' },
   '.cm-scroller': { fontFamily: 'var(--font-text)', lineHeight: '1.7' },
   // The column of a document, as a page.
-  '.cm-content': { caretColor: 'var(--iris)', padding: '32px max(32px, calc((100% - 760px) / 2)) 40vh' },
+  '.cm-content': { caretColor: 'var(--iris)', padding: '32px max(32px, calc((100% - 680px) / 2)) 40vh' },
   '.cm-cursor': { borderLeftColor: 'var(--iris)', borderLeftWidth: '2px' },
   '.cm-fat-cursor': { background: 'var(--iris) !important', color: 'var(--base) !important' },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { background: 'var(--hl-med) !important' },

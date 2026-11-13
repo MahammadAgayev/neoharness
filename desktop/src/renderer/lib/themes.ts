@@ -91,30 +91,75 @@ export function resolveScheme(name: string, systemDark: boolean): Palette {
   return schemes[name]
 }
 
-export function applyScheme(p: Palette, root: HTMLElement): void {
-  // Rosé Pine keeps its text soft; a window of work reads sharper with the
-  // text a step closer to black or white, and the muted text a step up.
-  const ink = p.dark ? '#fff' : '#000'
-  const vars: Record<string, string> = {
+type RGB = [number, number, number]
+
+const rgb = (hex: string): RGB => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as RGB
+const hex = (c: RGB): string => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
+const mix = (a: string, b: string, p: number): string => {
+  const x = rgb(a)
+  const y = rgb(b)
+  return hex(x.map((v, i) => v * p + y[i] * (1 - p)) as RGB)
+}
+
+function luminance(c: string): number {
+  const [r, g, b] = rgb(c).map((v) => {
+    const s = v / 255
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+// contrast is the WCAG ratio of two colors, from 1 to 21.
+export function contrast(a: string, b: string): number {
+  const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m)
+  return (x + 0.05) / (y + 0.05)
+}
+
+// legible takes c toward black or white, a step at a time, until it reads at
+// ratio on every background. The hue stays the scheme's.
+function legible(c: string, ink: string, bgs: string[], ratio: number): string {
+  for (let p = 1; p >= 0; p -= 0.02) {
+    const m = mix(c, ink, p)
+    if (bgs.every((b) => contrast(m, b) >= ratio)) return m
+  }
+  return ink
+}
+
+// The contrast of each level of text. Rosé Pine keeps its text soft for code
+// in a terminal; a window of prose and labels needs darker ink, and no text
+// below 4.5, the WCAG minimum, even the muted one.
+export const ratios = { text: 12, subtle: 6.5, muted: 4.6 }
+
+export function colors(p: Palette): Record<string, string> {
+  const ink = p.dark ? '#ffffff' : '#000000'
+  // The shell (title bar, sidebar) sits under the panel the work is on; in
+  // the light schemes only a little darker, so the edges stay calm.
+  const shell = p.dark ? mix(p.base, '#000000', 0.7) : mix(p.overlay, p.surface, 0.55)
+  const panel = p.dark ? p.base : p.surface
+  const bgs = [shell, panel, p.surface]
+  return {
     '--base': p.base,
     '--surface': p.surface,
     '--overlay': p.overlay,
-    // The shell (title bar, sidebar) sits under the panel the work is on.
-    '--shell': p.dark ? `color-mix(in srgb, ${p.base} 70%, #000)` : p.overlay,
-    '--panel': p.dark ? p.base : p.surface,
-    '--muted': `color-mix(in srgb, ${p.muted} 55%, ${p.subtle})`,
-    '--subtle': `color-mix(in srgb, ${p.subtle} 85%, ${ink})`,
-    '--text': `color-mix(in srgb, ${p.text} ${p.dark ? 88 : 75}%, ${ink})`,
-    '--love': p.love,
-    '--gold': p.gold,
-    '--rose': p.rose,
-    '--pine': p.pine,
-    '--foam': p.foam,
-    '--iris': p.iris,
+    '--shell': shell,
+    '--panel': panel,
+    '--muted': legible(mix(p.muted, p.subtle, 0.55), ink, bgs, ratios.muted),
+    '--subtle': legible(p.subtle, ink, bgs, ratios.subtle),
+    '--text': legible(p.text, ink, bgs, ratios.text),
+    // The accents color text too: a state, a link, a heading.
+    '--love': legible(p.love, ink, bgs, ratios.muted),
+    '--gold': legible(p.gold, ink, bgs, ratios.muted),
+    '--rose': legible(p.rose, ink, bgs, ratios.muted),
+    '--pine': legible(p.pine, ink, bgs, ratios.muted),
+    '--foam': legible(p.foam, ink, bgs, ratios.muted),
+    '--iris': legible(p.iris, ink, bgs, ratios.muted),
     '--hl-low': p.hlLow,
     '--hl-med': p.hlMed,
     '--hl-high': p.hlHigh,
   }
-  for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v)
+}
+
+export function applyScheme(p: Palette, root: HTMLElement): void {
+  for (const [k, v] of Object.entries(colors(p))) root.style.setProperty(k, v)
   root.style.colorScheme = p.dark ? 'dark' : 'light'
 }

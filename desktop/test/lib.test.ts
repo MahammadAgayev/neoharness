@@ -13,7 +13,7 @@ import { parseEx, words } from '../src/renderer/lib/ex'
 import { fuzzy, fuzzyScore, grep } from '../src/renderer/lib/fuzzy'
 import { keyName, Sequencer, split } from '../src/renderer/lib/keys'
 import { hunks, lines, take } from '../src/renderer/lib/linediff'
-import { resolveScheme, schemes } from '../src/renderer/lib/themes'
+import { colors, contrast, ratios, resolveScheme, schemes } from '../src/renderer/lib/themes'
 import { keep, viewToast, type Toast } from '../src/renderer/lib/toasts'
 import { addEvent, fromEvents, lastText, lastUserMessage, shortTool, type Block } from '../src/renderer/lib/transcript'
 
@@ -260,5 +260,26 @@ describe('next', () => {
     ])
     s.feed('p')
     expect(s.next().map((n) => n.keys.join(''))).toEqual(['t', 'a'])
+  })
+})
+
+describe('schemes', () => {
+  it('every level of text reads at its contrast on the panel and the shell', () => {
+    for (const [name, p] of Object.entries(schemes)) {
+      const c = colors(p)
+      for (const level of ['text', 'subtle', 'muted'] as const) {
+        for (const bg of ['--panel', '--shell', '--surface']) {
+          expect(contrast(c[`--${level}`], c[bg]), `${name} ${level} on ${bg}`).toBeGreaterThanOrEqual(ratios[level])
+        }
+      }
+      for (const accent of ['love', 'gold', 'rose', 'pine', 'foam', 'iris']) {
+        for (const bg of ['--panel', '--shell', '--surface']) {
+          expect(contrast(c[`--${accent}`], c[bg]), `${name} ${accent} on ${bg}`).toBeGreaterThanOrEqual(ratios.muted)
+        }
+      }
+    }
+  })
+  it('keeps the paper of the light scheme', () => {
+    expect(colors(schemes['rose-pine-dawn'])['--panel']).toBe('#fffaf3')
   })
 })
