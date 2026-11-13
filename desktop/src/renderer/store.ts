@@ -308,7 +308,6 @@ class Store {
           // A held event may be in the history that loaded with it already.
           if (replay && this.loaded[u.thread]?.some((x) => JSON.stringify(x) === JSON.stringify(e))) return
           this.set({ chats: { ...s.chats, [u.thread]: addEvent(s.chats[u.thread] ?? [], e) } })
-          if (e.kind === 'ask') this.alert(u.workspace, u.thread, `asks: ${e.text ?? ''}`)
         } else if (e.kind === 'text' && u.thread) {
           this.awayText[`${u.workspace}\0${u.thread}`] = (e.text ?? '').trim().split('\n')[0] ?? ''
         }
@@ -400,11 +399,6 @@ class Store {
     const toasts = s.toasts.filter((o) => !(o.workspace === t.workspace && o.thread === t.thread))
     this.set({ toasts: [...toasts, t], log: [...s.log, t].slice(-500) })
     if (spec.needsYou) nh().notify(`${spec.workspace} · ${spec.thread}`, spec.body, { workspace: spec.workspace, thread: spec.thread })
-  }
-
-  // alert sends a question to macOS too: the view's change toasts it in the app.
-  private alert(workspace: string, thread: string, body: string): void {
-    if (!document.hasFocus()) nh().notify(`${workspace} · ${thread}`, body, { workspace, thread })
   }
 
   visibleToasts(): Toast[] {

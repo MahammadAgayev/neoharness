@@ -89,8 +89,9 @@ test('/ completes commands in the prompt', async () => {
   await page.keyboard.type('/cl')
   await expect(page.locator('.cm-tooltip-autocomplete', { hasText: 'clear' })).toBeVisible()
   await shot('23-completion')
-  await page.keyboard.press('Escape')
+  // ⌃U clears the line in Insert, as in the TUI.
   await page.keyboard.press('Control+u')
+  await expect(page.locator('.prompt .cm-focused .cm-placeholder')).toBeVisible()
   await normal()
 })
 
@@ -138,6 +139,33 @@ test('an artifact opens, edits, saves, and a newer version is merged or forced',
   await expect(page.locator('.conflict')).toHaveCount(0)
   await page.keyboard.press('Control+o')
   await expect(page.locator('.statusline .sl-name', { hasText: /^api$/ })).toBeVisible()
+})
+
+test('without Vim, keys work as in Claude Code: ⌃S stashes, Esc takes your message back', async () => {
+  await page.keyboard.type(':')
+  await page.keyboard.type('set novim')
+  await page.keyboard.press('Enter')
+  hub.setView(view('demo', 'api', { state: 'running' }))
+  await page.keyboard.press('i')
+  const prompt = page.locator('.window.chat', { has: page.locator('.sl-name', { hasText: /^api$/ }) }).locator('.prompt .cm-content')
+  await expect(prompt).toBeFocused()
+  await page.keyboard.type('a draft for later')
+  await page.keyboard.press('Control+s')
+  await expect(prompt.locator('.cm-placeholder')).toBeVisible()
+  // Esc stops the running turn and brings back your last message.
+  await page.keyboard.press('Escape')
+  await expect.poll(() => hub.calls.some((c) => c.path.endsWith('/stop'))).toBe(true)
+  await expect(prompt).toHaveText('8080')
+  await page.keyboard.type(' please')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => hub.calls.filter((c) => c.path.endsWith('/messages')).pop()?.body).toMatchObject({ text: '8080 please' })
+  // The stash comes back after the send.
+  await expect(prompt).toHaveText('a draft for later')
+  await shot('27-novim')
+  await page.keyboard.press('Control+u')
+  await page.keyboard.type(':')
+  await page.keyboard.type('set vim')
+  await page.keyboard.press('Enter')
 })
 
 test('a hub that stops says so and offers to start it', async () => {

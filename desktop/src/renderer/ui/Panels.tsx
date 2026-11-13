@@ -42,6 +42,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['⌃S  ⌃X ⌃S', 'stash the draft; it comes back after you send'],
       ['!<command>', "run it in the thread's folder; the output goes with your next message"],
       ['⇧<CR>  <C-j>', 'new line'],
+      ['<C-u>  <C-w>', 'delete to the start of the line, a word back (in Insert)'],
       ['/  @', 'complete a command, a thread or a file'],
       ['p', 'put the last yank in the prompt'],
     ],

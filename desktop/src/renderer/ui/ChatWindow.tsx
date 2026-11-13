@@ -286,7 +286,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
     store.updateWin(win.id, { cursor: -1, follow: true })
     prompts.get(win.id)?.focus(insert)
   }
-  const matches = (q: string) => {
+  const matches = (q: string): number[] => {
     if (!q) return [] as number[]
     const fold = q.toLowerCase() === q
     const out: number[] = []
@@ -306,6 +306,8 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
     const next = d > 0 ? (ms.find((i) => i > from) ?? ms[0]) : ([...ms].reverse().find((i) => i < from) ?? ms[ms.length - 1])
     setCursor(next)
   }
+
+  const matched = useMemo(() => new Set(matches(query)), [query, blocks])
 
   // Register the window's keys.
   const handle = (a: WinAction, count: number): boolean => {
@@ -502,7 +504,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
             <div
               key={b.key}
               data-i={i}
-              className={`row k-${b.kind} ${focused && cursor === i ? 'cursor' : ''} ${query && matches(query).includes(i) ? 'match' : ''}`}
+              className={`row k-${b.kind} ${focused && cursor === i ? 'cursor' : ''} ${matched.has(i) ? 'match' : ''}`}
               onMouseDown={(e) => {
                 if (e.detail === 2) {
                   store.updateWin(win.id, { cursor: i, follow: false })

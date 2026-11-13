@@ -125,7 +125,8 @@ export class FakeHub {
       if (kind === 'threads' && sub === 'events') return json(this.events[`${ws}/${name}`] ?? [])
       if (kind === 'threads' && sub === 'completions') return json({ commands: ['/clear', '/compact', '/model'], files: ['main.go', 'go.mod'], threads: ['api'] })
       if (kind === 'threads' && sub === 'messages') {
-        this.event(ws, name, { kind: 'message', from: 'user', text: body.text })
+        // An empty message with now sends the queue; it is no message.
+        if (body.text) this.event(ws, name, { kind: 'message', from: 'user', text: body.text })
         return json({})
       }
       if (kind === 'threads' && sub === 'answer') {

@@ -28,6 +28,12 @@ function WindowView(props: { win: Win; focused: boolean }) {
 
 function Layout() {
   const layout = useStore((s) => s.layout)
+  const workspace = useStore((s) => s.workspace)
+  const focused = layout.cols.flatMap((c) => c.wins).find((w) => w.id === layout.focus)
+  const title = focused?.buf.kind === 'chat' ? focused.buf.thread : focused?.buf.kind === 'artifact' ? focused.buf.name : focused?.buf.kind
+  useEffect(() => {
+    document.title = title ? `${workspace} · ${title}` : workspace || 'neoharness'
+  }, [workspace, title])
   const [sizes, setSizes] = useState<Record<number, number>>({})
   const drag = (colId: number, start: number, width: number) => (e: React.MouseEvent) => {
     e.preventDefault()

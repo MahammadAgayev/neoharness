@@ -1,5 +1,5 @@
 import { autocompletion, completionKeymap, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { defaultKeymap, deleteGroupBackward, deleteToLineStart, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { EditorView, keymap, placeholder, tooltips } from '@codemirror/view'
@@ -71,6 +71,11 @@ const theme = EditorView.theme({
   '.cm-completionDetail': { color: 'var(--muted)', fontStyle: 'normal', marginLeft: '1em' },
 })
 
+// insertMode says the keys write: always without Vim, in Insert with it.
+function insertMode(v: EditorView): boolean {
+  return !store.state.settings.vim || !!getCM(v)?.state.vim?.insertMode
+}
+
 export function Prompt(props: {
   win: number
   thread: string
@@ -138,8 +143,11 @@ export function Prompt(props: {
               { key: 'Enter', run: send },
               { key: 'Mod-Enter', run: send },
               { key: 'Shift-Enter', run: newline },
-              { key: 'Ctrl-j', run: (v) => (store.state.settings.vim && !getCM(v)?.state.vim?.insertMode ? false : newline(v)) },
+              { key: 'Ctrl-j', run: (v) => (insertMode(v) ? newline(v) : false) },
               { key: 'Alt-Enter', run: newline },
+              // As in the TUI's Insert mode and a shell.
+              { key: 'Ctrl-u', run: (v) => (insertMode(v) ? deleteToLineStart(v) : false) },
+              { key: 'Ctrl-w', run: (v) => (insertMode(v) ? deleteGroupBackward(v) : false) },
               // ⌃X ⌃S stashes as ⌃S does: ⌃X alone does nothing here.
               { key: 'Ctrl-x', run: () => true },
               { key: 'Ctrl-s', run: stash },
@@ -204,6 +212,7 @@ export function Prompt(props: {
     const api: PromptApi = {
       view,
       focus(insert) {
+        if (!view.hasFocus) view.dispatch({ selection: { anchor: view.state.doc.length } })
         view.focus()
         const cm = getCM(view)
         if (insert && cm && store.state.settings.vim && !cm.state.vim?.insertMode) {
