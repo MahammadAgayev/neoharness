@@ -88,10 +88,10 @@ export const calls = {
     method: 'GET',
     path: `${th(a.workspace, a.thread)}/choices`,
   }),
-  send: (a: { workspace: string; thread: string; text: string; now?: boolean }): Req => ({
+  send: (a: { workspace: string; thread: string; text: string; images?: string[]; now?: boolean }): Req => ({
     method: 'POST',
     path: `${th(a.workspace, a.thread)}/messages`,
-    body: { text: a.text, now: a.now ?? false },
+    body: { text: a.text, images: a.images ?? [], now: a.now ?? false },
   }),
   stop: (a: { workspace: string; thread: string }): Req => ({
     method: 'POST',

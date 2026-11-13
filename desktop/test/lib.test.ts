@@ -12,6 +12,7 @@ import type { Event, ThreadView } from '../src/shared/model'
 import { parseEx, words } from '../src/renderer/lib/ex'
 import { fuzzy, fuzzyScore, grep } from '../src/renderer/lib/fuzzy'
 import { keyName, Sequencer, split } from '../src/renderer/lib/keys'
+import { imageToken, nextImage, used, withImages } from '../src/renderer/lib/images'
 import { hunks, lines, take } from '../src/renderer/lib/linediff'
 import { colors, contrast, ratios, resolveScheme, schemes } from '../src/renderer/lib/themes'
 import { endHidesError, keep, viewToast, type Toast } from '../src/renderer/lib/toasts'
@@ -203,7 +204,7 @@ describe('hub', () => {
     expect(calls.send({ workspace: 'a b', thread: 'c', text: 'hi' })).toEqual({
       method: 'POST',
       path: '/workspaces/a%20b/threads/c/messages',
-      body: { text: 'hi', now: false },
+      body: { text: 'hi', images: [], now: false },
     })
     expect(calls.unqueue({ workspace: 'w', thread: 't', at: '2026-11-13T10:00:00.5+01:00' }).path).toBe(
       '/workspaces/w/threads/t/queue?at=2026-11-13T10%3A00%3A00.5%2B01%3A00',
@@ -293,5 +294,26 @@ describe('schemes', () => {
   })
   it('keeps the paper of the light scheme', () => {
     expect(colors(schemes['rose-pine-dawn'])['--panel']).toBe('#fffaf3')
+  })
+})
+
+describe('images', () => {
+  const imgs = new Map([
+    [1, 'one'],
+    [2, 'two'],
+    [3, 'three'],
+  ])
+  it('sends only the images whose token is still in the text, numbered from 1', () => {
+    expect(withImages('see [image 3] and [image 1], not [image 9]', imgs)).toEqual({
+      text: 'see [image 2] and [image 1], not [image 9]',
+      images: ['one', 'three'],
+    })
+    expect(withImages('no picture', imgs)).toEqual({ text: 'no picture', images: [] })
+  })
+  it('numbers a new image past every one pasted', () => {
+    expect(nextImage(new Map())).toBe(1)
+    expect(nextImage(imgs)).toBe(4)
+    expect(imageToken(4)).toBe('[image 4]')
+    expect(used('[image 2][image 2]', imgs)).toEqual([2])
   })
 })

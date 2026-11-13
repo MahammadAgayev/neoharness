@@ -149,6 +149,13 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   the end of a window's status line closes it (`⌘W`). A right
   click on a thread or a block gives its actions (open in a split,
   resolve, stop, copy, delete); hints show on hover.
+- **Images**: paste a picture (`⌘V`) into the prompt, and it goes to the
+  agent with the message, as in Claude Code. The prompt shows it as a
+  small `[image 1]`; delete the token and the image does not go. Up to 5
+  per message, png, jpeg, gif or webp. A big one is made smaller first, to
+  1568 pixels on its long side, the size the model works at. Taking the
+  message back (`u`) brings its images back too. The TUI does the same with
+  `:image`, as a terminal cannot paste a picture.
 - **Color schemes**: `:colorscheme system` follows the macOS appearance;
   `rose-pine-moon` (the TUI's), `rose-pine` and `rose-pine-dawn` (light).
 - **macOS notifications**, quiet: only what needs you (a permission, a
@@ -191,7 +198,7 @@ e2e` writes the screenshots named here to `test-results/`.
 ## Tests
 
 ```sh
-npm test           # unit tests: transcript, toasts, keys, search, themes
+npm test           # unit tests: transcript, toasts, keys, search, themes, image tokens
 npm run e2e        # the app on a scratch hub and on a fake hub, with screenshots in test-results/
 NEOHARNESS_APP=dist/neoharness-darwin-arm64/neoharness.app/Contents/MacOS/neoharness npx playwright test cards   # the packaged app
 NEOHARNESS_LIVE=1 npx playwright test live   # one real turn with haiku

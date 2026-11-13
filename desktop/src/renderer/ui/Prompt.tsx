@@ -2,10 +2,11 @@ import { acceptCompletion, autocompletion, completionKeymap, completionStatus, t
 import { defaultKeymap, deleteGroupBackward, deleteToLineStart, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
-import { EditorView, keymap, placeholder, tooltips } from '@codemirror/view'
+import { Decoration, EditorView, keymap, MatchDecorator, placeholder, tooltips, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import { getCM, vim, Vim } from '@replit/codemirror-vim'
 import { useEffect, useRef, useState } from 'react'
 
+import { fit, imageToken, maxImages, nextImage, used, withImages } from '../lib/images'
 import { store, useStore } from '../store'
 import { Icon } from './Icon'
 import { editorKeys, editors, typeahead } from './registry'
@@ -15,6 +16,25 @@ const drafts = new Map<string, string>()
 // stashes are Ctrl+S's: the draft put aside until the next send, as in
 // Claude Code.
 const stashes = new Map<string, string>()
+// pasted are the images pasted per thread, as base64 by number; sent is the
+// last message sent with images, so taking it back brings them back too.
+const pasted = new Map<string, Map<number, string>>()
+const sent = new Map<string, { text: string; images: Map<number, string> }>()
+
+const imageMark = Decoration.mark({ class: 'cm-image' })
+const imageTokens = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet
+    m = new MatchDecorator({ regexp: /\[image \d+\]/g, decoration: imageMark })
+    constructor(view: EditorView) {
+      this.decorations = this.m.createDeco(view)
+    }
+    update(u: ViewUpdate) {
+      this.decorations = this.m.updateDeco(u, this.decorations)
+    }
+  },
+  { decorations: (v) => v.decorations },
+)
 
 export interface PromptApi {
   focus(insert: boolean): void
@@ -79,6 +99,7 @@ const theme = EditorView.theme({
   '.cm-tooltip-autocomplete ul': { fontFamily: 'var(--font-text) !important', padding: '4px' },
   '.cm-tooltip-autocomplete ul li': { padding: '3px 10px !important', borderRadius: '6px' },
   '.cm-completionDetail': { color: 'var(--muted)', fontStyle: 'normal', marginLeft: '1em' },
+  '.cm-image': { color: 'var(--subtle)', background: 'var(--hl-low)', borderRadius: '4px' },
 })
 
 // insertMode says the keys write: always without Vim, in Insert with it.
@@ -104,8 +125,10 @@ export function Prompt(props: {
 
   useEffect(() => {
     const send = (view: EditorView) => {
+      const imgs = pasted.get(thread) ?? new Map<number, string>()
       const text = view.state.doc.toString()
-      if (!text.trim()) return true
+      const out = withImages(text, imgs)
+      if (!text.trim() && !out.images.length) return true
       // A bare /model or /effort picks from a list, as in Claude Code.
       const bare = /^\/(model|effort)$/.exec(text.trim())
       if (bare) {
@@ -113,8 +136,11 @@ export function Prompt(props: {
         store.openChoice({ thread, kind: bare[1] as 'model' | 'effort' })
         return true
       }
-      void store.send(thread, text).then((ok) => {
+      void store.send(thread, out.text, out.images).then((ok) => {
         if (!ok) return
+        // A stashed draft may still name the others.
+        for (const n of used(text, imgs)) imgs.delete(n)
+        if (out.images.length) sent.set(thread, { text: out.text.trim(), images: new Map(out.images.map((d, i) => [i + 1, d])) })
         const back = stashes.get(thread) ?? ''
         stashes.delete(thread)
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: back } })
@@ -142,10 +168,33 @@ export function Prompt(props: {
           return
         }
         if (text) {
+          const last = sent.get(thread)
+          if (last?.text === text && !pasted.get(thread)?.size) pasted.set(thread, new Map(last.images))
           view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, selection: { anchor: text.length } })
         }
       })
       return true
+    }
+    const attach = async (view: EditorView, files: File[]) => {
+      const imgs = pasted.get(thread) ?? new Map<number, string>()
+      pasted.set(thread, imgs)
+      for (const f of files) {
+        if (used(view.state.doc.toString(), imgs).length >= maxImages) {
+          store.say(`a message takes at most ${maxImages} images`, 'love')
+          return
+        }
+        let data: string
+        try {
+          data = await fit(f)
+        } catch (err) {
+          store.say(`the image was not added: ${(err as Error).message}`, 'love')
+          return
+        }
+        if (!view.dom.isConnected) return
+        const n = nextImage(imgs)
+        imgs.set(n, data)
+        view.dispatch(view.state.replaceSelection(imageToken(n) + ' '))
+      }
     }
     const newline = (view: EditorView) => {
       view.dispatch(view.state.replaceSelection('\n'))
@@ -199,8 +248,16 @@ export function Prompt(props: {
             setHasText(u.state.doc.toString().trim() !== '')
             if (u.focusChanged) store.setInsert(u.view.hasFocus && (!store.state.settings.vim || !!getCM(u.view)?.state.vim?.insertMode))
           }),
+          imageTokens,
           EditorView.domEventHandlers({
             focus: () => store.focus(win),
+            paste: (e, v) => {
+              const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'))
+              if (!files.length) return false
+              e.preventDefault()
+              void attach(v, files)
+              return true
+            },
           }),
         ],
       }),
