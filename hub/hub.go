@@ -165,14 +165,51 @@ type thread struct {
 	// back to disk.
 	deleted bool
 	branch  string
+	// seen is what the hub saw the running turn do, and recap what the thread
+	// said of it, for its recap when the turn ends.
+	seen  turnSeen
+	recap *model.Recap
+}
+
+// turnSeen is what a turn did that the recap shows as fact: the commands it
+// ran, the files it edited, the artifacts it wrote.
+type turnSeen struct {
+	commands  []model.RecapCommand
+	ids       map[string]int
+	edited    []string
+	artifacts []string
+}
+
+func (s *turnSeen) empty() bool {
+	return len(s.commands) == 0 && len(s.edited) == 0 && len(s.artifacts) == 0
+}
+
+func (s *turnSeen) tool(e agent.Event, dir string) {
+	switch e.Act {
+	case agent.ActRun:
+		if s.ids == nil {
+			s.ids = map[string]int{}
+		}
+		s.ids[e.ID] = len(s.commands)
+		s.commands = append(s.commands, model.RecapCommand{Text: oneLine(e.Detail, recapLimit)})
+	case agent.ActEdit:
+		f := strings.TrimPrefix(e.Detail, strings.TrimSuffix(dir, "/")+"/")
+		if f != "" && !slices.Contains(s.edited, f) {
+			s.edited = append(s.edited, f)
+		}
+	}
+}
+
+func (s *turnSeen) failed(id string) {
+	if i, ok := s.ids[id]; ok {
+		s.commands[i].Failed = true
+	}
 }
 
 type pending struct {
 	model.Permission
-	prefix   string
-	compound bool
-	done     chan model.Decision
-	msg      string
+	done chan model.Decision
+	msg  string
 }
 
 type ident struct {
@@ -1120,6 +1157,9 @@ func (h *Hub) WriteArtifact(workspaceName, by, name, text string) (model.Artifac
 	}
 	h.event(ws, th, model.Event{Kind: model.EventArtifact, Detail: name, Text: a.Title, Version: a.Version})
 	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: by, Artifact: &a})
+	if th.busy && !slices.Contains(th.seen.artifacts, name) {
+		th.seen.artifacts = append(th.seen.artifacts, name)
+	}
 	return a, nil
 }
 
@@ -1294,6 +1334,64 @@ func (h *Hub) ReportProgress(workspaceName, name, summary string) error {
 	return nil
 }
 
+// recapLimit keeps each part of a recap to a few lines on screen.
+const recapLimit = 300
+
+// recapCommands is how many commands that did not fail a recap names.
+const recapCommands = 8
+
+// Recap keeps what a thread says its turn produced. The hub joins it with
+// what it saw the turn do when the turn ends.
+func (h *Hub) Recap(workspaceName, name, asked, outcome, open string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	_, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	if th.t.Role == model.RoleCoordinator {
+		return errors.New("the coordinator writes no recap")
+	}
+	th.recap = &model.Recap{Asked: oneLine(asked, recapLimit), Outcome: oneLine(outcome, recapLimit), Open: oneLine(open, recapLimit)}
+	return nil
+}
+
+// recapOf is a thread's recap after a turn: what the thread wrote, or else
+// the first line of its reply, with what the hub saw the turn do. A turn
+// that wrote none and did nothing keeps the old one, so a "thanks" does not
+// hide the work.
+func recapOf(old, written *model.Recap, seen turnSeen, asked, reply, failure string) *model.Recap {
+	if old != nil && written == nil && seen.empty() && failure == "" {
+		return old
+	}
+	var r model.Recap
+	if written != nil {
+		r = *written
+	} else if failure == "" {
+		r.Outcome = oneLine(firstLine(reply), recapLimit)
+		r.FromReply = r.Outcome != ""
+	}
+	if r.Asked == "" && old != nil {
+		r.Asked = old.Asked
+	}
+	if r.Asked == "" {
+		r.Asked = oneLine(firstLine(asked), recapLimit)
+	}
+	r.Ran = len(seen.commands)
+	room := recapCommands
+	for _, c := range seen.commands {
+		if c.Failed || room > 0 {
+			if !c.Failed {
+				room--
+			}
+			r.Commands = append(r.Commands, c)
+		}
+	}
+	r.Edited, r.Artifacts, r.Error = seen.edited, seen.artifacts, failure
+	r.At = time.Now().UTC()
+	return &r
+}
+
 // MaxWake is the furthest ahead a thread can ask to be woken.
 const MaxWake = 24 * time.Hour
 
@@ -1447,22 +1545,19 @@ func (h *Hub) Permission(ctx context.Context, workspaceName, name string, q agen
 		h.mu.Unlock()
 		return false, err.Error()
 	}
-	tool, detail, prefix := q.Tool, q.Detail, q.Prefix
 	for _, r := range th.t.Rules {
-		if r.Tool == tool && !q.Compound && (r.Prefix == "" || r.Prefix == prefix) {
+		if r.Tool == q.Tool && q.Scope != "" && r.Scope == q.Scope {
 			h.mu.Unlock()
 			return true, ""
 		}
 	}
 	h.nextPerm++
 	p := &pending{
-		Permission: model.Permission{ID: fmt.Sprintf("p%d", h.nextPerm), Tool: tool, Detail: detail},
-		prefix:     prefix,
-		compound:   q.Compound,
+		Permission: model.Permission{ID: fmt.Sprintf("p%d", h.nextPerm), Tool: q.Tool, Detail: q.Detail, Scope: q.Scope},
 		done:       make(chan model.Decision, 1),
 	}
 	th.perms = append(th.perms, p)
-	h.event(ws, th, model.Event{Kind: model.EventPermission, ID: p.ID, Tool: tool, Detail: detail})
+	h.event(ws, th, model.Event{Kind: model.EventPermission, ID: p.ID, Tool: q.Tool, Detail: q.Detail})
 	h.changed(ws, th)
 	h.mu.Unlock()
 
@@ -1500,10 +1595,10 @@ func (h *Hub) Answer(workspaceName, name, id string, d model.Decision, msg strin
 	if p == nil {
 		return fmt.Errorf("no pending permission %q on %s", id, name)
 	}
-	// A rule for a chained command's first word would allow more than the
-	// person saw, so "always" on one allows it this time only.
-	if d == model.Always && !p.compound {
-		th.t.Rules = append(th.t.Rules, workspace.Rule{Tool: p.Tool, Prefix: p.prefix})
+	// With no scope, such as for a chained command, a rule would allow more
+	// than the person saw, so "always" allows it this time only.
+	if d == model.Always && p.Scope != "" {
+		th.t.Rules = append(th.t.Rules, workspace.Rule{Tool: p.Tool, Scope: p.Scope})
 	}
 	p.msg = msg
 	text := string(d)
@@ -1575,6 +1670,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 	th.started = false
 	th.interrupted, th.dropped = false, false
 	th.cancel = cancel
+	th.seen, th.recap = turnSeen{}, nil
 	h.changed(ws, th)
 
 	prompt := compose(batch, ws.threads)
@@ -1663,11 +1759,14 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		_ = workspace.AppendCost(ws.p.Name, model.TurnCost{At: time.Now().UTC(), Thread: t.Name, Model: t.Model, Cost: res.Cost, Tools: res.Tools})
 	}
 	h.readBranch(ws, th)
+	// failure is why the turn failed; ended says it ended well.
+	failure, ended := "", false
 	switch {
 	case h.ctx.Err() != nil:
 		// Shutting down. The next start reports nothing lost, because nothing
 		// is in flight on disk any more; say it here while we still can.
-		h.event(ws, th, model.Event{Kind: model.EventError, Text: "neoharness stopped during this turn"})
+		failure = "neoharness stopped during this turn"
+		h.event(ws, th, model.Event{Kind: model.EventError, Text: failure})
 	case t.Resolved:
 		// Cancelled by Resolve; the note already says so.
 	case th.interrupted:
@@ -1682,17 +1781,21 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 			t.Paused = true
 		}
 	case ctx.Err() == context.DeadlineExceeded:
-		h.event(ws, th, model.Event{Kind: model.EventError, Text: fmt.Sprintf("the turn ran past %s and was stopped", h.cfg.TurnTimeout)})
+		failure = fmt.Sprintf("the turn ran past %s and was stopped", h.cfg.TurnTimeout)
+		h.event(ws, th, model.Event{Kind: model.EventError, Text: failure})
 	case err != nil:
-		h.event(ws, th, model.Event{Kind: model.EventError, Text: err.Error()})
+		failure = err.Error()
+		h.event(ws, th, model.Event{Kind: model.EventError, Text: failure})
 	case res.Lost:
 		// The agent never saw these messages.
 		t.SessionID, t.Started = workspace.NewID(), false
 		t.Queue = append(batch, t.Queue...)
 		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "The agent has no record of this conversation, so a new one starts."})
 	case res.ExitCode != 0:
-		h.event(ws, th, model.Event{Kind: model.EventError, Text: "the agent failed: " + lastLine(res.Stderr, res.Text)})
+		failure = "the agent failed: " + lastLine(res.Stderr, res.Text)
+		h.event(ws, th, model.Event{Kind: model.EventError, Text: failure})
 	default:
+		ended = true
 		t.Started = true
 		h.event(ws, th, model.Event{Kind: model.EventTurnEnd, Tools: res.Tools, Tokens: res.Tokens})
 		switch {
@@ -1706,6 +1809,14 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 			t.Summary = ""
 		}
 	}
+	if t.Role == model.RoleThread && !compact && (ended || failure != "") {
+		asked := ""
+		if len(batch) > 0 {
+			asked = batch[0].Text
+		}
+		t.Recap = recapOf(t.Recap, th.recap, th.seen, asked, res.Text, failure)
+	}
+	th.seen, th.recap = turnSeen{}, nil
 	h.changed(ws, th)
 	if h.ctx.Err() == nil {
 		h.kick(ws, th)
@@ -1729,8 +1840,10 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 	switch e.Kind {
 	case agent.KindToolStart:
 		h.event(ws, th, model.Event{Kind: model.EventTool, Tool: e.Tool, Detail: e.Detail, ID: e.ID})
+		th.seen.tool(e, th.t.Location.Dir)
 	case agent.KindToolFailed:
 		h.event(ws, th, model.Event{Kind: model.EventTool, ID: e.ID, Exit: 1, Text: e.Text})
+		th.seen.failed(e.ID)
 	case agent.KindAssistantText:
 		h.event(ws, th, model.Event{Kind: model.EventText, Text: e.Text})
 	case agent.KindError:
@@ -2005,6 +2118,7 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		State:         th.state,
 		Queued:        len(t.Queue),
 		Pending:       unshown(t.Queue),
+		Recap:         t.Recap,
 		Progress:      t.Progress,
 		WakeAt:        t.WakeAt,
 		Model:         t.Model,
@@ -2113,6 +2227,24 @@ func lastLine(texts ...string) string {
 		}
 	}
 	return "no output"
+}
+
+func firstLine(s string) string {
+	for _, l := range strings.Split(s, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			return l
+		}
+	}
+	return ""
+}
+
+// oneLine puts s on one line and cuts it to n runes.
+func oneLine(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > n {
+		s = string(r[:n]) + "…"
+	}
+	return s
 }
 
 func expandHome(p string) string {

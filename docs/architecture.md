@@ -72,6 +72,7 @@ so no thread can act for another thread or another workspace.
 | Who | Tools |
 |---|---|
 | all sessions | `whoami`, `workspace_status`, `send_message`, `report_progress`, `ask_user`, `wake_me`, `read_thread`, `write_artifact`, `read_artifact` |
+| threads only | `recap` |
 | coordinator only | `open_thread`, `resolve_thread`, `notify` |
 | internal | `permission_prompt` |
 
@@ -81,6 +82,23 @@ that outlives the turn, such as a long benchmark. A thread has at most one
 wake-up; it is saved with the thread, so it survives a restart. The threads
 list shows `wakes at 16:52` on an idle thread that has one.
 
+## Recaps
+
+A thread's recap says what its work produced, so the person learns it
+without the transcript. It has two parts that stay apart, so a claim never
+reads as a check:
+
+- **The thread's words**: `recap(asked, outcome, open)`, its last call in a
+  turn in which its work moved.
+- **What the hub saw** that turn: the commands it ran and which failed, the
+  files it edited, the artifacts it wrote, and the error if the turn failed.
+  The adapter says which tool calls run a command or edit a file
+  (`agent.Act`); only it knows its tools' names.
+
+When the thread wrote no recap, the first line of its reply stands in, marked
+as such. A turn that wrote none and did nothing keeps the old recap. The
+recap is kept in `thread.json` and sent as `ThreadView.Recap`.
+
 ## Permissions
 
 When Claude asks for approval, it calls `permission_prompt`. The hub holds
@@ -88,9 +106,16 @@ the call open, sets the thread to waiting, and the TUI shows a card.
 
 - Your own Claude settings and allow-lists still apply.
 - The hub's own tools are always allowed.
-- "Allow always" stores a rule per thread. A Bash command with `;`, `&`,
-  `|`, `` ` ``, `<`, `>`, a newline or `$(` always asks, and "allow
-  always" on one allows it this time only.
+- "Allow always" stores a rule per thread for the request's scope, which
+  the card shows. The adapter chooses the scope: for Bash the command and,
+  for tools such as git, go and npm, its subcommand (`git push`); for a
+  file edit the thread's folder; for a fetch the domain; else the whole
+  tool.
+- Some requests have no scope, so they always ask and the card offers no
+  "always": a Bash command with `;`, `&`, `|`, `` ` ``, `<`, `>`, a newline
+  or `$(`; a destructive flag such as `--force`, `--hard` or `-rf`; a
+  command that runs other commands or deletes, such as `sh`, `env`,
+  `python`, `rm` or `curl`; a file edit outside the thread's folder.
 - A pending request is denied when its turn ends.
 
 ## Remote threads

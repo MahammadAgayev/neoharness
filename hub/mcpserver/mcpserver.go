@@ -83,6 +83,12 @@ type notifyIn struct {
 	NeedsYou bool   `json:"needs_you,omitempty" jsonschema:"true when the person must act: the notice stays until they look"`
 }
 
+type recapIn struct {
+	Asked   string `json:"asked" jsonschema:"your task, in one line"`
+	Outcome string `json:"outcome" jsonschema:"what came out: what changed or was decided, and how you checked it; one or two lines"`
+	Open    string `json:"open" jsonschema:"what is still to do, and what needs the person; empty when nothing"`
+}
+
 type openIn struct {
 	Name     string `json:"name" jsonschema:"short kebab-case name, unique in the workspace"`
 	Brief    string `json:"brief" jsonschema:"the task: goal, area, what done means, who to agree with"`
@@ -207,12 +213,23 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			input, _ := json.Marshal(in.Input)
 			ok, msg := true, ""
 			if !claude.HarnessTool(in.ToolName) {
-				ok, msg = h.Permission(ctx, p, me, claude.Ask(in.ToolName, input))
+				v, err := h.Whoami(p, me)
+				if err != nil {
+					return nil, nil, err
+				}
+				ok, msg = h.Permission(ctx, p, me, claude.Ask(in.ToolName, input, v.Location.Dir))
 			}
 			return text(permissionReply(ok, msg, input)), nil, nil
 		})
 
 	if id.Role != model.RoleCoordinator {
+		mcp.AddTool(s, &mcp.Tool{Name: "recap", Description: "Say what your work produced, so the person learns it without reading your transcript. Call it last in a turn in which your work moved. It replaces your last recap; neoharness adds the commands it saw you run."},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in recapIn) (*mcp.CallToolResult, any, error) {
+				if err := h.Recap(p, me, in.Asked, in.Outcome, in.Open); err != nil {
+					return nil, nil, err
+				}
+				return text("Recap kept."), nil, nil
+			})
 		return s
 	}
 

@@ -470,16 +470,52 @@ func TestPermissionPromptsInTheHubsTerms(t *testing.T) {
 		tool, input string
 		want        agent.Permission
 	}{
-		{"Bash", `{"command":"go  test ./..."}`, agent.Permission{Tool: "Bash", Detail: "go test ./...", Prefix: "go"}},
-		{"Bash", `{"command":"go test ./... && rm -rf /"}`, agent.Permission{Tool: "Bash", Detail: "go test ./... && rm -rf /", Prefix: "go", Compound: true}},
-		{"Write", `{"file_path":"x"}`, agent.Permission{Tool: "Write", Detail: "x"}},
+		{"Bash", `{"command":"go  test ./..."}`, agent.Permission{Tool: "Bash", Detail: "go test ./...", Scope: "go test"}},
+		{"Bash", `{"command":"ls -la src"}`, agent.Permission{Tool: "Bash", Detail: "ls -la src", Scope: "ls"}},
+		{"Write", `{"file_path":"/src/app/x.go"}`, agent.Permission{Tool: "Write", Detail: "/src/app/x.go", Scope: "/src/app/"}},
+		{"Write", `{"file_path":"/home/me/.zshrc"}`, agent.Permission{Tool: "Write", Detail: "/home/me/.zshrc"}},
+		{"Edit", `{"file_path":"/src/app-old/x.go"}`, agent.Permission{Tool: "Edit", Detail: "/src/app-old/x.go"}},
+		{"WebFetch", `{"url":"https://go.dev/doc/x?y=1","prompt":"p"}`, agent.Permission{Tool: "WebFetch", Detail: "https://go.dev/doc/x?y=1", Scope: "go.dev"}},
+		{"Grep", `{"pattern":"x"}`, agent.Permission{Tool: "Grep", Detail: "x", Scope: "Grep"}},
 	} {
-		if got := Ask(c.tool, json.RawMessage(c.input)); got != c.want {
+		if got := Ask(c.tool, json.RawMessage(c.input), "/src/app"); got != c.want {
 			t.Errorf("Ask(%s, %s) = %+v, want %+v", c.tool, c.input, got, c.want)
 		}
 	}
-	if !HarnessTool("mcp__neoharness__whoami") || HarnessTool("mcp__slack__read") {
-		t.Error("only the neoharness tools skip the person")
+}
+
+// An "always" covers only what the person can judge from the card. A chained
+// command, a destructive flag or an interpreter gets no "always": a rule for
+// it would allow far more than the one call they saw.
+func TestPermissionScopeOfBash(t *testing.T) {
+	for cmd, want := range map[string]string{
+		"git status":                   "git status",
+		"git push origin main":         "git push",
+		"git push --force origin main": "",
+		"git reset --hard HEAD~1":      "",
+		"git clean -fdx":               "",
+		"git -c core.pager=x log":      "",
+		"git":                          "git",
+		"npm run build":                "npm run",
+		"make":                         "make",
+		"cat README.md":                "cat",
+		"./run.sh fast":                "./run.sh",
+		"go test ./... | tail":         "",
+		"rm -rf build && make":         "",
+		"sh -c 'make'":                 "",
+		"env FOO=1 go test":            "",
+		"FOO=1 go test":                "",
+		"python3 x.py":                 "",
+		"xargs rm":                     "",
+		"rm build/x":                   "",
+		"sudo make install":            "",
+		"curl https://x.example":       "",
+		"":                             "",
+	} {
+		in, _ := json.Marshal(map[string]string{"command": cmd})
+		if got := Ask("Bash", in, "/src/app").Scope; got != want {
+			t.Errorf("scope of %q = %q, want %q", cmd, got, want)
+		}
 	}
 }
 
@@ -698,5 +734,25 @@ func TestModelsFallBackToTheAliasesWhenClaudeFails(t *testing.T) {
 	got := New(script).Models(context.Background())
 	if len(got) != 3 || got[0].Name != "opus" {
 		t.Fatalf("models = %+v, want the aliases", got)
+	}
+}
+
+func TestToolCallsSayWhatTheyDo(t *testing.T) {
+	_, got := feed(t, []string{
+		`{"type":"assistant","message":{"content":[` +
+			`{"type":"tool_use","id":"a","name":"Bash","input":{"command":"go test ./..."}},` +
+			`{"type":"tool_use","id":"b","name":"Edit","input":{"file_path":"/r/a.go","old_string":"x","new_string":"y"}},` +
+			`{"type":"tool_use","id":"c","name":"Write","input":{"file_path":"/r/b.go","content":"z"}},` +
+			`{"type":"tool_use","id":"d","name":"mcp__neoharness__recap","input":{"asked":"x"}},` +
+			`{"type":"tool_use","id":"e","name":"Read","input":{"file_path":"/r/c.go"}}]}}`,
+	})
+	want := []agent.Act{agent.ActRun, agent.ActEdit, agent.ActEdit, agent.ActOther, agent.ActOther}
+	if len(got) != len(want) {
+		t.Fatalf("events = %+v", got)
+	}
+	for i, e := range got {
+		if e.Act != want[i] {
+			t.Errorf("%s: act %d, want %d", e.Tool, e.Act, want[i])
+		}
 	}
 }

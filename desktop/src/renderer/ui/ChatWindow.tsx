@@ -89,6 +89,7 @@ const BlockView = memo(function BlockView(props: {
   artifacts: Set<string>
   thread: string
   pendingPermission: boolean
+  scope?: string
 }) {
   const { b, open } = props
   switch (b.kind) {
@@ -163,9 +164,11 @@ const BlockView = memo(function BlockView(props: {
               <button className="btn primary" onClick={() => void store.answerThread(props.thread, 'allow')}>
                 Allow <kbd>space a</kbd>
               </button>
-              <button className="btn" onClick={() => void store.answerThread(props.thread, 'always')}>
-                Always <kbd>space A</kbd>
-              </button>
+              {props.scope && (
+                <button className="btn" onClick={() => void store.answerThread(props.thread, 'always')}>
+                  Always: {props.scope} <kbd>space A</kbd>
+                </button>
+              )}
               <button className="btn danger" onClick={() => void store.answerThread(props.thread, 'deny')}>
                 Deny <kbd>space x</kbd>
               </button>
@@ -560,7 +563,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
                 void blockMenu(b, (a) => handleRef.current(a, 1))
               }}
             >
-              <BlockView b={b} open={!!folds[b.key]} artifacts={artifacts} thread={thread} pendingPermission={b.key === permKey} />
+              <BlockView b={b} open={!!folds[b.key]} artifacts={artifacts} thread={thread} pendingPermission={b.key === permKey} scope={b.key === permKey ? v?.permission?.scope : undefined} />
             </div>
           ))}
           {working && (

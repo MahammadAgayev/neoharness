@@ -363,6 +363,7 @@ func (a *accumulator) consume(line []byte) {
 				a.emit(agent.Event{
 					Kind:   agent.KindToolStart,
 					Tool:   c.Name,
+					Act:    actOf(c.Name),
 					ID:     c.ID,
 					Detail: detailOf(c.Input),
 					Tokens: a.tokens,
@@ -408,6 +409,17 @@ func (a *accumulator) consume(line []byte) {
 		a.emit(agent.Event{Kind: agent.KindTurnEnd, Tokens: a.tokens})
 	}
 	// Other "system" records are hooks and progress — machinery, not work.
+}
+
+// actOf says what one of Claude Code's tools does, for the recap.
+func actOf(tool string) agent.Act {
+	switch {
+	case tool == "Bash":
+		return agent.ActRun
+	case tool == "Edit" || tool == "MultiEdit" || tool == "Write" || tool == "NotebookEdit":
+		return agent.ActEdit
+	}
+	return agent.ActOther
 }
 
 // resultText is a tool result's content: a string, or text blocks.

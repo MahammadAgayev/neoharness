@@ -53,11 +53,25 @@ func (k Kind) String() string {
 	return "unknown"
 }
 
+// Act is what a tool call does, for the recap of a turn. Only the adapter
+// knows its tools' names, so it says.
+type Act int
+
+const (
+	// ActOther reads, searches, calls the harness: nothing the recap counts.
+	ActOther Act = iota
+	// ActRun runs a command.
+	ActRun
+	// ActEdit changes a file: Detail is its path.
+	ActEdit
+)
+
 // Event is one thing that happened during a turn, already normalised.
 type Event struct {
 	Kind Kind
-	// Tool is the tool name, for KindToolStart.
+	// Tool is the tool name, and Act what it does, for KindToolStart.
 	Tool string
+	Act  Act
 	// ID ties a KindToolFailed to its KindToolStart.
 	ID string
 	// Detail is the interesting argument to that tool — a path, a command, a
@@ -115,12 +129,10 @@ type Permission struct {
 	Tool string
 	// Detail is the interesting argument, on one line.
 	Detail string
-	// Prefix is what an "allow always" remembers, as a command's first word;
-	// empty covers the whole tool.
-	Prefix string
-	// Compound is a call that does more than one thing, as a chained shell
-	// command. A rule never covers it.
-	Compound bool
+	// Scope is what an "allow always" remembers and the person sees on the
+	// card, such as `git push`. Empty means the call is never covered by a
+	// rule and gets no "always".
+	Scope string
 }
 
 // Efforter is an Agent that names the effort levels it takes. The hub checks

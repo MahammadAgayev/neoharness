@@ -624,9 +624,13 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 	switch {
 	case v.Permission != nil:
 		title = "permission"
+		keys := []Span{{"␣a", th.Iris}, {" allow   ", th.Muted}}
+		if sc := v.Permission.Scope; sc != "" {
+			keys = append(keys, Span{"␣A", th.Iris}, Span{" always: " + truncate(sc, bw-36) + "   ", th.Muted})
+		}
 		body = [][]Span{
 			{{v.Permission.Tool, th.Text.Bold(true)}, {"  " + truncate(v.Permission.Detail, bw-8-width(v.Permission.Tool)), th.Subtle}},
-			{{"␣a", th.Iris}, {" allow   ", th.Muted}, {"␣A", th.Iris}, {" always   ", th.Muted}, {"␣x", th.Iris}, {" deny", th.Muted}},
+			append(keys, Span{"␣x", th.Iris}, Span{" deny", th.Muted}),
 		}
 	case v.Waiting == "paused":
 		title = "paused"

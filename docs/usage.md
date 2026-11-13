@@ -75,9 +75,13 @@ card shows in the chat:
 
 ```
 <leader>a   :allow           allow once
-<leader>A   :always          allow always (for Bash: the first word; a chained command only this time)
+<leader>A   :always          allow always, for what the card shows after "always:"
 <leader>x   :deny [reason]   deny
 ```
+
+"Always" covers only what the card names, such as `git push`, a folder or
+a domain. A request that is risky every time, such as a force push, a
+chained command or `rm`, offers no "always".
 
 ## Notifications
 

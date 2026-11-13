@@ -338,9 +338,9 @@ func TestPermissionWaitsForTheUser(t *testing.T) {
 	h := newHub(t, f)
 	f.script = func(ctx context.Context, req agent.Request) agent.Result {
 		for _, q := range []agent.Permission{
-			{Tool: "Bash", Detail: "go test ./...", Prefix: "go"},
-			{Tool: "Bash", Detail: "go vet ./...", Prefix: "go"},
-			{Tool: "Bash", Detail: "go test ./... && rm -rf /", Prefix: "go", Compound: true},
+			{Tool: "Bash", Detail: "go test ./...", Scope: "go test"},
+			{Tool: "Bash", Detail: "go test ./hub", Scope: "go test"},
+			{Tool: "Bash", Detail: "go vet ./...", Scope: "go vet"},
 		} {
 			ok, msg := h.Permission(ctx, "demo", model.Coordinator, q)
 			results <- outcome{ok, msg}
@@ -352,7 +352,7 @@ func TestPermissionWaitsForTheUser(t *testing.T) {
 
 	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
 	v := view(t, h, "demo", model.Coordinator)
-	if v.Permission == nil || v.Permission.Tool != "Bash" || v.Permission.Detail != "go test ./..." {
+	if v.Permission == nil || v.Permission.Tool != "Bash" || v.Permission.Detail != "go test ./..." || v.Permission.Scope != "go test" {
 		t.Fatalf("permission = %+v", v.Permission)
 	}
 	if err := h.Answer("demo", model.Coordinator, v.Permission.ID, model.Always, ""); err != nil {
@@ -361,11 +361,11 @@ func TestPermissionWaitsForTheUser(t *testing.T) {
 	if r := <-results; !r.ok {
 		t.Fatal("allowed call was denied")
 	}
-	// The rule allows the next `go` command without asking.
+	// The rule allows the next `go test` without asking.
 	if r := <-results; !r.ok {
 		t.Fatal("always-allow rule did not apply")
 	}
-	// But not a chained command that starts with the same word.
+	// But not another go command: the rule is its scope, not its first word.
 	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
 	if err := h.Answer("demo", model.Coordinator, "", model.Deny, "too risky"); err != nil {
 		t.Fatal(err)
@@ -2131,16 +2131,17 @@ func TestReadArtifactStaysInItsWorkspace(t *testing.T) {
 	}
 }
 
-// "Always" on a chained command allows it once but stores no rule: a rule
-// for its first word would let `rm -rf ~` through after `rm -rf build && make`.
-func TestAlwaysOnACompoundCommandStoresNoRule(t *testing.T) {
+// "Always" on a call with no scope, such as a chained command, allows it once
+// but stores no rule: a rule would let `rm -rf ~` through after
+// `rm -rf build && make`.
+func TestAlwaysWithNoScopeStoresNoRule(t *testing.T) {
 	results := make(chan bool, 2)
 	f := &fake{}
 	h := newHub(t, f)
 	f.script = func(ctx context.Context, req agent.Request) agent.Result {
 		for _, q := range []agent.Permission{
-			{Tool: "Bash", Detail: "rm -rf build && make", Prefix: "rm", Compound: true},
-			{Tool: "Bash", Detail: "rm -rf ~", Prefix: "rm"},
+			{Tool: "Bash", Detail: "rm -rf build && make"},
+			{Tool: "Bash", Detail: "rm -rf ~"},
 		} {
 			ok, _ := h.Permission(ctx, "demo", model.Coordinator, q)
 			results <- ok
@@ -2165,4 +2166,89 @@ func TestAlwaysOnACompoundCommandStoresNoRule(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-results
+}
+
+func TestTheRecapJoinsTheThreadsWordsAndWhatTheHubSaw(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	dir := view(t, h, "demo", model.Coordinator).Location.Dir
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if req.HarnessOnly {
+			return agent.Result{Text: "ok"}
+		}
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Tool: "Bash", Act: agent.ActRun, Detail: "go test ./...", ID: "t1"})
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Tool: "Bash", Act: agent.ActRun, Detail: "golangci-lint run", ID: "t2"})
+		req.OnEvent(agent.Event{Kind: agent.KindToolFailed, ID: "t2", Text: "3 issues"})
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Tool: "Edit", Act: agent.ActEdit, Detail: dir + "/a.go", ID: "t3"})
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Tool: "Edit", Act: agent.ActEdit, Detail: dir + "/a.go", ID: "t4"})
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Tool: "mcp__neoharness__report_progress", ID: "t5"})
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Tool: "Read", Detail: dir + "/b.go", ID: "t6"})
+		if _, err := h.WriteArtifact("demo", "lint", "plan", "# Plan\n\nsteps"); err != nil {
+			t.Error(err)
+		}
+		if err := h.Recap("demo", "lint", " Fix the lint issues ", "Fixed two; tests pass", "Choose: change the API or ignore one issue"); err != nil {
+			t.Error(err)
+		}
+		return agent.Result{Text: "Done.", Tools: 7}
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "lint", "fix lint", ""); err != nil {
+		t.Fatal(err)
+	}
+	var r *model.Recap
+	eventually(t, "a recap", func() bool { r = view(t, h, "demo", "lint").Recap; return r != nil })
+	if r.Asked != "Fix the lint issues" || r.Outcome != "Fixed two; tests pass" || r.Open != "Choose: change the API or ignore one issue" || r.FromReply {
+		t.Errorf("the thread's words: %+v", r)
+	}
+	want := []model.RecapCommand{{Text: "go test ./..."}, {Text: "golangci-lint run", Failed: true}}
+	if r.Ran != 2 || !slices.Equal(r.Commands, want) {
+		t.Errorf("commands: ran %d %+v, want %+v", r.Ran, r.Commands, want)
+	}
+	if !slices.Equal(r.Edited, []string{"a.go"}) || !slices.Equal(r.Artifacts, []string{"plan"}) || r.Error != "" || r.At.IsZero() {
+		t.Errorf("observed: %+v", r)
+	}
+	if c := view(t, h, "demo", model.Coordinator); c.Recap != nil {
+		t.Errorf("the coordinator has no recap: %+v", c.Recap)
+	}
+}
+
+func TestWithoutARecapTheReplyStandsInAndAnEmptyTurnKeepsIt(t *testing.T) {
+	gate := make(chan agent.Result)
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result { return <-gate }
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "cache", "Add an LRU cache\nin front of the store", ""); err != nil {
+		t.Fatal(err)
+	}
+	gate <- agent.Result{Text: "\nAll tests pass.\nDetails follow."}
+	stateIs(t, h, "demo", "cache", model.StateIdle)
+	r := view(t, h, "demo", "cache").Recap
+	if r == nil || r.Outcome != "All tests pass." || !r.FromReply || r.Asked != "Add an LRU cache" || r.Ran != 0 {
+		t.Fatalf("recap from the reply: %+v", r)
+	}
+	// A turn that wrote no recap and did nothing does not hide the work.
+	_ = h.Send("demo", model.User, "cache", "thanks")
+	gate <- agent.Result{Text: "You are welcome."}
+	stateIs(t, h, "demo", "cache", model.StateIdle)
+	if r2 := view(t, h, "demo", "cache").Recap; r2 == nil || r2.Outcome != "All tests pass." {
+		t.Fatalf("an empty turn replaced the recap: %+v", r2)
+	}
+}
+
+func TestAFailedTurnSaysSoInTheRecap(t *testing.T) {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		return agent.Result{ExitCode: 1, Stderr: "panic\nfake: crashed on purpose"}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "flaky", "try", ""); err != nil {
+		t.Fatal(err)
+	}
+	var r *model.Recap
+	eventually(t, "a recap", func() bool { r = view(t, h, "demo", "flaky").Recap; return r != nil })
+	if r.Error != "the agent failed: fake: crashed on purpose" || r.Outcome != "" || r.Asked != "try" {
+		t.Fatalf("recap of a failed turn: %+v", r)
+	}
 }

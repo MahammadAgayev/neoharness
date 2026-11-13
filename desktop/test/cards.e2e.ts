@@ -55,7 +55,7 @@ test.afterAll(async () => {
 })
 
 test('a permission request toasts, shows a card, and <leader>a allows it', async () => {
-  const perm = { id: 'p1', tool: 'Bash', detail: 'go test ./...' }
+  const perm = { id: 'p1', tool: 'Bash', detail: 'go test ./...', scope: 'go test' }
   hub.event('demo', 'api', { kind: 'permission', tool: 'Bash', detail: 'go test ./...', id: 'p1' })
   hub.setView(view('demo', 'api', { state: 'waiting', permission: perm }))
   const toast = page.locator('.toast', { hasText: 'needs permission · Bash' })
@@ -63,6 +63,7 @@ test('a permission request toasts, shows a card, and <leader>a allows it', async
   await shot('20-permission-toast')
   await toast.click()
   await expect(page.locator('.card.permission button', { hasText: 'Allow' })).toBeVisible()
+  await expect(page.locator('.card.permission button', { hasText: 'Always: go test' })).toBeVisible()
   // The thread is on screen now: its toast goes.
   await expect(toast).toHaveCount(0, { timeout: 3000 })
   await shot('21-permission-card')
@@ -71,6 +72,18 @@ test('a permission request toasts, shows a card, and <leader>a allows it', async
   await page.keyboard.press('a')
   await expect.poll(() => hub.calls.find((c) => c.path.endsWith('/answer'))?.body).toMatchObject({ id: 'p1', decision: 'allow' })
   await expect(page.locator('.row.k-permission', { hasText: '· allow' })).toBeVisible()
+})
+
+test('a permission with no scope offers no always', async () => {
+  const perm = { id: 'p2', tool: 'Bash', detail: 'git push --force origin main' }
+  hub.event('demo', 'api', { kind: 'permission', tool: 'Bash', detail: perm.detail, id: 'p2' })
+  hub.setView(view('demo', 'api', { state: 'waiting', permission: perm }))
+  await expect(page.locator('.card.permission button', { hasText: 'Deny' })).toBeVisible()
+  await expect(page.locator('.card.permission button', { hasText: 'Always' })).toHaveCount(0)
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('x')
+  await expect.poll(() => hub.calls.filter((c) => c.path.endsWith('/answer')).at(-1)?.body).toMatchObject({ id: 'p2', decision: 'deny' })
 })
 
 test('a question shows as a card you answer by writing', async () => {

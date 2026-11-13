@@ -56,12 +56,12 @@ type Edit struct {
 	Text    string `json:"text"`
 }
 
-// Rule is an "allow always" answer. An empty Prefix matches every call of the
-// tool; for Bash it holds the command's first word, so allowing `go test`
-// once also allows `go build` but not `rm`.
+// Rule is an "allow always" answer: a call of the tool with the same scope
+// goes ahead without asking. Rules saved before scopes, with a prefix, load
+// with no scope and match nothing, so their broad allow ends.
 type Rule struct {
-	Tool   string `json:"tool"`
-	Prefix string `json:"prefix,omitempty"`
+	Tool  string `json:"tool"`
+	Scope string `json:"scope,omitempty"`
 }
 
 // Thread is the persisted part of a thread. The visible state is derived from
@@ -116,6 +116,9 @@ type Thread struct {
 	// Edits holds, per artifact the thread wrote, the version it last saw
 	// before the person edited it. The next turn's prompt gets the diff.
 	Edits map[string]Edit `json:"edits,omitempty"`
+	// Recap is what the thread's work produced, as of its last turn that did
+	// something.
+	Recap *model.Recap `json:"recap,omitempty"`
 
 	Since     time.Time `json:"since"`
 	CreatedAt time.Time `json:"createdAt"`

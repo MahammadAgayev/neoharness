@@ -695,7 +695,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<leader>t", "threads list: goes to it, or opens it in a new column on the right; <CR> opens a thread in its place"),
 		row("<leader>c", "coordinator"),
 		row("<leader>nc  <leader>nh", "dismiss notifications, their history"),
-		row("<leader>a A x", "allow, allow always, deny a permission"),
+		row("<leader>a A x", "allow, allow always (what the card names), deny a permission"),
 		{},
 		sec("commands"),
 		row(":new <name> [folder]", "create a workspace; no folder opens a folder picker"),

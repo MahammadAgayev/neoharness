@@ -58,6 +58,8 @@ export interface Permission {
   id: string
   tool: string
   detail: string
+  // What "always" allows; absent when the hub offers no "always".
+  scope?: string
 }
 
 export interface ThreadView {

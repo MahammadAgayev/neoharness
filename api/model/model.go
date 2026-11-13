@@ -178,6 +178,47 @@ type Permission struct {
 	ID     string `json:"id"`
 	Tool   string `json:"tool"`
 	Detail string `json:"detail"`
+	// Scope is what "allow always" covers; empty when it is not offered.
+	Scope string `json:"scope,omitempty"`
+}
+
+// Recap is what a thread's work produced, for the person to read without
+// its transcript. Asked, Outcome and Open are the thread's own words; the
+// rest is what the hub saw its last turn do, so a claim never reads as a
+// check.
+type Recap struct {
+	Asked   string `json:"asked,omitempty"`
+	Outcome string `json:"outcome,omitempty"`
+	Open    string `json:"open,omitempty"`
+	// FromReply says the thread wrote no recap: Outcome is the first line of
+	// its reply.
+	FromReply bool `json:"fromReply,omitempty"`
+	// Ran counts the commands of the turn; Commands holds every failed one
+	// and the first of the others.
+	Ran       int            `json:"ran,omitempty"`
+	Commands  []RecapCommand `json:"commands,omitempty"`
+	Edited    []string       `json:"edited,omitempty"`
+	Artifacts []string       `json:"artifacts,omitempty"`
+	// Error is why the turn failed; empty when it ended well.
+	Error string    `json:"error,omitempty"`
+	At    time.Time `json:"at"`
+}
+
+// RecapCommand is a command a turn ran.
+type RecapCommand struct {
+	Text   string `json:"text"`
+	Failed bool   `json:"failed,omitempty"`
+}
+
+// Failed counts the failed commands.
+func (r *Recap) Failed() int {
+	n := 0
+	for _, c := range r.Commands {
+		if c.Failed {
+			n++
+		}
+	}
+	return n
 }
 
 // ThreadView is a thread as the API shows it.
@@ -194,6 +235,7 @@ type ThreadView struct {
 	Waiting    string      `json:"waiting,omitempty"`
 	Permission *Permission `json:"permission,omitempty"`
 	Pending    []Event     `json:"pending,omitempty"` // queued, not yet in the transcript
+	Recap      *Recap      `json:"recap,omitempty"`
 	// Quiet says the coordinator decides what of this thread reaches the
 	// person: only its questions and permission requests notify them.
 	Quiet bool `json:"quiet,omitempty"`

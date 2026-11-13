@@ -282,3 +282,18 @@ func TestArtifactListShowsThePersonsEdit(t *testing.T) {
 		t.Fatalf("artifacts = %q", got)
 	}
 }
+
+func TestOnlyThreadsWriteARecap(t *testing.T) {
+	h, srv := setup(t)
+	coord := connect(t, srv, token(t, model.Coordinator))
+	if slices.Contains(toolNames(t, coord), "recap") {
+		t.Fatal("the coordinator has no recap tool")
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "api", "write tests", ""); err != nil {
+		t.Fatal(err)
+	}
+	th := connect(t, srv, token(t, "api"))
+	if out, isErr := call(t, th, "recap", map[string]any{"asked": "write tests", "outcome": "3 tests", "open": ""}); isErr || out == "" {
+		t.Fatalf("recap: %q", out)
+	}
+}

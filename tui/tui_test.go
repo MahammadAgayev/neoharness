@@ -530,6 +530,28 @@ func TestPermissionCardAndAnswer(t *testing.T) {
 	}
 }
 
+// The card says what "always" would allow, and offers none when the hub gives
+// no scope.
+func TestPermissionCardShowsTheScopeOfAlways(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads["auth-refactor"]
+	v.State = model.StateWaiting
+	v.Waiting = "permission"
+	v.Permission = &model.Permission{ID: "p1", Tool: "Bash", Detail: "git push origin main", Scope: "git push"}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.press(":b auth-refactor", "<CR>")
+	h.see("␣A always: git push")
+
+	v.Permission = &model.Permission{ID: "p2", Tool: "Bash", Detail: "git push --force origin main"}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("git push --force")
+	if strings.Contains(h.screen(), "always") {
+		t.Errorf("a call with no scope should offer no always:\n%s", h.screen())
+	}
+}
+
 func TestNewWorkspaceFolder(t *testing.T) {
 	tmp := t.TempDir()
 	for _, d := range []string{"alpha", "beta/inner", ".hidden"} {
