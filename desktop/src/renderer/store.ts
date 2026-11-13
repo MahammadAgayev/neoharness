@@ -135,6 +135,8 @@ export interface State {
   settings: Settings
   settingsOpen: boolean
   helpOpen: boolean
+  // spend is the spend dialog: of the open workspace, or of all of them.
+  spend: 'workspace' | 'all' | null
   // choice is the /model or /effort picker of a thread.
   choice: { thread: string; kind: 'model' | 'effort' } | null
   newWorkspace: boolean
@@ -190,6 +192,7 @@ class Store {
     settings: loadSettings(),
     settingsOpen: false,
   helpOpen: false,
+  spend: null,
   choice: null,
     newWorkspace: false,
     newDoc: false,
@@ -1215,6 +1218,16 @@ class Store {
     this.set({ helpOpen: open, settingsOpen: false, picker: null, cmdline: null })
   }
 
+  // openSpend opens the spend dialog; with no workspace open it shows all.
+  openSpend(scope: 'workspace' | 'all' | null): void {
+    if (scope === 'workspace' && (!this.state.workspace || this.state.screen !== 'workspace')) scope = 'all'
+    this.set({ spend: scope, helpOpen: false, settingsOpen: false, picker: null, cmdline: null })
+  }
+
+  spendOf(scope: 'workspace' | 'all') {
+    return this.call('spend', { workspace: scope === 'all' ? '' : this.state.workspace })
+  }
+
 
   setWorkspaceCursor(i: number): void {
     const n = this.state.workspaces.length
@@ -1302,6 +1315,8 @@ class Store {
       case 'help':
       case 'h':
         return this.openHelp(true)
+      case 'spend':
+        return this.openSpend(a[0] === 'all' ? 'all' : 'workspace')
       case 'w':
       case 'write':
         if (!art) return this.say('nothing to write here; :w saves an artifact', 'muted')

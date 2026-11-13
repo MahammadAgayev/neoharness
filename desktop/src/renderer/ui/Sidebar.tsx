@@ -122,6 +122,11 @@ export function Sidebar(props: { folded: boolean }) {
         </button>
       </div>
       <div className="sb-foot">
+        <button className="sb-item" onClick={() => store.openSpend('workspace')}>
+          <Icon name="chart-column" className="sb-icon" />
+          <span className="sb-label">Spend</span>
+          <kbd className="sb-kbd shown">{lead} $</kbd>
+        </button>
         <button className="sb-item" onClick={() => store.openSettings()}>
           <Icon name="settings" className="sb-icon" />
           <span className="sb-label">Settings</span>

@@ -120,6 +120,31 @@ export class FakeHub {
         return json({})
       }
       if (url.pathname === '/deleted') return json([])
+      if (url.pathname === '/spend') {
+        const all = !url.searchParams.get('workspace')
+        const day = (back: number) => {
+          const d = new Date(Date.now() - back * 86400000)
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        }
+        const costs = [0, 1.2, 0.4, 0, 2.6, 3.1, 0.8, 0, 0, 1.9, 4.2, 2.2, 0.6, 1.5]
+        return json({
+          total: all ? 31.4 : 24.75,
+          today: 1.5,
+          since: new Date(Date.now() - 13 * 86400000).toISOString(),
+          threads: [
+            { workspace: 'demo', name: 'api', cost: 12.5, turns: 30 },
+            { workspace: 'demo', name: 'coordinator', cost: 9.25, turns: 41 },
+            { workspace: 'demo', name: 'docs', cost: 3, turns: 6 },
+          ],
+          workspaces: all ? [{ name: 'demo', cost: 24.75 }, { name: 'billing', cost: 6.65 }] : [],
+          models: [{ name: 'claude-opus-5-5', cost: 19.5, turns: 50 }, { name: 'claude-sonnet-5-5', cost: 5.25, turns: 27 }],
+          days: costs.map((c, i) => ({ name: day(13 - i), cost: c, turns: c ? Math.ceil(c * 3) : 0 })),
+          top: [
+            { at: new Date().toISOString(), workspace: 'demo', thread: 'api', model: 'claude-opus-5-5', cost: 1.42, tools: 31 },
+            { at: new Date().toISOString(), workspace: 'demo', thread: 'coordinator', model: 'claude-opus-5-5', cost: 0.9, tools: 4 },
+          ],
+        })
+      }
       const [, ws, kind, name, sub] = parts
       if (kind === 'threads' && !name && m === 'GET') return json(this.threads[ws] ?? [])
       if (kind === 'threads' && !name && m === 'POST') {

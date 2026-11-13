@@ -91,6 +91,36 @@ export interface Completions {
   query?: string
 }
 
+// TurnCost is what one turn cost, from a workspace's spend log.
+export interface TurnCost {
+  at: string
+  workspace?: string
+  thread: string
+  model?: string
+  cost: number
+  tools?: number
+}
+
+// Spend is what a workspace, or every workspace, cost. Days, models and top
+// count only the turns in the spend logs, from since on.
+export interface Spend {
+  total: number
+  today: number
+  since: string
+  threads: SpendPart[]
+  workspaces: SpendPart[]
+  models: SpendPart[]
+  days: SpendPart[]
+  top: TurnCost[]
+}
+
+export interface SpendPart {
+  workspace?: string
+  name: string
+  cost: number
+  turns?: number
+}
+
 // Choices are what /model and /effort of a thread take; an empty model or
 // effort is the agent's default.
 export interface Choices {

@@ -10,6 +10,7 @@ import type {
   Decision,
   Event,
   HubInfo,
+  Spend,
   ThreadView,
   WorkspaceView,
 } from './model'
@@ -79,6 +80,10 @@ export const calls = {
     method: 'GET',
     path: `${th(a.workspace, a.thread)}/completions?q=${e(a.query)}`,
   }),
+  spend: (a: { workspace: string }): Req => ({
+    method: 'GET',
+    path: `/spend?workspace=${e(a.workspace)}`,
+  }),
   choices: (a: { workspace: string; thread: string }): Req => ({
     method: 'GET',
     path: `${th(a.workspace, a.thread)}/choices`,
@@ -130,6 +135,7 @@ export interface Results {
   events: Event[]
   completions: Completions
   choices: Choices
+  spend: Spend
 }
 
 export type Result<N extends CallName> = N extends keyof Results ? Results[N] : void

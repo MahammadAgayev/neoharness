@@ -662,6 +662,34 @@ test('the send button turns to the accent with text, and a click sends', async (
   await expect(send).not.toHaveClass(/ready/)
 })
 
+test('<leader>$ shows what the workspace cost, Tab every workspace, and a turn opens its thread', async () => {
+  await normal()
+  await page.keyboard.press('Meta+1')
+  await page.keyboard.press('Space')
+  await page.keyboard.type('$')
+  const d = page.locator('.spend-dialog')
+  await expect(d).toBeVisible()
+  await expect(d.locator('.spend-stat-value')).toHaveText(['$24.75', '$1.50', '$18.50'])
+  await expect(d.locator('.spend-day')).toHaveCount(14)
+  await expect(d.locator('.spend-day.today .spend-day-label')).toHaveText('today')
+  await expect(d.locator('.spend-section', { hasText: 'by thread' }).locator('.spend-bar-row')).toHaveCount(3)
+  await expect(d.locator('.spend-section', { hasText: 'by workspace' })).toHaveCount(0)
+  await shot('46-spend')
+  await page.keyboard.press('Tab')
+  await expect(d.locator('.tab.active')).toHaveText('All workspaces')
+  await expect(d.locator('.spend-section', { hasText: 'by workspace' }).locator('.spend-bar-row')).toHaveCount(2)
+  await expect.poll(() => hub.calls.filter((c) => c.path.startsWith('/spend')).pop()?.path).toBe('/spend?workspace=')
+  await d.locator('.spend-turn', { hasText: 'api' }).click()
+  await expect(d).toHaveCount(0)
+  await expect(page.locator('.statusline.focused .sl-name')).toHaveText('api')
+
+  // From the sidebar, and Esc closes it.
+  await page.locator('.sb-item', { hasText: 'Spend' }).click()
+  await expect(d).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(d).toHaveCount(0)
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

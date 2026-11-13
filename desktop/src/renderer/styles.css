@@ -1885,3 +1885,124 @@ kbd {
 .sb-resizer:hover {
   background: linear-gradient(to right, transparent 3px, color-mix(in srgb, var(--iris) 40%, transparent) 3px, transparent 5px);
 }
+
+/* The spend dialog: totals, the last 14 days, bars by thread and model. One
+   hue for every bar; the text stays in the text colors. */
+.spend-dialog {
+  width: min(760px, 92vw);
+}
+.spend-body:focus {
+  outline: none;
+}
+.spend-tabs {
+  display: flex;
+  gap: 2px;
+  margin-right: auto;
+}
+.spend-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 16px 0 4px;
+}
+.spend-stat {
+  padding: 12px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+.spend-stat-value {
+  font-size: 1.6em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.spend-stat-label {
+  font-size: var(--fs-secondary);
+  color: var(--subtle);
+}
+.spend-days {
+  display: flex;
+  gap: 2px;
+  height: 140px;
+}
+.spend-day {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.spend-day-plot {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 3px;
+  border-bottom: 1px solid var(--line);
+}
+.spend-day-plot:hover {
+  background: var(--hl-low);
+  border-radius: 4px 4px 0 0;
+}
+.spend-day-bar {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: color-mix(in srgb, var(--iris) 55%, transparent);
+}
+.spend-day.today .spend-day-bar {
+  background: var(--iris);
+}
+.spend-day-label {
+  text-align: center;
+  font-size: var(--fs-small);
+  color: var(--subtle);
+  margin-top: 4px;
+}
+.spend-section {
+  margin-bottom: 8px;
+}
+.spend-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0 24px;
+}
+.spend-bar-row,
+.spend-turn {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(40px, 1fr) 64px;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  font-size: var(--fs-secondary);
+}
+.spend-turn {
+  grid-template-columns: minmax(0, 1fr) auto auto 64px;
+  gap: 14px;
+}
+.spend-bar-row.clickable:hover,
+.spend-turn.clickable:hover {
+  background: var(--hl-low);
+}
+.spend-bar-name,
+.spend-turn-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.spend-bar-track {
+  height: 6px;
+}
+.spend-bar {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--iris) 70%, transparent);
+}
+.spend-bar-cost {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.spend-note {
+  margin-top: 16px;
+  font-size: var(--fs-small);
+}
