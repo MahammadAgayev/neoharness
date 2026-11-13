@@ -18,7 +18,9 @@ npm run dist       # dist/neoharness-darwin-arm64/neoharness.app
 ```
 
 To install, copy `neoharness.app` to `/Applications` or `~/Applications`.
-The app is not signed, so the first open needs a right click and Open.
+`npm run dist` signs the app ad hoc, which is enough on the Mac that built
+it. It is not signed with an Apple developer ID nor notarized, so on another
+Mac the first open needs a right click and Open.
 `build/icon.svg` is the icon; `build/icon.icns` is made from it with `sips`
 and `iconutil`.
 

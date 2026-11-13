@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "e2e": "electron-vite build && playwright test",
-    "dist": "electron-vite build && electron-packager . neoharness --platform=darwin --out=dist --overwrite --icon=build/icon.icns --app-bundle-id=dev.neoharness.desktop --ignore=\"^/(src|test|test-results|playwright-report|build|dist)($|/)\" --ignore=\"\\.(ts|md)$\""
+    "dist": "electron-vite build && electron-packager . neoharness --platform=darwin --out=dist --overwrite --icon=build/icon.icns --app-bundle-id=dev.neoharness.desktop --ignore=\"^/(src|test|test-results|playwright-report|build|dist)($|/)\" --ignore=\"\\.(ts|md)$\" && codesign --force --deep --sign - dist/neoharness-darwin-*/neoharness.app"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.4",
