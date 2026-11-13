@@ -17,7 +17,10 @@ npm run build      # out/
 npm run dist       # dist/neoharness-darwin-arm64/neoharness.app
 ```
 
-To install, copy `neoharness.app` to `/Applications` or `~/Applications`.
+To install, run `./install-mac.sh` from the repository root: it installs
+the binary as `install.sh` does, builds the app and copies it to
+`~/Applications` (`APPS=` changes the folder). Or copy `neoharness.app` to
+`/Applications` or `~/Applications` yourself.
 `npm run dist` signs the app ad hoc, which is enough on the Mac that built
 it. It is not signed with an Apple developer ID nor notarized, so on another
 Mac the first open needs a right click and Open.

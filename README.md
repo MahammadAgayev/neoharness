@@ -1,6 +1,8 @@
 # neoharness
 
-A terminal UI for running several Claude Code sessions at once, with Vim keys.
+Run several Claude Code sessions at once: a coordinator splits your work into
+threads, local or over ssh. Use it from a terminal UI with Vim keys, or from
+a macOS app.
 
 ![a coordinator opens three threads; one writes a design note](docs/demo/demo.gif)
 
@@ -30,9 +32,22 @@ run on when you close the TUI. `neoharness hub stop` stops it. Agents talk to
 it through an MCP server that it adds to each session, so you change nothing
 in your Claude setup.
 
-A macOS desktop app in `desktop/` shares the same hub: the same keys, a
-search over everything, color schemes, and keys as in Claude Code for those
-who do not use Vim. See [docs/desktop.md](docs/desktop.md).
+## Desktop app
+
+The macOS app in `desktop/` shares the same hub, so the TUI and the app show
+the same workspaces and threads at the same time. It has:
+
+- the same Vim keys and `:` commands, or keys as in Claude Code if you turn
+  Vim off;
+- one search over threads, artifacts, transcripts and commands (`⌘K`);
+- a sidebar of workspaces that shows what waits for you; `⌘B` folds it to a
+  rail that opens on hover;
+- back and forward arrows, as in Slack (`⌘[` `⌘]`, `<C-o>` `<C-i>`);
+- the `/model` and `/effort` pickers, with Claude Code's own models and
+  versions;
+- docs you write in, rendered as you type, that the coordinator works from.
+
+See [docs/desktop.md](docs/desktop.md).
 
 ## Install
 
@@ -43,6 +58,13 @@ git clone https://github.com/MahammadAgayev/neoharness
 cd neoharness
 ./install.sh            # builds to ~/.local/bin; BIN=/other/dir ./install.sh to change
 ```
+
+On macOS, `./install-mac.sh` installs the desktop app too. It also needs
+Node.js and npm (`brew install node`). It builds the TUI as `install.sh`
+does, then builds the app and copies it to `~/Applications`
+(`APPS=/Applications ./install-mac.sh` to change). Quit the app before you
+run it; the hub and its turns go on. The app is signed ad hoc, not
+notarized: that is enough on the Mac that built it.
 
 On Windows, run `.\install.ps1` in PowerShell instead. You also need
 [Git for Windows](https://git-scm.com/download/win): its `sh` lists the files
@@ -87,6 +109,7 @@ require("neoharness.agents").setup({ claude = { model = "sonnet" } })
 - [Configuration](docs/configuration.md): `init.lua`, environment variables
 - [Architecture](docs/architecture.md): the hub, turns, MCP tools,
   permissions, remote threads, data on disk
+- [Desktop app](docs/desktop.md): the macOS app, its keys, how to build it
 - [Development](docs/development.md): code map, tests, a scratch hub for
   end-to-end runs
 
