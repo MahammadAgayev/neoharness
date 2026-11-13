@@ -95,6 +95,9 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   transcripts, `⌘.` stop the turn, `⌘N` open a thread, `⌘S` save, `⌘W` close
   the window, `⌘\` split, `⌘1`…`⌘9` workspaces, `⌘/` help (also `<leader>h`, as `<leader>s` is settings), `⌘[` `⌘]` back and forward (`<C-o>` `<C-i>`).
   Help opens as a dialog, as the settings do: Esc closes it, j and k scroll it.
+- **`/model` and `/effort`** with no name open a picker, as in Claude Code;
+  a click on the model under the prompt opens it too. The choice holds for
+  the thread from its next turn.
 - **A sidebar** of workspaces, each with what waits or runs in it. `⌘B` or
   `:set nosidebar` hides it. The work sits on a raised panel beside it, and
   icons are Lucide's line icons (ISC). The Rosé Pine text is drawn a step

@@ -103,6 +103,13 @@ export function Prompt(props: {
     const send = (view: EditorView) => {
       const text = view.state.doc.toString()
       if (!text.trim()) return true
+      // A bare /model or /effort picks from a list, as in Claude Code.
+      const bare = /^\/(model|effort)$/.exec(text.trim())
+      if (bare) {
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
+        store.openChoice({ thread, kind: bare[1] as 'model' | 'effort' })
+        return true
+      }
       void store.send(thread, text).then((ok) => {
         if (!ok) return
         const back = stashes.get(thread) ?? ''

@@ -12,6 +12,7 @@ import { NewWorkspace } from './NewWorkspace'
 import { Tooltip } from './Tooltip'
 import { Help, MessagesWindow } from './Panels'
 import { Icon } from './Icon'
+import { Choice } from './Choice'
 import { Sidebar } from './Sidebar'
 import { ThreadsList } from './ThreadsList'
 import { Workspaces } from './Workspaces'
@@ -157,6 +158,7 @@ export function App() {
       <Picker />
       <Settings />
       <Help />
+      <Choice />
       <Tooltip />
       <KeyHints />
       <NewWorkspace />

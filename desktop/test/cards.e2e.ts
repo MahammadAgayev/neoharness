@@ -465,6 +465,31 @@ test('in a narrow column the prompt keeps its width and one line, the model and 
   await page.keyboard.press('Meta+w')
 })
 
+test('/model picks from a list, as in Claude Code, and so does a click on the model under the prompt', async () => {
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  await page.keyboard.press('i')
+  await page.keyboard.type('/model')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('i')
+  await page.keyboard.press('Enter')
+  const choice = page.locator('.choice')
+  await expect(choice).toBeVisible()
+  await expect(choice.locator('.palette-row.active')).toContainText('opus')
+  await expect(choice.locator('.palette-row', { hasText: 'opus' }).locator('.icon')).toHaveCount(1)
+  await shot('42-model-choice')
+  await page.keyboard.press('j')
+  await page.keyboard.press('Enter')
+  await expect(choice).toHaveCount(0)
+  await expect.poll(() => hub.calls.filter((c) => c.path.endsWith('/messages')).pop()?.body).toMatchObject({ text: '/model sonnet' })
+
+  await page.locator('.pane.focused .prompt-info .pick').click()
+  await expect(choice).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(choice).toHaveCount(0)
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

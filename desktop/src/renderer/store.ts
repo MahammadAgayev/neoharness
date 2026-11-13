@@ -134,6 +134,8 @@ export interface State {
   settings: Settings
   settingsOpen: boolean
   helpOpen: boolean
+  // choice is the /model or /effort picker of a thread.
+  choice: { thread: string; kind: 'model' | 'effort' } | null
   newWorkspace: boolean
   newDoc: boolean
   hints: Hint[] | null
@@ -187,6 +189,7 @@ class Store {
     settings: loadSettings(),
     settingsOpen: false,
   helpOpen: false,
+  choice: null,
     newWorkspace: false,
     newDoc: false,
     hints: null,
@@ -1199,6 +1202,10 @@ class Store {
   openSettings(open = true): void {
     this.set({ settingsOpen: open, helpOpen: false, picker: null, cmdline: null })
   }
+  openChoice(c: { thread: string; kind: 'model' | 'effort' } | null): void {
+    this.set({ choice: c, picker: null, cmdline: null })
+  }
+
   openHelp(open = true): void {
     this.set({ helpOpen: open, settingsOpen: false, picker: null, cmdline: null })
   }

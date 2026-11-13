@@ -19,15 +19,16 @@ function shortModel(m: string): string {
 // PromptInfo is the line under the prompt, as in Claude Code: what the next
 // message goes with, and what the turns cost. It has a line of its own, so
 // a narrow column never squeezes the text you write.
-function PromptInfo(props: { v: ThreadView | undefined; focused: boolean }) {
+function PromptInfo(props: { v: ThreadView | undefined; focused: boolean; thread: string }) {
   const { v, focused } = props
   const warn = useStore((s) => s.settings.compactwarn)
-  const right: { text: string; tone: string; title?: string }[] = []
+  const right: { text: string; tone: string; title?: string; run?: () => void }[] = []
   if (v) {
     if (v.queued > 0) right.push({ text: `+${v.queued} queued`, tone: 'muted' })
     if (v.location.host) right.push({ text: `ssh:${v.location.host}`, tone: 'muted' })
     if (v.branch) right.push({ text: v.branch, tone: 'foam', title: 'git branch' })
-    if (v.model) right.push({ text: shortModel(v.model), tone: 'rose', title: 'model' })
+    if (v.model)
+      right.push({ text: shortModel(v.model), tone: 'rose', title: 'Change the model', run: () => store.openChoice({ thread: props.thread, kind: 'model' }) })
     if (v.contextWindow) {
       const pct = Math.floor(((v.context ?? 0) * 100) / v.contextWindow)
       // Every turn sends the whole context again: time to /compact.
@@ -43,7 +44,13 @@ function PromptInfo(props: { v: ThreadView | undefined; focused: boolean }) {
   return (
     <div className="prompt-info">
       {right.reverse().map((p, i) => (
-        <span key={i} className={`sl-part t-${focused || p.tone === 'love' ? p.tone : 'muted'}`} data-tip={p.title}>
+        <span
+          key={i}
+          className={`sl-part t-${focused || p.tone === 'love' ? p.tone : 'muted'} ${p.run ? 'pick' : ''}`}
+          data-tip={p.title}
+          data-keys={p.run ? '/model' : undefined}
+          onClick={p.run}
+        >
           {p.text}
         </span>
       ))}
@@ -573,7 +580,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
         <span className="prompt-mark">›</span>
         <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
       </div>
-      <PromptInfo v={v} focused={focused} />
+      <PromptInfo v={v} focused={focused} thread={thread} />
     </div>
   )
 }

@@ -350,7 +350,7 @@ export function onKey(e: KeyboardEvent): void {
     return
   }
   // The picker, the command line and the settings are inputs of their own.
-  if (s.picker || s.cmdline !== null || s.settingsOpen || s.helpOpen || s.newWorkspace || s.newDoc) return
+  if (s.picker || s.cmdline !== null || s.settingsOpen || s.helpOpen || s.choice || s.newWorkspace || s.newDoc) return
 
   const km = keymaps()
   if (key.startsWith('<D-')) {

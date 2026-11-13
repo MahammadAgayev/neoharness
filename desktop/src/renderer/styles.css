@@ -1779,3 +1779,18 @@ kbd {
 .help-dialog .settings-body:focus {
   outline: none;
 }
+
+.prompt-info .pick {
+  cursor: pointer;
+  border-radius: 4px;
+}
+.prompt-info .pick:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.choice {
+  width: 420px;
+}
+.choice:focus {
+  outline: none;
+}
