@@ -62,6 +62,26 @@ export interface Permission {
   scope?: string
 }
 
+// Recap is what a thread's work produced. asked, outcome and open are the
+// thread's words; the rest is what the hub saw its last turn do.
+export interface Recap {
+  asked?: string
+  outcome?: string
+  open?: string
+  fromReply?: boolean
+  ran?: number
+  commands?: RecapCommand[]
+  edited?: string[]
+  artifacts?: string[]
+  error?: string
+  at: string
+}
+
+export interface RecapCommand {
+  text: string
+  failed?: boolean
+}
+
 export interface ThreadView {
   workspace: string
   name: string
@@ -74,6 +94,7 @@ export interface ThreadView {
   waiting?: string
   permission?: Permission
   pending?: Event[]
+  recap?: Recap
   quiet?: boolean
   model?: string
   context?: number

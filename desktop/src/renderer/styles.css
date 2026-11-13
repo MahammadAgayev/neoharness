@@ -924,6 +924,33 @@ kbd {
   white-space: nowrap;
 }
 
+.list-recap .from-reply {
+  font-style: italic;
+}
+
+/* a thread's recap, above its transcript */
+.recap {
+  border-bottom: 1px solid var(--hl-med);
+  padding: 10px 24px;
+  font-size: var(--fs-secondary);
+}
+.recap-inner {
+  max-width: var(--measure);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 14px;
+  row-gap: 2px;
+}
+.recap-label {
+  color: var(--muted);
+}
+.recap-body {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* documents */
 .doc {
   flex: 1;

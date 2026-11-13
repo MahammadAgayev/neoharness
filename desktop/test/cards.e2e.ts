@@ -716,6 +716,44 @@ test('<leader>$ shows what the workspace cost, the sidebar each workspace\'s cos
   await expect(demo.locator('.sb-cost')).toHaveText('$24.75')
 })
 
+test("a thread's recap shows under its row and at the top of its chat", async () => {
+  const row = page.locator('.list-row', { hasText: 'api' })
+  hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
+  await expect(row.locator('.list-recap.t-love')).toHaveText('✗ the agent failed: boom')
+  hub.setView(
+    view('demo', 'api', {
+      progress: 'half way',
+      recap: {
+        asked: 'add a health check',
+        outcome: 'Added /healthz and a test',
+        open: 'keep the old /ping?',
+        ran: 3,
+        commands: [{ text: 'go test ./...' }, { text: 'golangci-lint run', failed: true }],
+        edited: ['server.go'],
+        artifacts: ['health-plan'],
+        at: new Date().toISOString(),
+      },
+    }),
+  )
+  await expect(row.locator('.list-recap').first()).toHaveText('Added /healthz and a test · 3 commands, 1 failed · 1 file edited · ◇ health-plan')
+  await expect(row.locator('.list-recap', { hasText: 'open: keep the old /ping?' })).toBeVisible()
+  await expect(row).not.toContainText('half way')
+  await row.click()
+  const head = page.locator('.pane.focused .window.chat .recap')
+  await expect(head).toContainText('asked')
+  await expect(head).toContainText('Added /healthz and a test')
+  await expect(head.locator('.recap-failed')).toHaveText('✗ golangci-lint run')
+  await expect(head).toContainText('+1')
+  await expect(head).toContainText('◇ health-plan')
+  await shot('27-recap')
+
+  hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', outcome: 'All tests pass.', fromReply: true, at: new Date().toISOString() } }))
+  await expect(head).toContainText('reply')
+  await expect(head).toContainText('no commands')
+  hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
+  await expect(head.locator('.t-love')).toHaveText('the agent failed: boom')
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

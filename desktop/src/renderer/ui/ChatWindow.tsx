@@ -9,6 +9,7 @@ import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
 import { CloseWindow } from './CloseWindow'
+import { RecapHead } from './Recap'
 
 const shellLines = 10
 
@@ -524,6 +525,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           />
         </div>
       )}
+      <RecapHead r={v?.recap} />
       <div
         className="transcript"
         ref={scroller}
