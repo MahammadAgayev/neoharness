@@ -10,7 +10,7 @@ import { KeyHints } from './KeyHints'
 import { NewDoc } from './NewDoc'
 import { NewWorkspace } from './NewWorkspace'
 import { Tooltip } from './Tooltip'
-import { HelpWindow, MessagesWindow } from './Panels'
+import { Help, MessagesWindow } from './Panels'
 import { Icon } from './Icon'
 import { Sidebar } from './Sidebar'
 import { ThreadsList } from './ThreadsList'
@@ -25,8 +25,6 @@ function WindowView(props: { win: Win; focused: boolean }) {
       return <ThreadsList {...props} />
     case 'artifact':
       return <ArtifactWindow key={win.buf.name} {...props} />
-    case 'help':
-      return <HelpWindow {...props} />
     case 'messages':
       return <MessagesWindow {...props} />
   }
@@ -158,6 +156,7 @@ export function App() {
       <Toasts />
       <Picker />
       <Settings />
+      <Help />
       <Tooltip />
       <KeyHints />
       <NewWorkspace />

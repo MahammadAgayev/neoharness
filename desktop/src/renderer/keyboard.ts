@@ -59,6 +59,7 @@ const appMaps: Record<string, Action> = {
   '<Tab>': c('next-window'),
   '<S-Tab>': { fn: () => store.nextWindow(-1), desc: 'Previous window' },
   '<C-o>': c('back'),
+  '<C-i>': c('forward'),
   '<C-^>': c('alternate'),
   '<C-6>': c('alternate'),
   ']b': c('next-thread'),
@@ -123,6 +124,7 @@ const macMaps: Record<string, Action> = {
   '<D-\\>': c('vsplit'),
   '<D-/>': c('help'),
   '<D-[>': c('back'),
+  '<D-]>': c('forward'),
   '<D-b>': c('sidebar'),
   '<D-,>': c('settings'),
   '<D-S-n>': c('new-doc'),
@@ -348,7 +350,7 @@ export function onKey(e: KeyboardEvent): void {
     return
   }
   // The picker, the command line and the settings are inputs of their own.
-  if (s.picker || s.cmdline !== null || s.settingsOpen || s.newWorkspace || s.newDoc) return
+  if (s.picker || s.cmdline !== null || s.settingsOpen || s.helpOpen || s.newWorkspace || s.newDoc) return
 
   const km = keymaps()
   if (key.startsWith('<D-')) {

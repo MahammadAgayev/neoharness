@@ -93,7 +93,8 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   status line, so you answer it without leaving.
 - **macOS shortcuts** next to the Vim keys: `⌘P` threads, `⌘⇧F` search the
   transcripts, `⌘.` stop the turn, `⌘N` open a thread, `⌘S` save, `⌘W` close
-  the window, `⌘\` split, `⌘1`…`⌘9` workspaces, `⌘/` help (also `<leader>h`, as `<leader>s` is settings).
+  the window, `⌘\` split, `⌘1`…`⌘9` workspaces, `⌘/` help (also `<leader>h`, as `<leader>s` is settings), `⌘[` `⌘]` back and forward (`<C-o>` `<C-i>`).
+  Help opens as a dialog, as the settings do: Esc closes it, j and k scroll it.
 - **A sidebar** of workspaces, each with what waits or runs in it. `⌘B` or
   `:set nosidebar` hides it. The work sits on a raised panel beside it, and
   icons are Lucide's line icons (ISC). The Rosé Pine text is drawn a step

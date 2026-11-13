@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 import { commands } from '../commands'
+import { keyName } from '../lib/keys'
 import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
 import { Glyph } from './Icon'
@@ -71,7 +72,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['<C-w>v  <C-w>s', 'split right / above'],
       ['<C-w>c  <C-w>o  <C-w>=', 'close, only, equal sizes'],
       [']b [b  <C-^>', 'next / previous thread, alternate'],
-      ['<C-o>', 'back to the buffer the window showed before'],
+      ['<C-o>  <C-i>  ⌘[  ⌘]', 'back and forward through what the window showed'],
       ['<C-v>  <C-x>', 'thread in a split on the right / above (threads list, search)'],
       ['<C-d>', 'delete the thread or workspace, after y (search)'],
     ],
@@ -123,23 +124,46 @@ const sections: { title: string; rows: [string, string][] }[] = [
   },
 ]
 
-export function HelpWindow(props: { win: Win; focused: boolean }) {
+// Help is the keys and commands, in a dialog as the settings: <leader>h,
+// ⌘/ or :help opens it, Esc closes it, j and k scroll it.
+export function Help() {
+  const open = useStore((s) => s.helpOpen)
   const leader = useStore((s) => s.settings.leader)
   const el = useRef<HTMLDivElement>(null)
-  useScrollKeys(props.win, el)
+  useEffect(() => {
+    if (open) el.current?.focus()
+  }, [open])
+  if (!open) return null
+  const close = () => store.openHelp(false)
+  const onKey = (e: React.KeyboardEvent) => {
+    const k = keyName(e.nativeEvent)
+    const d = el.current
+    if (!d || !k) return
+    const by: Record<string, number> = {
+      j: 40,
+      k: -40,
+      '<Down>': 40,
+      '<Up>': -40,
+      '<C-d>': d.clientHeight / 2,
+      '<C-u>': -d.clientHeight / 2,
+      '<Space>': d.clientHeight - 40,
+    }
+    if (k === '<Esc>' || k === 'q' || k === '<D-/>' || k === '<D-w>') close()
+    else if (k === 'g') d.scrollTo({ top: 0 })
+    else if (k === 'G') d.scrollTo({ top: d.scrollHeight })
+    else if (by[k] !== undefined) d.scrollBy({ top: by[k] })
+    else return
+    e.preventDefault()
+    e.stopPropagation()
+  }
   return (
-    <div className="window help" onMouseDown={() => store.focus(props.win.id)}>
-      <div className={`statusline ${props.focused ? 'focused' : ''}`}>
-        <span className="sl-name">help</span>
-        <span className="sl-fill" />
-        <span className="sl-part t-muted">{`<leader> is ${leader}`}</span>
-        <CloseWindow id={props.win.id} />
-      </div>
-      <div className="doc" ref={el} tabIndex={-1}>
-        <div className="help-inner">
-          <h1 className="help-title">
-            <span className="t-iris">neoharness</span> <span className="t-subtle">keys</span>
-          </h1>
+    <div className="overlay" onMouseDown={close}>
+      <div className="palette settings help-dialog" onMouseDown={(e) => e.stopPropagation()} onKeyDown={onKey}>
+        <div className="settings-head">
+          <span className="settings-title">Keys and commands</span>
+          <span className="t-muted">{`the leader is ${leader === '<Space>' ? 'Space' : leader} · Esc closes`}</span>
+        </div>
+        <div className="settings-body help-inner" ref={el} tabIndex={-1}>
           {sections.map((s) => (
             <section key={s.title}>
               <h2>{s.title}</h2>

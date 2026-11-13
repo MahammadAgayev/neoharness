@@ -35,14 +35,15 @@ export type BufRef =
   | { kind: 'chat'; thread: string }
   | { kind: 'threads' }
   | { kind: 'artifact'; name: string }
-  | { kind: 'help' }
   | { kind: 'messages' }
 
 export interface Win {
   id: number
   buf: BufRef
-  // back is where <C-o> goes: the buffers the window showed before.
+  // back is where <C-o> goes: the buffers the window showed before; fwd
+  // is where <C-i> goes after it, as Slack's back and forward.
   back: BufRef[]
+  fwd: BufRef[]
   // cursor is the block of a chat, or the row of a list.
   cursor: number
   // follow keeps a chat at its end as it grows.
@@ -132,6 +133,7 @@ export interface State {
   insert: boolean
   settings: Settings
   settingsOpen: boolean
+  helpOpen: boolean
   newWorkspace: boolean
   newDoc: boolean
   hints: Hint[] | null
@@ -184,6 +186,7 @@ class Store {
     insert: false,
     settings: loadSettings(),
     settingsOpen: false,
+  helpOpen: false,
     newWorkspace: false,
     newDoc: false,
     hints: null,
@@ -665,7 +668,7 @@ class Store {
   // --- windows ---
 
   private win(buf: BufRef): Win {
-    return { id: nextId(), buf, back: [], cursor: -1, follow: true }
+    return { id: nextId(), buf, back: [], fwd: [], cursor: -1, follow: true }
   }
 
   wins(): Win[] {
@@ -700,7 +703,7 @@ class Store {
     this.set({
       layout: {
         ...this.mapWins(this.state.layout, (x) =>
-          x.id === id ? { ...x, buf, back, cursor: buf.kind === 'threads' ? 0 : -1, follow: buf.kind !== 'threads' } : x,
+          x.id === id ? { ...x, buf, back, fwd: [], cursor: buf.kind === 'threads' ? 0 : -1, follow: buf.kind !== 'threads' } : x,
         ),
         focus: id,
       },
@@ -711,7 +714,14 @@ class Store {
     const w = this.cur()
     if (!w || w.back.length === 0) return
     const buf = w.back[w.back.length - 1]
-    this.updateWin(w.id, { buf, back: w.back.slice(0, -1), cursor: buf.kind === 'threads' ? 0 : -1, follow: true })
+    this.updateWin(w.id, { buf, back: w.back.slice(0, -1), fwd: [...w.fwd, w.buf], cursor: buf.kind === 'threads' ? 0 : -1, follow: true })
+  }
+
+  goForward(): void {
+    const w = this.cur()
+    if (!w || w.fwd.length === 0) return
+    const buf = w.fwd[w.fwd.length - 1]
+    this.updateWin(w.id, { buf, fwd: w.fwd.slice(0, -1), back: [...w.back, w.buf], cursor: buf.kind === 'threads' ? 0 : -1, follow: true })
   }
 
   // alternate is <C-^>: the buffer the window showed last.
@@ -1187,8 +1197,12 @@ class Store {
   }
 
   openSettings(open = true): void {
-    this.set({ settingsOpen: open, picker: null, cmdline: null })
+    this.set({ settingsOpen: open, helpOpen: false, picker: null, cmdline: null })
   }
+  openHelp(open = true): void {
+    this.set({ helpOpen: open, settingsOpen: false, picker: null, cmdline: null })
+  }
+
 
   setWorkspaceCursor(i: number): void {
     const n = this.state.workspaces.length
@@ -1275,8 +1289,7 @@ class Store {
         return this.answer('deny', e.rest.trim())
       case 'help':
       case 'h':
-        if (w) this.split(true, { kind: 'help' })
-        return
+        return this.openHelp(true)
       case 'w':
       case 'write':
         if (!art) return this.say('nothing to write here; :w saves an artifact', 'muted')
@@ -1365,7 +1378,6 @@ class Store {
     if (this.state.threads[name]) return { kind: 'chat', thread: name }
     if (this.state.artifacts.some((a) => a.name === name)) return { kind: 'artifact', name }
     if (name === 'threads') return { kind: 'threads' }
-    if (name === 'help') return { kind: 'help' }
     if (name === 'messages') return { kind: 'messages' }
     const ms = this.state.order.filter((n) => n.includes(name))
     return ms.length === 1 ? { kind: 'chat', thread: ms[0] } : null

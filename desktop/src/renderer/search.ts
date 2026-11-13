@@ -187,7 +187,6 @@ function bufferItems(): Item[] {
   for (const [label, buf] of [
     ['threads', { kind: 'threads' }],
     ['messages', { kind: 'messages' }],
-    ['help', { kind: 'help' }],
   ] as [string, BufRef][]) {
     if (label === 'threads' && !s.workspace) continue
     items.push({

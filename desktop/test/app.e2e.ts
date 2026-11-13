@@ -110,8 +110,10 @@ test('the hub starts, a workspace and a thread open, search everywhere finds the
   await ex('colorscheme rose-pine-moon')
 
   await ex('help')
-  await expect(page.locator('.help-title')).toBeVisible()
+  await expect(page.locator('.help-dialog')).toBeVisible()
   await shot('06-help')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.help-dialog')).toHaveCount(0)
 })
 
 test('the workspaces screen lists the workspace and opens it', async () => {
