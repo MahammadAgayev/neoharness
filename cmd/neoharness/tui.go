@@ -9,8 +9,19 @@ func cmdTUI() error {
 	if err != nil {
 		return err
 	}
-	return tui.Run(c, func() error {
-		_, err := ensureHub()
-		return err
+	return tui.Run(c, tui.Hub{
+		Start: func() error {
+			_, err := ensureHub()
+			return err
+		},
+		Restart: func() error {
+			if c.Ping() == nil {
+				if err := stopHub(c); err != nil {
+					return err
+				}
+			}
+			return spawnHub(c)
+		},
+		Version: version(),
 	})
 }

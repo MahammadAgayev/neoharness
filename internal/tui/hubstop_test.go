@@ -43,7 +43,7 @@ func listenUntilGone(t *testing.T, stopped bool) (restarts int32, screen string)
 	g := &goneHub{fakeClient: newFake(), stopped: stopped}
 	a := newApp(s, g)
 	var n atomic.Int32
-	a.restart = func() error { n.Add(1); return errors.New("no hub") }
+	a.hub.Start = func() error { n.Add(1); return errors.New("no hub") }
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go a.listen(ctx)

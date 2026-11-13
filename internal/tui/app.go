@@ -43,6 +43,7 @@ type Client interface {
 	OpenThread(workspace, name, brief, location string) error
 	Events(workspace, thread string, tail int) ([]model.Event, error)
 	Completions(workspace, thread, query string) (model.Completions, error)
+	Info() (hubapi.Info, error)
 	Send(workspace, thread, text string) error
 	SendNow(workspace, thread, text string) error
 	Stop(workspace, thread string) error
@@ -81,6 +82,8 @@ type (
 		c   model.Completions
 		ok  bool
 	}
+	// evError is an error from work in the background.
+	evError struct{ text string }
 )
 
 func (evUpdate) When() time.Time     { return time.Now() }
@@ -89,6 +92,7 @@ func (evDisconnect) When() time.Time { return time.Now() }
 func (evTick) When() time.Time       { return time.Now() }
 func (evKeyTimeout) When() time.Time { return time.Now() }
 func (evComplete) When() time.Time   { return time.Now() }
+func (evError) When() time.Time      { return time.Now() }
 
 // App is the whole UI.
 type App struct {
@@ -207,16 +211,28 @@ type App struct {
 	ticking bool
 	quit    bool
 	pasting bool
-	restart func() error
+	hub     Hub
+	// newer is this binary's version while the hub runs another: the hub
+	// restarts on it once no turn runs.
+	newer string
 	// reg is the unnamed register: every yank and delete, in any window.
 	// ctrlR is <C-r> in Insert waiting for the register it names.
 	reg   register
 	ctrlR bool
 }
 
+// Hub is what the TUI does to the hub process beyond its API.
+type Hub struct {
+	// Start starts the hub again when it stops answering.
+	Start func() error
+	// Restart stops the hub and starts the one of this binary.
+	Restart func() error
+	// Version is this binary's commit; a hub of another one restarts on it.
+	Version string
+}
+
 // Run opens the workspace on a terminal and blocks until the user quits.
-// restart starts the hub again when it stops answering.
-func Run(c Client, restart func() error) error {
+func Run(c Client, hub Hub) error {
 	s, err := tcell.NewScreen()
 	if err != nil {
 		return err
@@ -237,7 +253,7 @@ func Run(c Client, restart func() error) error {
 	// Shift (or Option) held.
 	s.EnableMouse(tcell.MouseButtonEvents)
 	a := newApp(s, c)
-	a.restart = restart
+	a.hub = hub
 	a.loadConfig(filepath.Join(filepath.Dir(hubapi.SocketPath()), "init.lua"))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -307,6 +323,7 @@ func (a *App) handle(ev tcell.Event) {
 		}
 		a.offline = false
 		a.resync()
+		a.checkVersion()
 	case evDisconnect:
 		if !a.offline {
 			a.offline = true
@@ -317,6 +334,8 @@ func (a *App) handle(ev tcell.Event) {
 			}
 		}
 	case evRedraw:
+	case evError:
+		a.notify(ev.text, a.th.Love)
 	case evTick:
 		a.ticking = false
 		a.spin++
@@ -347,8 +366,8 @@ func (a *App) listen(ctx context.Context) {
 		ch, err := a.c.Updates(ctx)
 		if err != nil {
 			_ = a.s.PostEvent(evDisconnect{stopped})
-			if a.restart != nil && !stopped {
-				_ = a.restart()
+			if a.hub.Start != nil && !stopped {
+				_ = a.hub.Start()
 			}
 			time.Sleep(time.Second)
 			continue
@@ -454,6 +473,7 @@ func (a *App) apply(u model.Update) {
 			a.workspaces[i] = *u.Summary
 		}
 		a.renderWorkspaces()
+		a.restartWhenIdle()
 	case model.UpdateThread:
 		switch {
 		case u.View == nil:

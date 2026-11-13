@@ -12,11 +12,14 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 
+	"github.com/MahammadAgayev/neoharness/internal/hubapi"
 	"github.com/MahammadAgayev/neoharness/internal/model"
 )
 
 // fakeClient is a hub that records what the UI asked of it.
 type fakeClient struct {
+	// version is the commit the hub says it runs.
+	version    string
 	workspaces []model.WorkspaceView
 	threads    map[string][]model.ThreadView
 	events     map[string][]model.Event
@@ -36,6 +39,7 @@ type fakeClient struct {
 	merged string
 }
 
+func (f *fakeClient) Info() (hubapi.Info, error)                 { return hubapi.Info{Version: f.version}, nil }
 func (f *fakeClient) Workspaces() ([]model.WorkspaceView, error) { return f.workspaces, nil }
 func (f *fakeClient) CreateWorkspace(name, pin string) error {
 	f.workspaces = append(f.workspaces, model.WorkspaceView{Name: name, Pin: pin})

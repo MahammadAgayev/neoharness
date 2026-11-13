@@ -36,7 +36,11 @@ func cmdHub(args []string) error {
 		}
 		return printStatus(c)
 	case "stop":
-		return stopHub(hubapi.New(hubapi.SocketPath()))
+		if err := stopHub(hubapi.New(hubapi.SocketPath())); err != nil {
+			return err
+		}
+		fmt.Println("hub stopped")
+		return nil
 	case "restart":
 		c := hubapi.New(hubapi.SocketPath())
 		if c.Ping() == nil {
@@ -145,7 +149,6 @@ func stopHub(c *hubapi.Client) error {
 	}
 	for end := time.Now().Add(stopWait); time.Now().Before(end); time.Sleep(50 * time.Millisecond) {
 		if c.Ping() != nil {
-			fmt.Println("hub stopped")
 			return nil
 		}
 	}

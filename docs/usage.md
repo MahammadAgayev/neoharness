@@ -170,12 +170,16 @@ neoharness hub stop      stop the running turns and the hub
 neoharness hub restart   stop it and start a new one, e.g. after an upgrade or an init.lua change
 neoharness hub status    pid, uptime, running turns, version
 neoharness hub serve     run the hub in this terminal
+neoharness version       the commit this neoharness was built from
 ```
 
 - After `hub stop`, an open TUI says the hub stopped and waits. It does not
   start a new one; `hub start` brings it back. If the hub goes away by
   itself, the TUI starts a new one.
-- `hub status` says when the hub is from another build than this
-  neoharness: run `neoharness hub restart`.
+- After an update the hub still runs the old build. The TUI and the
+  desktop app see it when they connect and restart the hub on the new
+  build: at once when no turn runs, else when the turns end, so an update
+  cuts no turn. `:hub restart` does it by hand, after a yes when turns run.
+  `hub status` also says when the hub is from another build.
 - Each thread keeps its Claude session, so a new hub continues every
   conversation.
