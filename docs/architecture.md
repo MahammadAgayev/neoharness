@@ -73,7 +73,7 @@ so no thread can act for another thread or another workspace.
 |---|---|
 | all sessions | `whoami`, `workspace_status`, `send_message`, `report_progress`, `ask_user`, `wake_me`, `read_thread`, `write_artifact`, `read_artifact` |
 | threads only | `recap` |
-| coordinator only | `open_thread`, `resolve_thread`, `notify` |
+| coordinator only | `open_thread`, `resolve_thread`, `notify`, `workspace_recap` |
 | internal | `permission_prompt` |
 
 A turn ends when Claude's reply ends, and only a message starts the next
@@ -102,8 +102,11 @@ recap is kept in `thread.json` and sent as `ThreadView.Recap`.
 The workspace recap says how the whole workspace stands, as
 `WorkspaceView.Recap`. It holds only what no thread's recap says:
 
-- **The goal**: the first line of the person's first message to the
-  coordinator, kept in `workspace.json`.
+- **The coordinator's words**: `workspace_recap(goal, lines)`, its last call
+  in a turn in which the board changed: what the workspace is for, and at
+  most three lines on what the threads' work means together. Until it writes
+  a goal, the goal is the first line of the person's first message to it.
+  Both are kept in `workspace.json`.
 - **What the hub joins** from the open threads' recaps, at no cost: the files
   that two or more threads edited (each path joined back to its thread's
   folder) and how many idle threads failed their last turn.

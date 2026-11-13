@@ -297,3 +297,22 @@ func TestOnlyThreadsWriteARecap(t *testing.T) {
 		t.Fatalf("recap: %q", out)
 	}
 }
+
+func TestOnlyTheCoordinatorWritesTheWorkspaceRecap(t *testing.T) {
+	h, srv := setup(t)
+	coord := connect(t, srv, token(t, model.Coordinator))
+	if out, isErr := call(t, coord, "workspace_recap", map[string]any{"goal": "ship auth", "lines": []string{"answer lint first"}}); isErr || out == "" {
+		t.Fatalf("workspace_recap: %q", out)
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "api", "write tests", ""); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(toolNames(t, connect(t, srv, token(t, "api"))), "workspace_recap") {
+		t.Fatal("a thread has the workspace_recap tool")
+	}
+	for _, v := range h.Workspaces() {
+		if v.Name == "demo" && (v.Recap == nil || v.Recap.Goal != "ship auth" || len(v.Recap.Lines) != 1) {
+			t.Fatalf("recap = %+v", v.Recap)
+		}
+	}
+}

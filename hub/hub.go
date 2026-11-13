@@ -1367,23 +1367,62 @@ func (h *Hub) Recap(workspaceName, name, asked, outcome, open string) error {
 	return nil
 }
 
+// workspaceLines and workspaceLineLimit keep the coordinator's part of the
+// workspace recap to a few short rows above its chat.
+const (
+	workspaceLines     = 3
+	workspaceLineLimit = 200
+)
+
+// WorkspaceRecap keeps the coordinator's words on how the workspace stands:
+// its goal, and a few lines on what the threads' work means together. An
+// empty goal keeps the last one.
+func (h *Hub) WorkspaceRecap(workspaceName, name, goal string, lines []string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	if th.t.Role != model.RoleCoordinator {
+		return errors.New("only the coordinator writes the workspace recap")
+	}
+	var kept []string
+	for _, l := range lines {
+		if l = oneLine(l, workspaceLineLimit); l != "" && len(kept) < workspaceLines {
+			kept = append(kept, l)
+		}
+	}
+	return h.saveRecap(ws, func(r *model.WorkspaceRecap) {
+		if goal = oneLine(goal, recapLimit); goal != "" {
+			r.Goal = goal
+		}
+		r.Lines, r.At = kept, time.Now().UTC()
+	})
+}
+
 // setGoal keeps what the workspace is for. Callers hold h.mu.
 func (h *Hub) setGoal(ws *space, goal string) {
-	if goal == "" {
-		return
+	if goal != "" {
+		_ = h.saveRecap(ws, func(r *model.WorkspaceRecap) { r.Goal = goal })
 	}
+}
+
+// saveRecap changes the stored part of the workspace recap. Callers hold h.mu.
+func (h *Hub) saveRecap(ws *space, change func(*model.WorkspaceRecap)) error {
 	p := ws.p
 	r := model.WorkspaceRecap{}
 	if p.Recap != nil {
 		r = *p.Recap
 	}
-	r.Goal = goal
+	change(&r)
 	p.Recap = &r
 	if err := workspace.Save(p); err != nil {
-		return
+		return err
 	}
 	ws.p = p
 	h.publishWorkspace(ws)
+	return nil
 }
 
 // recapOf is a thread's recap after a turn: what the thread wrote, or else

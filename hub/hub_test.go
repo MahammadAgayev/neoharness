@@ -2364,3 +2364,39 @@ func TestThePersonsFirstMessageIsTheGoalUntilTheCoordinatorWritesOne(t *testing.
 		t.Fatalf("goal = %+v, want the first line of the first message", r)
 	}
 }
+
+func TestTheCoordinatorWritesTheGoalAndLinesOfTheWorkspaceRecap(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "Move auth")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if err := h.WorkspaceRecap("demo", model.Coordinator, " Move auth into sessions ", []string{"answer lint first", "", " cache ran\nno command ", "a", "b"}); err != nil {
+		t.Fatal(err)
+	}
+	r := workspaceView(t, h, "demo").Recap
+	if r == nil || r.Goal != "Move auth into sessions" || !slices.Equal(r.Lines, []string{"answer lint first", "cache ran no command", "a"}) || r.At.IsZero() {
+		t.Fatalf("recap = %+v", r)
+	}
+	// No goal keeps the last one; the lines are replaced.
+	if err := h.WorkspaceRecap("demo", model.Coordinator, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if r := workspaceView(t, h, "demo").Recap; r.Goal != "Move auth into sessions" || len(r.Lines) != 0 {
+		t.Fatalf("recap = %+v", r)
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "api", "work", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.WorkspaceRecap("demo", "api", "mine", nil); err == nil {
+		t.Fatal("a thread wrote the workspace recap")
+	}
+	// It is kept across a restart.
+	h2, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return &fake{} }, MCPPort: 4243})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h2.Close()
+	if r := workspaceView(t, h2, "demo").Recap; r == nil || r.Goal != "Move auth into sessions" {
+		t.Fatalf("after a restart: %+v", r)
+	}
+}

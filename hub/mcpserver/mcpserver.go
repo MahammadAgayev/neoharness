@@ -89,6 +89,11 @@ type recapIn struct {
 	Open    string `json:"open" jsonschema:"what is still to do or needs the person, in one short sentence; an empty string when nothing is open"`
 }
 
+type workspaceRecapIn struct {
+	Goal  string   `json:"goal,omitempty" jsonschema:"what this workspace is for, in a few words; empty keeps the last goal"`
+	Lines []string `json:"lines" jsonschema:"at most 3 short lines on what the threads' work means together; name the threads; empty when the board says it all"`
+}
+
 type openIn struct {
 	Name     string `json:"name" jsonschema:"short kebab-case name, unique in the workspace"`
 	Brief    string `json:"brief" jsonschema:"the task: goal, area, what done means, who to agree with"`
@@ -247,6 +252,14 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 				return nil, nil, err
 			}
 			return text("Resolved " + in.Name + "."), nil, nil
+		})
+
+	mcp.AddTool(s, &mcp.Tool{Name: "workspace_recap", Description: "Say how the whole workspace stands, so the person learns it at a glance above your chat, without reading any thread. It replaces your last workspace recap. Below each thread's row the person already sees its own recap, and neoharness shows what waits, failed or runs, and the files two threads both edited; say only what those do not."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in workspaceRecapIn) (*mcp.CallToolResult, any, error) {
+			if err := h.WorkspaceRecap(p, me, in.Goal, in.Lines); err != nil {
+				return nil, nil, err
+			}
+			return text("Workspace recap kept."), nil, nil
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "notify", Description: "Show the person a notice, wherever they are in neoharness. With needs_you it stays until they look."},
