@@ -145,4 +145,6 @@ export interface Bridge {
   setBadge(n: number): void
   copy(text: string): void
   home(): string
+  // ready says the page listens: the main process sends the hub's status.
+  ready(): void
 }

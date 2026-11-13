@@ -93,7 +93,7 @@ function TitleBar() {
       </div>
       <button className="search-pill" onClick={() => store.openPicker('all')}>
         <span>Search everywhere</span>
-        <kbd>⇧⇧</kbd>
+        <kbd>⌘K</kbd>
       </button>
       <div className="titlebar-right">
         {waiting > 0 && (

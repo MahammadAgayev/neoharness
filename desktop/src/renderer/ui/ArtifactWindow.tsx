@@ -2,7 +2,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { markdown } from '@codemirror/lang-markdown'
 import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
-import { getCM, vim } from '@replit/codemirror-vim'
+import { getCM, vim, Vim } from '@replit/codemirror-vim'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { store, useStore, type Win } from '../store'
@@ -13,7 +13,8 @@ const editorTheme = EditorView.theme({
   '&': { background: 'transparent', color: 'var(--text)', height: '100%' },
   '&.cm-focused': { outline: 'none' },
   '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.6' },
-  '.cm-content': { caretColor: 'var(--iris)', padding: '20px 0', maxWidth: '820px', margin: '0 auto' },
+  // The column of the rendered document: the text stays where it was.
+  '.cm-content': { caretColor: 'var(--iris)', padding: '28px max(32px, calc((100% - 780px) / 2))' },
   '.cm-cursor': { borderLeftColor: 'var(--iris)', borderLeftWidth: '2px' },
   '.cm-fat-cursor': { background: 'var(--iris) !important', color: 'var(--base) !important' },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { background: 'var(--hl-med) !important' },
@@ -76,6 +77,8 @@ function SourceEditor(props: { name: string; text: string; onLeave: () => void; 
       return false
     })
     view.focus()
+    // i a o start an edit in Insert mode, as in the TUI.
+    if (cm && store.state.settings.vim) Vim.handleKey(cm as never, 'i', 'mapping')
     return () => {
       cm?.off('vim-mode-change', onMode)
       editors.delete(view)

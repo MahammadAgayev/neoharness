@@ -1044,7 +1044,8 @@ kbd {
 /* toasts */
 .toasts {
   position: fixed;
-  top: calc(var(--titlebar) + 10px);
+  /* Under the window headers, which name the thread and its state. */
+  top: calc(var(--titlebar) + 44px);
   right: 14px;
   display: flex;
   flex-direction: column;

@@ -1,5 +1,5 @@
 // The items of search everywhere, per tab. "all" mixes the tabs, best
-// matches first, as JetBrains' Search Everywhere does.
+// matches first, as JetBrains' Search Everywhere does. ⌘K opens it.
 
 import { Coordinator, type ThreadView } from '../shared/model'
 import { commands } from './commands'

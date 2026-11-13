@@ -2,7 +2,7 @@ import { autocompletion, completionKeymap, type CompletionContext, type Completi
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
-import { EditorView, keymap, placeholder } from '@codemirror/view'
+import { EditorView, keymap, placeholder, tooltips } from '@codemirror/view'
 import { getCM, vim, Vim } from '@replit/codemirror-vim'
 import { useEffect, useRef } from 'react'
 
@@ -66,6 +66,8 @@ const theme = EditorView.theme({
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': { background: 'var(--hl-med) !important' },
   '.cm-tooltip': { background: 'var(--surface)', border: '1px solid var(--overlay)', borderRadius: '8px', overflow: 'hidden' },
   '.cm-tooltip-autocomplete ul li[aria-selected]': { background: 'var(--hl-med)', color: 'var(--text)' },
+  '.cm-tooltip-autocomplete ul': { fontFamily: 'var(--font-text) !important', padding: '4px' },
+  '.cm-tooltip-autocomplete ul li': { padding: '3px 10px !important', borderRadius: '6px' },
   '.cm-completionDetail': { color: 'var(--muted)', fontStyle: 'normal', marginLeft: '1em' },
 })
 
@@ -156,6 +158,8 @@ export function Prompt(props: {
           history(),
           keymap.of([...completionKeymap, ...historyKeymap, ...defaultKeymap]),
           autocompletion({ override: [source(thread)], icons: false, activateOnTyping: true }),
+          // On the page, so the list can open above a prompt at the bottom.
+          tooltips({ parent: document.body }),
           markdown(),
           EditorView.lineWrapping,
           placeholder(props.resolved ? 'resolved · write to bring it back' : `write to ${thread} · / commands · @ threads and files`),

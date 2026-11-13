@@ -20,7 +20,7 @@ const bridge: Bridge = {
   setBadge: (n) => ipcRenderer.send('badge', n),
   copy: (text) => ipcRenderer.send('clipboard:write', text),
   home: () => ipcRenderer.sendSync('home'),
+  ready: () => ipcRenderer.send('page:ready'),
 }
 
 contextBridge.exposeInMainWorld('nh', bridge)
-ipcRenderer.send('page:ready')

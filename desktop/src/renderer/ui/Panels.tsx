@@ -72,7 +72,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
     ],
   },
   {
-    title: 'search everywhere  ⇧⇧  ⌘K  <leader><leader>',
+    title: 'search everywhere  ⌘K  <leader><leader>',
     rows: [
       ['<Tab>  ⇧<Tab>', 'next / previous tab: all, threads, artifacts, text, commands, …'],
       ['<C-n> <C-p>  ↑ ↓', 'next / previous result'],

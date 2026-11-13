@@ -16,7 +16,7 @@ export interface Command {
 const s = store
 
 export const commands: Command[] = [
-  { id: 'everywhere', title: 'Search everywhere', keys: ['<leader><leader>', '⇧⇧', '⌘K'], run: () => s.openPicker('all') },
+  { id: 'everywhere', title: 'Search everywhere', keys: ['⌘K', '<leader><leader>'], run: () => s.openPicker('all') },
   { id: 'buffers', title: 'Pick a buffer', keys: ['<leader>pb'], run: () => s.openPicker('buffers', true) },
   { id: 'threads', title: 'Pick a thread of any workspace', keys: ['<leader>pt', '⌘P'], run: () => s.openPicker('threads', true) },
   { id: 'local-threads', title: 'Pick a thread of this workspace', keys: ['<leader>pl'], run: () => s.openPicker('threads', true) },

@@ -140,13 +140,13 @@ const BlockView = memo(function BlockView(props: {
           {props.pendingPermission && (
             <div className="card-actions">
               <button className="btn primary" onClick={() => void store.answerThread(props.thread, 'allow')}>
-                Allow <kbd>␣a</kbd>
+                Allow <kbd>space a</kbd>
               </button>
               <button className="btn" onClick={() => void store.answerThread(props.thread, 'always')}>
-                Always <kbd>␣A</kbd>
+                Always <kbd>space A</kbd>
               </button>
               <button className="btn danger" onClick={() => void store.answerThread(props.thread, 'deny')}>
-                Deny <kbd>␣x</kbd>
+                Deny <kbd>space x</kbd>
               </button>
             </div>
           )}

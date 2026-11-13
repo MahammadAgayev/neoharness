@@ -34,7 +34,7 @@ it apply to both.
 
 ## What the window adds
 
-- **Search everywhere**: Shift twice, `⌘K` or `<leader><leader>`. It searches
+- **Search everywhere**: `⌘K`, or `<leader><leader>`. It searches
   threads of every workspace, artifacts, workspaces, commands, notifications
   and the text of every transcript at once. `<Tab>` goes to one kind. The
   pickers (`<leader>pt`, `<leader>pa`, `<leader>ps`, …) open it on one kind.

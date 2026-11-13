@@ -116,7 +116,6 @@ const macMaps: Record<string, Action> = {
 const normal = new Sequencer<Action>({ ...appMaps, ...winMaps })
 const promptNormal = new Sequencer<Action>(appMaps)
 let timer: ReturnType<typeof setTimeout> | null = null
-let lastShift = 0
 
 function run(a: Action, count: number): boolean {
   if ('cmd' in a) {
@@ -177,20 +176,7 @@ export function onKey(e: KeyboardEvent): void {
   const s = store.state
   const key = keyName(e)
 
-  // Shift twice is JetBrains' Search Everywhere.
-  if (e.key === 'Shift' && !e.repeat) {
-    const now = Date.now()
-    if (now - lastShift < 350 && !s.picker) {
-      lastShift = 0
-      command('everywhere').run()
-      e.preventDefault()
-      return
-    }
-    lastShift = now
-    return
-  }
   if (!key) return
-  lastShift = 0
 
   if (typeahead.waiting && !focusedEditor() && !s.picker && s.cmdline === null) {
     if (key.length === 1 || key === '<Space>' || key === '<CR>') {
@@ -259,7 +245,4 @@ export function onKey(e: KeyboardEvent): void {
 
 export function installKeys(): void {
   window.addEventListener('keydown', onKey, true)
-  window.addEventListener('blur', () => {
-    lastShift = 0
-  })
 }

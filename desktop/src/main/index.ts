@@ -117,6 +117,9 @@ ipcMain.on('notify', (_ev, title: string, body: string, target: { workspace: str
 })
 
 app.setName('neoharness')
+// Another home is another neoharness: its own window state and settings, so
+// a scratch hub never changes the person's app.
+if (process.env.NEOHARNESS_HOME) app.setPath('userData', path.join(process.env.NEOHARNESS_HOME, 'desktop'))
 
 app.whenReady().then(() => {
   menu()
@@ -131,7 +134,7 @@ app.whenReady().then(() => {
   })
 })
 
-// The status is sent again when the page loads, as it missed the first one.
+// The status goes again to a page that starts to listen, as it missed it.
 ipcMain.on('page:ready', () => updates?.replay())
 
 app.on('window-all-closed', () => {

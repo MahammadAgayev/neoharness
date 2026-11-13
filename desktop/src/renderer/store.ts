@@ -168,6 +168,11 @@ class Store {
   // opening are threads the person opens here: they see them open, so the
   // "opened" toast would only cover the screen.
   private opening = new Set<string>()
+  // held are the updates of the workspace that loads: they come after the
+  // history it fetches, so they go on top of it, not under it.
+  private held: Update[] | null = null
+  // loaded are the last events of each history as it loaded.
+  private loaded: Record<string, Event[]> = {}
 
   subscribe = (fn: () => void) => {
     this.listeners.add(fn)
@@ -207,6 +212,7 @@ class Store {
     })
     nh().onUpdate((u) => this.apply(u))
     nh().onOpenTarget((t) => void this.goThread(t.workspace, t.thread))
+    nh().ready()
     setInterval(() => this.prune(), 1000)
   }
 
@@ -234,6 +240,17 @@ class Store {
   // and its artifacts.
   private async resync(): Promise<void> {
     const name = this.state.workspace
+    this.held = []
+    try {
+      await this.load(name)
+    } finally {
+      const held = this.held ?? []
+      this.held = null
+      for (const u of held) if (u.workspace === this.state.workspace) this.apply(u, true)
+    }
+  }
+
+  private async load(name: string): Promise<void> {
     const vs = await this.try(this.call('threads', { workspace: name }))
     if (!vs || name !== this.state.workspace) return
     const threads: Record<string, ThreadView> = {}
@@ -243,8 +260,10 @@ class Store {
       vs.map((v) => this.call('events', { workspace: name, thread: v.name, tail: historyTail }).catch(() => [] as Event[])),
     )
     const chats: Record<string, Block[]> = {}
+    this.loaded = {}
     vs.forEach((v, i) => {
       chats[v.name] = fromEvents(evs[i], v.state === 'running')
+      this.loaded[v.name] = evs[i].slice(-50)
     })
     const artifacts = (await this.call('artifacts', { workspace: name }).catch(() => [])) ?? []
     if (name !== this.state.workspace) return
@@ -254,7 +273,11 @@ class Store {
 
   // --- updates ---
 
-  private apply(u: Update): void {
+  private apply(u: Update, replay = false): void {
+    if (this.held && u.workspace === this.state.workspace && u.kind !== 'workspace') {
+      this.held.push(u)
+      return
+    }
     const s = this.state
     switch (u.kind) {
       case 'workspace': {
@@ -278,6 +301,8 @@ class Store {
         if (e.kind === 'notice') this.toast(noticeToast(u.workspace, e))
         if (e.kind === 'error') this.toast(errorToast(u.workspace, u.thread ?? '', e))
         if (u.workspace === s.workspace && u.thread) {
+          // A held event may be in the history that loaded with it already.
+          if (replay && this.loaded[u.thread]?.some((x) => JSON.stringify(x) === JSON.stringify(e))) return
           this.set({ chats: { ...s.chats, [u.thread]: addEvent(s.chats[u.thread] ?? [], e) } })
           if (e.kind === 'ask') this.alert(u.workspace, u.thread, `asks: ${e.text ?? ''}`)
         } else if (e.kind === 'text' && u.thread) {
