@@ -11,9 +11,10 @@ let win: BrowserWindow | null = null
 let updates: Updates | null = null
 // Kept so a notification is not collected before the person clicks it.
 const shown = new Set<Notification>()
-// hidden is for the tests: no window on the screen, no Dock icon and no
-// notifications, so a test run never takes the person's focus.
-const hidden = !!process.env.NEOHARNESS_DESKTOP_HIDDEN
+// test is set by the tests: "shown" puts the window on the screen without
+// focus, so the person can watch and keep typing elsewhere; "hidden" shows
+// no window and no Dock icon. Neither sends notifications.
+const test = process.env.NEOHARNESS_DESKTOP_TEST ?? ''
 
 function createWindow(): void {
   win = new BrowserWindow({
@@ -32,10 +33,10 @@ function createWindow(): void {
       sandbox: true,
       nodeIntegration: false,
       spellcheck: false,
-      backgroundThrottling: !hidden,
+      backgroundThrottling: !test,
     },
   })
-  if (!hidden) win.once('ready-to-show', () => win?.show())
+  if (test !== 'hidden') win.once('ready-to-show', () => (test ? win?.showInactive() : win?.show()))
 
   // The page never leaves the app; links go to the browser.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -108,7 +109,7 @@ ipcMain.on('home', (ev) => {
 })
 ipcMain.on('notify', (_ev, title: string, body: string, target: { workspace: string; thread: string }) => {
   // Only when the window is not in front: there the toast says it already.
-  if (hidden || win?.isFocused() || !Notification.isSupported()) return
+  if (test || win?.isFocused() || !Notification.isSupported()) return
   const n = new Notification({ title, body, silent: false })
   shown.add(n)
   n.on('click', () => {
@@ -128,7 +129,7 @@ app.setName('neoharness')
 if (process.env.NEOHARNESS_HOME) app.setPath('userData', path.join(process.env.NEOHARNESS_HOME, 'desktop'))
 
 app.whenReady().then(() => {
-  if (hidden) app.dock?.hide()
+  if (test === 'hidden') app.dock?.hide()
   menu()
   createWindow()
   updates = new Updates(

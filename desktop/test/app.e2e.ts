@@ -53,7 +53,7 @@ test.beforeAll(async () => {
   if (!process.env.NEOHARNESS_BIN) execFileSync('go', ['build', '-o', bin, './cmd/neoharness'], { cwd: repo })
   app = await electron.launch({
     args: [path.join(__dirname, '..', 'out', 'main', 'index.js')],
-    env: { ...process.env, NEOHARNESS_DESKTOP_HIDDEN: '1', NEOHARNESS_HOME: home, NEOHARNESS_BIN: bin },
+    env: { ...process.env, NEOHARNESS_DESKTOP_TEST: process.env.NEOHARNESS_DESKTOP_TEST ?? 'shown', NEOHARNESS_HOME: home, NEOHARNESS_BIN: bin },
   })
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })

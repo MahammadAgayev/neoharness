@@ -40,7 +40,7 @@ test.beforeAll(async () => {
   app = await electron.launch({
     ...target,
     // The fake hub is up; false makes sure no real hub ever starts here.
-    env: { ...process.env, NEOHARNESS_DESKTOP_HIDDEN: '1', NEOHARNESS_HOME: tmp, NEOHARNESS_BIN: '/usr/bin/false' },
+    env: { ...process.env, NEOHARNESS_DESKTOP_TEST: process.env.NEOHARNESS_DESKTOP_TEST ?? 'shown', NEOHARNESS_HOME: tmp, NEOHARNESS_BIN: '/usr/bin/false' },
   })
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })

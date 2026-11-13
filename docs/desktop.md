@@ -105,9 +105,10 @@ The end-to-end tests make their own `NEOHARNESS_HOME` and MCP port and stop
 their hub after. They never touch `~/.neoharness`. `test/fakehub.ts` is the
 hub API with no model behind it: the card tests push permission requests,
 questions, artifacts and a stop through it. Another `NEOHARNESS_HOME` also
-gets its own app settings. The tests set `NEOHARNESS_DESKTOP_HIDDEN=1`: the
-app runs with no window on the screen, no Dock icon and no notifications, so
-a run never takes your focus.
+gets its own app settings. The tests show the window without focus, so you
+can watch a run and keep typing elsewhere; they send no notifications.
+`NEOHARNESS_DESKTOP_TEST=hidden npm run e2e` runs with no window and no Dock
+icon.
 
 ## Rules
 
