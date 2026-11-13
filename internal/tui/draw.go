@@ -597,6 +597,11 @@ func bufTitle(b *Buffer) string {
 		return "messages"
 	case KindHelp:
 		return "help"
+	case KindCost:
+		if b.Workspace == "" {
+			return "cost of every workspace"
+		}
+		return "cost"
 	case KindArtifact:
 		return b.Artifact
 	}

@@ -1012,6 +1012,10 @@ func (a *App) enter() {
 		if l.Item != "" {
 			a.openWorkspace(l.Item)
 		}
+	case KindCost:
+		if strings.HasPrefix(l.Item, costRow) {
+			a.openCostRow(l.Item)
+		}
 	case KindThreads:
 		switch l.Item {
 		case "":

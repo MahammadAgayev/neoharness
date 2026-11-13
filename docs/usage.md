@@ -149,6 +149,12 @@ to select text with the terminal.
 `:b <name>`, `:ls`, `:split`, `:vsplit`, `:only`, `:threads`, `:artifacts`,
 `:messages`, `:help`, `:q`, `:qa`, `:q!`, `:qa!`.
 
+`:cost` shows what the workspace cost: in all, today, the last 14 days as
+bars, by thread and by model, and the turns that cost the most. `<CR>` on a
+thread or a turn opens it. `:cost all` adds up every workspace. The days,
+the models and the turns count from when the hub began to log each turn;
+the totals count every turn.
+
 `:q` on the last window and `:qa` quit. The hub and its turns run on, so a
 thread that works keeps working, and the next `neoharness` shows where it
 is. `:qa!` also drops unsaved artifact changes.

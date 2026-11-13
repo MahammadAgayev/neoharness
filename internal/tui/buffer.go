@@ -26,6 +26,8 @@ const (
 	// KindDiff is the newer version of an artifact beside its source in
 	// diff mode.
 	KindDiff
+	// KindCost is what a workspace, or every workspace, cost.
+	KindCost
 )
 
 type blockKind int

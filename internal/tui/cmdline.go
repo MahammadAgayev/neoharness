@@ -31,7 +31,7 @@ type cmdline struct {
 
 var commands = []string{
 	"allow", "always", "artifacts", "b", "buffer", "deny", "diffoff", "edit", "folder", "help", "ls", "messages", "new",
-	"only", "open", "q", "qa", "quit", "reopen", "resolve", "restore", "setlocal", "split", "threads",
+	"only", "open", "q", "qa", "quit", "reopen", "resolve", "restore", "cost", "setlocal", "split", "threads",
 	"vsplit", "workspace", "workspaces", "wq",
 }
 
@@ -451,6 +451,8 @@ func (a *App) exec(line string) {
 	case "messages", "mes":
 		a.cur.show(a.messagesBuf)
 		a.cur.Follow = true
+	case "cost":
+		a.showCost(arg(0) == "all")
 	case "vsplit", "vs", "split", "sp":
 		var b *Buffer
 		if arg(0) != "" {
@@ -697,6 +699,7 @@ func (a *App) helpBuf() *Buffer {
 		row(":threads", "threads pane, as <leader>t"),
 		row(":artifacts", "pick an artifact; <CR> on ◇ in a chat opens it too"),
 		row(":messages", "notice history"),
+		row(":cost  :cost all", "what this workspace, or every workspace, cost: by day, thread and model; <CR> opens a thread"),
 		row(":workspaces  :workspace <n>", "workspace list, switch workspace"),
 		row(":restore [name]", "bring back a deleted workspace; no name lists them"),
 		row(":q  :qa", "close window, quit; the hub and its turns run on"),
