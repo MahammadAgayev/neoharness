@@ -1,28 +1,77 @@
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { markdown } from '@codemirror/lang-markdown'
-import { Compartment, EditorState } from '@codemirror/state'
+import { cssLanguage } from '@codemirror/lang-css'
+import { htmlLanguage } from '@codemirror/lang-html'
+import { javascriptLanguage, jsxLanguage, tsxLanguage, typescriptLanguage } from '@codemirror/lang-javascript'
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { HighlightStyle, StreamLanguage, syntaxHighlighting, syntaxTree, type Language } from '@codemirror/language'
+import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile'
+import { go } from '@codemirror/legacy-modes/mode/go'
+import { python } from '@codemirror/legacy-modes/mode/python'
+import { rust } from '@codemirror/legacy-modes/mode/rust'
+import { shell } from '@codemirror/legacy-modes/mode/shell'
+import { standardSQL } from '@codemirror/legacy-modes/mode/sql'
+import { toml } from '@codemirror/legacy-modes/mode/toml'
+import { yaml } from '@codemirror/legacy-modes/mode/yaml'
+import { Compartment, EditorState, Transaction } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
+import { tags as t } from '@lezer/highlight'
 import { getCM, vim, Vim } from '@replit/codemirror-vim'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { hunks, lines, type Hunk } from '../lib/linediff'
+import { livePreview } from '../lib/livepreview'
+import { outline } from '../lib/markdown'
 import { store, useStore, type Doc, type Win } from '../store'
-import { Markdown } from './Markdown'
 import { editorKeys, editors, handlers, type WinAction } from './registry'
 
-const editorTheme = EditorView.theme({
+const docTheme = EditorView.theme({
   '&': { background: 'transparent', color: 'var(--text)', height: '100%' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.6' },
-  // The column of the rendered document: the text stays where it was.
-  '.cm-content': { caretColor: 'var(--iris)', padding: '28px max(32px, calc((100% - 780px) / 2))' },
+  '.cm-scroller': { fontFamily: 'var(--font-text)', lineHeight: '1.7' },
+  // The column of a document, as a page.
+  '.cm-content': { caretColor: 'var(--iris)', padding: '32px max(32px, calc((100% - 760px) / 2)) 40vh' },
   '.cm-cursor': { borderLeftColor: 'var(--iris)', borderLeftWidth: '2px' },
   '.cm-fat-cursor': { background: 'var(--iris) !important', color: 'var(--base) !important' },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { background: 'var(--hl-med) !important' },
-  '.cm-activeLine': { background: 'var(--hl-low)' },
   '&:not(.cm-focused) .cm-cursorLayer': { display: 'none' },
   '.cm-gutters': { display: 'none' },
 })
+
+const codeColors = HighlightStyle.define([
+  { tag: [t.keyword, t.controlKeyword, t.moduleKeyword, t.operatorKeyword], color: 'var(--pine)' },
+  { tag: [t.string, t.special(t.string), t.regexp], color: 'var(--gold)' },
+  { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--muted)', fontStyle: 'italic' },
+  { tag: [t.number, t.bool, t.null, t.atom], color: 'var(--rose)' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: 'var(--foam)' },
+  { tag: [t.typeName, t.className, t.tagName], color: 'var(--foam)' },
+  { tag: [t.propertyName, t.attributeName], color: 'var(--iris)' },
+])
+
+// Code blocks in these languages are highlighted; others show plain.
+const codeLanguages: Record<string, Language> = {
+  js: javascriptLanguage,
+  javascript: javascriptLanguage,
+  jsx: jsxLanguage,
+  ts: typescriptLanguage,
+  typescript: typescriptLanguage,
+  tsx: tsxLanguage,
+  html: htmlLanguage,
+  css: cssLanguage,
+  json: javascriptLanguage,
+  go: StreamLanguage.define(go),
+  py: StreamLanguage.define(python),
+  python: StreamLanguage.define(python),
+  rs: StreamLanguage.define(rust),
+  rust: StreamLanguage.define(rust),
+  sh: StreamLanguage.define(shell),
+  bash: StreamLanguage.define(shell),
+  shell: StreamLanguage.define(shell),
+  sql: StreamLanguage.define(standardSQL),
+  yaml: StreamLanguage.define(yaml),
+  yml: StreamLanguage.define(yaml),
+  toml: StreamLanguage.define(toml),
+  dockerfile: StreamLanguage.define(dockerFile),
+}
 
 // hunkAt is the change at a source line, as diffTake in the TUI: a line it
 // changes, or the line above lines it adds.
@@ -37,15 +86,26 @@ function conflictHunks(name: string): Hunk[] | null {
   return hunks(lines(d.edit.text.split('\n'), d.text.split('\n')))
 }
 
-function SourceEditor(props: { name: string; text: string; onLeave: () => void; win: number; onHunk: (i: number) => void }) {
+// DocEditor is the artifact as a document: rendered where you read, the
+// markdown where the cursor is, as the TUI shows it. A change starts an edit;
+// :w or ⌘S saves it.
+function DocEditor(props: {
+  name: string
+  text: string
+  win: number
+  focused: boolean
+  artifacts: Set<string>
+  onHunk: (i: number) => void
+  onView: (v: EditorView | null) => void
+}) {
   const host = useRef<HTMLDivElement>(null)
   const vimOn = useStore((s) => s.settings.vim)
   const comp = useRef(new Compartment())
   const viewRef = useRef<EditorView | null>(null)
-  const leave = useRef(props.onLeave)
-  leave.current = props.onLeave
   const onHunk = useRef(props.onHunk)
   onHunk.current = props.onHunk
+  const arts = useRef(props.artifacts)
+  arts.current = props.artifacts
 
   useEffect(() => {
     const view = new EditorView({
@@ -55,31 +115,43 @@ function SourceEditor(props: { name: string; text: string; onLeave: () => void; 
         extensions: [
           comp.current.of(store.state.settings.vim ? vim({ status: false }) : []),
           history(),
-          keymap.of([
-            {
-              key: 'Escape',
-              run: () => {
-                if (store.state.settings.vim) return false
-                leave.current()
-                return true
-              },
-            },
-            indentWithTab,
-            ...historyKeymap,
-            ...defaultKeymap,
-          ]),
-          markdown(),
+          keymap.of([indentWithTab, ...historyKeymap, ...defaultKeymap]),
+          markdown({ base: markdownLanguage, codeLanguages: (info) => codeLanguages[info.toLowerCase()] ?? null }),
+          syntaxHighlighting(codeColors),
+          livePreview(() => arts.current),
           EditorView.lineWrapping,
-          editorTheme,
+          docTheme,
           EditorView.updateListener.of((u) => {
-            if (u.docChanged) store.editText(props.name, u.state.doc.toString())
+            // A newer version or a merge comes in as remote: it is no edit.
+            if (u.docChanged && !u.transactions.some((tr) => tr.annotation(Transaction.remote)))
+              store.editText(props.name, u.state.doc.toString())
             if (u.focusChanged) store.setInsert(u.view.hasFocus && (!store.state.settings.vim || !!getCM(u.view)?.state.vim?.insertMode))
           }),
-          EditorView.domEventHandlers({ focus: () => store.focus(props.win) }),
+          EditorView.domEventHandlers({
+            focus: () => store.focus(props.win),
+            // ⌘-click opens an artifact named in code, or a link.
+            mousedown: (e, v) => {
+              if (!e.metaKey) return false
+              const art = (e.target as HTMLElement).closest<HTMLElement>('[data-artifact]')?.dataset.artifact
+              if (art) {
+                void store.openArtifact(art)
+                return true
+              }
+              const pos = v.posAtCoords({ x: e.clientX, y: e.clientY })
+              for (let n = pos === null ? null : syntaxTree(v.state).resolveInner(pos, 1); n; n = n.parent) {
+                if (n.name !== 'Link') continue
+                const url = n.getChild('URL')
+                if (url) void window.nh.openExternal(v.state.sliceDoc(url.from, url.to))
+                return true
+              }
+              return false
+            },
+          }),
         ],
       }),
     })
     viewRef.current = view
+    props.onView(view)
     editors.add(view)
     const cm = getCM(view)
     const onMode = (e: { mode: string }) => store.setInsert(e.mode === 'insert')
@@ -107,8 +179,7 @@ function SourceEditor(props: { name: string; text: string; onLeave: () => void; 
           return true
         }
         if (hs && first === 'd' && (key === 'o' || key === 'p')) {
-          const at = line()
-          const i = hunkAt(hs, at)
+          const i = hunkAt(hs, line())
           if (i < 0) store.say('no change here', 'muted')
           else {
             store.takeHunk(props.name, i)
@@ -116,7 +187,6 @@ function SourceEditor(props: { name: string; text: string; onLeave: () => void; 
           }
           return true
         }
-        const cm = getCM(view)
         if (cm) {
           Vim.handleKey(cm as never, first, 'user')
           Vim.handleKey(cm as never, key, 'user')
@@ -127,35 +197,46 @@ function SourceEditor(props: { name: string; text: string; onLeave: () => void; 
         held = key
         return true
       }
-      // <Esc> in Normal mode shows the document rendered again, as the TUI does.
-      if (key === '<Esc>') {
-        leave.current()
-        return true
-      }
       return false
     })
-    view.focus()
-    // i a o start an edit in Insert mode, as in the TUI.
-    if (cm && store.state.settings.vim) Vim.handleKey(cm as never, 'i', 'mapping')
+    // gO picks a heading: the cursor goes to its line.
+    const onHeading = (e: Event) => {
+      const d = (e as CustomEvent<{ win: number; index: number }>).detail
+      if (d.win !== props.win) return
+      const h = outline(view.state.doc.toString())[d.index]
+      if (h) {
+        toLine(h.line)
+        view.focus()
+      }
+    }
+    document.addEventListener('nh:heading', onHeading)
     return () => {
+      document.removeEventListener('nh:heading', onHeading)
       cm?.off('vim-mode-change', onMode)
       editors.delete(view)
+      props.onView(null)
       view.destroy()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.name])
 
-  // A merge or :e! changes the text under the editor.
+  // A newer version, a merge or :e! changes the text under the editor.
   useEffect(() => {
     const v = viewRef.current
-    if (v && v.state.doc.toString() !== props.text) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.text } })
+    if (v && v.state.doc.toString() !== props.text)
+      v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.text }, annotations: Transaction.remote.of(true) })
   }, [props.text])
 
   useEffect(() => {
     viewRef.current?.dispatch({ effects: comp.current.reconfigure(vimOn ? vim({ status: false }) : []) })
   }, [vimOn])
 
-  return <div className="source-editor" ref={host} />
+  // The window in focus has the cursor in its document.
+  useEffect(() => {
+    if (props.focused && !viewRef.current?.hasFocus) viewRef.current?.focus()
+  }, [props.focused])
+
+  return <div className="doc-editor" ref={host} />
 }
 
 // Conflict is what a refused :w shows: your edit against the newer version,
@@ -242,19 +323,9 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
   const workspace = useStore((s) => s.workspace)
   const artifactList = useStore((s) => s.artifacts)
   const artifacts = useMemo(() => new Set(artifactList.map((a) => a.name)), [artifactList])
-  const [editing, setEditing] = useState(false)
   const [hunk, setHunk] = useState(0)
-  const scroller = useRef<HTMLDivElement>(null)
-  const dirty = !!doc?.edit && doc.edit.text !== doc.edit.baseText
-
-  // :e starts an edit from the command line; :w and :e! end it.
-  const hasEdit = !!doc?.edit
-  useEffect(() => setEditing(hasEdit), [hasEdit])
-
-  const edit = () => {
-    store.startEdit(name)
-    setEditing(true)
-  }
+  const view = useRef<EditorView | null>(null)
+  const dirty = store.dirty(name)
 
   const handle = (a: WinAction, count: number): boolean => {
     if (a === 'nextHunk' || a === 'prevHunk' || a === 'takeHunk') {
@@ -269,63 +340,8 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
       } else setHunk(Math.max(0, Math.min(n - 1, hunk + (a === 'nextHunk' ? count : -count))))
       return true
     }
-    const el = scroller.current
-    if (!el) return false
-    const line = 24
-    const headings = () => Array.from(el.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6'))
-    switch (a) {
-      case 'down':
-        el.scrollBy({ top: line * count })
-        return true
-      case 'up':
-        el.scrollBy({ top: -line * count })
-        return true
-      case 'top':
-        el.scrollTo({ top: 0 })
-        return true
-      case 'bottom':
-        el.scrollTo({ top: el.scrollHeight })
-        return true
-      case 'halfDown':
-        el.scrollBy({ top: el.clientHeight / 2 })
-        return true
-      case 'halfUp':
-        el.scrollBy({ top: -el.clientHeight / 2 })
-        return true
-      case 'pageDown':
-        el.scrollBy({ top: el.clientHeight - 40 })
-        return true
-      case 'pageUp':
-        el.scrollBy({ top: -(el.clientHeight - 40) })
-        return true
-      case 'nextMsg':
-      case 'prevMsg': {
-        const top = el.getBoundingClientRect().top
-        const hs = headings()
-        const h =
-          a === 'nextMsg'
-            ? hs.find((x) => x.getBoundingClientRect().top > top + 8)
-            : [...hs].reverse().find((x) => x.getBoundingClientRect().top < top - 8)
-        h?.scrollIntoView({ block: 'start' })
-        return true
-      }
-      case 'insert':
-      case 'append':
-      case 'enter':
-        edit()
-        return true
-      case 'yank': {
-        const text = window.getSelection()?.toString() || doc?.edit?.text || doc?.text || ''
-        window.nh.copy(text)
-        store.say('yanked the document', 'muted')
-        return true
-      }
-      case 'link': {
-        const a = el.querySelector<HTMLAnchorElement>('a[href]:hover') ?? el.querySelector<HTMLAnchorElement>('a[href]')
-        if (a) void window.nh.openExternal(a.href)
-        return true
-      }
-    }
+    // Keys that reach the window when its document has no focus give it back.
+    view.current?.focus()
     return false
   }
   const ref = useRef(handle)
@@ -333,17 +349,6 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
   useEffect(() => {
     handlers.set(win.id, (a, n) => ref.current(a, n))
     return () => void handlers.delete(win.id)
-  }, [win.id])
-
-  useEffect(() => {
-    const on = (e: Event) => {
-      const d = (e as CustomEvent<{ win: number; index: number }>).detail
-      if (d.win !== win.id) return
-      setEditing(false)
-      requestAnimationFrame(() => scroller.current?.querySelectorAll('h1, h2, h3, h4, h5, h6')[d.index]?.scrollIntoView({ block: 'start' }))
-    }
-    document.addEventListener('nh:heading', on)
-    return () => document.removeEventListener('nh:heading', on)
   }, [win.id])
 
   const a = doc?.artifact
@@ -361,33 +366,25 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
           </span>
         )}
         <span className="sl-fill" />
-        {editing ? (
-          <>
-            <button className="btn small" onClick={() => void store.save(name)}>
-              Save <kbd>⌘S</kbd>
-            </button>
-            <button className="btn small ghost" onClick={() => setEditing(false)}>
-              Done
-            </button>
-          </>
-        ) : (
-          <button className="btn small ghost" onClick={edit}>
-            Edit <kbd>i</kbd>
+        {dirty && (
+          <button className="btn small primary" onClick={() => void store.save(name)}>
+            Save <kbd>⌘S</kbd>
           </button>
         )}
       </div>
       {doc?.conflict && doc.edit && <Conflict name={name} doc={doc} cursor={hunk} setCursor={setHunk} />}
       {!doc ? (
         <div className="empty">loading…</div>
-      ) : editing && doc.edit ? (
-        <SourceEditor name={name} text={doc.edit.text} win={win.id} onLeave={() => setEditing(false)} onHunk={setHunk} />
       ) : (
-        <div className="doc" ref={scroller} tabIndex={-1} onDoubleClick={edit}>
-          <article className="doc-inner">
-            {a && <div className="doc-title">{a.title}</div>}
-            <Markdown text={doc.edit?.text ?? doc.text} artifacts={artifacts} />
-          </article>
-        </div>
+        <DocEditor
+          name={name}
+          text={doc.edit?.text ?? doc.text}
+          win={win.id}
+          focused={focused}
+          artifacts={artifacts}
+          onHunk={setHunk}
+          onView={(v) => (view.current = v)}
+        />
       )}
     </div>
   )

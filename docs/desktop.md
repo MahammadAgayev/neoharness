@@ -60,6 +60,12 @@ What the TUI takes from `init.lua` for itself is in Settings instead.
   (`:colorscheme rose-pine-dawn`), or Nothing, which turns a default off.
   Your keys win over the defaults.
 
+An artifact opens as a document you can write in, as the TUI draws it:
+every line shows rendered, headings, lists, task boxes, tables, alerts and
+highlighted code, and the lines under the cursor show their markdown. There
+is no separate source mode. `:w` or `⌘S` saves; `⌘`-click opens a link or an
+artifact named in code.
+
 When a save is refused because the agent changed the same lines, the window
 shows your edit against the newer version change by change, as the TUI's
 diff mode: `]c` `[c` move, `do` (or `dp`, or the Take button) takes one

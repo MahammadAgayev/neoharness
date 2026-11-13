@@ -84,14 +84,15 @@ const sections: { title: string; rows: [string, string][] }[] = [
     ],
   },
   {
-    title: 'edit an artifact',
+    title: 'an artifact',
     rows: [
-      ['i a o  :e', 'edit the markdown'],
+      ['i a o', 'write in it: it shows rendered, and the markdown only on the lines under the cursor'],
+      ['⌘-click', 'open an artifact named in code, or a link'],
       [':w  ⌘S', 'save, merged with a newer version; the writer gets the diff'],
       ['<leader>  <C-w>  g  ]  [', 'what can follow shows at once, as which-key; Settings turns it off'],
       [']c [c  do dp', 'in a refused save: next / previous change, take the change of the newer version'],
       [':w!  :e!', 'save over a newer version, take the newer version'],
-      ['<Esc>', 'back to the rendered document; an unsaved change shows [+]'],
+      ['<Esc>', 'leave Insert; an unsaved change shows [+]'],
       [':wq  :q!', 'save and close, drop the changes and close'],
     ],
   },

@@ -965,10 +965,14 @@ class Store {
     })
   }
 
+  // editText takes a change in the document. The first one starts an edit;
+  // undoing back to the saved text ends it, so newer versions show again.
   editText(name: string, text: string): void {
     const d = this.state.docs[name]
-    if (!d?.edit) return
-    this.set({ docs: { ...this.state.docs, [name]: { ...d, edit: { ...d.edit, text } } } })
+    if (!d) return
+    const edit = d.edit ?? { text: d.text, base: d.artifact.version, baseText: d.text }
+    const done = text === edit.baseText && !d.conflict
+    this.set({ docs: { ...this.state.docs, [name]: { ...d, edit: done ? null : { ...edit, text } } } })
   }
 
   dirty(name: string): boolean {
