@@ -13,7 +13,9 @@
 ```
 
 - A workspace opens with the coordinator on the left and the threads pane on
-  the right.
+  the right. `<CR>` on a thread shows it there. `<leader>t` brings the list
+  back in a column of its own, so the thread stays, or goes to the list when
+  it is on screen.
 - The folder picker lists "not pinned", the folder you started in, and every
   folder up to 6 levels below it. Dot folders, `Library` and `node_modules`
   are skipped.

@@ -821,6 +821,17 @@ func (a *App) showList() {
 		a.pickWorkspaces()
 		return
 	}
+	for _, w := range a.root.windows() {
+		if w.Buf == a.threadsBuf {
+			a.cur = w
+			return
+		}
+	}
+	// The list gets a column of its own, as a file tree does, so it never
+	// takes the place of a thread you read.
+	if a.pane != nil && a.pane.Buf != a.threadsBuf {
+		a.pane = nil
+	}
 	a.toPane(a.threadsBuf)
 	a.cur.Follow = false
 }

@@ -349,12 +349,13 @@ func TestThreadsPaneGoesBackToTheRight(t *testing.T) {
 			t.Fatalf("%s: <leader>t should put the pane at full height on the right", what)
 		}
 	}
-	h.press("<Space>", "t", "<C-w>s")
+	h.press("<Space>", "t", ":q", "<CR>")
 	h.press("<Space>", "t")
-	onRight("after a split of the pane")
-	h.press("<C-w>v")
+	onRight("after the pane was closed")
+	h.press("<C-w>s", "<C-w>j", ":b auth-refactor", "<CR>")
+	h.press("<C-w>k", ":b api-tests", "<CR>")
 	h.press("<Space>", "t")
-	onRight("after a window right of the pane")
+	onRight("after the pane's windows show threads")
 }
 
 func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
@@ -371,11 +372,19 @@ func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
 	if len(h.a.root.windows()) != 2 || h.a.cur != pane || pane.Buf.Thread != "api-tests" {
 		t.Fatalf("<CR> should show api-tests in the pane; got %q", pane.Buf.Name)
 	}
-	h.press("<Space>", "t", "gg", "j", "<CR>")
-	if len(h.a.root.windows()) != 2 || pane.Buf.Thread != "auth-refactor" {
-		t.Fatalf("the next thread should open in the same pane; got %q", pane.Buf.Name)
+	// The list comes back in a column of its own, as a file tree does: the
+	// thread you read stays.
+	h.press("<Space>", "t")
+	wins = h.a.root.windows()
+	if len(wins) != 3 || wins[1] != pane || pane.Buf.Thread != "api-tests" || wins[2] != h.a.cur || h.a.cur.Buf.Kind != KindThreads {
+		t.Fatalf("<leader>t should open the list beside the thread; got %d windows", len(wins))
 	}
-	h.press("<C-^>")
+	list := wins[2]
+	h.press("<C-w>h", "<Space>", "t")
+	if len(h.a.root.windows()) != 3 || h.a.cur != list {
+		t.Fatal("<leader>t with the list on screen should go to it")
+	}
+	h.press("<C-w>c", "<C-w>l", "<C-^>")
 	if pane.Buf.Kind != KindThreads {
 		t.Fatal("<C-^> should go back to the list")
 	}
