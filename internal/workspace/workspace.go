@@ -323,6 +323,44 @@ func AppendEvent(workspace, thread string, e model.Event) error {
 	return err
 }
 
+func spendFile(workspace string) string { return filepath.Join(Dir(workspace), "spend.jsonl") }
+
+// AppendSpend adds a paid turn to the workspace's spend log.
+func AppendSpend(workspace string, c model.TurnCost) error {
+	data, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(spendFile(workspace), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(append(data, '\n'))
+	return err
+}
+
+// Spends reads the workspace's spend log, oldest first.
+func Spends(workspace string) ([]model.TurnCost, error) {
+	f, err := os.Open(spendFile(workspace))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var out []model.TurnCost
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		var c model.TurnCost
+		if json.Unmarshal(sc.Bytes(), &c) == nil {
+			out = append(out, c)
+		}
+	}
+	return out, sc.Err()
+}
+
 // Events reads the last n events of a transcript; n <= 0 reads all. A
 // truncated last line, left by a crash mid-write, is skipped.
 func Events(workspace, thread string, n int) ([]model.Event, error) {

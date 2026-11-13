@@ -1582,6 +1582,9 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	}
 	// A failed turn was still paid for.
 	t.Cost += res.Cost
+	if res.Cost > 0 {
+		_ = workspace.AppendSpend(ws.p.Name, model.TurnCost{At: time.Now().UTC(), Thread: t.Name, Model: t.Model, Cost: res.Cost, Tools: res.Tools})
+	}
 	h.readBranch(ws, th)
 	switch {
 	case h.ctx.Err() != nil:

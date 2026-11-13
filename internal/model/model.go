@@ -217,6 +217,42 @@ type Completions struct {
 	Query string `json:"query,omitempty"`
 }
 
+// TurnCost is what one turn cost. The spend log of a workspace keeps one per
+// paid turn, failed ones too.
+type TurnCost struct {
+	At        time.Time `json:"at"`
+	Workspace string    `json:"workspace,omitempty"`
+	Thread    string    `json:"thread"`
+	Model     string    `json:"model,omitempty"`
+	Cost      float64   `json:"cost"`
+	Tools     int       `json:"tools,omitempty"`
+}
+
+// Spend is what a workspace, or every workspace, cost. Total and Threads
+// count every turn ever; Days, Models and Top only the turns in the spend
+// logs, which began later: Since is the first of them.
+type Spend struct {
+	Total   float64     `json:"total"`
+	Today   float64     `json:"today"`
+	Since   time.Time   `json:"since"`
+	Threads []SpendPart `json:"threads"`
+	// Workspaces is filled only for every workspace.
+	Workspaces []SpendPart `json:"workspaces"`
+	Models     []SpendPart `json:"models"`
+	// Days are the last 14, oldest first, each as YYYY-MM-DD in local time.
+	Days []SpendPart `json:"days"`
+	// Top are the turns that cost the most, the most first.
+	Top []TurnCost `json:"top"`
+}
+
+// SpendPart is the cost of one thread, workspace, model or day.
+type SpendPart struct {
+	Workspace string  `json:"workspace,omitempty"`
+	Name      string  `json:"name"`
+	Cost      float64 `json:"cost"`
+	Turns     int     `json:"turns,omitempty"`
+}
+
 // Choices are what /model and /effort of a thread take, and what it has now.
 // Empty Model or Effort is the agent's default.
 type Choices struct {

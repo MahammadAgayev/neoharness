@@ -1958,3 +1958,49 @@ func TestYourMessageReopensAResolvedThread(t *testing.T) {
 		t.Fatalf("last prompt = %q, want your message to run", reqs[len(reqs)-1].Prompt)
 	}
 }
+
+func TestSpendAddsUpTurnsByThreadModelDayAndWorkspace(t *testing.T) {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		switch req.Prompt {
+		case "big":
+			return agent.Result{Text: "ok", Model: "model-a", Cost: 2}
+		case "fails":
+			// A failed turn was still paid for.
+			return agent.Result{Text: "boom", Model: "model-b", Cost: 0.25, ExitCode: 1}
+		}
+		return agent.Result{Text: "ok", Model: "model-b", Cost: 0.5}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	pinned(t, h, "other")
+	for _, s := range []struct{ ws, prompt string }{{"demo", "big"}, {"demo", "small"}, {"demo", "fails"}, {"other", "small"}} {
+		if err := h.Send(s.ws, model.User, model.Coordinator, s.prompt); err != nil {
+			t.Fatal(err)
+		}
+		stateIs(t, h, s.ws, model.Coordinator, model.StateIdle)
+	}
+	sp, err := h.Spend("demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sp.Total != 2.75 || sp.Today != 2.75 || len(sp.Days) != 14 || sp.Days[13].Turns != 3 {
+		t.Fatalf("total %v today %v days %+v", sp.Total, sp.Today, sp.Days)
+	}
+	if len(sp.Threads) != 1 || sp.Threads[0].Name != model.Coordinator || sp.Threads[0].Turns != 3 {
+		t.Fatalf("threads = %+v", sp.Threads)
+	}
+	if len(sp.Models) != 2 || sp.Models[0].Name != "model-a" || sp.Models[1].Cost != 0.75 {
+		t.Fatalf("models = %+v", sp.Models)
+	}
+	if len(sp.Top) != 3 || sp.Top[0].Cost != 2 || sp.Top[0].Workspace != "demo" || len(sp.Workspaces) != 0 {
+		t.Fatalf("top = %+v, workspaces = %+v", sp.Top, sp.Workspaces)
+	}
+	all, _ := h.Spend("")
+	if all.Total != 3.25 || len(all.Workspaces) != 2 || all.Workspaces[0].Name != "demo" || all.Workspaces[1].Cost != 0.5 {
+		t.Fatalf("all = %+v", all)
+	}
+	if _, err := h.Spend("nope"); err == nil {
+		t.Fatal("an unknown workspace should fail")
+	}
+}
