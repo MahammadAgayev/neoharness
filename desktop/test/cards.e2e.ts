@@ -221,6 +221,23 @@ async function yankTwo() {
   expect(clip).toContain('8080')
 }
 
+test('a selection holds the chat still as new blocks arrive', async () => {
+  await page.locator('.b-ask').click()
+  await normal()
+  await page.keyboard.press('i')
+  await page.keyboard.press('Escape')
+  // <Esc> in the prompt's Normal puts the cursor on the last block.
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('v')
+  const sel = page.locator('.row.selected')
+  await expect(sel).toHaveCount(1)
+  for (let i = 0; i < 40; i++) hub.event('demo', 'api', { kind: 'text', text: `new block ${i}` })
+  await expect(page.locator('.row', { hasText: 'new block 39' })).toHaveCount(1)
+  await page.waitForTimeout(250)
+  await expect(sel).toBeInViewport()
+  await page.keyboard.press('Escape')
+})
+
 test('⌘, opens the settings: a theme, and a key you record runs an ex command', async () => {
   const base = () => page.evaluate(() => document.documentElement.style.getPropertyValue('--base'))
   await page.keyboard.press('Meta+Comma')

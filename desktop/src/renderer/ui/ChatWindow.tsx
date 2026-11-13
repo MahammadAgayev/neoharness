@@ -292,10 +292,11 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
     return -1
   }, [blocks, v?.permission])
 
-  // Follow the end as the chat grows, unless the person scrolled away.
+  // Follow the end as the chat grows, unless the person scrolled away or
+  // selects: new blocks would scroll the selection away.
   useLayoutEffect(() => {
     const el = scroller.current
-    if (el && win.follow) el.scrollTop = el.scrollHeight
+    if (el && win.follow && vstart === null) el.scrollTop = el.scrollHeight
   })
 
   useEffect(() => {

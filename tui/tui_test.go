@@ -2570,6 +2570,29 @@ func TestVisualModeInThePrompt(t *testing.T) {
 	}
 }
 
+func TestVisualSelectionStaysAsNewLinesArrive(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	w := h.a.cur
+	h.press("V")
+	if w.inPrompt || !w.Follow {
+		t.Fatalf("a chat should open on its last transcript line; in prompt %v, follow %v", w.inPrompt, w.Follow)
+	}
+	cur, top := w.Cur, w.Top
+	for i := range 60 {
+		h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator,
+			Event: &model.Event{Kind: model.EventText, Text: fmt.Sprintf("line %d", i)}})
+		h.a.draw()
+	}
+	if w.Cur != cur || w.Top != top {
+		t.Fatalf("new lines moved the selection: cursor %d → %d, top %d → %d", cur, w.Cur, top, w.Top)
+	}
+	h.press("<Esc>")
+	if w.Cur != w.linesN-1 {
+		t.Fatalf("after <Esc> the window should follow the chat again; cursor %d of %d lines", w.Cur, w.linesN)
+	}
+}
+
 func TestPromptCursorKeepsItsRuneOnResize(t *testing.T) {
 	h := start(t)
 	h.openDemo()

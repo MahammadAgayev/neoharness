@@ -162,9 +162,12 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	if w.inPrompt {
 		cur = &w.chatCur
 	}
+	// A selection in the transcript holds it still: new lines would move its
+	// end and scroll the window under the person.
+	follow := w.Follow && (w.vmode == 0 || w.inPrompt)
 	if n == 0 {
 		*cur = 0
-	} else if w.Follow || *cur >= n {
+	} else if follow || *cur >= n {
 		*cur = n - 1
 	}
 	off := min(scrollOff, h/2)
@@ -175,7 +178,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		w.Top = *cur - h + off + 1
 	}
 	w.Top = max(min(w.Top, n-h), 0)
-	if w.Follow {
+	if follow {
 		w.Top = max(n-h, 0)
 	}
 
