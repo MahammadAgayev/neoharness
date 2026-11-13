@@ -94,6 +94,25 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
 
 `:set vim` brings Vim back. Settings stay between runs.
 
+## Polish checklist
+
+What the app takes from Linear, and the test that shows each one. `npm run
+e2e` writes the screenshots named here to `test-results/`.
+
+| Quality | In the app | Test (screenshot) |
+|---|---|---|
+| One search for everything | `⌘K`: threads of every workspace, artifacts, commands, text | app: search everywhere finds them (04); showcase (32, 33) |
+| Every action has a key you can find | `:help`, the commands tab of `⌘K`, hints on hover, keys on buttons | app (06); showcase (35); right click and hint (29) |
+| Work without the mouse | Vim keys, or keys as in Claude Code; marks; select and yank | cards: `<leader>a` allows; without Vim; `v` and `y`; marks (27) |
+| The mouse works too | Clicks on toasts, blocks and artifacts; right-click menus | cards: a toast click opens the thread; an artifact click; right click on a thread |
+| Quiet | A toast or notification only for what needs you; it goes when you look | cards: permission toast goes when the thread shows (20) |
+| No modal for the work | Permissions and questions are cards in the chat | cards: permission card (21), question (22) |
+| Settings in one place, applied at once | `⌘,` | cards: settings (28) |
+| Light and dark | System, Moon, Night, Dawn | app: Dawn (05); cards: settings |
+| Care with your edits | A refused save resolves change by change | cards: artifact conflict (25) |
+| Clear failure | A stopped hub says so and offers to start it | cards: hub stopped (26) |
+| Completion where you type | `/` and `@` in the prompt, `<Tab>` for commands and folders | cards: completion (23), folder `<Tab>` |
+
 ## Tests
 
 ```sh
