@@ -84,9 +84,9 @@ type notifyIn struct {
 }
 
 type recapIn struct {
-	Asked   string `json:"asked" jsonschema:"your task, in one line"`
-	Outcome string `json:"outcome" jsonschema:"what came out: what changed or was decided, and how you checked it; one or two lines"`
-	Open    string `json:"open" jsonschema:"what is still to do, and what needs the person; empty when nothing"`
+	Asked   string `json:"asked" jsonschema:"your task, in a few words"`
+	Outcome string `json:"outcome" jsonschema:"what came out, in one short sentence: what changed or was decided, and how you checked it"`
+	Open    string `json:"open" jsonschema:"what is still to do or needs the person, in one short sentence; an empty string when nothing is open"`
 }
 
 type openIn struct {

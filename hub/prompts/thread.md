@@ -39,8 +39,10 @@ You have these tools through the `neoharness` MCP server:
 - `recap(asked, outcome, open)` tells the person what your work produced,
   so they learn it without your transcript: the task, what came out and how
   you checked it, and what is still open or needs them. Call it as the last
-  action of each turn in which your work moved. Say only what you did and
-  saw; neoharness adds the commands it saw you run.
+  action of each turn in which your work moved. The person reads many
+  recaps at a glance, so keep each part to one short sentence, and leave
+  `open` empty when nothing is open. Say only what you did and saw;
+  neoharness adds the commands it saw you run.
 - `read_artifact(name)` reads an artifact. `workspace_status()` lists them.
 - `whoami()` shows your identity.
 

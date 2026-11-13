@@ -3496,7 +3496,8 @@ func TestARecapShowsUnderItsRowAndAtTheTopOfTheThread(t *testing.T) {
 	run.Recap = &model.Recap{Outcome: "an older turn"}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: run.Name, View: &run})
 	h.a.draw()
-	h.see("Added 12 tests · 3 commands, 1 failed")
+	h.see("   Added 12 tests")
+	h.see("3 commands, 1 failed · 1 file edited · ◇ test-plan")
 	h.see("open: keep slow test?")
 	if s := h.screen(); strings.Contains(s, "half way") || strings.Contains(s, "an older turn") {
 		t.Errorf("an idle row with a recap drops its old report, and a running row shows no recap:\n%s", s)
@@ -3506,7 +3507,7 @@ func TestARecapShowsUnderItsRowAndAtTheTopOfTheThread(t *testing.T) {
 	h.see("asked    write the api tests")
 	h.see("outcome  Added 12 tests")
 	h.see("open     keep slow test?")
-	h.see("ran      go test ./... · ✗ golangci-lint run · +1")
+	h.see("ran      ✗ golangci-lint run · go test ./... · +1 earl…")
 	h.see("changed  api_test.go · ◇ test-plan")
 
 	v.Recap = &model.Recap{Asked: "write the api tests", Outcome: "All tests pass.", FromReply: true}

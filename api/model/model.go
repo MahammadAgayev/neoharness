@@ -194,7 +194,7 @@ type Recap struct {
 	// its reply.
 	FromReply bool `json:"fromReply,omitempty"`
 	// Ran counts the commands of the turn; Commands holds every failed one
-	// and the first of the others.
+	// and the last of the others, in the order they ran.
 	Ran       int            `json:"ran,omitempty"`
 	Commands  []RecapCommand `json:"commands,omitempty"`
 	Edited    []string       `json:"edited,omitempty"`

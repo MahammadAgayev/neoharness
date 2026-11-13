@@ -50,8 +50,9 @@ thread yourself:
   asked, what came out and what is open; neoharness adds what it saw the turn
   do: the commands it ran and which failed, the files it edited, the
   artifacts it wrote, or why the turn failed. Under an idle or waiting row
-  the pane shows it in short (`Added 12 tests · 3 commands, 1 failed`, then
-  `open: …`); at the top of the thread's window it shows in full. When the
+  the pane shows it in short, one row each: the outcome, the facts
+  (`3 commands, 1 failed · 1 file edited`), and `open: …`; at the top of the
+  thread's window it shows in full, the newest commands first. When the
   thread wrote none, the first line of its reply stands in, labeled `reply`,
   and `no commands` says that nothing was checked.
 - To delete a thread, press `<C-d>` on it in a picker, then `y`. This cannot

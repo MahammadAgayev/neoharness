@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -2250,5 +2251,38 @@ func TestAFailedTurnSaysSoInTheRecap(t *testing.T) {
 	eventually(t, "a recap", func() bool { r = view(t, h, "demo", "flaky").Recap; return r != nil })
 	if r.Error != "the agent failed: fake: crashed on purpose" || r.Outcome != "" || r.Asked != "try" {
 		t.Fatalf("recap of a failed turn: %+v", r)
+	}
+}
+
+func TestTheRecapKeepsTheLastCommandsAndShortPathsThroughALink(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	real := t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.CreateWorkspace("demo", link); err != nil {
+		t.Fatal(err)
+	}
+	resolved, _ := filepath.EvalSymlinks(real)
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		for i := range recapCommands + 2 {
+			req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActRun, Detail: fmt.Sprintf("cmd %d", i), ID: fmt.Sprint(i)})
+		}
+		req.OnEvent(agent.Event{Kind: agent.KindToolFailed, ID: "0"})
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActEdit, Detail: resolved + "/pkg/a.go", ID: "e"})
+		return agent.Result{Text: "done"}
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "x", "go", ""); err != nil {
+		t.Fatal(err)
+	}
+	var r *model.Recap
+	eventually(t, "a recap", func() bool { r = view(t, h, "demo", "x").Recap; return r != nil })
+	if len(r.Commands) != recapCommands+1 || r.Commands[0] != (model.RecapCommand{Text: "cmd 0", Failed: true}) || r.Commands[1].Text != "cmd 2" || r.Commands[recapCommands].Text != fmt.Sprintf("cmd %d", recapCommands+1) {
+		t.Errorf("want the failed command and the last %d: %+v", recapCommands, r.Commands)
+	}
+	if !slices.Equal(r.Edited, []string{"pkg/a.go"}) {
+		t.Errorf("edited = %v", r.Edited)
 	}
 }

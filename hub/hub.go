@@ -174,6 +174,9 @@ type thread struct {
 // turnSeen is what a turn did that the recap shows as fact: the commands it
 // ran, the files it edited, the artifacts it wrote.
 type turnSeen struct {
+	// dirs are the thread's folder as it was given and with its links
+	// resolved: an agent may name a file either way.
+	dirs      []string
 	commands  []model.RecapCommand
 	ids       map[string]int
 	edited    []string
@@ -184,7 +187,7 @@ func (s *turnSeen) empty() bool {
 	return len(s.commands) == 0 && len(s.edited) == 0 && len(s.artifacts) == 0
 }
 
-func (s *turnSeen) tool(e agent.Event, dir string) {
+func (s *turnSeen) tool(e agent.Event) {
 	switch e.Act {
 	case agent.ActRun:
 		if s.ids == nil {
@@ -193,7 +196,13 @@ func (s *turnSeen) tool(e agent.Event, dir string) {
 		s.ids[e.ID] = len(s.commands)
 		s.commands = append(s.commands, model.RecapCommand{Text: oneLine(e.Detail, recapLimit)})
 	case agent.ActEdit:
-		f := strings.TrimPrefix(e.Detail, strings.TrimSuffix(dir, "/")+"/")
+		f := e.Detail
+		for _, d := range s.dirs {
+			if rel, ok := strings.CutPrefix(f, strings.TrimSuffix(d, "/")+"/"); ok {
+				f = rel
+				break
+			}
+		}
 		if f != "" && !slices.Contains(s.edited, f) {
 			s.edited = append(s.edited, f)
 		}
@@ -1337,7 +1346,8 @@ func (h *Hub) ReportProgress(workspaceName, name, summary string) error {
 // recapLimit keeps each part of a recap to a few lines on screen.
 const recapLimit = 300
 
-// recapCommands is how many commands that did not fail a recap names.
+// recapCommands is how many of the last commands that did not fail a recap
+// names.
 const recapCommands = 8
 
 // Recap keeps what a thread says its turn produced. The hub joins it with
@@ -1377,16 +1387,18 @@ func recapOf(old, written *model.Recap, seen turnSeen, asked, reply, failure str
 	if r.Asked == "" {
 		r.Asked = oneLine(firstLine(asked), recapLimit)
 	}
+	// The last commands are most often the checks: the tests, the commit.
 	r.Ran = len(seen.commands)
 	room := recapCommands
-	for _, c := range seen.commands {
-		if c.Failed || room > 0 {
+	for i := len(seen.commands) - 1; i >= 0; i-- {
+		if c := seen.commands[i]; c.Failed || room > 0 {
 			if !c.Failed {
 				room--
 			}
 			r.Commands = append(r.Commands, c)
 		}
 	}
+	slices.Reverse(r.Commands)
 	r.Edited, r.Artifacts, r.Error = seen.edited, seen.artifacts, failure
 	r.At = time.Now().UTC()
 	return &r
@@ -1670,7 +1682,12 @@ func (h *Hub) kick(ws *space, th *thread) {
 	th.started = false
 	th.interrupted, th.dropped = false, false
 	th.cancel = cancel
-	th.seen, th.recap = turnSeen{}, nil
+	th.seen, th.recap = turnSeen{dirs: []string{t.Location.Dir}}, nil
+	if !t.Location.Remote() {
+		if d, err := filepath.EvalSymlinks(t.Location.Dir); err == nil && d != t.Location.Dir {
+			th.seen.dirs = append(th.seen.dirs, d)
+		}
+	}
 	h.changed(ws, th)
 
 	prompt := compose(batch, ws.threads)
@@ -1840,7 +1857,7 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 	switch e.Kind {
 	case agent.KindToolStart:
 		h.event(ws, th, model.Event{Kind: model.EventTool, Tool: e.Tool, Detail: e.Detail, ID: e.ID})
-		th.seen.tool(e, th.t.Location.Dir)
+		th.seen.tool(e)
 	case agent.KindToolFailed:
 		h.event(ws, th, model.Event{Kind: model.EventTool, ID: e.ID, Exit: 1, Text: e.Text})
 		th.seen.failed(e.ID)

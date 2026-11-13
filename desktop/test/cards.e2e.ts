@@ -720,6 +720,7 @@ test("a thread's recap shows under its row and at the top of its chat", async ()
   const row = page.locator('.list-row', { hasText: 'api' })
   hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
   await expect(row.locator('.list-recap.t-love')).toHaveText('✗ the agent failed: boom')
+  await expect(row.locator('.list-recap').nth(1)).toHaveText('no commands')
   hub.setView(
     view('demo', 'api', {
       progress: 'half way',
@@ -735,7 +736,8 @@ test("a thread's recap shows under its row and at the top of its chat", async ()
       },
     }),
   )
-  await expect(row.locator('.list-recap').first()).toHaveText('Added /healthz and a test · 3 commands, 1 failed · 1 file edited · ◇ health-plan')
+  await expect(row.locator('.list-recap').nth(0)).toHaveText('Added /healthz and a test')
+  await expect(row.locator('.list-recap').nth(1)).toHaveText('3 commands, 1 failed · 1 file edited · ◇ health-plan')
   await expect(row.locator('.list-recap', { hasText: 'open: keep the old /ping?' })).toBeVisible()
   await expect(row).not.toContainText('half way')
   await row.click()
@@ -743,7 +745,7 @@ test("a thread's recap shows under its row and at the top of its chat", async ()
   await expect(head).toContainText('asked')
   await expect(head).toContainText('Added /healthz and a test')
   await expect(head.locator('.recap-failed')).toHaveText('✗ golangci-lint run')
-  await expect(head).toContainText('+1')
+  await expect(head).toContainText('✗ golangci-lint run · go test ./... · +1 earlier')
   await expect(head).toContainText('◇ health-plan')
   await shot('27-recap')
 

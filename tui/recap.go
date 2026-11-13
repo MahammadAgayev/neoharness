@@ -8,32 +8,34 @@ import (
 )
 
 // recapRows are a thread's recap under its row in the threads pane: what came
-// out and what the hub saw, then what is open. A running thread shows its
-// live report instead.
+// out, what the hub saw, and what is open, one row each, so a long outcome
+// does not push the facts off a narrow pane. A running thread shows its live
+// report instead.
 func recapRows(v model.ThreadView, th *Theme) []Line {
 	r := v.Recap
 	if r == nil || v.State == model.StateRunning || v.State == model.StateResolved {
 		return nil
 	}
 	pre := []Span{{"   ", th.Text}}
-	var first []Span
+	var out []Line
 	switch {
 	case r.Error != "":
-		first = append(first, Span{"✗ " + r.Error, th.Love})
+		out = append(out, Line{Prefix: pre, Spans: []Span{{"✗ " + r.Error, th.Love}}, Item: v.Name})
 	case r.Outcome != "":
 		st := th.Muted
 		if r.FromReply {
 			st = st.Italic(true)
 		}
-		first = append(first, Span{r.Outcome, st})
+		out = append(out, Line{Prefix: pre, Spans: []Span{{r.Outcome, st}}, Item: v.Name})
 	}
+	var facts []Span
 	for i, s := range evidence(r, th) {
-		if i > 0 || len(first) > 0 {
-			first = append(first, Span{" · ", th.Muted})
+		if i > 0 {
+			facts = append(facts, Span{" · ", th.Muted})
 		}
-		first = append(first, s...)
+		facts = append(facts, s...)
 	}
-	out := []Line{{Prefix: pre, Spans: first, Item: v.Name}}
+	out = append(out, Line{Prefix: pre, Spans: facts, Item: v.Name})
 	if r.Open != "" {
 		out = append(out, Line{Prefix: pre, Spans: []Span{{"open: ", th.Muted}, {r.Open, th.Subtle}}, Item: v.Name})
 	}
@@ -93,9 +95,12 @@ func recapHead(r *model.Recap, th *Theme) []Line {
 	if r.Open != "" {
 		out = append(out, row("open", Span{r.Open, th.Text}))
 	}
+	// The newest first: the last commands are most often the checks, and a
+	// long row is cut at its end.
 	var ran []Span
-	for i, c := range r.Commands {
-		if i > 0 {
+	for i := len(r.Commands) - 1; i >= 0; i-- {
+		c := r.Commands[i]
+		if len(ran) > 0 {
 			ran = append(ran, Span{" · ", th.Muted})
 		}
 		if c.Failed {
@@ -105,7 +110,7 @@ func recapHead(r *model.Recap, th *Theme) []Line {
 		}
 	}
 	if more := r.Ran - len(r.Commands); more > 0 {
-		ran = append(ran, Span{fmt.Sprintf(" · +%d", more), th.Muted})
+		ran = append(ran, Span{fmt.Sprintf(" · +%d earlier", more), th.Muted})
 	}
 	if len(ran) == 0 {
 		ran = []Span{{"no commands", th.Muted}}

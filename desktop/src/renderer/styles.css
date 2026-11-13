@@ -924,7 +924,7 @@ kbd {
   white-space: nowrap;
 }
 
-.list-recap .from-reply {
+.list-recap.from-reply {
   font-style: italic;
 }
 

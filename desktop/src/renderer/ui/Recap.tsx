@@ -28,20 +28,21 @@ function evidence(r: Recap): ReactNode[] {
 
 const joined = (parts: ReactNode[]) => parts.flatMap((p, i) => (i === 0 ? [p] : [<span key={`s${i}`}> · </span>, p]))
 
-// RecapRows are a thread's recap under its row in the threads list. A running
-// thread shows its live report instead.
+// RecapRows are a thread's recap under its row in the threads list: what came
+// out, what the hub saw, and what is open, one row each, so a long outcome
+// does not push the facts out. A running thread shows its live report instead.
 export function RecapRows(props: { v: ThreadView }) {
   const { v } = props
   const r = v.recap
   if (!r || v.state === 'running' || v.state === 'resolved') return null
-  const first: ReactNode[] = []
-  if (r.error) first.push(<span key="err">✗ {r.error}</span>)
-  else if (r.outcome) first.push(<span key="out" className={r.fromReply ? 'from-reply' : ''}>{r.outcome}</span>)
   return (
     <>
-      <div className={`list-detail list-recap ${r.error ? 't-love' : 't-muted'}`}>
-        {joined([...first, ...(r.error ? [] : evidence(r))])}
-      </div>
+      {r.error ? (
+        <div className="list-detail list-recap t-love">✗ {r.error}</div>
+      ) : (
+        r.outcome && <div className={`list-detail list-recap t-muted ${r.fromReply ? 'from-reply' : ''}`}>{r.outcome}</div>
+      )}
+      <div className="list-detail list-recap t-muted">{joined(evidence(r))}</div>
       {r.open && (
         <div className="list-detail list-recap t-muted">
           open: <span className="t-subtle">{r.open}</span>
@@ -86,15 +87,16 @@ export function RecapHead(props: { r?: Recap }) {
             <span className="t-muted">no commands</span>
           ) : (
             <span className="t-muted">
+              {/* The newest first: the last commands are most often the checks. */}
               {joined([
-                ...commands.map((c, i) =>
+                ...[...commands].reverse().map((c, i) =>
                   c.failed ? (
                     <span key={i} className="recap-failed t-subtle">✗ {c.text}</span>
                   ) : (
                     <span key={i}>{c.text}</span>
                   ),
                 ),
-                ...(more > 0 ? [<span key="more">+{more}</span>] : []),
+                ...(more > 0 ? [<span key="more">+{more} earlier</span>] : []),
               ])}
             </span>
           ),
