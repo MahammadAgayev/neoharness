@@ -6,6 +6,7 @@ import { ArtifactWindow } from './ArtifactWindow'
 import { ChatWindow } from './ChatWindow'
 import { CommandLine, HubBanner, Picker, Toasts } from './Overlays'
 import { HelpWindow, MessagesWindow } from './Panels'
+import { Sidebar } from './Sidebar'
 import { ThreadsList } from './ThreadsList'
 import { Workspaces } from './Workspaces'
 
@@ -110,6 +111,7 @@ export function App() {
   const scheme = useStore((s) => s.settings.scheme)
   const fontSize = useStore((s) => s.settings.fontSize)
   const screen = useStore((s) => s.screen)
+  const sidebar = useStore((s) => s.settings.sidebar)
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   useEffect(() => {
@@ -127,7 +129,10 @@ export function App() {
     <div className="app">
       <TitleBar />
       <HubBanner />
-      <main className="main">{screen === 'workspaces' ? <Workspaces /> : <Layout />}</main>
+      <main className="main">
+        {sidebar && <Sidebar />}
+        {screen === 'workspaces' ? <Workspaces /> : <Layout />}
+      </main>
       <CommandLine />
       <Toasts />
       <Picker />

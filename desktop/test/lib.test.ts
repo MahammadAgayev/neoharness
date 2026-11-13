@@ -6,6 +6,7 @@ import type { Event, ThreadView } from '../src/shared/model'
 import { parseEx, words } from '../src/renderer/lib/ex'
 import { fuzzy, fuzzyScore, grep } from '../src/renderer/lib/fuzzy'
 import { keyName, Sequencer, split } from '../src/renderer/lib/keys'
+import { lines } from '../src/renderer/lib/linediff'
 import { resolveScheme, schemes } from '../src/renderer/lib/themes'
 import { keep, viewToast, type Toast } from '../src/renderer/lib/toasts'
 import { addEvent, fromEvents, lastText, lastUserMessage, shortTool, type Block } from '../src/renderer/lib/transcript'
@@ -197,5 +198,17 @@ describe('themes', () => {
     expect(resolveScheme('system', false).dark).toBe(false)
     expect(resolveScheme('system', true).dark).toBe(true)
     for (const p of Object.values(schemes)) expect(Object.values(p).every((v) => v !== '')).toBe(true)
+  })
+})
+
+describe('linediff', () => {
+  it('keeps common lines and marks the change', () => {
+    const ops = lines(['a', 'b', 'c', 'd'], ['a', 'x', 'c', 'd', 'e'])
+    expect(ops.map((o) => o.kind + o.text)).toEqual([' a', '-b', '+x', ' c', ' d', '+e'])
+  })
+
+  it('handles empty texts', () => {
+    expect(lines([], ['a']).map((o) => o.kind)).toEqual(['+'])
+    expect(lines(['a'], []).map((o) => o.kind)).toEqual(['-'])
   })
 })

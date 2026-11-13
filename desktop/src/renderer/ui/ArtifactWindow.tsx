@@ -5,7 +5,8 @@ import { EditorView, keymap } from '@codemirror/view'
 import { getCM, vim, Vim } from '@replit/codemirror-vim'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { store, useStore, type Win } from '../store'
+import { lines } from '../lib/linediff'
+import { store, useStore, type Doc, type Win } from '../store'
 import { Markdown } from './Markdown'
 import { editorKeys, editors, handlers, type WinAction } from './registry'
 
@@ -98,6 +99,47 @@ function SourceEditor(props: { name: string; text: string; onLeave: () => void; 
   }, [vimOn])
 
   return <div className="source-editor" ref={host} />
+}
+
+// Conflict is what a refused :w shows: the newer version against your edit,
+// and the two ways out.
+function Conflict(props: { name: string; doc: Doc }) {
+  const [open, setOpen] = useState(true)
+  const { doc } = props
+  const ops = useMemo(() => lines(doc.text.split('\n'), (doc.edit?.text ?? '').split('\n')), [doc.text, doc.edit?.text])
+  return (
+    <div className="conflict">
+      <div className="conflict-head">
+        <span className="t-love">●</span>
+        <span>
+          {doc.artifact.thread} changed the same lines in v{doc.artifact.version}
+        </span>
+        <span className="sl-fill" />
+        <button className="btn small ghost" onClick={() => setOpen(!open)}>
+          {open ? 'Hide diff' : 'Show diff'}
+        </button>
+        <button className="btn small" onClick={() => void store.revert(props.name)}>
+          Take theirs <kbd>:e!</kbd>
+        </button>
+        <button className="btn small primary" onClick={() => void store.save(props.name, true)}>
+          Keep mine <kbd>:w!</kbd>
+        </button>
+      </div>
+      {open && (
+        <pre className="diff">
+          <div className="diff-legend t-muted">
+            <span className="t-love">− v{doc.artifact.version}</span> <span className="t-pine">+ yours</span>
+          </div>
+          {ops.map((o, i) => (
+            <div key={i} className={`diff-line d-${o.kind === '-' ? 'del' : o.kind === '+' ? 'add' : 'same'}`}>
+              <span className="diff-mark">{o.kind}</span>
+              {o.text || ' '}
+            </div>
+          ))}
+        </pre>
+      )}
+    </div>
+  )
 }
 
 export function ArtifactWindow(props: { win: Win; focused: boolean }) {
@@ -228,6 +270,7 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
           </button>
         )}
       </div>
+      {doc?.conflict && doc.edit && <Conflict name={name} doc={doc} />}
       {!doc ? (
         <div className="empty">loading…</div>
       ) : editing && doc.edit ? (

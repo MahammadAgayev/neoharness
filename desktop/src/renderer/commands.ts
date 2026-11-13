@@ -56,6 +56,7 @@ export const commands: Command[] = [
   { id: 'revert', title: "Take the agent's version", keys: [':e!'], run: () => void s.ex('e!') },
   { id: 'scheme', title: 'Color scheme…', keys: [':colorscheme <name>'], run: () => s.openCmdline('colorscheme ') },
   { id: 'vim', title: 'Vim mode on or off', keys: [':set vim', ':set novim'], run: () => s.setSettings({ vim: !s.state.settings.vim }) },
+  { id: 'sidebar', title: 'Show or hide the sidebar', keys: ['⌘B', ':set nosidebar'], run: () => s.setSettings({ sidebar: !s.state.settings.sidebar }) },
   { id: 'start-hub', title: 'Start the hub', keys: ['neoharness hub start'], run: () => void s.startHub() },
   { id: 'help', title: 'Keys and commands', keys: [':help', '⌘/'], run: () => void s.ex('help') },
 ]

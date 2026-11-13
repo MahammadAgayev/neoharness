@@ -62,6 +62,9 @@ export interface Doc {
   // edit is the source while the person changes it; base is the version it
   // started from.
   edit: { text: string; base: number; baseText: string } | null
+  // conflict says the last :w was refused: a newer version changed the
+  // same lines.
+  conflict?: boolean
 }
 
 export type Tab = 'all' | 'threads' | 'artifacts' | 'text' | 'commands' | 'workspaces' | 'notifications' | 'buffers' | 'outline'
@@ -82,6 +85,7 @@ export interface Settings {
   vim: boolean
   fontSize: number
   compactwarn: number
+  sidebar: boolean
 }
 
 export interface State {
@@ -116,7 +120,7 @@ let ids = 1
 const nextId = () => ids++
 
 function loadSettings(): Settings {
-  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80 }
+  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true }
   try {
     return { ...d, ...JSON.parse(localStorage.getItem('settings') || '{}') }
   } catch {
@@ -972,6 +976,8 @@ class Store {
       })
     } catch (err) {
       this.say(`${errText(err)} · :w! saves over it, :e! takes the newer version`, 'love')
+      const cur = this.state.docs[name]
+      if (cur) this.set({ docs: { ...this.state.docs, [name]: { ...cur, conflict: true } } })
       return false
     }
     const merged = r.text !== d.edit.text
@@ -1175,7 +1181,7 @@ class Store {
 
   private setOption(args: string[]): void {
     const s = this.state.settings
-    if (!args.length) return this.say(`vim=${s.vim} fontsize=${s.fontSize} compactwarn=${s.compactwarn} colorscheme=${s.scheme}`)
+    if (!args.length) return this.say(`vim=${s.vim} sidebar=${s.sidebar} fontsize=${s.fontSize} compactwarn=${s.compactwarn} colorscheme=${s.scheme}`)
     for (const arg of args) {
       const [k, v] = arg.split('=', 2)
       switch (k) {
@@ -1184,6 +1190,12 @@ class Store {
           break
         case 'novim':
           this.setSettings({ vim: false })
+          break
+        case 'sidebar':
+          this.setSettings({ sidebar: true })
+          break
+        case 'nosidebar':
+          this.setSettings({ sidebar: false })
           break
         case 'fontsize':
         case 'fs':
@@ -1195,7 +1207,7 @@ class Store {
           else return this.say('compactwarn is 0 to 100', 'love')
           break
         default:
-          return this.say(`no option ${k}; the options are vim novim fontsize compactwarn`, 'love')
+          return this.say(`no option ${k}; the options are vim novim sidebar nosidebar fontsize compactwarn`, 'love')
       }
     }
   }

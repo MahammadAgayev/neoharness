@@ -41,6 +41,8 @@ it apply to both.
 - **macOS shortcuts** next to the Vim keys: `⌘P` threads, `⌘⇧F` search the
   transcripts, `⌘.` stop the turn, `⌘N` open a thread, `⌘S` save, `⌘W` close
   the window, `⌘\` split, `⌘1`…`⌘9` workspaces, `⌘/` help.
+- **A sidebar** of workspaces, each with what waits or runs in it. `⌘B` or
+  `:set nosidebar` hides it.
 - **The mouse**: buttons on permission cards, a click on a thread, an
   artifact or a queued message, drag the line between columns.
 - **Color schemes**: `:colorscheme system` follows the macOS appearance;

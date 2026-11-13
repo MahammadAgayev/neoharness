@@ -111,6 +111,7 @@ const macMaps: Record<string, Action> = {
   '<D-\\>': c('vsplit'),
   '<D-/>': c('help'),
   '<D-[>': c('back'),
+  '<D-b>': c('sidebar'),
 }
 
 const normal = new Sequencer<Action>({ ...appMaps, ...winMaps })

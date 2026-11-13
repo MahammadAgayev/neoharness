@@ -106,6 +106,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       [':restore [name]', 'bring back a deleted workspace; no name lists them'],
       [':colorscheme <name>', 'system, rose-pine-moon, rose-pine, rose-pine-dawn'],
       [':set vim  :set novim', 'Vim keys in editors, or keys as in Claude Code'],
+      [':set nosidebar  ⌘B', 'hide the sidebar of workspaces, for focus'],
       [':set fontsize=15  compactwarn=80', 'text size; the context % that says /compact'],
       [':q', 'close the window; ⌘Q quits, and the hub and its turns run on'],
     ],

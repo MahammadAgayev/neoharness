@@ -1097,3 +1097,138 @@ kbd {
 .spark {
   display: block;
 }
+
+/* a refused save */
+.conflict {
+  flex: 0 0 auto;
+  max-height: 45%;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--love) 5%, var(--surface));
+}
+.conflict-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.diff {
+  margin: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 4px 0 10px;
+  user-select: text;
+}
+.diff-legend {
+  padding: 0 14px 4px;
+}
+.diff-line {
+  padding: 0 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.diff-mark {
+  display: inline-block;
+  width: 16px;
+  color: var(--muted);
+}
+.d-del {
+  background: color-mix(in srgb, var(--love) 12%, transparent);
+}
+.d-del .diff-mark {
+  color: var(--love);
+}
+.d-add {
+  background: color-mix(in srgb, var(--pine) 14%, transparent);
+}
+.d-add .diff-mark {
+  color: var(--pine);
+}
+.d-same {
+  color: var(--subtle);
+}
+
+/* sidebar */
+.sidebar {
+  flex: 0 0 216px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--surface) 55%, var(--base));
+  padding: 8px 8px 6px;
+  min-height: 0;
+}
+.sb-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sb-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.sb-head {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 14px 8px 4px;
+}
+.sb-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--subtle);
+  font-size: 13px;
+  text-align: left;
+  cursor: default;
+  transition: background-color 80ms var(--ease), color 80ms var(--ease);
+}
+.sb-item:hover {
+  background: var(--hl-low);
+  color: var(--text);
+}
+.sb-item.active {
+  background: var(--hl-med);
+  color: var(--text);
+  font-weight: 550;
+}
+.sb-icon {
+  width: 14px;
+  text-align: center;
+  flex: 0 0 14px;
+  font-size: 12px;
+}
+.sb-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-count {
+  font-size: 12px;
+}
+.sb-kbd {
+  opacity: 0;
+  transition: opacity 100ms var(--ease);
+}
+.sb-item:hover .sb-kbd {
+  opacity: 1;
+}
+.sb-new {
+  color: var(--muted);
+  margin-top: 4px;
+}
+.sb-foot {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 6px;
+}
