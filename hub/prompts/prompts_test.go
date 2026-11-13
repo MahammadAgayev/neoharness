@@ -3,6 +3,8 @@ package prompts
 import (
 	"strings"
 	"testing"
+
+	"github.com/MahammadAgayev/neoharness/api/model"
 )
 
 func TestSessionPromptsFillEveryPlaceholder(t *testing.T) {
@@ -26,5 +28,33 @@ func TestCompactPrompt(t *testing.T) {
 	}
 	if got := Compact(" the auth bug "); !strings.Contains(got, "Focus on: the auth bug\n") {
 		t.Errorf("focus: %q", got)
+	}
+}
+
+func TestTheBoardShowsAThreadsRecapWhenItEndedATurn(t *testing.T) {
+	r := &model.Recap{
+		Asked: "Fix the lint issues", Outcome: "Fixed two", Open: "Choose: change the API or ignore one",
+		Ran:      3,
+		Commands: []model.RecapCommand{{Text: "go test ./..."}, {Text: "golangci-lint run", Failed: true}, {Text: "go vet"}},
+		Edited:   []string{"a.go", "b.go", "c.go", "d.go", "e.go", "f.go"}, Artifacts: []string{"plan"},
+	}
+	want := "- lint: idle, ended a turn. Asked: Fix the lint issues. Outcome: Fixed two. Open: Choose: change the API or ignore one. " +
+		"Seen by neoharness: 3 commands, 1 failed: golangci-lint run; edited a.go, b.go, c.go, d.go, e.go and 1 more; wrote the artifact plan."
+	if got := BoardLine("lint", "idle", "half way", r, true); got != want {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+	if got := BoardLine("lint", "idle", "half way", r, false); got != "- lint: idle." {
+		t.Errorf("a recap comes once, and a report from before it is old news: %q", got)
+	}
+	if got := BoardLine("lint", "running", "half way", r, false); got != "- lint: running. Report: half way." {
+		t.Errorf("running: %q", got)
+	}
+	reply := &model.Recap{Asked: "Add a cache", Outcome: "All tests pass.", FromReply: true}
+	if got, want := BoardLine("cache", "idle", "", reply, true), "- cache: idle, ended a turn. Asked: Add a cache. Reply: All tests pass. Seen by neoharness: no commands."; got != want {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+	failed := &model.Recap{Asked: "try", Error: "the agent failed: crashed"}
+	if got, want := BoardLine("flaky", "idle", "", failed, true), "- flaky: idle, ended a turn. Asked: try. Failed: the agent failed: crashed. Seen by neoharness: no commands."; got != want {
+		t.Errorf("got  %q\nwant %q", got, want)
 	}
 }

@@ -49,8 +49,8 @@ UUID.
 
 - Messages that arrive while a thread is busy wait in a queue. All of them
   go into the next turn as one prompt.
-- Every coordinator turn starts with the board: each open thread, its state
-  and last report, and the start of its reply if it ended a turn since the
+- Every coordinator turn starts with the board: each open thread, its state,
+  its last report while it runs, and its recap if it ended a turn since the
   coordinator's last one. With `notify = "coordinator"`, a
   thread's turn also wakes the coordinator, 15 seconds later so that threads
   that end close together make one turn. It decides with `notify` what

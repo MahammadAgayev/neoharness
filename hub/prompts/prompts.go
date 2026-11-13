@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/MahammadAgayev/neoharness/api/model"
 )
 
 //go:embed coordinator.md
@@ -115,24 +117,81 @@ func ArtifactStarted(name, text string) string {
 const (
 	reportLimit = 150
 	replyLimit  = 200
+	boardFiles  = 5
 )
 
-// BoardLine is one thread on the board: its state and last progress report,
-// and, when it ended a turn since the coordinator's last turn, the start of
-// its reply. A report can be older than the reply, so both go in.
-func BoardLine(name, state, progress, reply string, ended bool) string {
+// BoardLine is one thread on the board: its state, and, when it ended a turn
+// since the coordinator's last turn, its recap: its own words, then what the
+// hub saw it do. A report from during that turn is old news then, so it goes
+// in only while the thread runs or has no recap.
+func BoardLine(name, state, progress string, r *model.Recap, ended bool) string {
 	s := "- " + name + ": " + state
 	if ended {
 		s += ", ended a turn"
 	}
 	s += "."
-	if progress = clip(progress, reportLimit); progress != "" {
-		s += " Report: " + strings.TrimRight(progress, ".") + "."
+	if progress = clip(progress, reportLimit); progress != "" && (r == nil || state != "idle") {
+		s += " Report: " + sentence(progress)
 	}
-	if reply = clip(reply, replyLimit); ended && reply != "" {
-		s += " Reply: " + reply
+	if r == nil || !ended {
+		return s
 	}
-	return s
+	part := func(label, text string) {
+		if text = clip(text, replyLimit); text != "" {
+			s += " " + label + ": " + sentence(text)
+		}
+	}
+	part("Asked", r.Asked)
+	if r.FromReply {
+		part("Reply", r.Outcome)
+	} else {
+		part("Outcome", r.Outcome)
+	}
+	part("Open", r.Open)
+	part("Failed", r.Error)
+	return s + " Seen by neoharness: " + seen(r) + "."
+}
+
+// seen is what the hub saw a turn do, in short: the failed commands by name,
+// the others only counted, as they are what the coordinator acts on.
+func seen(r *model.Recap) string {
+	var parts []string
+	switch r.Ran {
+	case 0:
+		parts = append(parts, "no commands")
+	case 1:
+		parts = append(parts, "1 command")
+	default:
+		parts = append(parts, fmt.Sprintf("%d commands", r.Ran))
+	}
+	if n := r.Failed(); n > 0 {
+		var failed []string
+		for _, c := range r.Commands {
+			if c.Failed {
+				failed = append(failed, clip(c.Text, reportLimit))
+			}
+		}
+		parts[0] += fmt.Sprintf(", %d failed: %s", n, strings.Join(failed, ", "))
+	}
+	if n := len(r.Edited); n > 0 {
+		files := strings.Join(r.Edited[:min(n, boardFiles)], ", ")
+		if n > boardFiles {
+			files += fmt.Sprintf(" and %d more", n-boardFiles)
+		}
+		parts = append(parts, "edited "+files)
+	}
+	for _, a := range r.Artifacts {
+		parts = append(parts, "wrote the artifact "+a)
+	}
+	return strings.Join(parts, "; ")
+}
+
+// sentence ends s with one full stop.
+func sentence(s string) string {
+	if strings.HasSuffix(s, "…") || strings.HasSuffix(s, "?") || strings.HasSuffix(s, "!") {
+		return s
+	}
+	return strings.TrimRight(s, ".") + "."
 }
 
 // Board starts a coordinator turn with every open thread.

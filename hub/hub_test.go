@@ -248,7 +248,7 @@ func TestAQueuedMessageJoinsTheTranscriptWhenItsTurnStarts(t *testing.T) {
 
 // TestCoordinatorTurnsStartWithTheBoard: the coordinator sees every open
 // thread at the start of each turn, so it manages without asking for the
-// status. A thread that ended a turn since its last turn adds its reply.
+// status. A thread that ended a turn since its last turn adds its recap.
 func TestCoordinatorTurnsStartWithTheBoard(t *testing.T) {
 	f := &fake{}
 	h := newHub(t, f)
@@ -274,10 +274,10 @@ func TestCoordinatorTurnsStartWithTheBoard(t *testing.T) {
 	if len(coord) != 2 {
 		t.Fatalf("%d coordinator turns, want 2", len(coord))
 	}
-	if want := "Threads:\n- docs: idle, ended a turn. Report: Done: usage written. Reply: ok\n- lint: idle.\n\n---\n\n"; !strings.HasPrefix(coord[0], want) {
+	if want := "Threads:\n- docs: idle, ended a turn. Asked: work. Reply: ok. Seen by neoharness: no commands.\n- lint: idle.\n\n---\n\n"; !strings.HasPrefix(coord[0], want) {
 		t.Errorf("first turn = %q, want it to start with %q", coord[0], want)
 	}
-	if want := "Threads:\n- docs: idle. Report: Done: usage written.\n- lint: idle.\n\n---\n\n"; !strings.HasPrefix(coord[1], want) {
+	if want := "Threads:\n- docs: idle.\n- lint: idle.\n\n---\n\n"; !strings.HasPrefix(coord[1], want) {
 		t.Errorf("second turn = %q, want it to start with %q: a reply comes once", coord[1], want)
 	}
 }

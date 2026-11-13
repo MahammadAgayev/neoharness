@@ -159,8 +159,6 @@ type thread struct {
 	wake  *time.Timer
 	perms []*pending
 	state model.State
-	// reply is the final text of its last turn, for the coordinator's note.
-	reply string
 	// deleted stops a turn that is still unwinding from writing the thread
 	// back to disk.
 	deleted bool
@@ -1767,10 +1765,6 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		if !slices.Contains(ws.ended, t.Name) {
 			ws.ended = append(ws.ended, t.Name)
 		}
-		th.reply = ""
-		if err == nil && res.ExitCode == 0 {
-			th.reply = res.Text
-		}
 	}
 	batch := t.InFlight
 	th.busy = false
@@ -2030,7 +2024,7 @@ func compose(batch []workspace.Message, threads map[string]*thread) string {
 
 // board is every open thread, for the start of a coordinator turn, so the
 // coordinator manages without asking for the status. A thread that ended a
-// turn since its last turn adds the start of its reply, unless its message
+// turn since its last turn adds its recap, unless its message
 // is in the batch and says it there. Callers hold h.mu.
 func (h *Hub) board(ws *space, batch []workspace.Message) string {
 	var lines []string
@@ -2041,7 +2035,7 @@ func (h *Hub) board(ws *space, batch []workspace.Message) string {
 		}
 		ended := slices.Contains(ws.ended, n) &&
 			!slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From == n })
-		lines = append(lines, prompts.BoardLine(n, string(th.state), th.t.Progress, th.reply, ended))
+		lines = append(lines, prompts.BoardLine(n, string(th.state), th.t.Progress, th.t.Recap, ended))
 	}
 	ws.ended = nil
 	if len(lines) == 0 {
