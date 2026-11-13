@@ -1,8 +1,31 @@
 # neoharness
 
 Run several Claude Code sessions at once: a coordinator splits your work into
-threads, local or over ssh. Use it from a terminal UI with Vim keys, or from
-a macOS app.
+threads, local or over ssh. Use it from a macOS app, or from a terminal UI
+with Vim keys.
+
+## Desktop app
+
+The macOS app in `desktop/` shares the same hub, so the TUI and the app show
+the same workspaces and threads at the same time.
+
+![the app: a coordinator opens three threads, you allow one to run a migration, and its plan opens](docs/demo/desktop.gif)
+
+It has:
+
+- the same Vim keys and `:` commands, or keys as in Claude Code if you turn
+  Vim off;
+- one search over threads, artifacts, transcripts and commands (`⌘K`);
+- a sidebar of workspaces that shows what waits for you; `⌘B` folds it to a
+  rail that opens on hover;
+- back and forward arrows, as in Slack (`⌘[` `⌘]`, `<C-o>` `<C-i>`);
+- the `/model` and `/effort` pickers, with Claude Code's own models and
+  versions;
+- docs you write in, rendered as you type, that the coordinator works from.
+
+See [docs/desktop.md](docs/desktop.md).
+
+## Terminal UI
 
 ![a coordinator opens three threads; one writes a design note](docs/demo/demo.gif)
 
@@ -31,27 +54,6 @@ process, as the tmux server is: the first `neoharness` starts it, and turns
 run on when you close the TUI. `neoharness hub stop` stops it. Agents talk to
 it through an MCP server that it adds to each session, so you change nothing
 in your Claude setup.
-
-## Desktop app
-
-The macOS app in `desktop/` shares the same hub, so the TUI and the app show
-the same workspaces and threads at the same time.
-
-![the app: a coordinator opens three threads, you allow one to run a migration, and its plan opens](docs/demo/desktop.gif)
-
-It has:
-
-- the same Vim keys and `:` commands, or keys as in Claude Code if you turn
-  Vim off;
-- one search over threads, artifacts, transcripts and commands (`⌘K`);
-- a sidebar of workspaces that shows what waits for you; `⌘B` folds it to a
-  rail that opens on hover;
-- back and forward arrows, as in Slack (`⌘[` `⌘]`, `<C-o>` `<C-i>`);
-- the `/model` and `/effort` pickers, with Claude Code's own models and
-  versions;
-- docs you write in, rendered as you type, that the coordinator works from.
-
-See [docs/desktop.md](docs/desktop.md).
 
 ## Download
 
