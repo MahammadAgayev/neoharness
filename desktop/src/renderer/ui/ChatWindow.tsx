@@ -577,7 +577,6 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
         </div>
       </div>
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>
-        <span className="prompt-mark">›</span>
         <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
       </div>
       <PromptInfo v={v} focused={focused} thread={thread} />

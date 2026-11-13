@@ -646,6 +646,22 @@ test('a doc opened from the coordinator goes back with <C-o> and the back button
   await page.mouse.move(700, 400)
 })
 
+test('the send button turns to the accent with text, and a click sends', async () => {
+  await normal()
+  await page.keyboard.press('Meta+1')
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  const send = page.locator('.pane.focused .prompt-send')
+  await expect(send).not.toHaveClass(/ready/)
+  await page.keyboard.press('i')
+  await page.keyboard.type('ship it')
+  await expect(send).toHaveClass(/ready/)
+  await shot('45-send-button')
+  await send.click()
+  await expect.poll(() => hub.calls.filter((c) => c.path.endsWith('/messages')).pop()?.body).toMatchObject({ text: 'ship it' })
+  await expect(send).not.toHaveClass(/ready/)
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

@@ -662,12 +662,27 @@ kbd {
   color: var(--muted);
   margin-left: 10px;
 }
-.prompt-mark {
-  color: var(--iris);
-  line-height: 1.55;
-}
-.pane:not(.focused) .prompt-mark {
+/* Send: quiet while the prompt is empty, the accent once there is text. */
+.prompt-send {
+  align-self: flex-end;
+  flex: 0 0 24px;
+  height: 24px;
+  margin: -2px -6px -4px 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--hl-low);
   color: var(--muted);
+  cursor: default;
+  transition: background-color 120ms var(--ease), color 120ms var(--ease);
+}
+.prompt-send.ready {
+  background: var(--iris);
+  color: var(--panel);
+}
+.prompt-send.ready:hover {
+  background: color-mix(in srgb, var(--iris) 85%, var(--text));
 }
 .prompt-editor {
   flex: 1;

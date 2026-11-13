@@ -4,9 +4,10 @@ import { markdown } from '@codemirror/lang-markdown'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { EditorView, keymap, placeholder, tooltips } from '@codemirror/view'
 import { getCM, vim, Vim } from '@replit/codemirror-vim'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { store, useStore } from '../store'
+import { Icon } from './Icon'
 import { editorKeys, editors, typeahead } from './registry'
 
 // drafts keep what you wrote per thread while the window shows another.
@@ -98,6 +99,8 @@ export function Prompt(props: {
   const { win, thread, onLeave } = props
   const leave = useRef(onLeave)
   leave.current = onLeave
+  const sendRef = useRef<() => void>(() => {})
+  const [hasText, setHasText] = useState(false)
 
   useEffect(() => {
     const send = (view: EditorView) => {
@@ -193,6 +196,7 @@ export function Prompt(props: {
           theme,
           EditorView.updateListener.of((u) => {
             if (u.docChanged) drafts.set(thread, u.state.doc.toString())
+            setHasText(u.state.doc.toString().trim() !== '')
             if (u.focusChanged) store.setInsert(u.view.hasFocus && (!store.state.settings.vim || !!getCM(u.view)?.state.vim?.insertMode))
           }),
           EditorView.domEventHandlers({
@@ -202,6 +206,8 @@ export function Prompt(props: {
       }),
     })
     viewRef.current = view
+    sendRef.current = () => send(view)
+    setHasText(view.state.doc.toString().trim() !== '')
     editors.add(view)
     const cm = getCM(view)
     const onMode = (e: { mode: string }) => store.setInsert(e.mode === 'insert')
@@ -267,5 +273,21 @@ export function Prompt(props: {
     viewRef.current?.dispatch({ effects: vimComp.current.reconfigure(vimOn ? vim({ status: false }) : []) })
   }, [vimOn])
 
-  return <div className="prompt-editor" ref={host} />
+  return (
+    <>
+      <div className="prompt-editor" ref={host} />
+      <button
+        className={`prompt-send ${hasText ? 'ready' : ''}`}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.stopPropagation()
+          sendRef.current()
+        }}
+        data-tip="Send"
+        data-keys="↵"
+      >
+        <Icon name="arrow-up" size={14} />
+      </button>
+    </>
+  )
 }

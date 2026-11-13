@@ -125,7 +125,7 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   muted text and accents 4.5:1 (`lib/themes.ts`, tested). The paper and
   the hues stay Rosé Pine's. Prose is about 75 characters wide, the chat
   text a size up from the labels, and every size follows the text size.
-- **The mouse**: buttons on permission cards, a click on a thread, an
+- **The mouse**: the round send button in the prompt (the accent once there is text), buttons on permission cards, a click on a thread, an
   artifact or a queued message, drag the line between columns, the × at
   the end of a window's status line closes it (`⌘W`). A right
   click on a thread or a block gives its actions (open in a split,
