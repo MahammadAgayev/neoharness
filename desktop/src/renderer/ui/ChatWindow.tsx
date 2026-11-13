@@ -8,6 +8,7 @@ import { Markdown } from './Markdown'
 import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
+import { CloseWindow } from './CloseWindow'
 
 const shellLines = 10
 
@@ -50,7 +51,7 @@ function PromptInfo(props: { v: ThreadView | undefined; focused: boolean }) {
   )
 }
 
-function StatusLine(props: { v: ThreadView | undefined; focused: boolean; workspace: string; name: string; peek: boolean }) {
+function StatusLine(props: { v: ThreadView | undefined; focused: boolean; workspace: string; name: string; peek: boolean; id: number }) {
   const { v, focused } = props
   const [, tick] = useState(0)
   useEffect(() => {
@@ -70,6 +71,7 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
       )}
       {v && v.state !== 'idle' && v.since && <span className="sl-dim">{elapsed(v.since)}</span>}
       {wake && <span className="sl-dim">{wake}</span>}
+      <CloseWindow id={props.id} />
     </div>
   )
 }
@@ -485,7 +487,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
 
   return (
     <div className="window chat" onMouseDown={() => store.focus(win.id)}>
-      <StatusLine v={v} focused={focused} workspace={workspace} name={name} peek={peek} />
+      <StatusLine v={v} focused={focused} workspace={workspace} name={name} peek={peek} id={win.id} />
       {search !== null && (
         <div className="findbar">
           <span className="t-iris">/</span>

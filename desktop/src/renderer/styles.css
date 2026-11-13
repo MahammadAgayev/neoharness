@@ -187,7 +187,8 @@ kbd {
   min-height: 0;
   display: flex;
   background: var(--shell);
-  padding: 0 8px 8px 0;
+  /* No gap at the bottom: the command line under the panel is the gap. */
+  padding: 0 8px 0 0;
 }
 .main:not(:has(.sidebar)) {
   padding-left: 8px;
@@ -203,7 +204,7 @@ kbd {
 }
 
 .cmdline {
-  flex: 0 0 28px;
+  flex: 0 0 24px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -299,6 +300,30 @@ kbd {
 .statusline.focused .sl-name {
   color: var(--text);
   font-weight: 600;
+}
+.sl-close {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: -6px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  opacity: 0;
+  cursor: default;
+  transition: opacity 100ms var(--ease);
+}
+.pane:hover .sl-close,
+.sl-close:focus-visible {
+  opacity: 1;
+}
+.sl-close:hover {
+  background: var(--hl-med);
+  color: var(--text);
 }
 .sl-dim {
   color: var(--muted);

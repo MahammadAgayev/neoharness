@@ -13,11 +13,6 @@ export function Sidebar() {
   return (
     <nav className="sidebar">
       <div className="sb-section">
-        <button className="sb-item" onClick={() => store.openPicker('all')}>
-          <Icon name="search" className="sb-icon" />
-          <span className="sb-label">Search</span>
-          <kbd className="sb-kbd shown">⌘K</kbd>
-        </button>
         {open && artifacts.length > 0 && (
           <button className="sb-item" onClick={() => store.openPicker('artifacts', true)}>
             <Icon name="diamond" className="sb-icon t-foam" />

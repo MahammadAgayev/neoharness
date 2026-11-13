@@ -23,6 +23,7 @@ import { livePreview } from '../lib/livepreview'
 import { outline } from '../lib/markdown'
 import { store, useStore, type Doc, type Win } from '../store'
 import { editorKeys, editors, handlers, type WinAction } from './registry'
+import { CloseWindow } from './CloseWindow'
 
 const docTheme = EditorView.theme({
   '&': { background: 'transparent', color: 'var(--text)', height: '100%' },
@@ -378,6 +379,7 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
             Save <kbd>⌘S</kbd>
           </button>
         )}
+        <CloseWindow id={win.id} />
       </div>
       {doc?.conflict && doc.edit && <Conflict name={name} doc={doc} cursor={hunk} setCursor={setHunk} />}
       {!doc ? (

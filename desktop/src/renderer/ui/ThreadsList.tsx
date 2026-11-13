@@ -5,6 +5,7 @@ import { elapsed, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
 import { Glyph } from './Icon'
+import { CloseWindow } from './CloseWindow'
 
 export function ThreadsList(props: { win: Win; focused: boolean }) {
   const { win, focused } = props
@@ -91,6 +92,7 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
         <span className="sl-name">threads</span>
         <span className="sl-fill" />
         <span className="sl-part t-muted">{rows.filter((r) => r.state !== 'resolved-fold').length}</span>
+        <CloseWindow id={win.id} />
       </div>
       <div className="list" ref={el}>
         {rows.length === 0 && <div className="empty">No threads yet. The coordinator opens them, or :open a thread yourself.</div>}

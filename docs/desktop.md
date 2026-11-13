@@ -82,7 +82,8 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
 
 ## What the window adds
 
-- **Search everywhere**: `⌘K`, or `<leader><leader>`. It searches
+- **Search everywhere**: `⌘K`, `<leader><leader>`, or the box in the title
+  bar. It searches
   threads of every workspace, artifacts, workspaces, commands, notifications
   and the text of every transcript at once. `<Tab>` goes to one kind. The
   pickers (`<leader>pt`, `<leader>pa`, `<leader>ps`, …) open it on one kind.
@@ -98,7 +99,8 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   icons are Lucide's line icons (ISC). The Rosé Pine text is drawn a step
   closer to black or white than the TUI's, so it reads sharp in a window.
 - **The mouse**: buttons on permission cards, a click on a thread, an
-  artifact or a queued message, drag the line between columns. A right
+  artifact or a queued message, drag the line between columns, the × at
+  the end of a window's status line closes it (`⌘W`). A right
   click on a thread or a block gives its actions (open in a split,
   resolve, stop, copy, delete); hints show on hover.
 - **Color schemes**: `:colorscheme system` follows the macOS appearance;

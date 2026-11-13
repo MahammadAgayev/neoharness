@@ -4,6 +4,7 @@ import { commands } from '../commands'
 import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
 import { Glyph } from './Icon'
+import { CloseWindow } from './CloseWindow'
 
 function useScrollKeys(win: Win, el: React.RefObject<HTMLDivElement | null>) {
   const handle = (a: WinAction, count: number): boolean => {
@@ -132,6 +133,7 @@ export function HelpWindow(props: { win: Win; focused: boolean }) {
         <span className="sl-name">help</span>
         <span className="sl-fill" />
         <span className="sl-part t-muted">{`<leader> is ${leader}`}</span>
+        <CloseWindow id={props.win.id} />
       </div>
       <div className="doc" ref={el} tabIndex={-1}>
         <div className="help-inner">
@@ -172,6 +174,7 @@ export function MessagesWindow(props: { win: Win; focused: boolean }) {
     <div className="window messages" onMouseDown={() => store.focus(props.win.id)}>
       <div className={`statusline ${props.focused ? 'focused' : ''}`}>
         <span className="sl-name">messages</span>
+        <CloseWindow id={props.win.id} />
       </div>
       <div className="list" ref={el} tabIndex={-1}>
         {log.length === 0 && <div className="empty">No notifications yet.</div>}
