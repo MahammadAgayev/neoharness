@@ -104,10 +104,12 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   The arrows at the top left go back and forward too, as in Slack; their
   tooltips show the keys.
   Help opens as a dialog, as the settings do: Esc closes it, j and k scroll it.
-- **Spend** (`<leader>$`, `:spend`, or Spend in the sidebar): what the
+- **Cost** (`<leader>$`, `:cost`, or Cost in the sidebar): what the
   workspace cost, in all and today, the last 14 days as bars, by thread and
   by model, and the turns that cost the most; a click opens the thread. Tab
-  shows every workspace (`:spend all`), by workspace. The hub keeps a log of
+  shows every workspace (`:cost all`), by workspace. The sidebar shows
+  what each workspace cost beside its name; `:set nocost` or Settings hides
+  it. The hub keeps a log of
   each paid turn for it; the totals count the turns from before the log too.
 - **`/model` and `/effort`** with no name open a picker, as in Claude Code;
   a click on the model under the prompt opens it too. The models, their

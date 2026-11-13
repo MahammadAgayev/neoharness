@@ -217,7 +217,7 @@ type Completions struct {
 	Query string `json:"query,omitempty"`
 }
 
-// TurnCost is what one turn cost. The spend log of a workspace keeps one per
+// TurnCost is what one turn cost. The cost log of a workspace keeps one per
 // paid turn, failed ones too.
 type TurnCost struct {
 	At        time.Time `json:"at"`
@@ -228,25 +228,25 @@ type TurnCost struct {
 	Tools     int       `json:"tools,omitempty"`
 }
 
-// Spend is what a workspace, or every workspace, cost. Total and Threads
-// count every turn ever; Days, Models and Top only the turns in the spend
+// CostReport is what a workspace, or every workspace, cost. Total and Threads
+// count every turn ever; Days, Models and Top only the turns in the cost
 // logs, which began later: Since is the first of them.
-type Spend struct {
+type CostReport struct {
 	Total   float64     `json:"total"`
 	Today   float64     `json:"today"`
 	Since   time.Time   `json:"since"`
-	Threads []SpendPart `json:"threads"`
+	Threads []CostPart `json:"threads"`
 	// Workspaces is filled only for every workspace.
-	Workspaces []SpendPart `json:"workspaces"`
-	Models     []SpendPart `json:"models"`
+	Workspaces []CostPart `json:"workspaces"`
+	Models     []CostPart `json:"models"`
 	// Days are the last 14, oldest first, each as YYYY-MM-DD in local time.
-	Days []SpendPart `json:"days"`
+	Days []CostPart `json:"days"`
 	// Top are the turns that cost the most, the most first.
 	Top []TurnCost `json:"top"`
 }
 
-// SpendPart is the cost of one thread, workspace, model or day.
-type SpendPart struct {
+// CostPart is the cost of one thread, workspace, model or day.
+type CostPart struct {
 	Workspace string  `json:"workspace,omitempty"`
 	Name      string  `json:"name"`
 	Cost      float64 `json:"cost"`
@@ -281,6 +281,8 @@ type WorkspaceView struct {
 	Coordinator State `json:"coordinator,omitempty"`
 	// Activity is turns per hour over the last 24 hours, oldest first.
 	Activity []int `json:"activity"`
+	// Cost is what every thread of the workspace cost, the coordinator too.
+	Cost float64 `json:"cost,omitempty"`
 	// CoordinatorAgent and ThreadsAgent are the agents the roles run here,
 	// and AgentNames every agent of the config, for :setlocal.
 	CoordinatorAgent string   `json:"coordinatorAgent,omitempty"`

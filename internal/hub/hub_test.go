@@ -1959,7 +1959,7 @@ func TestYourMessageReopensAResolvedThread(t *testing.T) {
 	}
 }
 
-func TestSpendAddsUpTurnsByThreadModelDayAndWorkspace(t *testing.T) {
+func TestCostAddsUpTurnsByThreadModelDayAndWorkspace(t *testing.T) {
 	f := &fake{}
 	f.script = func(ctx context.Context, req agent.Request) agent.Result {
 		switch req.Prompt {
@@ -1980,7 +1980,7 @@ func TestSpendAddsUpTurnsByThreadModelDayAndWorkspace(t *testing.T) {
 		}
 		stateIs(t, h, s.ws, model.Coordinator, model.StateIdle)
 	}
-	sp, err := h.Spend("demo")
+	sp, err := h.Cost("demo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1996,11 +1996,14 @@ func TestSpendAddsUpTurnsByThreadModelDayAndWorkspace(t *testing.T) {
 	if len(sp.Top) != 3 || sp.Top[0].Cost != 2 || sp.Top[0].Workspace != "demo" || len(sp.Workspaces) != 0 {
 		t.Fatalf("top = %+v, workspaces = %+v", sp.Top, sp.Workspaces)
 	}
-	all, _ := h.Spend("")
+	if ws := h.Workspaces(); ws[0].Cost != 2.75 || ws[1].Cost != 0.5 {
+		t.Fatalf("workspace costs = %v, %v", ws[0].Cost, ws[1].Cost)
+	}
+	all, _ := h.Cost("")
 	if all.Total != 3.25 || len(all.Workspaces) != 2 || all.Workspaces[0].Name != "demo" || all.Workspaces[1].Cost != 0.5 {
 		t.Fatalf("all = %+v", all)
 	}
-	if _, err := h.Spend("nope"); err == nil {
+	if _, err := h.Cost("nope"); err == nil {
 		t.Fatal("an unknown workspace should fail")
 	}
 }

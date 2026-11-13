@@ -323,15 +323,15 @@ func AppendEvent(workspace, thread string, e model.Event) error {
 	return err
 }
 
-func spendFile(workspace string) string { return filepath.Join(Dir(workspace), "spend.jsonl") }
+func costFile(workspace string) string { return filepath.Join(Dir(workspace), "costs.jsonl") }
 
-// AppendSpend adds a paid turn to the workspace's spend log.
-func AppendSpend(workspace string, c model.TurnCost) error {
+// AppendCost adds a paid turn to the workspace's cost log.
+func AppendCost(workspace string, c model.TurnCost) error {
 	data, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(spendFile(workspace), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(costFile(workspace), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
@@ -340,9 +340,9 @@ func AppendSpend(workspace string, c model.TurnCost) error {
 	return err
 }
 
-// Spends reads the workspace's spend log, oldest first.
-func Spends(workspace string) ([]model.TurnCost, error) {
-	f, err := os.Open(spendFile(workspace))
+// Costs reads the workspace's cost log, oldest first.
+func Costs(workspace string) ([]model.TurnCost, error) {
+	f, err := os.Open(costFile(workspace))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}

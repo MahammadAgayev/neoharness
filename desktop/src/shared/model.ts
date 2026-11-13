@@ -91,7 +91,7 @@ export interface Completions {
   query?: string
 }
 
-// TurnCost is what one turn cost, from a workspace's spend log.
+// TurnCost is what one turn cost, from a workspace's cost log.
 export interface TurnCost {
   at: string
   workspace?: string
@@ -101,20 +101,20 @@ export interface TurnCost {
   tools?: number
 }
 
-// Spend is what a workspace, or every workspace, cost. Days, models and top
-// count only the turns in the spend logs, from since on.
-export interface Spend {
+// CostReport is what a workspace, or every workspace, cost. Days, models and top
+// count only the turns in the cost logs, from since on.
+export interface CostReport {
   total: number
   today: number
   since: string
-  threads: SpendPart[]
-  workspaces: SpendPart[]
-  models: SpendPart[]
-  days: SpendPart[]
+  threads: CostPart[]
+  workspaces: CostPart[]
+  models: CostPart[]
+  days: CostPart[]
   top: TurnCost[]
 }
 
-export interface SpendPart {
+export interface CostPart {
   workspace?: string
   name: string
   cost: number
@@ -145,6 +145,8 @@ export interface WorkspaceView {
   counts: Partial<Record<State, number>>
   coordinator?: State
   activity: number[]
+  // cost is what every thread of the workspace cost, the coordinator too.
+  cost?: number
   coordinatorAgent?: string
   threadsAgent?: string
   agentNames?: string[]

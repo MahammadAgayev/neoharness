@@ -110,6 +110,8 @@ export interface Settings {
   maps: UserMap[]
   keyhints: boolean
   sidebarWidth: number
+  // cost shows what each workspace cost in the sidebar.
+  cost: boolean
 }
 
 export interface State {
@@ -135,8 +137,8 @@ export interface State {
   settings: Settings
   settingsOpen: boolean
   helpOpen: boolean
-  // spend is the spend dialog: of the open workspace, or of all of them.
-  spend: 'workspace' | 'all' | null
+  // cost is the cost dialog: of the open workspace, or of all of them.
+  cost: 'workspace' | 'all' | null
   // choice is the /model or /effort picker of a thread.
   choice: { thread: string; kind: 'model' | 'effort' } | null
   newWorkspace: boolean
@@ -153,7 +155,7 @@ let ids = 1
 const nextId = () => ids++
 
 function loadSettings(): Settings {
-  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true, sidebarWidth: 216 }
+  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true, sidebarWidth: 216, cost: true }
   try {
     return { ...d, ...JSON.parse(localStorage.getItem('settings') || '{}') }
   } catch {
@@ -192,7 +194,7 @@ class Store {
     settings: loadSettings(),
     settingsOpen: false,
   helpOpen: false,
-  spend: null,
+  cost: null,
   choice: null,
     newWorkspace: false,
     newDoc: false,
@@ -1218,14 +1220,14 @@ class Store {
     this.set({ helpOpen: open, settingsOpen: false, picker: null, cmdline: null })
   }
 
-  // openSpend opens the spend dialog; with no workspace open it shows all.
-  openSpend(scope: 'workspace' | 'all' | null): void {
+  // openCost opens the cost dialog; with no workspace open it shows all.
+  openCost(scope: 'workspace' | 'all' | null): void {
     if (scope === 'workspace' && (!this.state.workspace || this.state.screen !== 'workspace')) scope = 'all'
-    this.set({ spend: scope, helpOpen: false, settingsOpen: false, picker: null, cmdline: null })
+    this.set({ cost: scope, helpOpen: false, settingsOpen: false, picker: null, cmdline: null })
   }
 
-  spendOf(scope: 'workspace' | 'all') {
-    return this.call('spend', { workspace: scope === 'all' ? '' : this.state.workspace })
+  costOf(scope: 'workspace' | 'all') {
+    return this.call('cost', { workspace: scope === 'all' ? '' : this.state.workspace })
   }
 
 
@@ -1315,8 +1317,8 @@ class Store {
       case 'help':
       case 'h':
         return this.openHelp(true)
-      case 'spend':
-        return this.openSpend(a[0] === 'all' ? 'all' : 'workspace')
+      case 'cost':
+        return this.openCost(a[0] === 'all' ? 'all' : 'workspace')
       case 'w':
       case 'write':
         if (!art) return this.say('nothing to write here; :w saves an artifact', 'muted')
@@ -1370,7 +1372,7 @@ class Store {
 
   private setOption(args: string[]): void {
     const s = this.state.settings
-    if (!args.length) return this.say(`vim=${s.vim} sidebar=${s.sidebar} fontsize=${s.fontSize} compactwarn=${s.compactwarn} colorscheme=${s.scheme}`)
+    if (!args.length) return this.say(`vim=${s.vim} sidebar=${s.sidebar} cost=${s.cost} fontsize=${s.fontSize} compactwarn=${s.compactwarn} colorscheme=${s.scheme}`)
     for (const arg of args) {
       const [k, v] = arg.split('=', 2)
       switch (k) {
@@ -1386,6 +1388,12 @@ class Store {
         case 'nosidebar':
           this.setSettings({ sidebar: false })
           break
+        case 'cost':
+          this.setSettings({ cost: true })
+          break
+        case 'nocost':
+          this.setSettings({ cost: false })
+          break
         case 'fontsize':
         case 'fs':
           if (Number(v) >= 9 && Number(v) <= 28) this.setSettings({ fontSize: Number(v) })
@@ -1396,7 +1404,7 @@ class Store {
           else return this.say('compactwarn is 0 to 100', 'love')
           break
         default:
-          return this.say(`no option ${k}; the options are vim novim sidebar nosidebar fontsize compactwarn`, 'love')
+          return this.say(`no option ${k}; the options are vim novim sidebar nosidebar cost nocost fontsize compactwarn`, 'love')
       }
     }
   }

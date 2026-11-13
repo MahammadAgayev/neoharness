@@ -54,7 +54,7 @@ export class FakeHub {
   }
 
   workspace(name: string, threads: string[]): void {
-    this.workspaces.push({ name, pin: '/tmp/fake', createdAt: now(), counts: { idle: threads.length }, activity: [0, 1, 3, 2, 5, 1] })
+    this.workspaces.push({ name, pin: '/tmp/fake', createdAt: now(), counts: { idle: threads.length }, activity: [0, 1, 3, 2, 5, 1], cost: name === 'demo' ? 24.75 : 0 })
     this.threads[name] = ['coordinator', ...threads].map((t) => view(name, t))
   }
 
@@ -120,7 +120,7 @@ export class FakeHub {
         return json({})
       }
       if (url.pathname === '/deleted') return json([])
-      if (url.pathname === '/spend') {
+      if (url.pathname === '/cost') {
         const all = !url.searchParams.get('workspace')
         const day = (back: number) => {
           const d = new Date(Date.now() - back * 86400000)

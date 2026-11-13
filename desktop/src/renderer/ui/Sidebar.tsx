@@ -8,6 +8,13 @@ const maxWidth = 400
 
 const railWidth = 48
 
+// shortCost keeps the cost of a workspace narrow: $4.20, $128, $1.2k.
+export function shortCost(n: number): string {
+  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`
+  if (n >= 100) return `$${Math.round(n)}`
+  return `$${n.toFixed(2)}`
+}
+
 // Sidebar lists the workspaces and what in each needs you, so a thread that
 // waits in another workspace is one look away. ⌘B folds it to a rail of
 // icons, as Chrome's vertical tabs: the mouse on the rail shows it whole,
@@ -20,6 +27,7 @@ export function Sidebar(props: { folded: boolean }) {
   const leader = useStore((s) => s.settings.leader)
   const lead = leader === '<Space>' ? 'Space' : leader.replace(/^<|>$/g, '')
   const saved = useStore((s) => s.settings.sidebarWidth)
+  const showCost = useStore((s) => s.settings.cost)
   // While a drag runs the width is local; it is saved when the drag ends.
   const [dragged, setDragged] = useState<number | null>(null)
   const width = dragged ?? saved
@@ -113,6 +121,7 @@ export function Sidebar(props: { folded: boolean }) {
               ) : (
                 i < 9 && <kbd className="sb-kbd">⌘{i + 1}</kbd>
               )}
+              {showCost && !!w.cost && <span className="sb-cost">{shortCost(w.cost)}</span>}
             </button>
           )
         })}
@@ -122,9 +131,9 @@ export function Sidebar(props: { folded: boolean }) {
         </button>
       </div>
       <div className="sb-foot">
-        <button className="sb-item" onClick={() => store.openSpend('workspace')}>
+        <button className="sb-item" onClick={() => store.openCost('workspace')}>
           <Icon name="chart-column" className="sb-icon" />
-          <span className="sb-label">Spend</span>
+          <span className="sb-label">Cost</span>
           <kbd className="sb-kbd shown">{lead} $</kbd>
         </button>
         <button className="sb-item" onClick={() => store.openSettings()}>

@@ -104,12 +104,12 @@ command.
 ~/.neoharness/workspaces/<workspace>/threads/<name>/thread.json    state, queue, session (0600: it holds the MCP token)
 ~/.neoharness/workspaces/<workspace>/threads/<name>/events.jsonl   transcript, append-only
 ~/.neoharness/workspaces/<workspace>/artifacts/<name>.md / .json   artifact text / metadata
-~/.neoharness/workspaces/<workspace>/spend.jsonl                   one line per paid turn: when, thread, model, cost
+~/.neoharness/workspaces/<workspace>/costs.jsonl                   one line per paid turn: when, thread, model, cost
 ```
 
-`GET /spend?workspace=<name>` adds up what a workspace cost; with no name,
+`GET /cost?workspace=<name>` adds up what a workspace cost; with no name,
 every workspace. The totals per thread count every turn. The days, the
-models and the turns that cost the most come from the spend log, which
+models and the turns that cost the most come from the cost log, which
 began later, so they start at its first line (`since`).
 
 An artifact belongs to the session that wrote it last. The person's edit

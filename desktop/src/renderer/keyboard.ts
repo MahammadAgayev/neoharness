@@ -38,7 +38,7 @@ const appMaps: Record<string, Action> = {
   '<leader>x': c('deny'),
   '<leader>s': c('settings'),
   '<leader>h': c('help'),
-  '<leader>$': c('spend'),
+  '<leader>$': c('cost'),
   '<leader>d': c('new-doc'),
   '<leader>e': w('fold'),
   '<leader>y': w('yank'),
@@ -385,7 +385,7 @@ export function onKey(e: KeyboardEvent): void {
     return
   }
   // The picker, the command line and the settings are inputs of their own.
-  if (s.picker || s.cmdline !== null || s.settingsOpen || s.helpOpen || s.spend || s.choice || s.newWorkspace || s.newDoc) return
+  if (s.picker || s.cmdline !== null || s.settingsOpen || s.helpOpen || s.cost || s.choice || s.newWorkspace || s.newDoc) return
 
   const km = keymaps()
   if (key.startsWith('<D-')) {

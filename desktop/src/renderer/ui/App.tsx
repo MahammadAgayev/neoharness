@@ -13,7 +13,7 @@ import { Tooltip } from './Tooltip'
 import { Help, MessagesWindow } from './Panels'
 import { Icon } from './Icon'
 import { Choice } from './Choice'
-import { Spend } from './Spend'
+import { Cost } from './Cost'
 import { Sidebar } from './Sidebar'
 import { ThreadsList } from './ThreadsList'
 import { Workspaces } from './Workspaces'
@@ -192,7 +192,7 @@ export function App() {
       <Picker />
       <Settings />
       <Help />
-      <Spend />
+      <Cost />
       <Choice />
       <Tooltip />
       <KeyHints />

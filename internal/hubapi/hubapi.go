@@ -122,10 +122,10 @@ func (c *Client) StopHub() error {
 	return c.do("POST", "/hub/stop", nil, nil)
 }
 
-// Spend is what a workspace cost, or every workspace for "".
-func (c *Client) Spend(workspace string) (model.Spend, error) {
-	var out model.Spend
-	return out, c.do("GET", "/spend?workspace="+url.QueryEscape(workspace), nil, &out)
+// Cost is what a workspace cost, or every workspace for "".
+func (c *Client) Cost(workspace string) (model.CostReport, error) {
+	var out model.CostReport
+	return out, c.do("GET", "/cost?workspace="+url.QueryEscape(workspace), nil, &out)
 }
 
 func (c *Client) Workspaces() ([]model.WorkspaceView, error) {

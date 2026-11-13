@@ -61,8 +61,8 @@ export const commands: Command[] = [
   { id: 'settings', title: 'Settings', keys: ['<leader>s', '⌘,', ':settings'], run: () => s.openSettings() },
   { id: 'start-hub', title: 'Start the hub', keys: ['neoharness hub start'], run: () => void s.startHub() },
   { id: 'help', title: 'Keys and commands', keys: ['<leader>h', '⌘/', ':help'], run: () => void s.ex('help') },
-  { id: 'spend', title: 'Spend: what this workspace cost', keys: ['<leader>$', ':spend'], run: () => s.openSpend('workspace') },
-  { id: 'spend-all', title: 'Spend of every workspace', keys: [':spend all'], run: () => s.openSpend('all') },
+  { id: 'cost', title: 'Cost: what this workspace cost', keys: ['<leader>$', ':cost'], run: () => s.openCost('workspace') },
+  { id: 'cost-all', title: 'Cost of every workspace', keys: [':cost all'], run: () => s.openCost('all') },
 ]
 
 export function command(id: string): Command {

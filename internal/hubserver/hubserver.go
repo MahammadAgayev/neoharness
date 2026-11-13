@@ -101,8 +101,8 @@ func Handler(h *hub.Hub, info hubapi.Info, stop func()) http.Handler {
 		c, err := h.Completions(r.PathValue("p"), r.PathValue("t"), r.URL.Query().Get("q"))
 		reply(w, c, err)
 	})
-	mux.HandleFunc("GET /spend", func(w http.ResponseWriter, r *http.Request) {
-		sp, err := h.Spend(r.URL.Query().Get("workspace"))
+	mux.HandleFunc("GET /cost", func(w http.ResponseWriter, r *http.Request) {
+		sp, err := h.Cost(r.URL.Query().Get("workspace"))
 		reply(w, sp, err)
 	})
 	mux.HandleFunc("GET /workspaces/{p}/threads/{t}/choices", func(w http.ResponseWriter, r *http.Request) {
