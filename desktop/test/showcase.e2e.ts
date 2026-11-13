@@ -58,6 +58,10 @@ test('the whole app, populated', async () => {
     await page.keyboard.type('colorscheme rose-pine-moon')
     await page.keyboard.press('Enter')
     await shot('30-show-workspaces')
+    // With no workspace open, search offers only what spans workspaces.
+    await page.keyboard.press('Meta+k')
+    await expect(page.locator('.palette-tabs .tab')).toHaveText(['All', 'Threads', 'Commands', 'Workspaces', 'Notifications'])
+    await page.keyboard.press('Escape')
     await page.keyboard.press('Enter')
     await expect(page.locator('.list-row .name', { hasText: 'ledger-migration' })).toBeVisible()
     await shot('31-show-workspace')

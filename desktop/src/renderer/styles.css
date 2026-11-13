@@ -1002,12 +1002,16 @@ kbd {
 }
 .palette-tabs {
   display: flex;
+  align-items: center;
   gap: 2px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--line-soft);
   overflow-x: auto;
 }
 .tab {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.4;
   background: none;
   border: 0;
   padding: 3px 9px;

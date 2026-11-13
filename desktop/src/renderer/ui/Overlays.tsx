@@ -22,7 +22,9 @@ export function Picker() {
   }, [index])
   if (!p) return null
 
-  const shown = p.only ? tabs.filter((t) => t.tab === p.tab) : tabs
+  // Artifacts, text, buffers and the outline are of the open workspace.
+  const usable = store.state.workspace ? tabs : tabs.filter((t) => !['artifacts', 'text', 'buffers', 'outline'].includes(t.tab))
+  const shown = p.only ? tabs.filter((t) => t.tab === p.tab) : usable
   const choose = (it: Item | undefined, how?: 'right' | 'above') => {
     if (!it) return
     store.closePicker()
@@ -30,8 +32,8 @@ export function Picker() {
     else it.run()
   }
   const cycle = (d: number) => {
-    const i = tabs.findIndex((t) => t.tab === p.tab)
-    store.setPicker({ tab: tabs[(i + d + tabs.length) % tabs.length].tab, index: 0, only: false })
+    const i = usable.findIndex((t) => t.tab === p.tab)
+    store.setPicker({ tab: usable[(i + d + usable.length) % usable.length].tab, index: 0, only: false })
   }
   const onKey = (e: React.KeyboardEvent) => {
     e.stopPropagation()
