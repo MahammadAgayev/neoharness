@@ -5,6 +5,7 @@ import { store, useStore, type Win } from '../store'
 import { ArtifactWindow } from './ArtifactWindow'
 import { ChatWindow } from './ChatWindow'
 import { CommandLine, HubBanner, Picker, Toasts } from './Overlays'
+import { Settings } from './Settings'
 import { HelpWindow, MessagesWindow } from './Panels'
 import { Sidebar } from './Sidebar'
 import { ThreadsList } from './ThreadsList'
@@ -148,6 +149,7 @@ export function App() {
       <CommandLine />
       <Toasts />
       <Picker />
+      <Settings />
     </div>
   )
 }

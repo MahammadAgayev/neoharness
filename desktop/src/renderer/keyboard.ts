@@ -6,9 +6,9 @@
 import { getCM } from '@replit/codemirror-vim'
 import type { EditorView } from '@codemirror/view'
 
-import { command } from './commands'
+import { command, commands } from './commands'
 import { keyName, Sequencer } from './lib/keys'
-import { store } from './store'
+import { store, type Settings } from './store'
 import { editorKeys, editors, handlers, typeahead, type WinAction } from './ui/registry'
 
 type Action = { cmd: string } | { win: WinAction } | { move: 'h' | 'j' | 'k' | 'l' } | { fn: () => void }
@@ -116,10 +116,40 @@ const macMaps: Record<string, Action> = {
   '<D-/>': c('help'),
   '<D-[>': c('back'),
   '<D-b>': c('sidebar'),
+  '<D-,>': c('settings'),
 }
 
-const normal = new Sequencer<Action>({ ...appMaps, ...winMaps })
-const promptNormal = new Sequencer<Action>(appMaps)
+function userAction(run: string): Action | null {
+  if (run === '') return { fn: () => {} }
+  if (run === ':') return null
+  if (run.startsWith(':')) return { fn: () => void store.ex(run.slice(1)) }
+  return commands.some((x) => x.id === run) ? c(run) : null
+}
+
+// The maps are built again when the settings change: the leader and the
+// person's own maps, which win over the defaults.
+let built: { settings: Settings; normal: Sequencer<Action>; prompt: Sequencer<Action>; mac: Record<string, Action> } | null = null
+
+function keymaps() {
+  const settings = store.state.settings
+  if (built?.settings === settings) return built
+  const user: Record<string, Action> = {}
+  const mac = { ...macMaps }
+  for (const m of settings.maps) {
+    const a = userAction(m.run)
+    if (!m.keys || !a) continue
+    if (m.keys.startsWith('<D-')) mac[m.keys] = a
+    else user[m.keys] = a
+  }
+  built = {
+    settings,
+    normal: new Sequencer<Action>({ ...appMaps, ...winMaps, ...user }, settings.leader),
+    prompt: new Sequencer<Action>({ ...appMaps, ...user }, settings.leader),
+    mac,
+  }
+  return built
+}
+
 let timer: ReturnType<typeof setTimeout> | null = null
 
 function run(a: Action, count: number): boolean {
@@ -196,11 +226,12 @@ export function onKey(e: KeyboardEvent): void {
     store.answerConfirm(key === 'y' || key === 'Y')
     return
   }
-  // The picker and the command line are inputs of their own.
-  if (s.picker || s.cmdline !== null) return
+  // The picker, the command line and the settings are inputs of their own.
+  if (s.picker || s.cmdline !== null || s.settingsOpen) return
 
+  const km = keymaps()
   if (key.startsWith('<D-')) {
-    const a = macMaps[key]
+    const a = km.mac[key]
     if (a) {
       e.preventDefault()
       run(a, 1)
@@ -229,8 +260,8 @@ export function onKey(e: KeyboardEvent): void {
       store.openCmdline()
       return
     }
-    if (promptNormal.pending || key === '<Space>' || key.startsWith('<C-w') || /^<C-[hjkl]>$/.test(key) || key === '<Tab>') {
-      if (feed(promptNormal, key)) {
+    if (km.prompt.pending || key === s.settings.leader || key.startsWith('<C-w') || /^<C-[hjkl]>$/.test(key) || key === '<Tab>') {
+      if (feed(km.prompt, key)) {
         e.preventDefault()
         e.stopPropagation()
       }
@@ -245,7 +276,7 @@ export function onKey(e: KeyboardEvent): void {
     store.openCmdline()
     return
   }
-  if (feed(normal, key)) e.preventDefault()
+  if (feed(km.normal, key)) e.preventDefault()
 }
 
 export function installKeys(): void {

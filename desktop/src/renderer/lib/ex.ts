@@ -56,4 +56,5 @@ export const exCommands = [
   'help',
   'colorscheme',
   'set',
+  'settings',
 ]

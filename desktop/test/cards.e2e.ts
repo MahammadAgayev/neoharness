@@ -163,6 +163,8 @@ test('without Vim, keys work as in Claude Code: ⌃S stashes, Esc takes your mes
   await expect(prompt).toHaveText('a draft for later')
   await shot('27-novim')
   await page.keyboard.press('Control+u')
+  // Without Vim the prompt keeps ":", so leave it first.
+  await prompt.blur()
   await page.keyboard.type(':')
   await page.keyboard.type('set vim')
   await page.keyboard.press('Enter')
@@ -191,6 +193,28 @@ async function yankTwo() {
   expect(clip).toContain('Which **port** should it listen on?')
   expect(clip).toContain('8080')
 }
+
+test('⌘, opens the settings: a theme, and a key you record runs an ex command', async () => {
+  const base = () => page.evaluate(() => document.documentElement.style.getPropertyValue('--base'))
+  await page.keyboard.press('Meta+Comma')
+  await expect(page.locator('.settings')).toBeVisible()
+  await expect(page.locator('.setting', { hasText: 'Vim keys' }).locator('.toggle')).toHaveAttribute('aria-checked', 'true')
+  await page.locator('.swatch', { hasText: 'Dawn' }).click()
+  await expect.poll(base).toBe('#faf4ed')
+  await page.locator('.add-map').click()
+  await page.locator('.map-row .field.keys').click()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('z')
+  await expect(page.locator('.map-row .field.keys kbd')).toHaveText(['<leader>', 'z'])
+  await page.locator('.map-row select').selectOption(':')
+  await page.locator('.map-row .ex').fill(':colorscheme rose-pine-moon')
+  await shot('28-settings')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.settings')).toHaveCount(0)
+  await page.keyboard.press('Space')
+  await page.keyboard.press('z')
+  await expect.poll(base).toBe('#232136')
+})
 
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()

@@ -60,6 +60,11 @@ export function Sidebar() {
         </button>
       </div>
       <div className="sb-foot">
+        <button className="sb-item" onClick={() => store.openSettings()}>
+          <span className="sb-icon">⚙</span>
+          <span className="sb-label">Settings</span>
+          <kbd className="sb-kbd">⌘,</kbd>
+        </button>
         <button className="sb-item" onClick={() => void store.ex('help')}>
           <span className="sb-icon">?</span>
           <span className="sb-label">Keys and commands</span>

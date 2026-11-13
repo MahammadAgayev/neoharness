@@ -35,8 +35,22 @@ questions, `!` commands, `/` and `@` completion, artifacts with merge on save,
 splits, toasts, and the ex commands (`:new`, `:open`, `:resolve`, `:setlocal`,
 `:restore`, `:allow`, `:w`, `:e!`, …). `:help` lists them all.
 
-The keymaps and colors of `init.lua` are the TUI's only. The hub settings in
-it apply to both.
+The app does not read `init.lua`; the hub settings in it apply to both.
+What the TUI takes from `init.lua` for itself is in Settings instead.
+
+## Settings
+
+`⌘,` or `:settings` opens them. A change applies at once and is kept.
+
+- **Theme**: System follows the macOS appearance; Moon (the TUI's), Night
+  and Dawn (light). `:colorscheme` sets it too.
+- **Text size**, the **sidebar**, **Vim keys**, and the **compact warning**:
+  the context % at which the status line says `/compact`.
+- **Leader**: click it and press a key; `<Space>` by default.
+- **Your keys**: click the keys field and press the keys, as `<leader>z`
+  or `⌘⇧L`; Backspace takes one back. Then pick a command, an ex command
+  (`:colorscheme rose-pine-dawn`), or Nothing, which turns a default off.
+  Your keys win over the defaults.
 
 ## What the window adds
 

@@ -83,12 +83,21 @@ export interface Picker {
   local?: boolean
 }
 
+// A UserMap runs a command, or an ex command when run starts with ":", on
+// its keys. An empty run turns the keys off.
+export interface UserMap {
+  keys: string
+  run: string
+}
+
 export interface Settings {
   scheme: string
   vim: boolean
   fontSize: number
   compactwarn: number
   sidebar: boolean
+  leader: string
+  maps: UserMap[]
 }
 
 export interface State {
@@ -112,6 +121,7 @@ export interface State {
   // insert is set while an editor takes the keys.
   insert: boolean
   settings: Settings
+  settingsOpen: boolean
   showResolved: boolean
   folds: Record<number, boolean>
   // workspaceCursor is the row of the workspaces screen.
@@ -123,7 +133,7 @@ let ids = 1
 const nextId = () => ids++
 
 function loadSettings(): Settings {
-  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true }
+  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [] }
   try {
     return { ...d, ...JSON.parse(localStorage.getItem('settings') || '{}') }
   } catch {
@@ -160,6 +170,7 @@ class Store {
     cmdline: null,
     insert: false,
     settings: loadSettings(),
+    settingsOpen: false,
     showResolved: false,
     folds: {},
     workspaceCursor: 0,
@@ -1046,6 +1057,10 @@ class Store {
     this.set({ settings })
   }
 
+  openSettings(open = true): void {
+    this.set({ settingsOpen: open, picker: null, cmdline: null })
+  }
+
   setWorkspaceCursor(i: number): void {
     const n = this.state.workspaces.length
     this.set({ workspaceCursor: Math.max(0, Math.min(i, n - 1)) })
@@ -1161,6 +1176,8 @@ class Store {
         return this.setSettings({ scheme: a[0] })
       case 'set':
         return this.setOption(a)
+      case 'settings':
+        return this.openSettings()
       default:
         this.say(`not a command: ${e.cmd}`, 'love')
     }

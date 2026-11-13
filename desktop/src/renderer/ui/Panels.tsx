@@ -110,12 +110,14 @@ const sections: { title: string; rows: [string, string][] }[] = [
       [':set vim  :set novim', 'Vim keys in editors, or keys as in Claude Code'],
       [':set nosidebar  ⌘B', 'hide the sidebar of workspaces, for focus'],
       [':set fontsize=15  compactwarn=80', 'text size; the context % that says /compact'],
+      [':settings  ⌘,', 'theme, text size, Vim keys, the leader and your own keys'],
       [':q', 'close the window; ⌘Q quits, and the hub and its turns run on'],
     ],
   },
 ]
 
 export function HelpWindow(props: { win: Win; focused: boolean }) {
+  const leader = useStore((s) => s.settings.leader)
   const el = useRef<HTMLDivElement>(null)
   useScrollKeys(props.win, el)
   return (
@@ -123,7 +125,7 @@ export function HelpWindow(props: { win: Win; focused: boolean }) {
       <div className={`statusline ${props.focused ? 'focused' : ''}`}>
         <span className="sl-name">help</span>
         <span className="sl-fill" />
-        <span className="sl-part t-muted">{'<leader> is <Space>'}</span>
+        <span className="sl-part t-muted">{`<leader> is ${leader}`}</span>
       </div>
       <div className="doc" ref={el} tabIndex={-1}>
         <div className="help-inner">

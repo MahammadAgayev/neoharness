@@ -1066,6 +1066,186 @@ kbd {
   font-size: 12px;
 }
 
+/* settings */
+.settings {
+  max-height: 80vh;
+}
+.settings-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12.5px;
+}
+.settings-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.settings-body {
+  overflow-y: auto;
+  padding: 4px 20px 20px;
+}
+.settings-body h2 {
+  font-size: 12.5px;
+  color: var(--muted);
+  font-weight: 500;
+  margin: 18px 0 4px;
+}
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.setting-text {
+  flex: 1;
+  min-width: 0;
+}
+.setting-title {
+  font-size: 13.5px;
+}
+.setting-detail {
+  font-size: 12.5px;
+}
+.setting-control {
+  flex: 0 0 auto;
+}
+.field {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--base);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 4px 8px;
+  outline: none;
+}
+.field:focus {
+  border-color: color-mix(in srgb, var(--iris) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--iris) 18%, transparent);
+}
+.field.small {
+  width: 64px;
+}
+.field.keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 120px;
+  min-height: 28px;
+  cursor: default;
+  text-align: left;
+}
+.field.keys.recording {
+  border-color: var(--iris);
+}
+.toggle {
+  width: 34px;
+  height: 20px;
+  border-radius: 10px;
+  border: 0;
+  padding: 0;
+  background: var(--hl-high);
+  position: relative;
+  transition: background-color 120ms var(--ease);
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform 120ms var(--ease);
+}
+.toggle.on {
+  background: var(--iris);
+}
+.toggle.on::after {
+  transform: translateX(14px);
+  background: var(--base);
+}
+.toggle:focus-visible,
+.swatch:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--iris) 60%, transparent);
+  outline-offset: 2px;
+}
+.swatches {
+  display: flex;
+  gap: 8px;
+}
+.swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--subtle);
+}
+.swatch-colors {
+  width: 56px;
+  height: 36px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 5px;
+}
+.swatch-colors span {
+  width: 12px;
+  height: 4px;
+  border-radius: 2px;
+}
+.swatch.active {
+  color: var(--text);
+}
+.swatch.active .swatch-colors {
+  border-color: var(--iris);
+  box-shadow: 0 0 0 1px var(--iris);
+}
+.maps {
+  padding: 10px 0;
+}
+.maps-head {
+  display: flex;
+  flex-direction: column;
+  font-size: 13.5px;
+  margin-bottom: 8px;
+}
+.maps-head .t-muted {
+  font-size: 12.5px;
+}
+.map-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+.map-row select {
+  max-width: 260px;
+}
+.map-row .ex {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.btn.icon {
+  padding: 2px 8px;
+}
+.add-map {
+  margin-top: 4px;
+}
+
 /* toasts */
 .toasts {
   position: fixed;
