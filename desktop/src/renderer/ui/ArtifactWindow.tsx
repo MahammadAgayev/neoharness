@@ -241,11 +241,13 @@ function DocEditor(props: {
 
   // The window in focus has the cursor in its document; a window that
   // loses focus gives the keys back, or they would still type here.
+  // It takes them back too when the command line or a dialog over it closes.
+  const over = useStore((s) => s.cmdline !== null || !!s.picker || s.settingsOpen || s.helpOpen || !!s.choice || s.newDoc)
   useEffect(() => {
     const v = viewRef.current
-    if (props.focused && !v?.hasFocus) v?.focus()
+    if (props.focused && !over && !v?.hasFocus) v?.focus()
     else if (!props.focused && v?.hasFocus) v.contentDOM.blur()
-  }, [props.focused])
+  }, [props.focused, over])
 
   return <div className="doc-editor" ref={host} />
 }

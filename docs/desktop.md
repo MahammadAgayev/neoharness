@@ -105,6 +105,8 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
 - **Window keys from Insert**: `<C-w>` followed by a window key (`h j k l w c
   s v o q =`) leaves Insert and acts on the window, so a doc you write in is
   no trap. `<C-w>` alone, or followed by any other key, still deletes a word.
+  In a doc, `<C-o>` and `<C-i>` are the app's back and forward, and `:w`
+  saves from Visual mode too.
 - **A sidebar** of workspaces, each with what waits or runs in it. `⌘B` or
   `:set nosidebar` hides it. Drag its edge to resize it; a double-click on
   the edge resets it. The work sits on a raised panel beside it, and

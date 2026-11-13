@@ -418,7 +418,7 @@ export function onKey(e: KeyboardEvent): void {
       store.openCmdline()
       return
     }
-    if (km.prompt.pending || key === s.settings.leader || key.startsWith('<C-w') || /^<C-[hjkl]>$/.test(key) || key === '<Tab>') {
+    if (km.prompt.pending || key === s.settings.leader || key.startsWith('<C-w') || /^<C-[hjklio]>$/.test(key) || key === '<Tab>') {
       if (feed(km.prompt, key)) {
         e.preventDefault()
         e.stopPropagation()
@@ -439,4 +439,18 @@ export function onKey(e: KeyboardEvent): void {
 
 export function installKeys(): void {
   window.addEventListener('keydown', onKey, true)
+  // Vim's own command line opens on : in Visual mode or after an operator.
+  // Its :w and the like are the app's, as on the app's command line.
+  for (const [name, prefix] of [
+    ['write', 'w'],
+    ['wq', 'wq'],
+    ['xit', 'x'],
+    ['quit', 'q'],
+    ['edit', 'e'],
+  ]) {
+    Vim.defineEx(name, prefix, (cm: { state: { vim?: { visualMode?: boolean } } }, p: { input?: string }) => {
+      if (cm.state.vim?.visualMode) Vim.exitVisualMode(cm as never)
+      void store.ex((p.input ?? prefix).replace(/^[^a-zA-Z]*/, ''))
+    })
+  }
 }

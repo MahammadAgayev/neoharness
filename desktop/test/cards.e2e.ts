@@ -375,10 +375,24 @@ test('New doc starts a document beside the chat, ready to write', async () => {
   await expect(doc.locator('.sl-name', { hasText: 'launch-plan [+]' })).toBeVisible()
   await shot('38-new-doc')
   await page.keyboard.press('Escape')
-  await page.keyboard.press('Meta+s')
+  await page.keyboard.type(':')
+  await page.keyboard.type('w')
+  await page.keyboard.press('Enter')
   await expect
     .poll(() => hub.calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/artifacts/launch-plan')).pop()?.body)
     .toMatchObject({ base: 1, text: '# Launch plan\n\n- [ ] write the API' })
+  // :w saves from Visual mode too, where Vim's own command line takes the :.
+  await page.keyboard.press('A')
+  await page.keyboard.type(' now')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('v')
+  await page.keyboard.type(':')
+  await page.keyboard.type('w')
+  await page.keyboard.press('Enter')
+  await expect
+    .poll(() => hub.calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/artifacts/launch-plan')).pop()?.body)
+    .toMatchObject({ text: '# Launch plan\n\n- [ ] write the API now' })
+  await page.keyboard.press('Escape')
 })
 
 test('Ctrl V on a thread of another workspace shows it beside this one, and you write to it there', async () => {
