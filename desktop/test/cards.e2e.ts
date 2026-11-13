@@ -33,8 +33,12 @@ test.beforeAll(async () => {
   hub.event('demo', 'api', { kind: 'text', text: 'I read `server.go`. The router is in **one** place.' })
   hub.event('demo', 'api', { kind: 'turn' })
   await hub.listen()
+  // NEOHARNESS_APP runs the packaged app instead: npm run dist first.
+  const target = process.env.NEOHARNESS_APP
+    ? { executablePath: process.env.NEOHARNESS_APP, args: [] }
+    : { args: [path.join(__dirname, '..', 'out', 'main', 'index.js')] }
   app = await electron.launch({
-    args: [path.join(__dirname, '..', 'out', 'main', 'index.js')],
+    ...target,
     // The fake hub is up; false makes sure no real hub ever starts here.
     env: { ...process.env, NEOHARNESS_HOME: tmp, NEOHARNESS_BIN: '/usr/bin/false' },
   })

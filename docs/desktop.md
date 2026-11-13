@@ -14,7 +14,13 @@ cd desktop
 npm install
 npm run dev        # the app, with reload on change
 npm run build      # out/
+npm run dist       # dist/neoharness-darwin-arm64/neoharness.app
 ```
+
+To install, copy `neoharness.app` to `/Applications` or `~/Applications`.
+The app is not signed, so the first open needs a right click and Open.
+`build/icon.svg` is the icon; `build/icon.icns` is made from it with `sips`
+and `iconutil`.
 
 The app starts the hub when none answers, as `neoharness` does. It runs
 `neoharness hub start` in a login shell, so the hub gets your PATH and
@@ -69,12 +75,16 @@ it apply to both.
 
 ```sh
 npm test           # unit tests: transcript, toasts, keys, search, themes
-npm run e2e        # the app on a scratch hub, with screenshots in test-results/
+npm run e2e        # the app on a scratch hub and on a fake hub, with screenshots in test-results/
+NEOHARNESS_APP=dist/neoharness-darwin-arm64/neoharness.app/Contents/MacOS/neoharness npx playwright test cards   # the packaged app
 NEOHARNESS_LIVE=1 npx playwright test live   # one real turn with haiku
 ```
 
 The end-to-end tests make their own `NEOHARNESS_HOME` and MCP port and stop
-their hub after. They never touch `~/.neoharness`.
+their hub after. They never touch `~/.neoharness`. `test/fakehub.ts` is the
+hub API with no model behind it: the card tests push permission requests,
+questions, artifacts and a stop through it. Another `NEOHARNESS_HOME` also
+gets its own app settings.
 
 ## Rules
 
