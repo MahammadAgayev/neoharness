@@ -6,6 +6,7 @@ import { ArtifactWindow } from './ArtifactWindow'
 import { ChatWindow } from './ChatWindow'
 import { CommandLine, HubBanner, Picker, Toasts } from './Overlays'
 import { Settings } from './Settings'
+import { KeyHints } from './KeyHints'
 import { Tooltip } from './Tooltip'
 import { HelpWindow, MessagesWindow } from './Panels'
 import { Sidebar } from './Sidebar'
@@ -152,6 +153,7 @@ export function App() {
       <Picker />
       <Settings />
       <Tooltip />
+      <KeyHints />
     </div>
   )
 }

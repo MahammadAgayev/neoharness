@@ -248,3 +248,17 @@ describe('hunks', () => {
     expect(take(take(mine, theirs, hs[1]), theirs, hs[0])).toEqual(theirs)
   })
 })
+
+describe('next', () => {
+  it('lists what can follow the keys typed so far', () => {
+    const s = new Sequencer({ '<leader>pt': 'threads', '<leader>pa': 'artifacts', '<leader>c': 'coordinator', gg: 'top' })
+    s.feed('<Space>')
+    expect(s.next()).toEqual([
+      { keys: ['p', 't'], action: 'threads' },
+      { keys: ['p', 'a'], action: 'artifacts' },
+      { keys: ['c'], action: 'coordinator' },
+    ])
+    s.feed('p')
+    expect(s.next().map((n) => n.keys.join(''))).toEqual(['t', 'a'])
+  })
+})

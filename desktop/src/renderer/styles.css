@@ -1278,6 +1278,44 @@ kbd {
   animation: fade 90ms var(--ease);
 }
 
+/* key hints, as which-key */
+.keyhints {
+  position: fixed;
+  left: 50%;
+  bottom: 36px;
+  transform: translateX(-50%);
+  width: min(860px, 92vw);
+  z-index: 55;
+  padding: 10px 14px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
+  font-size: 12.5px;
+  animation: rise 120ms var(--ease);
+}
+.keyhints-head {
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.keyhints-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 3px 18px;
+}
+.keyhint {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.keyhint-key {
+  color: var(--iris);
+  min-width: 64px;
+}
+
 /* toasts */
 .toasts {
   position: fixed;

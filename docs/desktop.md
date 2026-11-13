@@ -51,6 +51,10 @@ What the TUI takes from `init.lua` for itself is in Settings instead.
 - **Text size**, the **sidebar**, **Vim keys**, and the **compact warning**:
   the context % at which the line under the prompt says `/compact`.
 - **Leader**: click it and press a key; `<Space>` by default.
+- **Key hints**: after a key that starts others, as `<leader>`, `<C-w>` or
+  `g`, a pause shows what can follow, as which-key does in Neovim. The keys
+  wait while the hints show; `<Esc>` drops them. Off, they time out after a
+  second, as in Vim.
 - **Your keys**: click the keys field and press the keys, as `<leader>z`
   or `⌘⇧L`; Backspace takes one back. Then pick a command, an ex command
   (`:colorscheme rose-pine-dawn`), or Nothing, which turns a default off.

@@ -8,10 +8,11 @@ import type { EditorView } from '@codemirror/view'
 
 import { command, commands } from './commands'
 import { keyName, Sequencer } from './lib/keys'
-import { store, type Settings } from './store'
+import { store, type Hint, type Settings } from './store'
 import { editorKeys, editors, handlers, typeahead, type WinAction } from './ui/registry'
 
-type Action = { cmd: string } | { win: WinAction } | { move: 'h' | 'j' | 'k' | 'l' } | { fn: () => void }
+// desc names an fn action in the key hints.
+type Action = { cmd: string } | { win: WinAction } | { move: 'h' | 'j' | 'k' | 'l' } | { fn: () => void; desc?: string }
 
 const c = (cmd: string): Action => ({ cmd })
 const w = (win: WinAction): Action => ({ win })
@@ -42,7 +43,7 @@ const appMaps: Record<string, Action> = {
   '<C-w>c': c('close'),
   '<C-w>q': c('close'),
   '<C-w>o': c('only'),
-  '<C-w>=': { fn: () => document.dispatchEvent(new CustomEvent('nh:equal')) },
+  '<C-w>=': { fn: () => document.dispatchEvent(new CustomEvent('nh:equal')), desc: 'Equal sizes' },
   '<C-w>w': c('next-window'),
   '<C-w>h': { move: 'h' },
   '<C-w>j': { move: 'j' },
@@ -53,7 +54,7 @@ const appMaps: Record<string, Action> = {
   '<C-k>': { move: 'k' },
   '<C-l>': { move: 'l' },
   '<Tab>': c('next-window'),
-  '<S-Tab>': { fn: () => store.nextWindow(-1) },
+  '<S-Tab>': { fn: () => store.nextWindow(-1), desc: 'Previous window' },
   '<C-o>': c('back'),
   '<C-^>': c('alternate'),
   '<C-6>': c('alternate'),
@@ -151,17 +152,17 @@ function mark(op: 'm' | "'", r: string): void {
 }
 
 for (const r of 'abcdefghijklmnopqrstuvwxyz') {
-  winMaps['m' + r] = { fn: () => mark('m', r) }
-  winMaps["'" + r] = { fn: () => mark("'", r) }
-  winMaps['`' + r] = { fn: () => mark("'", r) }
+  winMaps['m' + r] = { fn: () => mark('m', r), desc: 'Set a mark' }
+  winMaps["'" + r] = { fn: () => mark("'", r), desc: 'Go to the mark' }
+  winMaps['`' + r] = { fn: () => mark("'", r), desc: 'Go to the mark' }
 }
-winMaps["''"] = { fn: () => mark("'", "'") }
-winMaps['``'] = { fn: () => mark("'", "'") }
+winMaps["''"] = { fn: () => mark("'", "'"), desc: 'Back to where the jump came from' }
+winMaps['``'] = { fn: () => mark("'", "'"), desc: 'Back to where the jump came from' }
 
 function userAction(run: string): Action | null {
-  if (run === '') return { fn: () => {} }
+  if (run === '') return { fn: () => {}, desc: 'Nothing' }
   if (run === ':') return null
-  if (run.startsWith(':')) return { fn: () => void store.ex(run.slice(1)) }
+  if (run.startsWith(':')) return { fn: () => void store.ex(run.slice(1)), desc: run }
   return commands.some((x) => x.id === run) ? c(run) : null
 }
 
@@ -190,6 +191,78 @@ function keymaps() {
 }
 
 let timer: ReturnType<typeof setTimeout> | null = null
+
+const winLabels: Record<WinAction, string> = {
+  down: 'Down',
+  up: 'Up',
+  top: 'Top',
+  bottom: 'Bottom',
+  halfDown: 'Half a page down',
+  halfUp: 'Half a page up',
+  pageDown: 'Page down',
+  pageUp: 'Page up',
+  nextMsg: 'Next message or heading',
+  prevMsg: 'Previous message or heading',
+  enter: 'Open, send now, or edit again',
+  fold: 'Open or close the tool calls',
+  yank: 'Yank',
+  insert: 'Write',
+  append: 'Write at the end',
+  stopHere: 'Stop the turn',
+  takeBack: 'Take your message back',
+  put: 'Put the yank in the prompt',
+  link: 'Open the link',
+  splitRight: 'Open in a split on the right',
+  splitAbove: 'Open in a split above',
+  delete: 'Delete',
+  search: 'Search',
+  searchNext: 'Next match',
+  searchPrev: 'Previous match',
+  visual: 'Select blocks',
+  escape: 'Stop selecting',
+  nextHunk: 'Next change',
+  prevHunk: 'Previous change',
+  takeHunk: 'Take the change',
+}
+
+const moveLabels = { h: 'Window on the left', j: 'Window below', k: 'Window above', l: 'Window on the right' }
+
+function describe(a: Action): string {
+  if ('cmd' in a) return command(a.cmd).title
+  if ('win' in a) return winLabels[a.win]
+  if ('move' in a) return moveLabels[a.move]
+  return a.desc ?? ''
+}
+
+// hints are what which-key shows after a key that starts other maps: the
+// next key and what it does, or how many maps go on from it. a to z with
+// the same action show as one row.
+// groupNames name the groups of maps under the leader.
+const groupNames: Record<string, string> = { p: 'pick', n: 'notifications' }
+
+function hints(seq: Sequencer<Action>): Hint[] {
+  const atLeader = seq.pending === store.state.settings.leader
+  const groups = new Map<string, { label?: string; more: number }>()
+  for (const { keys, action } of seq.next()) {
+    const g = groups.get(keys[0]) ?? { more: 0 }
+    if (keys.length === 1) g.label = describe(action)
+    else g.more++
+    groups.set(keys[0], g)
+  }
+  const rows = [...groups].map(([key, g]) => ({
+    key,
+    label: g.label ?? (atLeader && groupNames[key] ? `+${groupNames[key]} · ${g.more}` : `+${g.more} more`),
+  }))
+  const letters = new Map<string, number>()
+  for (const r of rows) if (/^[a-z]$/.test(r.key)) letters.set(r.label, (letters.get(r.label) ?? 0) + 1)
+  const out: Hint[] = []
+  for (const r of rows) {
+    if (/^[a-z]$/.test(r.key) && letters.get(r.label)! > 3) {
+      if (!out.some((o) => o.key === 'a–z' && o.label === r.label)) out.push({ key: 'a–z', label: r.label })
+    } else out.push(r)
+  }
+  return out.sort((a, b) => a.key.localeCompare(b.key))
+}
 
 function run(a: Action, count: number): boolean {
   if ('cmd' in a) {
@@ -232,13 +305,18 @@ function feed(seq: Sequencer<Action>, key: string): boolean {
   if (timer) clearTimeout(timer)
   const m = seq.feed(key)
   store.setPending(seq.pending)
+  store.setHints(m.kind === 'pending' && /\D/.test(seq.pending) ? hints(seq) : null)
   if (m.kind === 'action') return run(m.action, m.count) || true
   if (m.kind === 'pending') {
+    // With key hints on, keys that are no map of their own wait for the
+    // next key while the hints show, as which-key does.
+    if (store.state.settings.keyhints && !seq.exact) return true
     // As Vim's timeoutlen: keys that are a map and start a longer one wait
     // a second, then run as the shorter map.
     timer = setTimeout(() => {
       const f = seq.flush()
       store.setPending('')
+      store.setHints(null)
       if (f.kind === 'action') run(f.action, f.count)
     }, 1000)
     return true

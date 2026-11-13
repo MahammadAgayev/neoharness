@@ -91,6 +91,12 @@ export interface UserMap {
   run: string
 }
 
+// Hint is a row of the key hints: a key and what it does next.
+export interface Hint {
+  key: string
+  label: string
+}
+
 export interface Settings {
   scheme: string
   vim: boolean
@@ -99,6 +105,7 @@ export interface Settings {
   sidebar: boolean
   leader: string
   maps: UserMap[]
+  keyhints: boolean
 }
 
 export interface State {
@@ -123,6 +130,7 @@ export interface State {
   insert: boolean
   settings: Settings
   settingsOpen: boolean
+  hints: Hint[] | null
   showResolved: boolean
   folds: Record<number, boolean>
   // workspaceCursor is the row of the workspaces screen.
@@ -134,7 +142,7 @@ let ids = 1
 const nextId = () => ids++
 
 function loadSettings(): Settings {
-  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [] }
+  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true }
   try {
     return { ...d, ...JSON.parse(localStorage.getItem('settings') || '{}') }
   } catch {
@@ -172,6 +180,7 @@ class Store {
     insert: false,
     settings: loadSettings(),
     settingsOpen: false,
+    hints: null,
     showResolved: false,
     folds: {},
     workspaceCursor: 0,
@@ -1074,6 +1083,10 @@ class Store {
     const settings = { ...this.state.settings, ...patch }
     localStorage.setItem('settings', JSON.stringify(settings))
     this.set({ settings })
+  }
+
+  setHints(hints: Hint[] | null): void {
+    if (hints || this.state.hints) this.set({ hints })
   }
 
   openSettings(open = true): void {

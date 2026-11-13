@@ -280,6 +280,17 @@ test('a right click on a thread offers its actions, and a hint shows on hover', 
   await page.mouse.move(700, 400)
 })
 
+test('a pause after <leader> shows what can follow, as which-key', async () => {
+  await page.keyboard.press('Space')
+  const panel = page.locator('.keyhints')
+  await expect(panel).toBeVisible()
+  await expect(panel.locator('.keyhint', { hasText: 'Coordinator' })).toBeVisible()
+  await expect(panel.locator('.keyhint', { hasText: /^p\+pick · \d+$/ })).toBeVisible()
+  await shot('36-keyhints')
+  await page.keyboard.press('c')
+  await expect(panel).toHaveCount(0)
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

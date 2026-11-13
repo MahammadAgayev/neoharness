@@ -98,6 +98,20 @@ export class Sequencer<A> {
     return { kind: 'none' }
   }
 
+  // exact says the keys typed so far are a map of their own.
+  get exact(): boolean {
+    return this.maps.has(this.keys.join(''))
+  }
+
+  // next lists the maps that can follow the keys typed so far, as
+  // which-key shows them; each has the keys still to type.
+  next(): { keys: string[]; action: A }[] {
+    const seq = this.keys.join('')
+    const out: { keys: string[]; action: A }[] = []
+    for (const [k, a] of this.maps) if (k !== seq && k.startsWith(seq)) out.push({ keys: split(k.slice(seq.length)), action: a })
+    return out
+  }
+
   // flush ends a wait that timed out: keys that are a map and also start a
   // longer one run as the shorter map.
   flush(): Match<A> {
