@@ -23,6 +23,8 @@ type Window struct {
 	vLine, vCol   int
 	rect          Rect
 	textH, linesN int
+	// headH is the rows above the transcript: a thread's recap.
+	headH int
 	// jumps are the buffers the window showed before, the newest last, for
 	// <C-o>; views are where the window was in each.
 	jumps []*Buffer

@@ -45,6 +45,15 @@ thread yourself:
 
 - The threads pane groups threads by state. Resolved threads fold into
   `▸ N resolved`.
+- Each thread keeps a recap of its work, so you learn what it produced
+  without its transcript. At the end of a turn the thread writes what it was
+  asked, what came out and what is open; neoharness adds what it saw the turn
+  do: the commands it ran and which failed, the files it edited, the
+  artifacts it wrote, or why the turn failed. Under an idle or waiting row
+  the pane shows it in short (`Added 12 tests · 3 commands, 1 failed`, then
+  `open: …`); at the top of the thread's window it shows in full. When the
+  thread wrote none, the first line of its reply stands in, labeled `reply`,
+  and `no commands` says that nothing was checked.
 - To delete a thread, press `<C-d>` on it in a picker, then `y`. This cannot
   be undone. The coordinator cannot be deleted.
 - A thread runs at most 20 turns in a row that you did not start. Then it

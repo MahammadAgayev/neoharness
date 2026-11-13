@@ -113,6 +113,18 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	right := r.X + r.W
 	top := r.Y
 	status := r.Y + r.H - 1
+	// A thread's recap stays at the top of its window, so the person reads
+	// what the work produced before its transcript.
+	if b.Kind == KindChat {
+		if head := recapHead(a.threads[b.Thread].Recap, a.th); len(head) > 0 && r.H-len(head) > minTranscript {
+			for i, l := range head {
+				a.drawCut(r.X, top+i, right, l)
+			}
+			a.put(r.X, top+len(head), right, strings.Repeat("─", r.W), a.th.Muted)
+			top += len(head) + 1
+		}
+	}
+	w.headH = top - r.Y
 
 	// The prompt sits at the bottom of a chat window, above the statusline.
 	var promptLines []Line
@@ -376,6 +388,20 @@ func (a *App) matchCols(w *Window, li int, l Line) [][2]int {
 		}
 	}
 	return cols
+}
+
+// minTranscript is the fewest rows a chat window keeps for its transcript,
+// prompt and status line before its recap gives way.
+const minTranscript = 8
+
+// drawCut draws a line and marks with … a row that does not fit.
+func (a *App) drawCut(x, y, maxX int, l Line) {
+	if x+l.prefixWidth()+width(l.Text()) > maxX {
+		a.drawLine(x, y, maxX-1, l)
+		a.put(maxX-1, y, maxX, "…", a.th.Muted)
+		return
+	}
+	a.drawLine(x, y, maxX, l)
 }
 
 func (a *App) drawLine(x, y, maxX int, l Line) int {

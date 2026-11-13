@@ -3480,3 +3480,44 @@ func TestFailedTurnToastStaysAnError(t *testing.T) {
 		t.Fatalf("a failed turn shows as finished:\n%s", h.screen())
 	}
 }
+
+func TestARecapShowsUnderItsRowAndAtTheTopOfTheThread(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads["api-tests"]
+	v.Progress = "half way"
+	v.Recap = &model.Recap{
+		Asked: "write the api tests", Outcome: "Added 12 tests", Open: "keep slow test?",
+		Ran: 3, Commands: []model.RecapCommand{{Text: "go test ./..."}, {Text: "golangci-lint run", Failed: true}},
+		Edited: []string{"api_test.go"}, Artifacts: []string{"test-plan"},
+	}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	run := h.a.threads["auth-refactor"]
+	run.Recap = &model.Recap{Outcome: "an older turn"}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: run.Name, View: &run})
+	h.a.draw()
+	h.see("Added 12 tests · 3 commands, 1 failed")
+	h.see("open: keep slow test?")
+	if s := h.screen(); strings.Contains(s, "half way") || strings.Contains(s, "an older turn") {
+		t.Errorf("an idle row with a recap drops its old report, and a running row shows no recap:\n%s", s)
+	}
+
+	h.press("<Esc>", ":b api-tests", "<CR>")
+	h.see("asked    write the api tests")
+	h.see("outcome  Added 12 tests")
+	h.see("open     keep slow test?")
+	h.see("ran      go test ./... · ✗ golangci-lint run · +1")
+	h.see("changed  api_test.go · ◇ test-plan")
+
+	v.Recap = &model.Recap{Asked: "write the api tests", Outcome: "All tests pass.", FromReply: true}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("reply    All tests pass.")
+	h.see("ran      no commands")
+
+	v.Recap = &model.Recap{Asked: "write the api tests", Error: "the agent failed: boom"}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("failed   the agent failed: boom")
+	h.see("✗ the agent failed: boom")
+}

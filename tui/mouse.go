@@ -69,10 +69,10 @@ func (a *App) click(w *Window, x, y int, when time.Time) {
 	a.normal()
 	a.cur = w
 	r := w.rect
-	row := y - r.Y
+	row := y - r.Y - w.headH
 	switch {
-	case y == r.Y+r.H-1:
-		// The statusline only focuses.
+	case y == r.Y+r.H-1 || row < 0:
+		// The statusline and the recap only focus.
 	case row < w.textH:
 		if w.Top+row >= w.linesN {
 			return

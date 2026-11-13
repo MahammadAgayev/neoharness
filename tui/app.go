@@ -1204,6 +1204,11 @@ func (a *App) renderThreads() {
 	row := func(n string) Line {
 		v := a.threads[n]
 		nameSt, info, infoSt := th.Subtle, v.Progress, th.Muted
+		// The recap under the row says what the last turn produced; the
+		// report from during that turn is old news.
+		if v.State == model.StateIdle && v.Recap != nil {
+			info = ""
+		}
 		if shown[n] {
 			nameSt = th.Text.Bold(true)
 		}
@@ -1256,6 +1261,7 @@ func (a *App) renderThreads() {
 		lines = append(lines, Line{Prefix: []Span{{" ", th.Text}}, Spans: []Span{{stateLabel(s), th.Muted}}})
 		for _, n := range groups[s] {
 			lines = append(lines, row(n))
+			lines = append(lines, recapRows(a.threads[n], th)...)
 		}
 	}
 	if done := groups[model.StateResolved]; len(done) > 0 {
