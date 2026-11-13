@@ -1,4 +1,4 @@
-// Line diff, as internal/linediff: the common start and end are cut first,
+// Line diff, as api/linediff: the common start and end are cut first,
 // then the longest common run of lines matches the middle.
 
 export interface Op {

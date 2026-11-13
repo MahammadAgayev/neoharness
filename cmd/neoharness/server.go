@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/MahammadAgayev/neoharness/internal/hubapi"
-	"github.com/MahammadAgayev/neoharness/internal/model"
+	"github.com/MahammadAgayev/neoharness/api/hubapi"
+	"github.com/MahammadAgayev/neoharness/api/model"
 )
 
 // stopWait is how long `hub stop` waits for the hub to go. The hub gives its

@@ -1,4 +1,4 @@
-// A transcript as blocks, as internal/tui/buffer.go builds them from events:
+// A transcript as blocks, as tui/buffer.go builds them from events:
 // a turn's tool calls fold into one block, a permission's answer goes onto
 // its card, a shell command's output onto its command.
 

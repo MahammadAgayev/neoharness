@@ -1,0 +1,139 @@
+// Package tunnel keeps one ssh reverse tunnel open per remote host, so that a
+// Claude session on that host reaches the hub's MCP server at the same
+// 127.0.0.1 address a local session uses.
+//
+// One tunnel per host rather than one per turn: a turn's ssh process carries
+// the claude stream, and a second -R for the same port on the same host would
+// fail to bind while the first is up.
+package tunnel
+
+import (
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/MahammadAgayev/neoharness/hub/procgroup"
+)
+
+// startGrace is how long a new tunnel must stay up before it counts as open.
+// ssh with ExitOnForwardFailure exits within this window when the forward
+// cannot be bound or the host cannot be reached.
+var startGrace = 1500 * time.Millisecond
+
+// Manager owns the tunnels.
+type Manager struct {
+	Port int
+
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	mu      sync.Mutex
+	tunnels map[string]*tunnel
+	// command builds the ssh command; replaced in tests.
+	command func(ctx context.Context, host string, port int) *exec.Cmd
+	// reopenEvery is how long a dropped tunnel waits before it opens again.
+	reopenEvery time.Duration
+}
+
+type tunnel struct {
+	cmd  *exec.Cmd
+	done chan struct{}
+}
+
+// New returns a manager forwarding port on every remote host to the same port
+// here.
+func New(port int) *Manager {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Manager{Port: port, ctx: ctx, cancel: cancel, tunnels: map[string]*tunnel{}, command: sshCommand, reopenEvery: 5 * time.Second}
+}
+
+func sshCommand(ctx context.Context, host string, port int) *exec.Cmd {
+	fwd := fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", port, port)
+	// No ControlMaster: with a shared connection open, ssh hands the forward
+	// to the master and exits at once, so the tunnel looks dead, and the
+	// forward stays bound on the host after the hub is gone.
+	return exec.CommandContext(ctx, "ssh", "-N",
+		"-o", "ControlMaster=no",
+		"-o", "ControlPath=none",
+		"-o", "BatchMode=yes",
+		"-o", "ExitOnForwardFailure=yes",
+		"-o", "ServerAliveInterval=15",
+		"-o", "ServerAliveCountMax=3",
+		"-R", fwd, host)
+}
+
+// Ensure opens the tunnel to host if it is not open. It returns an error the
+// user can act on when the tunnel cannot be opened.
+func (m *Manager) Ensure(host string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if t, ok := m.tunnels[host]; ok {
+		select {
+		case <-t.done:
+		default:
+			return nil
+		}
+	}
+	cmd := m.command(m.ctx, host, m.Port)
+	// ssh on PATH can be a wrapper script that runs the real ssh as its child.
+	// Killing only the wrapper leaves that child holding the remote port, and
+	// Wait blocks on its stderr pipe, so Close never returns.
+	procgroup.Isolate(cmd)
+	cmd.Cancel = func() error { return procgroup.Kill(cmd) }
+	cmd.WaitDelay = time.Second
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("tunnel to %s: %w", host, err)
+	}
+	t := &tunnel{cmd: cmd, done: make(chan struct{})}
+	go func() {
+		_ = cmd.Wait()
+		close(t.done)
+	}()
+	select {
+	case <-t.done:
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = "ssh exited"
+		}
+		return fmt.Errorf("tunnel to %s failed: %s", host, msg)
+	case <-time.After(startGrace):
+	}
+	m.tunnels[host] = t
+	go m.reopen(host, t)
+	return nil
+}
+
+// reopenTries is how often a dropped tunnel tries to open again before it
+// leaves it to the next turn.
+const reopenTries = 12
+
+// reopen opens a tunnel again when it drops (the network went away, the
+// laptop slept), so an MCP call later in the same turn still reaches the hub.
+func (m *Manager) reopen(host string, t *tunnel) {
+	<-t.done
+	for range reopenTries {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-time.After(m.reopenEvery):
+		}
+		if m.ctx.Err() != nil || m.Ensure(host) == nil {
+			return
+		}
+	}
+}
+
+// Close stops every tunnel.
+func (m *Manager) Close() {
+	m.cancel()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, t := range m.tunnels {
+		<-t.done
+	}
+}

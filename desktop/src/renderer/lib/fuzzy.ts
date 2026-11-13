@@ -1,4 +1,4 @@
-// Fuzzy match as the TUI pickers do (internal/tui/picker.go): the query's
+// Fuzzy match as the TUI pickers do (tui/picker.go): the query's
 // letters in order, more for runs and for word starts, less for long text.
 
 export function fuzzyScore(text: string, q: string): number | null {

@@ -1,6 +1,6 @@
 // Color schemes. Every color in the app is a CSS variable of the scheme, so a
 // new scheme is one more entry here. The names of the colors are the TUI's
-// (internal/tui/theme.go): Love only for errors and things that need the
+// (tui/theme.go): Love only for errors and things that need the
 // person, Iris for "you type here".
 
 export interface Palette {

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	agentclaude "github.com/MahammadAgayev/neoharness/internal/agent/claude"
-	"github.com/MahammadAgayev/neoharness/internal/model"
-	"github.com/MahammadAgayev/neoharness/internal/procgroup"
+	"github.com/MahammadAgayev/neoharness/api/model"
+	agentclaude "github.com/MahammadAgayev/neoharness/hub/agent/claude"
+	"github.com/MahammadAgayev/neoharness/hub/procgroup"
 )
 
 // fileLimit is the most files `@` gets as one list. A folder with more, such

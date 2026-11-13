@@ -1,8 +1,7 @@
 # Development
 
 ```sh
-go vet ./...
-go test -race ./...
+./check.sh -race     # go vet and go test over every module
 ./install.sh
 ```
 
@@ -26,34 +25,48 @@ not notarized; the README says how to open it the first time.
 
 ## Code map
 
+The Go code is four modules in one `go.work`, built into one binary:
+
+| Module | What it holds | Requires |
+|---|---|---|
+| `api` | what the hub and its clients share: the wire types and the API client | nothing |
+| `hub` | the hub and everything that runs turns | `api` |
+| `tui` | the terminal UI | `api` |
+| `cmd/neoharness` | the binary: it joins the hub and the TUI | all three |
+
+The TUI cannot import the hub, and the hub cannot import the TUI: a module
+builds only against the modules its go.mod requires. go.work would let such
+an import through, so `check.sh` also builds each module without it.
+
 | Package | What it does |
 |---|---|
-| `cmd/neoharness` | CLI: the `hub` commands, starts the hub in the background, opens the TUI, file lists and `!` commands, locally or over ssh |
-| `internal/model` | shared types; a leaf package |
-| `internal/workspace` | disk storage of workspaces, threads, transcripts, artifacts |
-| `internal/hub` | the core: queues, turns, state, routing, permissions, slash commands, artifacts |
-| `internal/mcpserver` | MCP tools to hub methods |
-| `internal/hubapi` / `internal/hubserver` | the local API client and server (unix socket, SSE) |
-| `internal/tunnel` | ssh reverse tunnel per remote host |
-| `internal/tui` | the terminal UI |
-| `internal/agent` | the agent interface: one `Run` per turn, and a `Provider` per kind that lives as long as the hub |
-| `internal/agent/claude` | the Claude Code adapter |
-| `internal/prompts` | system prompts and notes for agents |
-| `internal/linediff` | line diff for the artifact merge and diff mode |
-| `internal/architecture` | tests that enforce the import rules |
+| `cmd/neoharness` | CLI: the `hub` commands, starts the hub in the background, opens the TUI, file lists and `!` commands, locally or over ssh; `architecture_test.go` enforces the import rules |
+| `api/model` | shared types; a leaf package |
+| `api/hubapi` | the local API client (unix socket, SSE) |
+| `api/linediff` | line diff for the artifact merge and diff mode |
+| `hub` | the core: queues, turns, state, routing, permissions, slash commands, artifacts |
+| `hub/workspace` | disk storage of workspaces, threads, transcripts, artifacts |
+| `hub/hubserver` | the local API server |
+| `hub/mcpserver` | MCP tools to hub methods |
+| `hub/tunnel` | ssh reverse tunnel per remote host |
+| `hub/agent` | the agent interface: one `Run` per turn, and a `Provider` per kind that lives as long as the hub |
+| `hub/agent/claude` | the Claude Code adapter |
+| `hub/prompts` | system prompts and notes for agents |
+| `hub/procgroup` | process groups, so a stop ends a turn's children too |
+| `tui` | the terminal UI |
 | `desktop/` | the macOS app (Electron, React); a hub API client like the TUI, see [desktop.md](desktop.md) |
 
-Import rules, enforced by tests:
+Import rules, enforced by the modules and by tests:
 
-- `hub` imports no adapter, TUI, MCP, API server or tunnel.
-- `tui` imports only `hubapi`, `model` and `linediff` from this module.
+- `tui` requires only `api`; `hub` requires no `tui`; `api` requires neither.
+- The `hub` package imports no adapter, MCP, API server or tunnel.
 - `model` and `linediff` are leaves. `workspace` and `hubapi` import only
   `model`.
 
-Keep Claude-specific code in `internal/agent/claude`. The hub and the TUI see
+Keep Claude-specific code in `hub/agent/claude`. The hub and the TUI see
 only neutral fields.
 
-To add an agent kind, write an `agent.Provider` in `internal/agent/<kind>`
+To add an agent kind, write an `agent.Provider` in `hub/agent/<kind>`
 and add it to `kinds` in `cmd/neoharness/hub.go`. `init.lua` then names it
 as an agent's `kind`.
 

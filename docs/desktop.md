@@ -203,7 +203,7 @@ icon.
 ## Rules
 
 - The app sees only the neutral fields of the hub API, as the TUI does.
-  `src/shared/model.ts` follows `internal/model`; change both together.
+  `src/shared/model.ts` follows `api/model`; change both together.
 - The page has no Node: it names a hub call (`src/shared/api.ts`) and the
   main process makes the request. Agent markdown is sanitized before it is
   shown.

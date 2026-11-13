@@ -18,10 +18,13 @@ Read first:
 ## Build and test
 
 ```sh
-go vet ./...
-go test ./...
+./check.sh            # go vet and go test over every module
 ./install.sh          # builds to ~/.local/bin/neoharness
 ```
+
+The Go code is four modules in one `go.work`: `api`, `hub`, `tui` and
+`cmd/neoharness`, which joins them into one binary. The TUI requires only
+`api`, so it cannot import the hub.
 
 The tests need no model and no terminal: a fake agent, a fake client and the
 tcell simulation screen. A bug fix starts with a test that fails without it.
@@ -29,9 +32,9 @@ tcell simulation screen. A bug fix starts with a test that fails without it.
 ## Rules
 
 - The hub and the TUI are agent-agnostic. Claude-specific code stays in
-  `internal/agent/claude`; the others see neutral fields only.
-- The import rules in `docs/development.md` are enforced by
-  `internal/architecture`. Do not work around them.
+  `hub/agent/claude`; the others see neutral fields only.
+- The import rules in `docs/development.md` are enforced by the
+  modules and `cmd/neoharness/architecture_test.go`. Do not work around them.
 - Never test on the person's data in `~/.neoharness`. Use a scratch hub with
   its own `NEOHARNESS_HOME` and `mcp_port`, and check its socket exists before
   you type into it. Stop only processes you started.
@@ -41,7 +44,7 @@ tcell simulation screen. A bug fix starts with a test that fails without it.
   person, in one line.
 - Comments say why, only where the code does not. Write simple English.
 - When a key, command, setting or prompt changes, update `:help`
-  (`internal/tui/cmdline.go`) and the docs in the same commit.
+  (`tui/cmdline.go`) and the docs in the same commit.
 
 ## TUI design rules
 

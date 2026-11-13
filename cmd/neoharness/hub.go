@@ -14,15 +14,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MahammadAgayev/neoharness/internal/agent"
-	agentclaude "github.com/MahammadAgayev/neoharness/internal/agent/claude"
-	"github.com/MahammadAgayev/neoharness/internal/hub"
-	"github.com/MahammadAgayev/neoharness/internal/hubapi"
-	"github.com/MahammadAgayev/neoharness/internal/hubserver"
-	"github.com/MahammadAgayev/neoharness/internal/mcpserver"
-	"github.com/MahammadAgayev/neoharness/internal/tui"
-	"github.com/MahammadAgayev/neoharness/internal/tunnel"
-	"github.com/MahammadAgayev/neoharness/internal/workspace"
+	"github.com/MahammadAgayev/neoharness/api/hubapi"
+	"github.com/MahammadAgayev/neoharness/hub"
+	"github.com/MahammadAgayev/neoharness/hub/agent"
+	agentclaude "github.com/MahammadAgayev/neoharness/hub/agent/claude"
+	"github.com/MahammadAgayev/neoharness/hub/hubserver"
+	"github.com/MahammadAgayev/neoharness/hub/mcpserver"
+	"github.com/MahammadAgayev/neoharness/hub/tunnel"
+	"github.com/MahammadAgayev/neoharness/hub/workspace"
+	"github.com/MahammadAgayev/neoharness/tui"
 )
 
 // defaultMCPPort is fixed rather than random because remote hosts reach it

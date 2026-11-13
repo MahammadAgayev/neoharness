@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/MahammadAgayev/neoharness/internal/model"
+	"github.com/MahammadAgayev/neoharness/api/model"
 )
 
 func TestListFilesUsesGitElseWalks(t *testing.T) {

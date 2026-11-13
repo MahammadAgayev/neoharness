@@ -122,7 +122,7 @@ threads". It opens the threads, and they show in the pane.
 ## Configure
 
 Every default key, color and setting is in
-[`defaults.lua`](internal/tui/defaults.lua): the model, notifications, the
+[`defaults.lua`](tui/defaults.lua): the model, notifications, the
 context warning, the leader and all maps. To change one, copy its line to
 `~/.neoharness/init.lua` and edit it. For example:
 

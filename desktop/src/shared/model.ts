@@ -1,4 +1,4 @@
-// The wire types of internal/model. Keep them in step with model.go: the app
+// The wire types of api/model. Keep them in step with model.go: the app
 // sees only these neutral fields, never an agent's own.
 
 export type State = 'idle' | 'running' | 'waiting' | 'resolved'

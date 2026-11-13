@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/MahammadAgayev/neoharness/internal/hubapi"
-	"github.com/MahammadAgayev/neoharness/internal/model"
+	"github.com/MahammadAgayev/neoharness/api/hubapi"
+	"github.com/MahammadAgayev/neoharness/api/model"
 )
 
 // TestMain lets the test binary stand in for neoharness: spawnHub starts

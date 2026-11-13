@@ -1,4 +1,4 @@
-// Toast rules, as internal/tui/toast.go: which change of a thread is news,
+// Toast rules, as tui/toast.go: which change of a thread is news,
 // and how long it stays. A toast with life 0 stays while its thread waits
 // and is not on screen.
 

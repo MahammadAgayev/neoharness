@@ -3,7 +3,7 @@
 ## init.lua
 
 neoharness reads `~/.neoharness/init.lua` when it starts, after the built-in
-[`defaults.lua`](../internal/tui/defaults.lua), which lists every default
+[`defaults.lua`](../tui/defaults.lua), which lists every default
 key, color and setting. Copy a line from there and edit it.
 
 The API is the global `neoharness` table; `require("neoharness")` is the same

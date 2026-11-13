@@ -1,4 +1,4 @@
-// The hub calls the app makes, as in internal/hubapi. The renderer names a
+// The hub calls the app makes, as in api/hubapi. The renderer names a
 // call and its arguments; only the main process turns them into requests, so
 // the page cannot reach any other path of the socket.
 

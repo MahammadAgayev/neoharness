@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/MahammadAgayev/neoharness/internal/tui"
+	"github.com/MahammadAgayev/neoharness/tui"
 )
 
 func cmdTUI() error {
