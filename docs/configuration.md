@@ -57,6 +57,7 @@ the hub starts: run `neoharness hub restart` after a change.
 require("neoharness").setup({
   mcp_port = 47821,                     -- remote hosts reach the hub through a tunnel on it
   notify = "threads",                   -- every thread notifies you; "coordinator": the coordinator decides
+  workspace_recap = true,               -- once the threads that ran end, wake the coordinator to write the workspace recap
   reopen_compact = "ask",               -- the coordinator reopens a thread past compactwarn: "compact", "ask" or "off"
   coordinator = "claude",               -- the agent coordinators run
   threads = "quick",                    -- the agent threads run; left out: the coordinator's

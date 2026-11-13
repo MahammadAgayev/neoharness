@@ -107,6 +107,10 @@ The workspace recap says how the whole workspace stands, as
   most three lines on what the threads' work means together. Until it writes
   a goal, the goal is the first line of the person's first message to it.
   Both are kept in `workspace.json`.
+  So the lines are fresh when the person looks, with `workspace_recap = true`
+  (the default) the hub wakes the coordinator once, 15 seconds after the last
+  running thread ends, when a thread's recap is newer than its lines. With
+  `notify = "coordinator"` the threads' reports wake it already.
 - **What the hub joins** from the open threads' recaps, at no cost: the files
   that two or more threads edited (each path joined back to its thread's
   folder) and how many idle threads failed their last turn.

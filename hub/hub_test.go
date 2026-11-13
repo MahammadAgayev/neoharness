@@ -2400,3 +2400,80 @@ func TestTheCoordinatorWritesTheGoalAndLinesOfTheWorkspaceRecap(t *testing.T) {
 		t.Fatalf("after a restart: %+v", r)
 	}
 }
+
+// TestThreadsThatEndTogetherWakeTheCoordinatorOnceForTheWorkspaceRecap: with
+// notify = "threads", nothing else wakes the coordinator, so its lines would
+// go stale; once no thread runs, it is woken once to write them.
+func TestThreadsThatEndTogetherWakeTheCoordinatorOnceForTheWorkspaceRecap(t *testing.T) {
+	defer func(d time.Duration) { reportDelay = d }(reportDelay)
+	reportDelay = 30 * time.Millisecond
+	gate := make(chan struct{})
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if !req.HarnessOnly && strings.Contains(req.Prompt, "slow") {
+			<-gate
+		}
+		return agent.Result{Text: "done"}
+	}
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }, RecapWake: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	pinned(t, h, "demo")
+	for _, n := range []string{"tests", "json", "bench"} {
+		brief := "work"
+		if n == "bench" {
+			brief = "slow work"
+		}
+		if err := h.OpenThread("demo", model.Coordinator, n, brief, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wakes := func() int {
+		n := 0
+		for _, r := range f.requests() {
+			if strings.Contains(r.Prompt, "workspace_recap") {
+				n++
+			}
+		}
+		return n
+	}
+	stateIs(t, h, "demo", "tests", model.StateIdle)
+	stateIs(t, h, "demo", "json", model.StateIdle)
+	time.Sleep(5 * reportDelay)
+	if n := wakes(); n != 0 {
+		t.Fatalf("%d wakes while bench still runs, want none", n)
+	}
+	close(gate)
+	eventually(t, "the coordinator to be woken for the recap", func() bool { return wakes() > 0 })
+	time.Sleep(5 * reportDelay)
+	if n := wakes(); n != 1 {
+		t.Fatalf("%d wakes, want 1", n)
+	}
+	h.mu.Lock()
+	turns := h.workspaces["demo"].threads[model.Coordinator].t.AgentTurns
+	h.mu.Unlock()
+	if turns != 0 {
+		t.Fatalf("agent turns = %d; the recap wake must not count toward the pause", turns)
+	}
+}
+
+func TestTheRecapWakeIsOffWhenTheSettingIs(t *testing.T) {
+	defer func(d time.Duration) { reportDelay = d }(reportDelay)
+	reportDelay = 10 * time.Millisecond
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "tests", "work", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "tests", model.StateIdle)
+	time.Sleep(10 * reportDelay)
+	for _, r := range f.requests() {
+		if strings.Contains(r.Prompt, "workspace_recap") {
+			t.Fatal("the coordinator was woken with RecapWake off")
+		}
+	}
+}

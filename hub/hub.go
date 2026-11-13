@@ -95,6 +95,10 @@ type Config struct {
 	// Notify makes the coordinator the one that notifies the person: thread
 	// turns wake it, and it decides with notify what reaches them.
 	Notify bool
+	// RecapWake wakes the coordinator once the threads that ran have all
+	// ended, to write the workspace recap. Under Notify their reports wake it
+	// already.
+	RecapWake bool
 	// ReopenCompact is what happens when the coordinator writes to a resolved
 	// thread whose context is past CompactWarn percent: one of the Reopen
 	// constants; empty is ReopenAsk. A workspace can choose another with
@@ -145,6 +149,9 @@ type space struct {
 	ended []string
 	// reports wakes the coordinator about ended, when Config.Notify is on.
 	reports *time.Timer
+	// recapWake wakes it to write the workspace recap, when Config.RecapWake
+	// is on.
+	recapWake *time.Timer
 }
 
 type thread struct {
@@ -1561,6 +1568,48 @@ func (h *Hub) report(ws *space) {
 	})
 }
 
+// recap wakes the coordinator, after reportDelay, to write the workspace
+// recap once no thread runs and a thread's recap is newer than its lines, so
+// the lines are fresh when the person looks. Callers hold h.mu.
+func (h *Hub) recap(ws *space) {
+	if h.cfg.Notify || !h.cfg.RecapWake || ws.recapWake != nil || !recapDue(ws) {
+		return
+	}
+	ws.recapWake = time.AfterFunc(reportDelay, func() {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		ws.recapWake = nil
+		co, ok := ws.threads[model.Coordinator]
+		// A coordinator with a turn to come writes the recap in that turn.
+		if h.ctx.Err() != nil || !ok || co.deleted || co.busy || len(co.t.Queue) > 0 || !recapDue(ws) {
+			return
+		}
+		h.enqueue(ws, co, reportFrom, prompts.RecapDue())
+	})
+}
+
+// recapDue says no open thread runs and one has a recap newer than the
+// coordinator's lines.
+func recapDue(ws *space) bool {
+	var at time.Time
+	if ws.p.Recap != nil {
+		at = ws.p.Recap.At
+	}
+	due := false
+	for _, th := range ws.threads {
+		if th.t.Role != model.RoleThread || th.deleted || th.t.Resolved {
+			continue
+		}
+		if th.state == model.StateRunning {
+			return false
+		}
+		if th.t.Recap != nil && th.t.Recap.At.After(at) {
+			due = true
+		}
+	}
+	return due
+}
+
 // Notify shows the person a notice from the coordinator. needsYou keeps it
 // on screen until they look.
 func (h *Hub) Notify(workspaceName, name, text string, needsYou bool) error {
@@ -1894,6 +1943,9 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		h.kick(ws, th)
 		if len(ws.ended) > 0 {
 			h.report(ws)
+		}
+		if t.Role == model.RoleThread {
+			h.recap(ws)
 		}
 	}
 }
