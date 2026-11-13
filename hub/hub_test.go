@@ -2130,3 +2130,39 @@ func TestReadArtifactStaysInItsWorkspace(t *testing.T) {
 		t.Errorf("ReadArtifact(%q) read another workspace: %q", name, text)
 	}
 }
+
+// "Always" on a chained command allows it once but stores no rule: a rule
+// for its first word would let `rm -rf ~` through after `rm -rf build && make`.
+func TestAlwaysOnACompoundCommandStoresNoRule(t *testing.T) {
+	results := make(chan bool, 2)
+	f := &fake{}
+	h := newHub(t, f)
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		for _, q := range []agent.Permission{
+			{Tool: "Bash", Detail: "rm -rf build && make", Prefix: "rm", Compound: true},
+			{Tool: "Bash", Detail: "rm -rf ~", Prefix: "rm"},
+		} {
+			ok, _ := h.Permission(ctx, "demo", model.Coordinator, q)
+			results <- ok
+		}
+		return agent.Result{Text: "ok"}
+	}
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "rebuild")
+
+	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
+	if err := h.Answer("demo", model.Coordinator, "", model.Always, ""); err != nil {
+		t.Fatal(err)
+	}
+	if !<-results {
+		t.Fatal("the chained command was denied")
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
+	if v := view(t, h, "demo", model.Coordinator); v.Permission == nil || v.Permission.Detail != "rm -rf ~" {
+		t.Fatalf("permission = %+v, want a card for rm -rf ~", v.Permission)
+	}
+	if err := h.Answer("demo", model.Coordinator, "", model.Deny, ""); err != nil {
+		t.Fatal(err)
+	}
+	<-results
+}

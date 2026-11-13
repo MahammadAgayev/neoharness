@@ -169,9 +169,10 @@ type thread struct {
 
 type pending struct {
 	model.Permission
-	prefix string
-	done   chan model.Decision
-	msg    string
+	prefix   string
+	compound bool
+	done     chan model.Decision
+	msg      string
 }
 
 type ident struct {
@@ -1457,6 +1458,7 @@ func (h *Hub) Permission(ctx context.Context, workspaceName, name string, q agen
 	p := &pending{
 		Permission: model.Permission{ID: fmt.Sprintf("p%d", h.nextPerm), Tool: tool, Detail: detail},
 		prefix:     prefix,
+		compound:   q.Compound,
 		done:       make(chan model.Decision, 1),
 	}
 	th.perms = append(th.perms, p)
@@ -1498,7 +1500,9 @@ func (h *Hub) Answer(workspaceName, name, id string, d model.Decision, msg strin
 	if p == nil {
 		return fmt.Errorf("no pending permission %q on %s", id, name)
 	}
-	if d == model.Always {
+	// A rule for a chained command's first word would allow more than the
+	// person saw, so "always" on one allows it this time only.
+	if d == model.Always && !p.compound {
 		th.t.Rules = append(th.t.Rules, workspace.Rule{Tool: p.Tool, Prefix: p.prefix})
 	}
 	p.msg = msg

@@ -89,7 +89,8 @@ the call open, sets the thread to waiting, and the TUI shows a card.
 - Your own Claude settings and allow-lists still apply.
 - The hub's own tools are always allowed.
 - "Allow always" stores a rule per thread. A Bash command with `;`, `&`,
-  `|`, `` ` ``, `<`, `>`, a newline or `$(` always asks.
+  `|`, `` ` ``, `<`, `>`, a newline or `$(` always asks, and "allow
+  always" on one allows it this time only.
 - A pending request is denied when its turn ends.
 
 ## Remote threads

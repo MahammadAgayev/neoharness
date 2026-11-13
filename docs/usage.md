@@ -75,7 +75,7 @@ card shows in the chat:
 
 ```
 <leader>a   :allow           allow once
-<leader>A   :always          allow always (for Bash: the first word of the command)
+<leader>A   :always          allow always (for Bash: the first word; a chained command only this time)
 <leader>x   :deny [reason]   deny
 ```
 
