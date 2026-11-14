@@ -7,6 +7,7 @@ import { useSyncExternalStore } from 'react'
 import type { CallArgs, CallName, HubStatus, Result } from '../shared/api'
 import {
   Coordinator,
+  RecapAway,
   User,
   validName,
   type Artifact,
@@ -112,7 +113,7 @@ export interface Settings {
   sidebarWidth: number
   // cost shows what each workspace cost in the sidebar.
   cost: boolean
-  // recap shows the recaps above the prompts.
+  // recap lets the recap box show by itself when the person comes back.
   recap: boolean
 }
 
@@ -151,6 +152,9 @@ export interface State {
   // workspaceCursor is the row of the workspaces screen.
   workspaceCursor: number
   pending: string
+  // recapBox is whose recap the box at the top shows: a thread, the
+  // coordinator for the workspace's, or null when it is closed.
+  recapBox: string | null
 }
 
 let ids = 1
@@ -205,6 +209,7 @@ class Store {
     folds: {},
     workspaceCursor: 0,
     pending: '',
+    recapBox: null,
   }
   private listeners = new Set<() => void>()
   // writeDoc is a new doc whose editor opens ready to write.
@@ -214,6 +219,12 @@ class Store {
   // their changes still toast.
   private away: Record<string, ThreadView> = {}
   private awayText: Record<string, string> = {}
+  // blurAt is when the window lost focus, and leftAt when each workspace
+  // was left: how long the person was away, for the recap box.
+  private blurAt = 0
+  private leftAt: Record<string, number> = {}
+  // typing says the person writes in an editor now; the keyboard sets it.
+  typing: () => boolean = () => false
   private connected = false
   // opening are threads the person opens here: they see them open, so the
   // "opened" toast would only cover the screen.
@@ -530,6 +541,7 @@ class Store {
 
   showWorkspaces(): void {
     this.saveLayout()
+    if (this.state.workspace) this.leftAt[this.state.workspace] = Date.now()
     const i = this.state.workspaces.findIndex((w) => w.name === this.state.workspace)
     this.set({ screen: 'workspaces', workspaceCursor: Math.max(i, 0), insert: false })
   }
@@ -546,6 +558,10 @@ class Store {
       return
     }
     this.saveLayout()
+    // Opening a workspace not looked at for minutes is coming back to it.
+    const now = Date.now()
+    const back = !(name in this.leftAt) || now - this.leftAt[name] >= RecapAway
+    if (s.workspace && s.screen === 'workspace') this.leftAt[s.workspace] = now
     // The threads of the workspace left behind keep toasting.
     for (const [n, v] of Object.entries(s.threads)) if (!n.includes('/')) this.away[`${s.workspace}\0${n}`] = v
     const layout = this.layouts[name] ?? {
@@ -557,7 +573,7 @@ class Store {
     }
     if (!this.layouts[name]) layout.focus = layout.cols[0].wins[0].id
     localStorage.setItem('workspace', name)
-    this.set({ workspace: name, screen: 'workspace', layout, threads: {}, order: [], chats: {}, artifacts: [], docs: {} })
+    this.set({ workspace: name, screen: 'workspace', layout, threads: {}, order: [], chats: {}, artifacts: [], docs: {}, recapBox: null })
     await this.resync()
     // Windows of threads that are gone show the coordinator.
     const known = this.state.threads
@@ -566,6 +582,54 @@ class Store {
         w.buf.kind === 'chat' && !known[w.buf.thread] ? { ...w, buf: { kind: 'chat', thread: Coordinator } } : w,
       ),
     })
+    if (back) this.cameBack()
+  }
+
+  // focused is the window gaining or losing focus.
+  focused(on: boolean): void {
+    if (!on) {
+      this.blurAt = Date.now()
+      return
+    }
+    if (this.blurAt && Date.now() - this.blurAt >= RecapAway) this.cameBack()
+    this.blurAt = 0
+  }
+
+  // cameBack shows the recap box when the person comes back to news they
+  // have not seen. Not while they type, nor over a card that waits for
+  // them, and not with the pop-up off in Settings. The hub says what is
+  // news; this says only when.
+  cameBack(): void {
+    const s = this.state
+    if (!s.settings.recap || s.screen !== 'workspace' || s.recapBox || this.typing()) return
+    if (s.cmdline !== null || s.picker || s.confirm || s.settingsOpen || s.helpOpen || s.cost || s.choice || s.newWorkspace || s.newDoc) return
+    const w = this.cur()
+    const v = w?.buf.kind === 'chat' ? s.threads[w.buf.thread] : undefined
+    if (v?.state === 'waiting') return
+    if (v && v.name !== Coordinator && v.recapUnseen) this.set({ recapBox: v.name })
+    else if (s.workspaces.find((x) => x.name === s.workspace)?.recapUnseen) this.set({ recapBox: Coordinator })
+  }
+
+  // boxSubject is whose recap the box shows from the window with focus: the
+  // thread's in its window, else the workspace's.
+  boxSubject(): string {
+    const w = this.cur()
+    const t = w?.buf.kind === 'chat' ? w.buf.thread : ''
+    return t && !t.includes('/') && this.state.threads[t]?.recap ? t : Coordinator
+  }
+
+  // openBox shows a recap box: :recap opens it whether or not it holds news.
+  openBox(subject = this.boxSubject()): void {
+    if (this.needWorkspace()) this.set({ recapBox: subject })
+  }
+
+  // closeBox closes the recap box and tells the hub the person saw it, so
+  // the TUI does not show the same news again.
+  async closeBox(): Promise<void> {
+    const subject = this.state.recapBox
+    if (!subject) return
+    this.set({ recapBox: null })
+    await this.try(this.call('seenRecap', { workspace: this.state.workspace, thread: subject }))
   }
 
   async createWorkspace(name: string, pin?: string): Promise<boolean> {
@@ -912,7 +976,8 @@ class Store {
   async askRecap(name = this.target()): Promise<void> {
     if (!this.needWorkspace() || !name) return
     if ((await this.try(this.call('askRecap', this.at(name)))) === undefined) return
-    this.setSettings({ recap: true })
+    // The box fills in when the recap comes.
+    if (!name.includes('/')) this.set({ recapBox: name })
     this.say(`asked ${this.at(name).thread} for a fresh recap`, 'muted')
   }
 
@@ -1376,7 +1441,7 @@ class Store {
         return this.openCost(a[0] === 'all' ? 'all' : 'workspace')
       case 'recap':
         if (e.bang) return this.askRecap(a[0])
-        return this.setSettings({ recap: !this.state.settings.recap })
+        return this.state.recapBox ? this.closeBox() : this.openBox()
       case 'w':
       case 'write':
         if (!art) return this.say('nothing to write here; :w saves an artifact', 'muted')

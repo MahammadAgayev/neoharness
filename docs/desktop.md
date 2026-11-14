@@ -48,12 +48,19 @@ splits, toasts, marks (`ma`, `'a`, `''`), and the ex commands (`:new`, `:open`, 
 completes the folder of `:new`, `:open` and `:folder` when it starts with
 `~/` or `/`; the app has no working folder for a relative one.
 
-Each thread's recap shows under its row and above its prompt, and the
-coordinator's chat shows the workspace recap above its prompt, as in the
-TUI. Each recap has two quiet buttons at its right: "ask again" asks for a
-fresh recap, which runs a turn, and "hide" hides the recaps. Hidden, a quiet
-"recap" button stays where the recap was and brings it back. `:recap`,
-`:recap!` and `:set norecap` do the same; Settings has it too. The
+Each thread's recap shows under its row. The recap box pops up at the top
+of the work, as in the TUI, when you come back to news you have not seen:
+the window gets focus after two minutes away, or you open a workspace you
+have not looked at for two minutes. It never shows while you write a
+message, nor over a permission or question card. Its border takes the color
+of what matters most: gold for what waits for you, red for a failure, foam
+while threads run, pine when all is done. It holds the counts, a strip with
+one cell per thread, one row per thread (a click shows it), and the
+coordinator's lines; in a thread's window, that thread's recap in full.
+"ask again" asks for a fresh recap, which runs a turn. Esc, `q` or `×`
+closes it and marks it seen in the hub, so the TUI does not show it again.
+`:recap` opens or closes it, and `:recap!` asks for a fresh one. Settings'
+"Recap pop-up" switch, or `:set norecap`, stops it showing by itself. The
 sidebar and the workspaces screen show `✗ N` beside a workspace whose
 threads failed.
 

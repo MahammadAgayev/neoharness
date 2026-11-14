@@ -386,6 +386,12 @@ export function onKey(e: KeyboardEvent): void {
   }
   // The picker, the command line and the settings are inputs of their own.
   if (s.picker || s.cmdline !== null || s.settingsOpen || s.helpOpen || s.cost || s.choice || s.newWorkspace || s.newDoc) return
+  if (s.recapBox && !s.insert && (key === '<Esc>' || key === 'q')) {
+    e.preventDefault()
+    e.stopPropagation()
+    void store.closeBox()
+    return
+  }
 
   const km = keymaps()
   if (key.startsWith('<D-')) {
@@ -450,6 +456,15 @@ export function onKey(e: KeyboardEvent): void {
 
 export function installKeys(): void {
   window.addEventListener('keydown', onKey, true)
+  // Focus tells when the person comes back, for the recap box. Typing is a
+  // draft in an editor with focus, not only Insert: the prompt often keeps
+  // Insert while the person is away.
+  window.addEventListener('focus', () => store.focused(true))
+  window.addEventListener('blur', () => store.focused(false))
+  store.typing = () => {
+    const ed = focusedEditor()
+    return !!ed && store.state.insert && ed.state.doc.length > 0
+  }
   // Vim's own command line opens on : in Visual mode or after an operator.
   // Its :w and the like are the app's, as on the app's command line.
   for (const [name, prefix] of [

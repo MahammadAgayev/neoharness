@@ -86,6 +86,10 @@ export interface RecapCommand {
   failed?: boolean
 }
 
+// RecapAway is how long the person must be away before coming back shows
+// the recap box, when there is news they have not seen: model.RecapAway.
+export const RecapAway = 2 * 60_000
+
 // WorkspaceRecap is how a workspace stands: the coordinator's goal and
 // lines, and what the hub joins from the threads' recaps.
 export interface WorkspaceRecap {
@@ -116,6 +120,9 @@ export interface ThreadView {
   permission?: Permission
   pending?: Event[]
   recap?: Recap
+  // The recap is newer than the last time the person closed a box that
+  // showed it.
+  recapUnseen?: boolean
   quiet?: boolean
   model?: string
   context?: number
@@ -201,6 +208,9 @@ export interface WorkspaceView {
   // 0 never.
   autoCompact?: number
   recap?: WorkspaceRecap
+  // An open thread's recap, or the coordinator's lines, came after the
+  // person last closed the workspace's recap box.
+  recapUnseen?: boolean
 }
 
 export type UpdateKind = 'event' | 'thread' | 'workspace' | 'deleted' | 'artifact' | 'stopped'

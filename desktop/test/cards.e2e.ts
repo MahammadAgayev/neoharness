@@ -755,7 +755,7 @@ test('<leader>$ shows what the workspace cost, the sidebar each workspace\'s cos
   await expect(demo.locator('.sb-cost')).toHaveText('$24.75')
 })
 
-test("a thread's recap shows under its row and above its prompt", async () => {
+test("a thread's recap shows under its row and in its box", async () => {
   const row = page.locator('.list-row', { hasText: 'api' })
   hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
   await expect(row.locator('.list-recap.t-love')).toHaveText('✗ the agent failed: boom')
@@ -777,61 +777,85 @@ test("a thread's recap shows under its row and above its prompt", async () => {
       },
     }),
   )
-  // The row shows the hub's headline; the recap above the prompt all of it.
+  // The row shows the hub's headline; the box all of it.
   await expect(row.locator('.list-recap').nth(0)).toHaveText('Added /healthz and a test. …')
   await expect(row.locator('.list-recap').nth(1)).toHaveText('3 commands, 1 failed · 1 file edited · ◇ health-plan')
   await expect(row.locator('.list-recap', { hasText: 'open: keep the old /ping?' })).toBeVisible()
   await expect(row).not.toContainText('half way')
   await row.click()
-  const head = page.locator('.pane.focused .window.chat .recap')
-  await expect(head).toContainText('asked')
-  await expect(head).toContainText('Added /healthz and a test. It answers 200 when the store is up.')
-  await expect(head.locator('.recap-failed')).toHaveText('✗ golangci-lint run')
-  await expect(head).toContainText('✗ golangci-lint run · go test ./... · +1 more')
-  await expect(head).toContainText('◇ health-plan')
+  // No recap above the prompt any more; :recap opens the box.
+  await expect(page.locator('.pane.focused .window.chat .recap')).toHaveCount(0)
+  await normal()
+  await page.keyboard.type(':')
+  await page.keyboard.type('recap')
+  await page.keyboard.press('Enter')
+  const box = page.locator('.recap-box')
+  await expect(box.locator('.box-title')).toHaveText('api · idle')
+  await expect(box).toContainText('asked')
+  await expect(box).toContainText('Added /healthz and a test. It answers 200 when the store is up.')
+  await expect(box.locator('.recap-failed')).toHaveText('✗ golangci-lint run')
+  await expect(box).toContainText('✗ golangci-lint run · go test ./... · +1 more')
+  await expect(box).toContainText('◇ health-plan')
+  await expect(box).toHaveClass(/b-pine/)
   await shot('27-recap')
 
-  // The recap holds its own controls: no ex command or setting to know.
-  // Asking runs a turn, so only a click asks.
+  // Asking runs a turn, so only a click or :recap! asks.
   const asks = () => hub.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/recap')).map((c) => c.path)
   expect(asks()).toEqual([])
-  await head.getByRole('button', { name: 'ask again' }).click()
+  await box.getByRole('button', { name: 'ask again' }).click()
   await expect.poll(asks).toEqual(['/workspaces/demo/threads/api/recap'])
-  await page.keyboard.press('Escape')
   await page.keyboard.type(':')
   await page.keyboard.type('recap!')
   await page.keyboard.press('Enter')
   await expect.poll(asks).toEqual(['/workspaces/demo/threads/api/recap', '/workspaces/demo/threads/api/recap'])
-  await head.getByRole('button', { name: 'hide' }).click()
-  await expect(head).toHaveCount(0)
-  const show = page.locator('.pane.focused .window.chat .recap-show')
-  await expect(show).toBeVisible()
-  await shot('27b-recap-hidden')
-  await show.click()
-  await expect(head).toHaveCount(1)
-  await expect(show).toHaveCount(0)
 
   hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', outcome: 'word '.repeat(200), at: new Date().toISOString() } }))
-  const words = head.locator('.recap-words').nth(1)
+  const words = box.locator('.recap-words').nth(1)
   await expect(words).toContainText('word word')
   // Three lines at most: the rest is cut.
   expect(await words.evaluate((el) => el.clientHeight / parseFloat(getComputedStyle(el).lineHeight))).toBeLessThanOrEqual(3.01)
   await shot('28-recap-long')
   hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', outcome: 'All tests pass.', fromReply: true, at: new Date().toISOString() } }))
-  await expect(head).toContainText('reply')
-  await expect(head).toContainText('no commands')
+  await expect(box).toContainText('reply')
+  await expect(box).toContainText('no commands')
   hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
-  await expect(head.locator('.t-love')).toHaveText('the agent failed: boom')
+  await expect(box.locator('.recap .t-love')).toHaveText('the agent failed: boom')
+  await expect(box).toHaveClass(/b-love/)
+
+  // q closes it, and tells the hub the person saw it.
+  const seen = () => hub.calls.filter((c) => c.path.endsWith('/recap/seen')).map((c) => c.path)
+  await page.keyboard.press('q')
+  await expect(box).toHaveCount(0)
+  expect(seen()).toEqual(['/workspaces/demo/threads/api/recap/seen'])
 })
 
-test("the coordinator's chat shows the workspace recap above its prompt", async () => {
+test('the recap box pops up when the person comes back to news', async () => {
+  // The renderer's clock moves on without waiting minutes.
+  await page.evaluate(() => {
+    const real = Date.now.bind(Date)
+    const w = window as unknown as { later: (ms: number) => void }
+    let off = 0
+    w.later = (ms) => (off += ms)
+    Date.now = () => real() + off
+  })
+  const away = async () => {
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('blur'))
+      ;(window as unknown as { later: (ms: number) => void }).later(3 * 60_000)
+      window.dispatchEvent(new Event('focus'))
+    })
+  }
   const at = new Date(Date.now() - 3600_000)
-  hub.setView(view('demo', 'db', { state: 'waiting', waiting: 'permission' }))
-  hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
+  hub.event('demo', 'db', { kind: 'permission', tool: 'Bash', detail: 'psql -c "drop table x"', id: 'p9' })
+  hub.setView(view('demo', 'db', { state: 'waiting', permission: { id: 'p9', tool: 'Bash', detail: 'psql -c "drop table x"' } }))
+  hub.setView(view('demo', 'api', { recapUnseen: true, recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
+  hub.setView(view('demo', 'web', { state: 'running', progress: 'half way' }))
+  hub.setView(view('demo', 'docs', { recapUnseen: true, recap: { outcome: 'Wrote the plan. Three pages.', headline: 'Wrote the plan.', at: new Date().toISOString() } }))
   const demo = hub.workspaces.find((w) => w.name === 'demo')!
   hub.setWorkspace({
     ...demo,
-    counts: { idle: 1, waiting: 1 },
+    counts: { idle: 2, waiting: 1, running: 1 },
+    recapUnseen: true,
     recap: {
       goal: 'Add a health check and keep /ping',
       lines: ['answer db first: the health check needs its table'],
@@ -841,34 +865,80 @@ test("the coordinator's chat shows the workspace recap above its prompt", async 
       newer: 1,
     },
   })
-  const head = page.locator('.recap-ws')
-  await expect(head).toHaveCount(1)
-  await expect(head.locator('.recap-goal')).toHaveText('Add a health check and keep /ping')
-  await expect(head.locator('.recap-counts')).toHaveText('◆ 1 waits for you · ✗ 1 failed')
-  await expect(head.locator('.recap-counts .t-love')).toHaveText('✗ 1')
-  await expect(head).toContainText('api and db both edited server.go')
-  await expect(head).toContainText('answer db first: the health check needs its table')
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  await expect(page.locator('.statusline .sl-name', { hasText: 'coordinator' })).toBeVisible()
+  const box = page.locator('.recap-box')
+  // The person is here: news alone does not pop it up.
+  await page.waitForTimeout(300)
+  await expect(box).toHaveCount(0)
+  await away()
+  await expect(box).toBeVisible()
+  await expect(box.locator('.box-title')).toHaveText('demo · Add a health check and keep /ping')
+  await expect(box).toHaveClass(/b-gold/)
+  await expect(box.locator('.recap-counts')).toHaveText('◆ 1 waits for you · ✗ 1 failed · ● 1 running · 1 idle')
+  await expect(box.locator('.box-cell')).toHaveCount(4)
+  // What needs the person first, then what failed, came out, still runs.
+  const rows = box.locator('.box-row')
+  await expect(rows.nth(0)).toContainText('◆dbpermission · Bash psql -c "drop table x"')
+  await expect(rows.nth(1)).toContainText('✗apithe agent failed: boom')
+  await expect(rows.nth(2)).toContainText('✓docsWrote the plan.')
+  await expect(rows.nth(3)).toContainText('●webhalf way')
+  await expect(box).toContainText('answer db first: the health check needs its table')
+  await expect(box).toContainText('api and db both edited server.go')
   const hhmm = at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-  await expect(head).toContainText(`as of ${hhmm} · 1 thread ended since`)
+  await expect(box).toContainText(`as of ${hhmm} · 1 thread ended since`)
   await expect(page.locator('.sb-item', { hasText: 'demo' }).locator('.sb-count.t-love')).toHaveText('✗ 1')
-  // It sits under the transcript, just above the prompt.
-  const order = await head.evaluate((el) => [el.previousElementSibling?.className, el.nextElementSibling?.className])
-  expect(order[0]).toContain('transcript')
-  expect(order[1]).toContain('prompt')
-  await shot('47-workspace-recap')
-  // :recap hides the recaps, and again shows them.
+  await shot('47-recap-box')
+  // Esc closes it and marks the workspace seen in the hub.
+  const seen = () => hub.calls.filter((c) => c.path.endsWith('/recap/seen')).map((c) => c.path)
   await page.keyboard.press('Escape')
+  await expect(box).toHaveCount(0)
+  expect(seen().pop()).toBe('/workspaces/demo/threads/coordinator/recap/seen')
+
+  // Not while the person types a message.
+  await page.locator('.pane.focused .prompt').click()
+  await page.keyboard.type('a draft')
+  await away()
+  await page.waitForTimeout(300)
+  await expect(box).toHaveCount(0)
+  await page.keyboard.press('Meta+a')
+  await page.keyboard.press('Backspace')
+  await normal()
+  // An empty prompt is not typing.
+  await away()
+  await expect(box).toBeVisible()
+  await box.locator('.box-close').click()
+  await expect(box).toHaveCount(0)
+
+  // Settings' switch stops the pop-up; :recap still opens it.
+  await page.keyboard.type(':')
+  await page.keyboard.type('set norecap')
+  await page.keyboard.press('Enter')
+  await away()
+  await page.waitForTimeout(300)
+  await expect(box).toHaveCount(0)
   await page.keyboard.type(':')
   await page.keyboard.type('recap')
   await page.keyboard.press('Enter')
-  await expect(head).toHaveCount(0)
+  await expect(box).toBeVisible()
   await page.keyboard.type(':')
   await page.keyboard.type('recap')
   await page.keyboard.press('Enter')
-  await expect(head).toHaveCount(1)
-  // From the coordinator's chat, "ask again" asks for a fresh workspace recap.
-  await head.getByRole('button', { name: 'ask again' }).click()
-  await expect.poll(() => hub.calls.filter((c) => c.method === 'POST').pop()?.path).toBe('/workspaces/demo/threads/coordinator/recap')
+  await expect(box).toHaveCount(0)
+  await page.keyboard.type(':')
+  await page.keyboard.type('set recap')
+  await page.keyboard.press('Enter')
+
+  // Over a card that waits for the person, it does not show.
+  await page.keyboard.type(':')
+  await page.keyboard.type('b db')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.card.permission')).toBeVisible()
+  await away()
+  await page.waitForTimeout(300)
+  await expect(box).toHaveCount(0)
 })
 
 test('a hub that stops says so and offers to start it', async () => {

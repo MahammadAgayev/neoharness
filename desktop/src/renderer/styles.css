@@ -976,9 +976,128 @@ kbd {
   justify-content: flex-end;
   padding: 0 24px;
 }
-/* the workspace recap, above the coordinator's transcript: no label column */
-.recap-ws .recap-inner {
-  display: block;
+/* the recap box: it pops up over the top of the work when the person comes
+   back, so it stands out on purpose, with a border in the color of what
+   matters most in it */
+.main {
+  position: relative;
+}
+.recap-box {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 35;
+  width: min(760px, calc(100% - 48px));
+  max-height: 70%;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1.5px solid var(--box);
+  border-radius: 12px;
+  padding: 12px 16px 14px;
+  font-size: var(--fs-secondary);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--box) 18%, transparent),
+    0 18px 48px rgba(0, 0, 0, 0.35);
+  animation: box-in 180ms var(--ease);
+}
+@keyframes box-in {
+  from {
+    transform: translate(-50%, -8px);
+    opacity: 0;
+  }
+}
+.recap-box.b-gold { --box: var(--gold); }
+.recap-box.b-love { --box: var(--love); }
+.recap-box.b-foam { --box: var(--foam); }
+.recap-box.b-pine { --box: var(--pine); }
+.recap-box.b-muted { --box: var(--muted); }
+.box-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.box-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.box-name {
+  font-weight: 600;
+  color: var(--text);
+}
+.box-head .btn {
+  color: var(--muted);
+}
+.box-close {
+  border: 0;
+  background: none;
+  color: var(--subtle);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.box-close:hover {
+  background: var(--hl-med);
+  color: var(--text);
+}
+.box-counts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.box-strip {
+  display: flex;
+  gap: 3px;
+}
+.box-cell {
+  width: 14px;
+  height: 6px;
+  border-radius: 3px;
+}
+.bg-gold { background: var(--gold); }
+.bg-love { background: var(--love); }
+.bg-foam { background: var(--foam); }
+.bg-pine { background: var(--pine); }
+.bg-muted { background: var(--hl-high); }
+.box-threads {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 2px;
+  margin-top: 10px;
+}
+.box-row {
+  display: contents;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.box-row > span {
+  padding: 1px 0;
+}
+.box-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.box-lines {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hl-med);
+}
+/* a thread's recap in the box: the box is its frame */
+.recap-box .recap {
+  border-top: 0;
+  padding: 0;
+}
+.recap-box .recap-inner {
+  max-width: none;
 }
 .recap-line {
   display: -webkit-box;
