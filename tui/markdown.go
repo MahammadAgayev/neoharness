@@ -70,15 +70,12 @@ func (r *mdRenderer) alertStyle(kind string) tcell.Style {
 	return r.th.Foam
 }
 
-// headingStyle gives each level of a document its own color.
+// headingStyle shows a heading's level by its ink and, in a document, its
+// rule. A hue would make it quieter than the text under it, and the hues
+// mean states.
 func headingStyle(th *Theme, level int) tcell.Style {
-	switch level {
-	case 1:
-		return th.Iris.Bold(true)
-	case 2:
-		return th.Foam.Bold(true)
-	case 3:
-		return th.Rose.Bold(true)
+	if level <= 2 {
+		return th.Bold
 	}
 	return th.Subtle.Bold(true)
 }
@@ -113,7 +110,7 @@ func (r *mdRenderer) block(n ast.Node, first, rest []Span) {
 		}
 		r.out = append(r.out, wrap(spans, r.w, first, rest)...)
 	case *ast.Heading:
-		r.out = append(r.out, wrap(r.inline(n, r.th.Bold), r.w, first, rest)...)
+		r.out = append(r.out, wrap(r.inline(n, headingStyle(r.th, n.Level)), r.w, first, rest)...)
 	case *ast.FencedCodeBlock:
 		lang := string(n.Language(r.src))
 		r.code(r.lines(n), lang, first, rest)

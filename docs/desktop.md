@@ -151,11 +151,14 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   over the windows. Drag its edge to resize it; a double-click on the edge
   resets it. The work sits on a raised panel beside it, and
   icons are Lucide's line icons (ISC). The Rosé Pine text and accents are
-  drawn darker on paper and brighter at night than the TUI's, until each
-  reads at a set contrast on every background: text 12:1, secondary 6.5:1,
-  muted text and accents 4.5:1 (`lib/themes.ts`, tested). The paper and
-  the hues stay Rosé Pine's. Prose is about 75 characters wide, the chat
-  text a size up from the labels, and every size follows the text size.
+  drawn darker on paper and brighter at night, until each reads at a set
+  contrast on every background: text 12:1 (15:1 on paper), secondary
+  6.5:1, muted text and accents 4.5:1 (`lib/themes.ts`, tested). The TUI
+  uses the same night values. The paper and the hues stay Rosé Pine's.
+  A reply reads in one ink: headings show their level by size, and inline
+  code is the text's color on a plain chip. Prose is about 90 characters
+  wide, the chat text two sizes up from the labels, paragraphs a line
+  apart, and every size follows the text size.
 - **The mouse**: the round send button in the prompt (the accent once there is text), buttons on permission cards, a click on a thread, an
   artifact or a queued message, drag the line between columns, the × at
   the end of a window's status line closes it (`⌘W`). A right

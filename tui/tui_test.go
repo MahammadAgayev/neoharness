@@ -774,6 +774,32 @@ func TestMarkdown(t *testing.T) {
 	}
 }
 
+func TestHeadingsTakeTheInkOfTheText(t *testing.T) {
+	th := newTheme()
+	for level, want := range map[int]tcell.Style{1: th.Bold, 2: th.Bold, 3: th.Subtle.Bold(true), 4: th.Subtle.Bold(true)} {
+		if got := headingStyle(th, level); got != want {
+			t.Errorf("heading %d style = %v, want %v", level, got, want)
+		}
+	}
+	lines := renderMarkdown("## Plan\n\n### Detail\n\nbody", 60, th, nil)
+	if st := lines[0].Spans[0].Style; st != headingStyle(th, 2) {
+		t.Errorf("a chat's ## heading = %v, want %v", st, headingStyle(th, 2))
+	}
+	if st := lines[2].Spans[0].Style; st != headingStyle(th, 3) {
+		t.Errorf("a chat's ### heading = %v, want %v", st, headingStyle(th, 3))
+	}
+}
+
+func TestChatWrapsAtTheDocumentWidth(t *testing.T) {
+	h := start(t)
+	h.s.SetSize(300, 40)
+	h.openDemo()
+	h.a.draw()
+	if w := h.a.cur; w.rect.W <= docWidth+2 || h.a.textWidth(w) != docWidth+2 {
+		t.Fatalf("a %d-column chat should wrap at %d, got %d", w.rect.W, docWidth+2, h.a.textWidth(w))
+	}
+}
+
 func TestMarkdownTableAlignsColumns(t *testing.T) {
 	th := newTheme()
 	src := "| PR | Saved | Result |\n|---|---:|---|\n| store-clients#62 | ~2,050 | Confirmed |\n| D. app-code#59746 | ~250 | Not proven |\n"

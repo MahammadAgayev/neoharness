@@ -452,7 +452,15 @@ func (a *App) line(w *Window) Line {
 	return Line{}
 }
 
-func (a *App) textWidth(w *Window) int { return max(w.rect.W-1-railWidth(w), 8) }
+func (a *App) textWidth(w *Window) int {
+	tw := max(w.rect.W-1-railWidth(w), 8)
+	// A chat wraps at a document's width, its gutter included: long lines
+	// are hard to read.
+	if w.Buf.Kind == KindChat {
+		tw = min(tw, docWidth+2)
+	}
+	return tw
+}
 
 func (a *App) lineCount(w *Window) int { return len(a.rows(w)) }
 

@@ -293,6 +293,11 @@ describe('schemes', () => {
           expect(contrast(c[`--${level}`], c[bg]), `${name} ${level} on ${bg}`).toBeGreaterThanOrEqual(ratios[level])
         }
       }
+      if (!p.dark) {
+        for (const bg of ['--panel', '--shell', '--surface']) {
+          expect(contrast(c['--text'], c[bg]), `${name} text on ${bg}`).toBeGreaterThanOrEqual(ratios.textLight)
+        }
+      }
       for (const accent of ['love', 'gold', 'rose', 'pine', 'foam', 'iris']) {
         for (const bg of ['--panel', '--shell', '--surface']) {
           expect(contrast(c[`--${accent}`], c[bg]), `${name} ${accent} on ${bg}`).toBeGreaterThanOrEqual(ratios.muted)

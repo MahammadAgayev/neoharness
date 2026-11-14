@@ -9,14 +9,17 @@ import (
 )
 
 // Rose Pine Moon. https://rosepinetheme.com/palette
+// Text, Subtle, Muted and Pine are brighter than the palette's, the values
+// the desktop app computes (desktop/src/renderer/lib/themes.ts), so every
+// level reads at its contrast: text 13:1, subtle 7:1, muted 5:1.
 var (
-	rpText    = tcell.NewHexColor(0xe0def4)
-	rpSubtle  = tcell.NewHexColor(0x908caa)
-	rpMuted   = tcell.NewHexColor(0x6e6a86)
+	rpText    = tcell.NewHexColor(0xebe9f8)
+	rpSubtle  = tcell.NewHexColor(0xafacc2)
+	rpMuted   = tcell.NewHexColor(0x9491a9)
 	rpLove    = tcell.NewHexColor(0xeb6f92)
 	rpGold    = tcell.NewHexColor(0xf6c177)
 	rpRose    = tcell.NewHexColor(0xea9a97)
-	rpPine    = tcell.NewHexColor(0x3e8fb0)
+	rpPine    = tcell.NewHexColor(0x559cb9)
 	rpFoam    = tcell.NewHexColor(0x9ccfd8)
 	rpIris    = tcell.NewHexColor(0xc4a7e7)
 	rpHLLow   = tcell.NewHexColor(0x2a283e)

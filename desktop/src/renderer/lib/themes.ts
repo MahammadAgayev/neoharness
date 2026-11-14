@@ -127,8 +127,10 @@ function legible(c: string, ink: string, bgs: string[], ratio: number): string {
 
 // The contrast of each level of text. Rosé Pine keeps its text soft for code
 // in a terminal; a window of prose and labels needs darker ink, and no text
-// below 4.5, the WCAG minimum, even the muted one.
-export const ratios = { text: 12, subtle: 6.5, muted: 4.6 }
+// below 4.5, the WCAG minimum, even the muted one. On paper the text goes
+// near black, as a long reply reads best in one firm ink; at night 15:1
+// would need pure white, which glares.
+export const ratios = { text: 12, textLight: 15, subtle: 6.5, muted: 4.6 }
 
 export function colors(p: Palette): Record<string, string> {
   const ink = p.dark ? '#ffffff' : '#000000'
@@ -145,7 +147,7 @@ export function colors(p: Palette): Record<string, string> {
     '--panel': panel,
     '--muted': legible(mix(p.muted, p.subtle, 0.55), ink, bgs, ratios.muted),
     '--subtle': legible(p.subtle, ink, bgs, ratios.subtle),
-    '--text': legible(p.text, ink, bgs, ratios.text),
+    '--text': legible(p.text, ink, bgs, p.dark ? ratios.text : ratios.textLight),
     // The accents color text too: a state, a link, a heading.
     '--love': legible(p.love, ink, bgs, ratios.muted),
     '--gold': legible(p.gold, ink, bgs, ratios.muted),

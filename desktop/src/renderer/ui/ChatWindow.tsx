@@ -20,23 +20,23 @@ function shortModel(m: string): string {
 // PromptInfo is the line under the prompt, as in Claude Code: what the next
 // message goes with. It has a line of its own, so
 // a narrow column never squeezes the text you write.
-function PromptInfo(props: { v: ThreadView | undefined; focused: boolean; thread: string }) {
-  const { v, focused } = props
+function PromptInfo(props: { v: ThreadView | undefined; thread: string }) {
+  const { v } = props
   const warn = useStore((s) => s.settings.compactwarn)
   const right: { text: string; tone: string; title?: string; run?: () => void }[] = []
   if (v) {
     if (v.queued > 0) right.push({ text: `+${v.queued} queued`, tone: 'muted' })
     if (v.location.host) right.push({ text: `ssh:${v.location.host}`, tone: 'muted' })
-    if (v.branch) right.push({ text: v.branch, tone: 'foam', title: 'git branch' })
+    if (v.branch) right.push({ text: v.branch, tone: 'muted', title: 'git branch' })
     if (v.model)
-      right.push({ text: shortModel(v.model), tone: 'rose', title: 'Change the model', run: () => store.openChoice({ thread: props.thread, kind: 'model' }) })
+      right.push({ text: shortModel(v.model), tone: 'muted', title: 'Change the model', run: () => store.openChoice({ thread: props.thread, kind: 'model' }) })
     if (v.contextWindow) {
       const pct = Math.floor(((v.context ?? 0) * 100) / v.contextWindow)
       // Every turn sends the whole context again: time to /compact.
       right.push(
         warn > 0 && pct >= warn
           ? { text: `ctx ${pct}% · /compact`, tone: 'love', title: 'every turn sends the whole context; /compact saves tokens' }
-          : { text: `ctx ${pct}%`, tone: 'gold', title: 'context used' },
+          : { text: `ctx ${pct}%`, tone: 'muted', title: 'context used' },
       )
     }
   }
@@ -46,7 +46,7 @@ function PromptInfo(props: { v: ThreadView | undefined; focused: boolean; thread
       {right.reverse().map((p, i) => (
         <span
           key={i}
-          className={`sl-part t-${focused || p.tone === 'love' ? p.tone : 'muted'} ${p.run ? 'pick' : ''}`}
+          className={`sl-part t-${p.tone} ${p.run ? 'pick' : ''}`}
           data-tip={p.title}
           data-keys={p.run ? '/model' : undefined}
           onClick={p.run}
@@ -607,7 +607,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>
         <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
       </div>
-      <PromptInfo v={v} focused={focused} thread={thread} />
+      <PromptInfo v={v} thread={thread} />
     </div>
   )
 }

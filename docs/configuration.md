@@ -44,8 +44,10 @@ Lua function. Actions with no ex command:
 | `<Plug>(neoharness-yank)` | `<leader>y` |
 | `<Plug>(neoharness-dismiss)` | `<leader>nc` |
 
-The colors are Rose Pine Moon. The background is never painted, so
-transparent terminals stay transparent. `NO_COLOR` is supported.
+The colors are Rose Pine Moon, its text levels drawn brighter as in the
+desktop app, so each reads at its contrast. The background is never
+painted, so transparent terminals stay transparent. `NO_COLOR` is
+supported.
 
 ## The hub and the agents
 
