@@ -88,6 +88,7 @@ func (a *App) key(ev *tcell.EventKey) {
 	if k == "" {
 		return
 	}
+	a.keyAfterAway()
 	if run := a.confirm; run != nil {
 		a.confirm = nil
 		a.notice = ""
@@ -1197,6 +1198,7 @@ func (a *App) send() {
 		}
 	}
 	p.Text, p.Cur, p.ed, p.Images = nil, 0, nil, nil
+	a.recapOn = false
 	if a.cur.inPrompt {
 		a.cur.Cur, a.cur.Col = 0, width(" › ")
 	}

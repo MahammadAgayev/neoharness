@@ -3602,3 +3602,52 @@ func TestFailedTurnToastStaysAnError(t *testing.T) {
 		t.Fatalf("a failed turn shows as finished:\n%s", h.screen())
 	}
 }
+
+// A session's recap shows dim above its prompt when the person comes back
+// after model.RecapAway, as in Claude Code, and goes when they send a
+// message. A short break shows nothing.
+func TestTheRecapShowsAboveThePromptAfterAway(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	clock := time.Now()
+	h.a.now = func() time.Time { return clock }
+	v := h.a.threads[model.Coordinator]
+	v.Recap = "Cache added; review next."
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	shows := func() bool {
+		h.a.draw()
+		return strings.Contains(h.screen(), "Cache added; review next.")
+	}
+	away := func(d time.Duration) {
+		h.a.handle(tcell.NewEventFocus(false))
+		clock = clock.Add(d)
+		h.a.handle(tcell.NewEventFocus(true))
+	}
+	if shows() {
+		t.Fatal("the recap shows before the person was away")
+	}
+	away(30 * time.Second)
+	if shows() {
+		t.Fatal("the recap shows after a short break")
+	}
+	away(model.RecapAway)
+	if !shows() {
+		t.Fatalf("no recap after the person came back:\n%s", h.screen())
+	}
+	h.press("i", "go on", "<CR>", "<Esc>")
+	if shows() {
+		t.Fatal("the recap stays after a message")
+	}
+
+	// A terminal with no focus events: the first key after a long pause.
+	clock = clock.Add(model.RecapAway)
+	h.press("k")
+	if !shows() {
+		t.Fatal("no recap at the first key after away")
+	}
+	v.State = model.StateRunning
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	if shows() {
+		t.Fatal("the recap shows while a turn runs")
+	}
+}

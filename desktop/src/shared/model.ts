@@ -63,6 +63,9 @@ export interface Permission {
   scope?: string
 }
 
+// model.RecapAway.
+export const RecapAwayMs = 2 * 60 * 1000
+
 export interface ThreadView {
   workspace: string
   name: string
@@ -76,6 +79,10 @@ export interface ThreadView {
   pending?: Event[]
   // The start of the last turn's reply; absent while a turn runs.
   reply?: string
+  // Where the session's work stands, in its own words; it shows above the
+  // prompt when the person comes back after RecapAwayMs.
+  recap?: string
+  recapAt?: string
   quiet?: boolean
   model?: string
   context?: number

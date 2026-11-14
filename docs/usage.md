@@ -69,6 +69,11 @@ yourself:
   coordinator and the other threads: they wait, dim at the end of the
   chat, until you answer. Your answer goes first, with them. `<CR>` on one
   sends them without an answer, and the question closes.
+- When you come back after 2 minutes or more away, a chat shows its recap
+  dim above the prompt, as Claude Code does: where the session's work
+  stands, in its own words. Away is the terminal without focus, or no key
+  for that long when the terminal sends no focus events. The recap goes
+  when you send a message, and a running turn hides it.
 - `u` with an empty prompt is Esc in Claude Code: your last message comes
   back to the prompt to edit, while the agent has not answered it yet. A
   queued one leaves the queue; a running turn stops, and the message

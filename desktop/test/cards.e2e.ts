@@ -777,6 +777,29 @@ test("an idle thread's row shows the start of its last reply, its group a count"
   await expect(row.locator('.list-detail')).toHaveCount(0)
 })
 
+test('the recap shows above the prompt after two minutes away, until a message', async () => {
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  hub.setView(view('demo', 'coordinator', { state: 'idle', recap: 'Cache added; review next.' }))
+  const recap = page.locator('.pane.focused .recap')
+  await expect(page.locator('.pane.focused .prompt')).toBeVisible()
+  await expect(recap).toHaveCount(0)
+  // Away: the window loses focus, and comes back three minutes later.
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('blur'))
+    const real = Date.now
+    Date.now = () => real() + 3 * 60_000
+    window.dispatchEvent(new Event('focus'))
+    Date.now = real
+  })
+  await expect(recap).toHaveText('※ Cache added; review next.')
+  await page.locator('.pane.focused .prompt').click()
+  await page.keyboard.type('go on')
+  await page.keyboard.press('Enter')
+  await expect(recap).toHaveCount(0)
+})
+
 test('Copy on a message copies its markdown, and on a code block its code', async () => {
   const saved = await app.evaluate(({ clipboard }) => clipboard.readText())
   try {

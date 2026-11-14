@@ -339,3 +339,22 @@ func TestTheCoordinatorPromptNamesItsTools(t *testing.T) {
 		}
 	}
 }
+
+// TestEverySessionRecaps: the coordinator and a thread both write the recap
+// the person reads above their prompt.
+func TestEverySessionRecaps(t *testing.T) {
+	h, srv := setup(t)
+	if err := h.OpenThread("demo", model.User, "api", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{model.Coordinator, "api"} {
+		if _, isErr := call(t, connect(t, srv, token(t, n)), "recap", map[string]any{"text": "Done; review next."}); isErr {
+			t.Fatalf("%s cannot recap", n)
+		}
+		vs, _ := h.Threads("demo")
+		i := slices.IndexFunc(vs, func(v model.ThreadView) bool { return v.Name == n })
+		if vs[i].Recap != "Done; review next." {
+			t.Fatalf("%s recap = %q", n, vs[i].Recap)
+		}
+	}
+}

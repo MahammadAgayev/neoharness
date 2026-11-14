@@ -15,6 +15,7 @@ import { keyName, Sequencer, split } from '../src/renderer/lib/keys'
 import { age } from '../src/renderer/search'
 import { imageToken, nextImage, used, withImages } from '../src/renderer/lib/images'
 import { wakeLabel } from '../src/renderer/lib/wake'
+import { Away } from '../src/renderer/lib/away'
 import { hunks, lines, take } from '../src/renderer/lib/linediff'
 import { colors, contrast, ratios, resolveScheme, schemes } from '../src/renderer/lib/themes'
 import { endHidesError, keep, viewToast, type Toast } from '../src/renderer/lib/toasts'
@@ -344,5 +345,23 @@ describe('age', () => {
     expect(age('2026-11-14T09:00:00Z', now)).toBe('3h')
     expect(age('2026-11-08T12:00:00Z', now)).toBe('6d')
     expect(age('2026-11-01T12:00:00Z', now)).toBe(new Date('2026-11-01T12:00:00Z').toLocaleDateString([], { day: 'numeric', month: 'short' }))
+  })
+})
+
+describe('away', () => {
+  const min = 60_000
+  it('comes back after two minutes out of the window, not after a short break', () => {
+    const a = new Away()
+    a.blur(0)
+    expect(a.focus(30_000)).toBe(false)
+    a.blur(min)
+    expect(a.focus(3 * min)).toBe(true)
+  })
+  it('comes back at the first key after a long pause, once', () => {
+    const a = new Away()
+    expect(a.input(0)).toBe(false)
+    expect(a.input(min)).toBe(false)
+    expect(a.input(4 * min)).toBe(true)
+    expect(a.input(4 * min + 1)).toBe(false)
   })
 })

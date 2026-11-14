@@ -2557,3 +2557,26 @@ func TestAutoCompactBeforeTheNextTurn(t *testing.T) {
 		t.Fatalf("turns = %d, want no compact with auto_compact=0", n)
 	}
 }
+
+// TestARecapStaysWithTheThread: a session's recap shows in its view and
+// a restart keeps it, so the person reads it when they come back.
+func TestARecapStaysWithTheThread(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.Recap("demo", model.Coordinator, "  Cache added;\n tests pass.  "); err != nil {
+		t.Fatal(err)
+	}
+	v := view(t, h, "demo", model.Coordinator)
+	if v.Recap != "Cache added; tests pass." || v.RecapAt.IsZero() {
+		t.Fatalf("recap = %q at %v", v.Recap, v.RecapAt)
+	}
+	h2, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }, MCPPort: 4242})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h2.Close()
+	if v := view(t, h2, "demo", model.Coordinator); v.Recap != "Cache added; tests pass." {
+		t.Fatalf("recap after restart = %q", v.Recap)
+	}
+}

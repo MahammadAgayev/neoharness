@@ -97,7 +97,7 @@ so no thread can act for another thread or another workspace.
 
 | Who | Tools |
 |---|---|
-| all sessions | `whoami`, `workspace_status`, `send_message` (to threads only), `ask_user`, `wake_me`, `write_artifact`, `read_artifact` |
+| all sessions | `whoami`, `workspace_status`, `send_message` (to threads only), `ask_user`, `wake_me`, `write_artifact`, `read_artifact`, `recap` |
 | threads only | `read_thread` |
 | coordinator only | `open_thread`, `resolve_thread`, `notify` |
 | internal | `permission_prompt` |
@@ -115,6 +115,12 @@ the computer sleeps, so the hub also checks the wall clock each minute: a
 wake-up comes at most a minute after the computer wakes. The threads list
 shows `wakes at 16:52` on an idle thread that has one, and never a time that
 has passed.
+
+`recap(text)` keeps where a session's work stands, in one or two short
+sentences, as Claude Code's recap. The session calls it last in a turn in
+which its work moved, so no extra model turn makes it. The hub saves it with
+the thread and sends it in the thread's view; the TUI and the app show it
+when the person comes back (see usage.md).
 
 ## Permissions
 

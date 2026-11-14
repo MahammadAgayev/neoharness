@@ -16,6 +16,7 @@ import {
   type Update,
   type WorkspaceView,
 } from '../shared/model'
+import { Away } from './lib/away'
 import { parseEx } from './lib/ex'
 import { hunks, lines, take } from './lib/linediff'
 import { schemeNames } from './lib/themes'
@@ -147,6 +148,9 @@ export interface State {
   // workspaceCursor is the row of the workspaces screen.
   workspaceCursor: number
   pending: string
+  // recapOn says the person came back after a while and has not sent a
+  // message since: a chat shows its recap above the prompt.
+  recapOn: boolean
 }
 
 let ids = 1
@@ -201,6 +205,7 @@ class Store {
     folds: {},
     workspaceCursor: 0,
     pending: '',
+    recapOn: false,
   }
   private listeners = new Set<() => void>()
   // writeDoc is a new doc whose editor opens ready to write.
@@ -260,6 +265,11 @@ class Store {
     nh().onOpenTarget((t) => void this.goThread(t.workspace, t.thread))
     nh().ready()
     setInterval(() => this.prune(), 1000)
+    const away = new Away()
+    const back = (yes: boolean) => yes && !this.state.recapOn && this.set({ recapOn: true })
+    window.addEventListener('blur', () => away.blur(Date.now()))
+    window.addEventListener('focus', () => back(away.focus(Date.now())))
+    for (const e of ['keydown', 'mousedown']) window.addEventListener(e, () => back(away.input(Date.now())), true)
   }
 
   private async reload(): Promise<void> {
@@ -952,6 +962,7 @@ class Store {
     if (ok === undefined) return false
     const w = this.cur()
     if (w) this.updateWin(w.id, { follow: true, cursor: -1 })
+    if (this.state.recapOn) this.set({ recapOn: false })
     return true
   }
 

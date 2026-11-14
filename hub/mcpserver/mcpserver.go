@@ -100,6 +100,10 @@ type artifactNameIn struct {
 	Name string `json:"name" jsonschema:"the artifact to read"`
 }
 
+type recapIn struct {
+	Text string `json:"text" jsonschema:"one or two short sentences: what your work came to and what is next or needs the person"`
+}
+
 type resolveIn struct {
 	Name string `json:"name" jsonschema:"thread to close"`
 }
@@ -179,6 +183,14 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 				return nil, nil, err
 			}
 			return text("Question posted. End your turn now; the answer arrives as your next message."), nil, nil
+		})
+
+	mcp.AddTool(s, &mcp.Tool{Name: "recap", Description: "Say where your work stands, so the person gets back on track when they come back. It shows above your prompt; it replaces your last one. Call it last in a turn in which your work moved. Plain words, short: outcomes, not steps."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in recapIn) (*mcp.CallToolResult, any, error) {
+			if err := h.Recap(p, me, in.Text); err != nil {
+				return nil, nil, err
+			}
+			return text("Recap kept."), nil, nil
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "permission_prompt", Description: "Used by Claude Code to ask the person for permission. Do not call it yourself."},

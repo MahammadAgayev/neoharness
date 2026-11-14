@@ -185,6 +185,10 @@ type Permission struct {
 	Scope string `json:"scope,omitempty"`
 }
 
+// RecapAway is how long the person must be away before the recap shows
+// when they come back. A shorter break leaves the work fresh in mind.
+const RecapAway = 2 * time.Minute
+
 // ThreadView is a thread as the API shows it.
 type ThreadView struct {
 	Workspace string   `json:"workspace"`
@@ -201,6 +205,11 @@ type ThreadView struct {
 	// Reply is the start of the last turn's reply; empty while a turn runs,
 	// as it is older news then.
 	Reply string `json:"reply,omitempty"`
+	// Recap is where the session's work stands, in its own words, and
+	// RecapAt when it wrote it. It shows above the prompt when the person
+	// comes back after RecapAway.
+	Recap   string    `json:"recap,omitempty"`
+	RecapAt time.Time `json:"recapAt,omitzero"`
 	// Quiet says the coordinator decides what of this thread reaches the
 	// person: only its questions and permission requests notify them.
 	Quiet bool `json:"quiet,omitempty"`

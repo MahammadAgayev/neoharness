@@ -167,6 +167,13 @@ type App struct {
 	mouseDown              bool
 	lastClick              time.Time
 	lastClickX, lastClickY int
+	// now is the clock, for tests. lastKey is the last key and blurAt when
+	// the terminal lost focus: how long the person was away. recapOn says
+	// they came back and have not sent a message since.
+	now     func() time.Time
+	lastKey time.Time
+	blurAt  time.Time
+	recapOn bool
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key
@@ -256,6 +263,8 @@ func Run(c Client, hub Hub) error {
 	// Clicks and the wheel, no drags: the terminal still selects text with
 	// Shift (or Option) held.
 	s.EnableMouse(tcell.MouseButtonEvents)
+	// Focus tells when the person comes back, for the recap.
+	s.EnableFocus()
 	a := newApp(s, c)
 	a.hub = hub
 	a.loadConfig(filepath.Join(filepath.Dir(hubapi.SocketPath()), "init.lua"))
@@ -277,6 +286,7 @@ func newApp(s tcell.Screen, c Client) *App {
 		comps:    map[string]model.Completions{},
 		compBusy: map[string]bool{},
 		menuShut: -1,
+		now:      time.Now,
 	}
 	a.workspacesBuf = newBuffer("neoharness://workspaces", KindWorkspaces)
 	a.messagesBuf = newBuffer("neoharness://messages", KindMessages)
@@ -317,6 +327,8 @@ func (a *App) handle(ev tcell.Event) {
 			a.toWindow(a.cur)
 			a.settle(a.cur)
 		}
+	case *tcell.EventFocus:
+		a.focus(ev.Focused)
 	case *tcell.EventResize:
 		a.s.Sync()
 	case evUpdate:
@@ -1328,4 +1340,28 @@ func pad(s string, n int) string {
 		return s + strings.Repeat(" ", n-w)
 	}
 	return s
+}
+
+// keyAfterAway shows the recap at the first key after a long pause, for a
+// terminal that sends no focus events: tmux may report focus once and
+// never again.
+func (a *App) keyAfterAway() {
+	now := a.now()
+	if !a.lastKey.IsZero() && now.Sub(a.lastKey) >= model.RecapAway {
+		a.recapOn = true
+	}
+	a.lastKey = now
+}
+
+// focus is the terminal gaining or losing focus.
+func (a *App) focus(in bool) {
+	if !in {
+		a.blurAt = a.now()
+		return
+	}
+	if !a.blurAt.IsZero() && a.now().Sub(a.blurAt) >= model.RecapAway {
+		a.recapOn = true
+	}
+	// The person is here now; their next key is not a second return.
+	a.blurAt, a.lastKey = time.Time{}, a.now()
 }

@@ -125,6 +125,9 @@ type Thread struct {
 	// turn failed, for the coordinator's board and the threads pane.
 	Reply  string `json:"reply,omitempty"`
 	Failed string `json:"failed,omitempty"`
+	// Recap is where the work stands, as the session last wrote it.
+	Recap   string    `json:"recap,omitempty"`
+	RecapAt time.Time `json:"recapAt,omitzero"`
 
 	Since     time.Time `json:"since"`
 	CreatedAt time.Time `json:"createdAt"`

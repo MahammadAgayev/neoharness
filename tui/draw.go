@@ -121,7 +121,8 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		promptLines, promptCur, promptFirst = a.promptLines(w, focused)
 		promptTop = status - len(promptLines)
 	}
-	textBottom := promptTop
+	recap := a.recapLines(w)
+	textBottom := promptTop - len(recap)
 	if b.Prompt != nil {
 		textBottom-- // a blank line between transcript and prompt
 	}
@@ -246,6 +247,9 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		a.drawRail(w, lines, top, h)
 	}
 
+	for i, l := range recap {
+		a.drawLine(r.X, promptTop-len(recap)+i, right, l)
+	}
 	if b.Prompt != nil {
 		for i, l := range promptLines {
 			if i == promptCur {
@@ -275,6 +279,22 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		a.drawMenu(w, top, promptTop)
 	}
 	a.drawStatus(w, status, focused)
+}
+
+// recapLines are a chat's recap, dim above its prompt, once the person came
+// back; at most two rows, so the transcript keeps its room.
+func (a *App) recapLines(w *Window) []Line {
+	v, ok := a.threads[w.Buf.Thread]
+	if !a.recapOn || w.Buf.Prompt == nil || !ok || v.State != model.StateIdle || v.Recap == "" {
+		return nil
+	}
+	th := a.th
+	l := wrap([]Span{{v.Recap, th.Muted}}, a.textWidth(w), []Span{{" ※ ", th.Muted}}, []Span{{"   ", th.Text}})
+	if len(l) > 2 {
+		l = l[:2]
+		l[1].Spans = append(clone(l[1].Spans), Span{"…", th.Muted})
+	}
+	return l
 }
 
 // railWidth is the left gutter of an artifact window, where the outline rail

@@ -1476,6 +1476,20 @@ func (h *Hub) AskUser(workspaceName, name, question string) error {
 	return nil
 }
 
+// Recap keeps where a session's work stands, for the person to read above
+// its prompt when they come back.
+func (h *Hub) Recap(workspaceName, name, text string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	th.t.Recap, th.t.RecapAt = oneLine(text, replyLimit), time.Now().UTC()
+	h.changed(ws, th)
+	return nil
+}
+
 // reportDelay is how long the coordinator waits after a thread's turn ends
 // before it hears of it, so the threads that end close together make one
 // coordinator turn.
@@ -2195,6 +2209,8 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		Queued:        len(t.Queue),
 		Pending:       unshown(t.Queue),
 		Reply:         t.Reply,
+		Recap:         t.Recap,
+		RecapAt:       t.RecapAt,
 		WakeAt:        t.WakeAt,
 		Model:         t.Model,
 		Context:       t.Context,
