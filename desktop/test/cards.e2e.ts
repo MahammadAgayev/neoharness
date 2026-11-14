@@ -521,7 +521,7 @@ test('without Vim a window closes with ⌘W from its prompt, or with the × on i
   await page.keyboard.press('Enter')
 })
 
-test('in a narrow column the prompt keeps its width and one line, the model and cost under it', async () => {
+test('in a narrow column the prompt keeps its width and one line, with no sideways scroll, the model and cost under it', async () => {
   await normal()
   await page.keyboard.press('Space')
   await page.keyboard.press('c')
@@ -544,6 +544,9 @@ test('in a narrow column the prompt keeps its width and one line, the model and 
     const box = await p.boundingBox()
     expect(editor!.width).toBeGreaterThan(box!.width * 0.6)
     expect(box!.height).toBeLessThan(60)
+    // The cut placeholder must not make the prompt scroll sideways.
+    const scroll = await p.locator('.cm-scroller').evaluate((el) => el.scrollWidth - el.clientWidth)
+    expect(scroll).toBeLessThanOrEqual(0)
   }
   await shot('41-narrow-prompt')
   await page.keyboard.press('Meta+w')

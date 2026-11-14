@@ -77,8 +77,11 @@ function source(thread: string) {
 const theme = EditorView.theme({
   '&': { background: 'transparent', color: 'var(--text)', fontSize: 'inherit' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-content': { fontFamily: 'var(--font-text)', caretColor: 'var(--iris)', padding: '0' },
+  '.cm-content': { fontFamily: 'var(--font-text)', caretColor: 'var(--iris)', padding: '0', minWidth: '0', width: '100%' },
   '.cm-line': { padding: '0' },
+  // Lines wrap, so nothing needs a sideways scroll; without this, the cut
+  // placeholder still widens the content and a scroll bar shows.
+  '.cm-scroller': { overflowX: 'hidden' },
   '.cm-cursor': { borderLeftColor: 'var(--iris)', borderLeftWidth: '2px' },
   '.cm-fat-cursor': { background: 'var(--iris) !important', color: 'var(--base) !important' },
   // Only the editor with focus shows a cursor: one place to type.
