@@ -121,9 +121,13 @@ type Buffer struct {
 	// asking hides the last question block: the card above the prompt
 	// shows it until the answer.
 	asking bool
-	lines  []Line
-	linesW  int
-	dirty   bool
+	// todos is the thread's todo list, shown after the queue while it has
+	// open items; todoOpen unfolds it.
+	todos    []model.Todo
+	todoOpen bool
+	lines    []Line
+	linesW   int
+	dirty    bool
 }
 
 func newBuffer(name string, kind BufKind) *Buffer {
@@ -241,8 +245,55 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 			out = append(out, l)
 		}
 	}
+	out = append(out, b.todoLines(w, th)...)
 	b.lines, b.linesW, b.dirty = out, w, false
 	return out
+}
+
+// todoLines are the chat's todo list above the prompt: one line, folded,
+// with the count and the item in hand; unfolded, every item. A list with
+// nothing left to do does not show.
+func (b *Buffer) todoLines(w int, th *Theme) []Line {
+	if !b.hasTodo() {
+		return nil
+	}
+	done, cur := 0, ""
+	for _, t := range b.todos {
+		switch {
+		case t.State == model.TodoDone:
+			done++
+		case cur == "" || t.State == model.TodoActive:
+			cur = t.Text
+		}
+	}
+	in := []Span{{"  ", th.Text}}
+	fold, head := "▸ ", []Span{{fmt.Sprintf("%d of %d", done, len(b.todos)), th.Muted}}
+	if b.todoOpen {
+		fold = "▾ "
+	} else {
+		head = append(head, Span{" · ", th.Muted}, Span{cur, th.Text})
+	}
+	rows := append([]Line{{}}, wrap(append([]Span{{fold, th.Muted}}, head...), w, in, append(clone(in), Span{"  ", th.Text}))...)
+	if b.todoOpen {
+		for _, t := range b.todos {
+			mark, ms, ts := "○ ", th.Subtle, th.Subtle
+			switch t.State {
+			case model.TodoDone:
+				mark, ms, ts = "✓ ", th.Muted, th.Muted.StrikeThrough(true)
+			case model.TodoActive:
+				mark, ms, ts = "● ", th.Foam, th.Text
+			}
+			pre := append(clone(in), Span{"  ", th.Text})
+			rows = append(rows, wrap([]Span{{mark, ms}, {t.Text, ts}}, w, pre, append(clone(pre), Span{"  ", th.Text}))...)
+		}
+	}
+	for i := range rows {
+		rows[i].Block = len(b.blocks)
+		if i > 0 {
+			rows[i].Item = todoRow
+		}
+	}
+	return rows
 }
 
 // lastMessage is the block of the last message to the thread, from anyone;
@@ -262,6 +313,29 @@ func (b *Buffer) SetPending(evs []model.Event) {
 		b.pending = evs
 		b.dirty = true
 	}
+}
+
+func (b *Buffer) hasTodo() bool {
+	return slices.ContainsFunc(b.todos, func(t model.Todo) bool { return t.State != model.TodoDone })
+}
+
+// SetTodos shows the thread's todo list above the prompt.
+func (b *Buffer) SetTodos(todos []model.Todo) {
+	if !slices.Equal(b.todos, todos) {
+		b.todos = todos
+		b.dirty = true
+	}
+}
+
+// ToggleTodo opens or closes the todo list above the prompt; false when
+// there is none.
+func (b *Buffer) ToggleTodo() bool {
+	if !b.hasTodo() {
+		return false
+	}
+	b.todoOpen = !b.todoOpen
+	b.dirty = true
+	return true
 }
 
 // SetWorking tells a chat whether its thread has a turn running.

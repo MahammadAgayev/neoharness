@@ -82,6 +82,12 @@ yourself:
   `×` closes the card, and so does a message to the session; it comes back
   only with a newer recap. A running turn hides it. `:recap` shows the
   card of the chat in the window again, even after you closed it.
+- While the thread's todo list has open items, one line above the prompt
+  shows it: `▸ 3 of 7 · ` and the item in hand. `za` or `<CR>` on the line,
+  or `<leader>T`, unfolds it into every item: done ones checked and struck
+  through, the one in hand `●`, the next ones `○`. It goes away when every
+  item is done. A done task in a reply or an artifact (`- [x]`) is struck
+  through too.
 - `u` with an empty prompt is Esc in Claude Code: your last message comes
   back to the prompt to edit, while the agent has not answered it yet. A
   queued one leaves the queue; a running turn stops, and the message
@@ -190,8 +196,8 @@ to select text with the terminal.
 `:messages`, `:help`, `:q`, `:qa`, `:q!`, `:qa!`.
 
 `:todo` shows the todo list of the thread in the window: what it plans to do,
-what it does now and what is done. It follows the work as the thread changes
-the list, and `<C-o>` goes back. `:todo <name>` shows another thread's. The
+what it does now and what is done, struck through. It follows the work as
+the thread changes the list, and `<C-o>` goes back. `:todo <name>` shows another thread's. The
 list belongs to the conversation, so `/clear` empties it. A thread whose
 agent keeps no todo list shows none.
 

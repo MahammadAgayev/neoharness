@@ -17,6 +17,7 @@ export type WinAction =
   | 'prevMsg'
   | 'enter'
   | 'fold'
+  | 'todo'
   | 'yank'
   | 'insert'
   | 'append'

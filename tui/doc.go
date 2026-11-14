@@ -180,7 +180,11 @@ func (r *mdRenderer) body(s string, first, rest []Span, numW int) []Line {
 		if box.Text != "" {
 			lead = box
 		}
-		return r.wrapped(r.inlineOf(content, r.th.Text),
+		spans := r.inlineOf(content, r.th.Text)
+		if box.Text == "☑ " {
+			strike(spans, r.th)
+		}
+		return r.wrapped(spans,
 			append(clone(first), indent, lead),
 			append(clone(rest), indent, Span{strings.Repeat(" ", width(lead.Text)), r.th.Text}))
 	}

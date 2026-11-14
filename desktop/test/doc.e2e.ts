@@ -60,6 +60,8 @@ test('an artifact edits as a rendered page: tables, tasks, code and Vim motions,
   await expect(doc.locator('table td', { hasText: 'build' })).toBeVisible()
   await expect(doc.locator('li.task')).toHaveCount(2)
   await expect(doc.locator('li.task.done')).toHaveCount(1)
+  await expect(doc.locator('li.task.done .task-body')).toHaveCSS('text-decoration-line', 'line-through')
+  await expect(doc.locator('li.task:not(.done) .task-body')).toHaveCSS('text-decoration-line', 'none')
   await expect(doc.locator('pre.code .hljs-keyword', { hasText: 'func' })).toBeVisible()
   await expect(doc.locator('blockquote.alert.alert-note')).toBeVisible()
   // [!NOTE] shows as the alert's title, not as the text it is.
@@ -133,4 +135,11 @@ test('the page cursor is a block in Normal and Visual mode and a line in Insert,
   await page.keyboard.press('u')
   await normal()
   await page.keyboard.press('Control+o')
+})
+
+test('a done task in a reply is struck through, an open one is not', async () => {
+  hub.event('demo', 'api', { kind: 'text', text: 'Where it stands:\n\n- [x] ship the fix\n- [ ] write the docs\n' })
+  const done = page.locator('.md li', { hasText: 'ship the fix' })
+  await expect(done).toHaveCSS('text-decoration-line', 'line-through')
+  await expect(page.locator('.md li', { hasText: 'write the docs' })).toHaveCSS('text-decoration-line', 'none')
 })

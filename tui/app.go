@@ -691,6 +691,7 @@ func (a *App) onView(v model.ThreadView) {
 		a.order = append(a.order, v.Name)
 	}
 	a.chat(v.Name).SetPending(v.Pending)
+	a.chat(v.Name).SetTodos(v.Todos)
 	a.chat(v.Name).SetWorking(v.State == model.StateRunning)
 	a.chat(v.Name).SetAsking(v.QuestionID != "")
 	// A turn makes the recap old news; its next one waits for the next return.
@@ -1211,6 +1212,9 @@ const resolvedRow = "\x00resolved"
 // queuedRow starts the Item of a queued message's rows, then when it was
 // queued: <CR> on one sends the queue now, x or dd takes it back.
 const queuedRow = "\x00queued"
+
+// todoRow is the Item of the rows of the todo list above the prompt.
+const todoRow = "\x00todo"
 
 func (a *App) renderThreads() {
 	if a.threadsBuf == nil {

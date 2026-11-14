@@ -70,6 +70,7 @@ map({ "n", "x" }, "<leader>Y", "<Plug>(neoharness-yank)")
 -- Write to the thread; open or close a turn's tool calls.
 map("n", "<leader>r", "i")
 map("n", "<leader>e", "za")
+map("n", "<leader>T", "<Plug>(neoharness-todo)") -- the todo list above the prompt
 
 -- Windows.
 map("n", "<Tab>", "<C-w>w")

@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
-import { Coordinator, User, type Event, type ThreadView } from '../../shared/model'
+import { Coordinator, User, type Event, type ThreadView, type Todo } from '../../shared/model'
 import { blockText, shortTool, shortTools, type Block } from '../lib/transcript'
 import { wakeLabel } from '../lib/wake'
 import { elapsed, stateGlyph, stateTone } from '../search'
@@ -10,6 +10,7 @@ import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
 import { CloseWindow } from './CloseWindow'
+import { todoMarks } from './Panels'
 
 const shellLines = 10
 
@@ -286,6 +287,34 @@ const BlockView = memo(function BlockView(props: {
   }
 })
 
+// TodoLine is the thread's todo list above the prompt: folded, the count
+// and the item in hand; unfolded, every item.
+function TodoLine(props: { todos: Todo[]; open: boolean; selected: boolean; onClick: () => void }) {
+  const done = props.todos.filter((t) => t.state === 'done').length
+  const cur = props.todos.find((t) => t.state === 'active') ?? props.todos.find((t) => t.state === 'pending')
+  return (
+    <div className={`row todo-line ${props.selected ? 'cursor' : ''}`}>
+      <div className="todo-head" onClick={props.onClick} data-tip={props.open ? 'Fold the todo list' : 'Show the todo list'} data-keys="za">
+        <span className="todo-fold">{props.open ? '▾' : '▸'}</span>
+        {done} of {props.todos.length}
+        {!props.open && cur && (
+          <>
+            {' · '}
+            <span className="t-text">{cur.text}</span>
+          </>
+        )}
+      </div>
+      {props.open &&
+        props.todos.map((t) => (
+          <div key={t.id} className={`todo-item ${t.state}`}>
+            <span className="glyph">{todoMarks[t.state]}</span>
+            <span className="todo-text">{t.text}</span>
+          </div>
+        ))}
+    </div>
+  )
+}
+
 function Queued(props: { e: Event; selected: boolean; onClick: () => void }) {
   return (
     <div className={`row b-queued ${props.selected ? 'cursor' : ''}`} onClick={props.onClick} data-tip="Send it now: the running turn stops" data-keys="<CR>">
@@ -309,13 +338,16 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   // A peek's artifacts are of its workspace: they open from their blocks.
   const artifacts = useMemo(() => new Set(peek ? [] : artifactList.map((a) => a.name)), [artifactList, peek])
   const pending = v?.pending ?? []
+  const todos = v?.todos ?? []
+  const todoAt = todos.some((t) => t.state !== 'done') ? blocks.length + pending.length : -1
+  const todoOpen = useStore((s) => !!s.todoOpen[thread])
   const working = v?.state === 'running' && !blocks.some((b) => 'live' in b && b.live)
   const scroller = useRef<HTMLDivElement>(null)
   const [search, setSearch] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   // vstart is where v started: the blocks from it to the cursor are selected.
   const [vstart, setVstart] = useState<number | null>(null)
-  const total = blocks.length + pending.length
+  const total = blocks.length + pending.length + (todoAt < 0 ? 0 : 1)
   const cursor = win.cursor
 
   // The newest pending permission's card gets the buttons.
@@ -435,6 +467,10 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
       }
       case 'enter': {
         if (cursor < 0) return false
+        if (cursor === todoAt) {
+          store.toggleTodo(thread)
+          return true
+        }
         if (cursor >= blocks.length) {
           void store.sendQueuedNow(thread)
           return true
@@ -449,7 +485,15 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
         }
         return true
       }
+      case 'todo':
+        if (todoAt < 0) store.say('no open todo list here · :todo shows the whole list', 'muted')
+        else store.toggleTodo(thread)
+        return true
       case 'fold': {
+        if (cursor >= 0 && cursor === todoAt) {
+          store.toggleTodo(thread)
+          return true
+        }
         const b = blocks[cursor]
         if (b && (b.kind === 'tools' || b.kind === 'shell')) store.toggleFold(b.key)
         return true
@@ -634,6 +678,11 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
               <Queued e={e} selected={focused && cursor === blocks.length + i} onClick={() => void store.sendQueuedNow(thread)} />
             </div>
           ))}
+          {todoAt >= 0 && (
+            <div data-i={todoAt}>
+              <TodoLine todos={todos} open={todoOpen} selected={focused && cursor === todoAt} onClick={() => store.toggleTodo(thread)} />
+            </div>
+          )}
         </div>
       </div>
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>

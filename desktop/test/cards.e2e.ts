@@ -898,10 +898,47 @@ test(':todo shows the thread\'s todo list, follows it, and <C-o> goes back', asy
   )
   await expect(page.locator('.todo .todo-row')).toHaveText(['✓Add the /healthz route', '●Write its test', '○Document it'])
   await expect(page.locator('.todo .todo-row.done')).toHaveCount(1)
+  await expect(page.locator('.todo .todo-row.done .todo-text')).toHaveCSS('text-decoration-line', 'line-through')
   await expect(page.locator('.todo .todo-count')).toHaveText('1 of 3 done')
   await shot('34-todo')
   await page.keyboard.press('Control+o')
   await expect(name).toHaveText('api')
+  hub.setView(view('demo', 'api'))
+})
+
+test('the todo list shows in one line above the prompt and unfolds, as in the TUI', async () => {
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  const name = page.locator('.statusline.focused .sl-name')
+  await page.keyboard.type(':')
+  await page.keyboard.type('b api')
+  await page.keyboard.press('Enter')
+  await expect(name).toHaveText('api')
+  const todos = [
+    { id: '1', text: 'Add the /healthz route', state: 'done' as const },
+    { id: '2', text: 'Write its test', state: 'active' as const },
+    { id: '3', text: 'Document it', state: 'pending' as const },
+  ]
+  hub.setView(view('demo', 'api', { todos }))
+  const line = page.locator('.window', { has: page.locator('.statusline.focused') }).locator('.todo-line')
+  await expect(line.locator('.todo-head')).toHaveText('▸1 of 3 · Write its test')
+  await expect(line.locator('.todo-item')).toHaveCount(0)
+  await page.keyboard.press('Space')
+  await page.keyboard.press('T')
+  await expect(line.locator('.todo-head')).toHaveText('▾1 of 3')
+  await expect(line.locator('.todo-item')).toHaveText(['✓Add the /healthz route', '●Write its test', '○Document it'])
+  await expect(line.locator('.todo-item.done .todo-text')).toHaveCSS('text-decoration-line', 'line-through')
+  await shot('43-todo-line')
+  // za on the line folds it, as on a fold of tool calls; a click opens it.
+  await page.keyboard.press('k')
+  await page.keyboard.press('z')
+  await page.keyboard.press('a')
+  await expect(line.locator('.todo-item')).toHaveCount(0)
+  await line.locator('.todo-head').click()
+  await expect(line.locator('.todo-item')).toHaveCount(3)
+  hub.setView(view('demo', 'api', { todos: todos.map((t) => ({ ...t, state: 'done' as const })) }))
+  await expect(line).toHaveCount(0)
   hub.setView(view('demo', 'api'))
 })
 

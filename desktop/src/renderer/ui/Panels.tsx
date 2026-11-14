@@ -57,7 +57,8 @@ const sections: { title: string; rows: [string, string][] }[] = [
       [']m [m', 'next / previous message, or heading in an artifact'],
       ['gO', 'outline: a message in a chat, a heading in an artifact'],
       ['/ n N', 'search the chat, next, back'],
-      ['za  <leader>e', "open or close a turn's tool calls"],
+      ['za  <leader>e', "open or close a turn's tool calls, or the todo list above the prompt"],
+      ['<leader>T', 'open or close the todo list above the prompt: what is done, what is in hand, what is next'],
       ['y  <leader>y', 'yank the block, or the selection, to the clipboard'],
       ['v V  then j k  y', 'select blocks, then yank them; <Esc> ends it'],
       ['x', 'stop the running turn'],
@@ -235,7 +236,7 @@ export function MessagesWindow(props: { win: Win; focused: boolean }) {
   )
 }
 
-const todoMarks = { done: '✓', active: '●', pending: '○' }
+export const todoMarks = { done: '✓', active: '●', pending: '○' }
 
 export function TodoWindow(props: { win: Win; focused: boolean; thread: string }) {
   const todos = useStore((s) => s.threads[props.thread]?.todos) ?? []
@@ -253,7 +254,7 @@ export function TodoWindow(props: { win: Win; focused: boolean; thread: string }
         {todos.map((t) => (
           <div key={t.id} className={`todo-row ${t.state}`}>
             <span className="glyph">{todoMarks[t.state]}</span>
-            {t.text}
+            <span className="todo-text">{t.text}</span>
           </div>
         ))}
         {todos.length > 0 && (

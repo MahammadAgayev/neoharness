@@ -455,6 +455,52 @@ kbd {
 .b-queued:hover {
   background: var(--hl-low);
 }
+/* The todo list above the prompt: one quiet line until you open it. */
+.todo-line {
+  color: var(--muted);
+  font-size: var(--fs-secondary);
+}
+.todo-head {
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+  cursor: pointer;
+  min-width: 0;
+}
+.todo-head .t-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.todo-fold {
+  width: 14px;
+  text-align: center;
+}
+.todo-item {
+  display: flex;
+  gap: 6px;
+  padding-left: 18px;
+  color: var(--subtle);
+}
+.todo-item .glyph,
+.todo-row .glyph {
+  font-size: inherit;
+  line-height: inherit;
+}
+.todo-item.active {
+  color: var(--text);
+}
+.todo-item.active .glyph,
+.todo-row.active .glyph {
+  color: var(--foam);
+}
+.todo-item.done {
+  color: var(--muted);
+}
+.todo-item.done .todo-text,
+.todo-row.done .todo-text {
+  text-decoration: line-through;
+}
 .b-line {
   display: flex;
   gap: 8px;
@@ -936,6 +982,12 @@ kbd {
 .md input[type='checkbox'] {
   accent-color: var(--pine);
 }
+/* A done task reads as done at a glance. */
+.md li:has(> input[type='checkbox']:checked),
+.md li:has(> p > input[type='checkbox']:checked) {
+  color: var(--muted);
+  text-decoration: line-through;
+}
 
 /* syntax, from the scheme */
 .hljs-keyword, .hljs-selector-tag, .hljs-built_in { color: var(--pine); }
@@ -991,9 +1043,6 @@ kbd {
 }
 .todo-row.done {
   color: var(--muted);
-}
-.todo-row.active .glyph {
-  color: var(--gold);
 }
 .todo-count {
   padding: 12px 10px 4px;
@@ -1142,7 +1191,8 @@ kbd {
   font-weight: 600;
 }
 .doc-page li.task.done > .task-body {
-  color: var(--subtle);
+  color: var(--muted);
+  text-decoration: line-through;
 }
 .doc-page pre.code {
   padding: 14px 16px;

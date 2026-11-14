@@ -52,15 +52,15 @@ func (a *App) todoLines(todos []model.Todo) []Line {
 	done := 0
 	var out []Line
 	for _, t := range todos {
-		mark, style := "○ ", th.Text
+		mark, ms, ts := "○ ", th.Text, th.Text
 		switch t.State {
 		case model.TodoDone:
-			mark, style = "✓ ", th.Muted
+			mark, ms, ts = "✓ ", th.Muted, th.Muted.StrikeThrough(true)
 			done++
 		case model.TodoActive:
-			mark, style = "● ", th.Gold
+			mark, ms = "● ", th.Foam
 		}
-		out = append(out, Line{Prefix: in, Spans: []Span{{mark, style}, {t.Text, style}}})
+		out = append(out, Line{Prefix: in, Spans: []Span{{mark, ms}, {t.Text, ts}}})
 	}
 	return append(out, Line{}, Line{Prefix: in, Spans: []Span{{fmt.Sprintf("%d of %d done", done, len(todos)), th.Subtle}}})
 }

@@ -146,6 +146,8 @@ export interface State {
   hints: Hint[] | null
   showResolved: boolean
   folds: Record<number, boolean>
+  // todoOpen holds the threads whose todo list above the prompt is unfolded.
+  todoOpen: Record<string, boolean>
   // workspaceCursor is the row of the workspaces screen.
   workspaceCursor: number
   pending: string
@@ -204,6 +206,7 @@ class Store {
     hints: null,
     showResolved: false,
     folds: {},
+    todoOpen: {},
     workspaceCursor: 0,
     pending: '',
     recapOpen: {},
@@ -1099,6 +1102,10 @@ class Store {
 
   toggleFold(key: number): void {
     this.set({ folds: { ...this.state.folds, [key]: !this.state.folds[key] } })
+  }
+
+  toggleTodo(thread: string): void {
+    this.set({ todoOpen: { ...this.state.todoOpen, [thread]: !this.state.todoOpen[thread] } })
   }
 
   // --- artifacts ---

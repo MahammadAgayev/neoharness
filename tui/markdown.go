@@ -415,7 +415,19 @@ func (r *mdRenderer) inline(n ast.Node, base tcell.Style) []Span {
 		}
 	}
 	walk(n, base)
+	if box, ok := n.FirstChild().(*east.TaskCheckBox); ok && box.IsChecked {
+		strike(out[1:], r.th)
+	}
 	return out
+}
+
+// strike shows the text of a done task struck through and muted, so what
+// is done reads as done at a glance.
+func strike(spans []Span, th *Theme) {
+	fg, _, _ := th.Muted.Decompose()
+	for i := range spans {
+		spans[i].Style = spans[i].Style.StrikeThrough(true).Foreground(fg)
+	}
 }
 
 // lineBreak is an HTML line break: <br>, <br/>, <br />.

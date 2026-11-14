@@ -58,6 +58,11 @@ back after 2 minutes or more out of the window, or with no key or click
 for that long. `Esc`, `q` or `×` closes it until a newer recap, and so
 does a message to the session. `:recap` shows it again.
 
+The todo list shows above the prompt as in the TUI: one line,
+`▸ 3 of 7 · ` and the item in hand, while it has open items. `za` or
+`<CR>` on it, a click, or `<leader>T` unfolds it; done items are struck
+through, there, in `:todo`, and as tasks in replies and artifacts.
+
 The threads list groups threads by state with a count, as in the TUI. A
 row shows the thread's name and, on the right, how long it has run or
 waited, or when it last changed (`5m`, `6d`, then the date). Under the
@@ -112,7 +117,7 @@ heading, `- ` or `1. ` a list, `> ` a quote, ` ``` ` code, `[ ] ` a task.
 `**bold**`, `*italic*`, `` `code` `` and `~~struck~~` turn rich as you
 close them. `<Tab>` and `<S-Tab>` indent a list item; in a table `<Tab>`
 goes to the next cell and adds a row at the end. A click on a task box
-checks it. A link pasted over selected words links them. `:w` or `⌘S`
+checks it and strikes its text through. A link pasted over selected words links them. `:w` or `⌘S`
 saves; `⌘`-click opens a link, or an artifact named in code.
 
 What is saved is markdown, as agents write and read it. A block you did

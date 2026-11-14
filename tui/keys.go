@@ -307,6 +307,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<Plug>(neoharness-yank)":          func(int) { a.yank() },
 		"<Plug>(neoharness-dismiss)":       func(int) { a.toasts = nil },
 		"<Plug>(neoharness-coordinator)":   func(int) { a.goCoordinator() },
+		"<Plug>(neoharness-todo)":          func(int) { a.toggleTodo() },
 	}
 	for _, f := range []string{"f", "F", "t", "T"} {
 		binds[f] = func(n int) { a.finding, a.findN = f, n }
@@ -880,7 +881,19 @@ func (a *App) openArtifactAt() {
 	a.notify("no artifact name under the cursor", a.th.Muted)
 }
 
+// toggleTodo opens or closes the todo list above the prompt of the chat in
+// the window.
+func (a *App) toggleTodo() {
+	if !a.cur.Buf.ToggleTodo() {
+		a.notify("no open todo list here · :todo shows the whole list", a.th.Muted)
+	}
+}
+
 func (a *App) toggleFold(w *Window) {
+	if a.line(w).Item == todoRow {
+		w.Buf.ToggleTodo()
+		return
+	}
 	if !w.Buf.Toggle(a.line(w).Block) {
 		a.notify("no fold here", a.th.Muted)
 	}
@@ -1044,6 +1057,10 @@ func (a *App) enter() {
 			a.showThread(l.Item)
 		}
 	default:
+		if l.Item == todoRow {
+			a.cur.Buf.ToggleTodo()
+			return
+		}
 		if strings.HasPrefix(l.Item, queuedRow) {
 			if err := a.c.SendNow(a.cur.Buf.Workspace, a.cur.Buf.Thread, ""); err != nil {
 				a.notify(err.Error(), a.th.Love)
