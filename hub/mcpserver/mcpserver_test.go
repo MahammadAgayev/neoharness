@@ -208,6 +208,21 @@ func TestPermissionReplyDeny(t *testing.T) {
 	}
 }
 
+// TestOnlyThreadsReadThreads: the coordinator decides from the board, and
+// asks a thread when that is not enough, so it cannot retell a transcript.
+func TestOnlyThreadsReadThreads(t *testing.T) {
+	h, srv := setup(t)
+	if slices.Contains(toolNames(t, connect(t, srv, token(t, model.Coordinator))), "read_thread") {
+		t.Fatal("the coordinator has read_thread")
+	}
+	if err := h.OpenThread("demo", model.User, "api", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(toolNames(t, connect(t, srv, token(t, "api"))), "read_thread") {
+		t.Fatal("a thread has no read_thread")
+	}
+}
+
 func TestReadThreadNeedsATail(t *testing.T) {
 	h, srv := setup(t)
 	if err := h.OpenThread("demo", model.User, "api", "", ""); err != nil {

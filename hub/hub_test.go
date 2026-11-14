@@ -687,12 +687,16 @@ func TestCompletionsCommandsFilesAndThreads(t *testing.T) {
 
 func TestComposeNotesThreadMentions(t *testing.T) {
 	threads := map[string]*thread{"api": {}, model.Coordinator: {}}
-	got := compose([]workspace.Message{{From: model.User, Text: "compare @api and @coordinator, not @api.go, @nope or a@api"}}, threads)
+	got := compose([]workspace.Message{{From: model.User, Text: "compare @api and @coordinator, not @api.go, @nope or a@api"}}, threads, false)
 	if strings.Count(got, "read_thread") != 2 || !strings.Contains(got, "@api is the thread api") || !strings.Contains(got, "@coordinator is the thread") {
 		t.Fatalf("prompt = %q", got)
 	}
 	if strings.Contains(got, "nope is the thread") {
 		t.Fatal("an unknown name got a note")
+	}
+	// The coordinator has no read_thread: it asks the thread.
+	if got := compose([]workspace.Message{{From: model.User, Text: "what did @api find?"}}, threads, true); strings.Contains(got, "read_thread") || !strings.Contains(got, "send_message") {
+		t.Fatalf("coordinator prompt = %q", got)
 	}
 }
 

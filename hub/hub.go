@@ -1992,7 +1992,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 	}
 	h.changed(ws, th)
 
-	prompt := compose(batch, ws.threads)
+	prompt := compose(batch, ws.threads, t.Role == model.RoleCoordinator)
 	switch {
 	case batch[0].Compact:
 		prompt = prompts.Compact(batch[0].Text)
@@ -2284,7 +2284,7 @@ func (h *Hub) systemPrompt(ws *space, th *thread) string {
 // anyone but the user are labelled, so the agent knows who to answer. An
 // `@name` of a thread gets a note that says how to read it, not the thread's
 // history: the agent decides how much of it it needs.
-func compose(batch []workspace.Message, threads map[string]*thread) string {
+func compose(batch []workspace.Message, threads map[string]*thread, coordinator bool) string {
 	parts := make([]string, 0, len(batch))
 	var named []string
 	images := 0
@@ -2305,8 +2305,12 @@ func compose(batch []workspace.Message, threads map[string]*thread) string {
 		}
 	}
 	prompt := strings.Join(parts, "\n\n---\n\n")
+	how := "Read its transcript with read_thread if you need it."
+	if coordinator {
+		how = "Ask it with send_message if the board is not enough."
+	}
 	for _, n := range named {
-		prompt += "\n\n@" + n + " is the thread " + n + " in this workspace. Read its transcript with read_thread if you need it."
+		prompt += "\n\n@" + n + " is the thread " + n + " in this workspace. " + how
 	}
 	return prompt
 }

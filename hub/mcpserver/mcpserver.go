@@ -177,15 +177,6 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			return text("Sent to " + in.To + "."), nil, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "read_thread", Description: "Read the transcript of a thread in this workspace: messages, replies, and tool calls, oldest first. Ask for only as much as you need."},
-		func(ctx context.Context, _ *mcp.CallToolRequest, in readIn) (*mcp.CallToolResult, any, error) {
-			evs, err := h.ReadThread(p, in.Name, in.Tail, in.Query)
-			if err != nil {
-				return nil, nil, err
-			}
-			return text(Transcript(evs)), nil, nil
-		})
-
 	mcp.AddTool(s, &mcp.Tool{Name: "report_progress", Description: "Tell the coordinator and the person where you are, in one line."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in progressIn) (*mcp.CallToolResult, any, error) {
 			if err := h.ReportProgress(p, me, in.Summary); err != nil {
@@ -228,6 +219,15 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 		})
 
 	if id.Role != model.RoleCoordinator {
+		mcp.AddTool(s, &mcp.Tool{Name: "read_thread", Description: "Read the transcript of a thread in this workspace: messages, replies, and tool calls, oldest first. Ask for only as much as you need."},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in readIn) (*mcp.CallToolResult, any, error) {
+				evs, err := h.ReadThread(p, in.Name, in.Tail, in.Query)
+				if err != nil {
+					return nil, nil, err
+				}
+				return text(Transcript(evs)), nil, nil
+			})
+
 		mcp.AddTool(s, &mcp.Tool{Name: "recap", Description: "Say what your work produced, so the person learns it at a glance without reading your transcript. Call it last in a turn in which your work moved. It replaces your last recap; neoharness adds what it saw you run and edit."},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in recapIn) (*mcp.CallToolResult, any, error) {
 				if err := h.Recap(p, me, in.Asked, in.Outcome, in.Open); err != nil {

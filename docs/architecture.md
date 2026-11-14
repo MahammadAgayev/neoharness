@@ -85,10 +85,14 @@ so no thread can act for another thread or another workspace.
 
 | Who | Tools |
 |---|---|
-| all sessions | `whoami`, `workspace_status`, `send_message`, `report_progress`, `ask_user`, `wake_me`, `read_thread`, `write_artifact`, `read_artifact` |
-| threads only | `recap` |
+| all sessions | `whoami`, `workspace_status`, `send_message`, `report_progress`, `ask_user`, `wake_me`, `write_artifact`, `read_artifact` |
+| threads only | `recap`, `read_thread` |
 | coordinator only | `open_thread`, `resolve_thread`, `notify`, `workspace_recap` |
 | internal | `permission_prompt` |
+
+The coordinator has no `read_thread`: it decides from the board, and asks a
+thread with `send_message` when the board is not enough. So it cannot read a
+transcript and retell it; the person opens the thread for its details.
 
 A turn ends when Claude's reply ends, and only a message starts the next
 one. `wake_me(minutes, note)` asks the hub for that message later, for work

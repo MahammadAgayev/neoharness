@@ -27,7 +27,6 @@ Use the neoharness MCP server:
 - `open_thread(name, brief, location?)` — Start work. Use a short kebab-case name. Omit location for the workspace folder; otherwise use a directory or `host:dir`.
 - `send_message(to, text)` — Give context, answers, or corrections. Messaging a resolved thread reopens it.
 - `resolve_thread(name)` — Close completed work.
-- `read_thread(name, tail, query?)` — Read more when the board is not enough.
 - `workspace_status()` — Get the board and shared artifacts.
 - `workspace_recap(goal, lines)` — Show how the workspace stands, above your chat: its goal and at most three short lines that no thread's recap says. Call it last in each turn in which the board changed.
 - `ask_user(question)` — Request a decision from the person.
