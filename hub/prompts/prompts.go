@@ -150,22 +150,42 @@ type Recap struct {
 	Edited, Artifacts []string
 }
 
-// BoardLine is one thread on the board: its state, and, when it ended a turn
-// since the coordinator's last turn, its recap: its own words, then what the
-// hub saw it do.
-func BoardLine(name, state string, r *Recap, ended bool) string {
+// Wait is what a waiting thread waits for. Permission is the tool and what
+// it would do.
+type Wait struct {
+	Question, Permission string
+	Paused               bool
+}
+
+// BoardLine is one thread on the board: its state, what it waits for, and,
+// when it ended a turn since the coordinator's last turn, its recap: its own
+// words, then what the hub saw it do. Without a new recap, a failed last
+// turn still shows, as the thread needs someone until it runs again.
+func BoardLine(name, state string, w Wait, r *Recap, ended bool) string {
 	s := "- " + name + ": " + state
 	if ended {
 		s += ", ended a turn"
 	}
 	s += "."
-	if r == nil || !ended {
-		return s
-	}
 	part := func(label, text string) {
 		if text = clip(text, replyLimit); text != "" {
 			s += " " + label + ": " + sentence(text)
 		}
+	}
+	switch {
+	case w.Permission != "":
+		part("Waits for permission", w.Permission)
+	case w.Question != "":
+		part("Asks the person", w.Question)
+	case w.Paused:
+		s += " Paused by the person."
+	}
+	if r == nil {
+		return s
+	}
+	if !ended {
+		part("Last turn failed", r.Error)
+		return s
 	}
 	part("Asked", r.Asked)
 	if r.FromReply {

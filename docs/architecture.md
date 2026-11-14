@@ -64,8 +64,8 @@ UUID.
   them as image content blocks before the text, on the session's stdin, so
   a remote thread gets them through ssh.
 - Every coordinator turn starts with the board: each open thread, its state,
-  its last report while it runs, and its recap if it ended a turn since the
-  coordinator's last one. With `notify = "coordinator"`, a
+  the question or permission it waits for, the error of a failed last turn,
+  and its recap if it ended a turn since the coordinator's last one. With `notify = "coordinator"`, a
   thread's turn also wakes the coordinator, 15 seconds later so that threads
   that end close together make one turn. It decides with `notify` what
   reaches the person; these turns do not count toward the pause. With

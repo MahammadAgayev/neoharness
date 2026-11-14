@@ -2342,13 +2342,25 @@ func (h *Hub) board(ws *space, batch []workspace.Message) string {
 		}
 		ended := slices.Contains(ws.ended, n) &&
 			!slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From == n })
-		lines = append(lines, prompts.BoardLine(n, string(th.state), boardRecap(th.t.Recap), ended))
+		lines = append(lines, prompts.BoardLine(n, string(th.state), boardWait(th), boardRecap(th.t.Recap), ended))
 	}
 	ws.ended = nil
 	if len(lines) == 0 {
 		return ""
 	}
 	return prompts.Board(lines)
+}
+
+// boardWait is what a thread waits for, in the order derive ranks it.
+func boardWait(th *thread) prompts.Wait {
+	switch {
+	case len(th.perms) > 0:
+		p := th.perms[0].Permission
+		return prompts.Wait{Permission: strings.TrimSuffix(p.Tool+": "+p.Detail, ": ")}
+	case th.t.Asking != "":
+		return prompts.Wait{Question: th.t.Asking}
+	}
+	return prompts.Wait{Paused: th.t.Paused}
 }
 
 // boardRecap is a thread's recap in the plain form the prompts take.
