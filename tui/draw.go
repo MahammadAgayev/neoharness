@@ -59,7 +59,6 @@ func (a *App) draw() {
 	for _, w := range a.bindDiff() {
 		a.drawWindow(w, false)
 	}
-	a.drawCard()
 	a.drawToasts(W, H)
 	if a.picker != nil {
 		a.drawPicker(W, H)
@@ -114,6 +113,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	right := r.X + r.W
 	top := r.Y
 	status := r.Y + r.H - 1
+
 	// The prompt sits at the bottom of a chat window, above the statusline.
 	var promptLines []Line
 	promptTop, promptCur, promptFirst := status, -1, 0
@@ -127,13 +127,8 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	}
 	// The transcript ends above the card, so the card hides none of it.
 	cardBottom := textBottom
-	title, body, _ := a.card(w)
-	if title != "" && textBottom-len(body)-2 > top {
+	if title, body, _ := a.card(w); title != "" && textBottom-len(body)-2 > top {
 		textBottom -= len(body) + 2
-	}
-	w.boxEnd = textBottom
-	if title == "" && b.Prompt != nil {
-		w.boxEnd++
 	}
 	h := max(textBottom-top, 1)
 	w.textH = h
@@ -384,16 +379,6 @@ func (a *App) matchCols(w *Window, li int, l Line) [][2]int {
 		}
 	}
 	return cols
-}
-
-// drawCut draws a line and marks with … a row that does not fit.
-func (a *App) drawCut(x, y, maxX int, l Line) {
-	if x+l.prefixWidth()+width(l.Text()) > maxX {
-		a.drawLine(x, y, maxX-1, l)
-		a.put(maxX-1, y, maxX, "…", a.th.Muted)
-		return
-	}
-	a.drawLine(x, y, maxX, l)
 }
 
 func (a *App) drawLine(x, y, maxX int, l Line) int {

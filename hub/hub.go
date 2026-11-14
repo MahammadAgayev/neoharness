@@ -17,7 +17,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -96,10 +95,6 @@ type Config struct {
 	// Notify makes the coordinator the one that notifies the person: thread
 	// turns wake it, and it decides with notify what reaches them.
 	Notify bool
-	// RecapWake wakes the coordinator once the threads that ran have all
-	// ended, to write the workspace recap. Under Notify their reports wake it
-	// already.
-	RecapWake bool
 	// ReopenCompact is what happens when the coordinator writes to a resolved
 	// thread whose context is past CompactWarn percent: one of the Reopen
 	// constants; empty is ReopenAsk. A workspace can choose another with
@@ -153,9 +148,6 @@ type space struct {
 	ended []string
 	// reports wakes the coordinator about ended, when Config.Notify is on.
 	reports *time.Timer
-	// recapWake wakes it to write the workspace recap, when Config.RecapWake
-	// is on.
-	recapWake *time.Timer
 }
 
 type thread struct {
@@ -174,91 +166,12 @@ type thread struct {
 	// back to disk.
 	deleted bool
 	branch  string
-	// seen is what the hub saw the running turn do, and recap what the thread
-	// said of it, for its recap when the turn ends.
-	seen  turnSeen
-	recap *model.Recap
 	// autoTried stops a summary that fails from being asked for again
 	// before every turn of the same session.
 	autoTried bool
 	// quiet marks a coordinator turn that only the hub's report started: it
 	// manages and says nothing in the person's chat.
 	quiet bool
-}
-
-// turnSeen is what a turn did that the recap shows as fact: the commands it
-// ran, the files it edited, the artifacts it wrote.
-type turnSeen struct {
-	// dirs are the thread's folder as it was given and with its links
-	// resolved: an agent may name a file either way.
-	dirs     []string
-	commands []model.RecapCommand
-	// lastEdit is how many commands had run at the last edit.
-	lastEdit  int
-	ids       map[string]int
-	edited    []string
-	artifacts []string
-}
-
-func (s *turnSeen) empty() bool {
-	return len(s.commands) == 0 && len(s.edited) == 0 && len(s.artifacts) == 0
-}
-
-func (s *turnSeen) tool(e agent.Event) {
-	switch e.Act {
-	case agent.ActRun:
-		if s.ids == nil {
-			s.ids = map[string]int{}
-		}
-		s.ids[e.ID] = len(s.commands)
-		s.commands = append(s.commands, model.RecapCommand{Text: oneLine(s.short(e.Detail), recapLimit)})
-	case agent.ActEdit:
-		s.lastEdit = len(s.commands)
-		f := e.Detail
-		for _, d := range s.dirs {
-			if rel, ok := strings.CutPrefix(f, strings.TrimSuffix(d, "/")+"/"); ok {
-				f = rel
-				break
-			}
-		}
-		if f != "" && !slices.Contains(s.edited, f) {
-			s.edited = append(s.edited, f)
-		}
-	}
-}
-
-// failed marks a command failed, unless it failed silently: a search that
-// found nothing answered no, and that is no error.
-func (s *turnSeen) failed(id string, silent bool) {
-	if i, ok := s.ids[id]; ok && !silent {
-		s.commands[i].Failed = true
-	}
-}
-
-// short is a command as the person reads it: paths in the thread's folder
-// relative to it, and no step into the folder it runs in already.
-func (s *turnSeen) short(cmd string) string {
-	dirs := slices.Clone(s.dirs)
-	// A folder through a link may hold the other name: /private/tmp/x holds
-	// /tmp/x.
-	slices.SortFunc(dirs, func(a, b string) int { return len(b) - len(a) })
-	for _, d := range dirs {
-		if d = strings.TrimSuffix(d, "/"); d == "" {
-			continue
-		}
-		re := regexp.MustCompile(regexp.QuoteMeta(d) + "(/|$|[\\s'\"`;|&)])")
-		cmd = re.ReplaceAllStringFunc(cmd, func(m string) string {
-			if end := m[len(d):]; end != "/" {
-				return "." + end
-			}
-			return ""
-		})
-	}
-	cmd = strings.Join(strings.Fields(cmd), " ")
-	for _, step := range []string{"cd . && ", "cd .; "} {
-		cmd = strings.TrimPrefix(cmd, step)
-	}
-	return cmd
 }
 
 type pending struct {
@@ -618,35 +531,12 @@ func (h *Hub) Threads(workspaceName string) ([]model.ThreadView, error) {
 // Events returns the last n transcript events of a thread.
 func (h *Hub) Events(workspaceName, threadName string, n int) ([]model.Event, error) {
 	h.mu.Lock()
-	_, th, err := h.lookup(workspaceName, threadName)
-	var r *model.Recap
-	if err == nil {
-		r = th.t.Recap
-	}
+	_, _, err := h.lookup(workspaceName, threadName)
 	h.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	evs, err := workspace.Events(workspaceName, threadName, n)
-	recapLine(evs, r)
-	return evs, err
-}
-
-// recapLine gives the last turn end its recap line when the hub that ended
-// the turn wrote none, from the recap the thread saved in that turn: a recap
-// older than the turn end is another turn's.
-func recapLine(evs []model.Event, r *model.Recap) {
-	if r == nil || r.FromReply || r.Outcome == "" {
-		return
-	}
-	for i := len(evs) - 1; i >= 0; i-- {
-		if e := &evs[i]; e.Kind == model.EventTurnEnd {
-			if e.Text == "" && !r.At.Before(e.At) {
-				e.Text, e.Detail = r.Outcome, r.Open
-			}
-			return
-		}
-	}
+	return workspace.Events(workspaceName, threadName, n)
 }
 
 // Completions lists what the prompt of a thread can complete. The commands
@@ -966,7 +856,7 @@ func (h *Hub) send(workspaceName, from, to, text string, images [][]byte) (*thre
 		return nil, errors.New("a thread cannot message itself")
 	}
 	if to == model.Coordinator && from != model.User {
-		return nil, errors.New("threads do not message the coordinator: say how your work stands with recap, and ask the person with ask_user")
+		return nil, errors.New("threads do not message the coordinator: its board shows your state and the start of your last reply; ask the person with ask_user")
 	}
 	switch {
 	case th.t.Resolved && from == model.User:
@@ -982,9 +872,6 @@ func (h *Hub) send(workspaceName, from, to, text string, images [][]byte) (*thre
 	if from == model.User {
 		if done, err := h.command(ws, th, text); done {
 			return th, err
-		}
-		if to == model.Coordinator && (ws.p.Recap == nil || ws.p.Recap.Goal == "") {
-			h.setGoal(ws, oneLine(firstLine(text), recapLimit))
 		}
 	}
 	// The thread asked and ended its reply; what still runs (background
@@ -1351,9 +1238,6 @@ func (h *Hub) WriteArtifact(workspaceName, by, name, text string) (model.Artifac
 	}
 	h.event(ws, th, model.Event{Kind: model.EventArtifact, Detail: name, Text: a.Title, Version: a.Version})
 	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: by, Artifact: &a})
-	if th.busy && !slices.Contains(th.seen.artifacts, name) {
-		th.seen.artifacts = append(th.seen.artifacts, name)
-	}
 	return a, nil
 }
 
@@ -1513,241 +1397,6 @@ func title(text, fallback string) string {
 	return fallback
 }
 
-// recapLimit keeps each part of a recap to a few lines on screen.
-const recapLimit = 300
-
-// recapCommands is how many commands that did not fail a recap names.
-const recapCommands = 4
-
-// Recap keeps what a thread says its turn produced and how its tasks stand.
-// The hub joins it with what it saw the turn do when the turn ends.
-func (h *Hub) Recap(workspaceName, name, goal, asked, outcome, open string, done, doing, needs []model.RecapItem) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	ws, th, err := h.lookup(workspaceName, name)
-	if err != nil {
-		return err
-	}
-	if th.t.Role == model.RoleCoordinator {
-		return errors.New("the coordinator writes no recap")
-	}
-	r := &model.Recap{Goal: oneLine(goal, recapItemLimit), Asked: oneLine(asked, recapLimit), Outcome: oneLine(outcome, recapLimit), Open: oneLine(open, recapLimit)}
-	if r.Done, r.Doing, r.Needs, err = recapItems(ws, done, doing, needs); err != nil {
-		return err
-	}
-	th.recap = r
-	return nil
-}
-
-// recapItemLimit and recapListLimit keep each list of a recap to what one
-// look takes in.
-const (
-	recapItemLimit = 200
-	recapListLimit = 6
-)
-
-// recapItems cleans the lists of a recap. A link must name a thread or an
-// artifact of the workspace, so Enter on the item opens something.
-func recapItems(ws *space, lists ...[]model.RecapItem) (done, doing, needs []model.RecapItem, err error) {
-	out := make([][]model.RecapItem, len(lists))
-	for i, l := range lists {
-		for _, it := range l {
-			it.Text = oneLine(it.Text, recapItemLimit)
-			if it.Text == "" || len(out[i]) == recapListLimit {
-				continue
-			}
-			if th, ok := ws.threads[it.Thread]; it.Thread != "" && (!ok || th.deleted) {
-				return nil, nil, nil, fmt.Errorf("no thread %q in this workspace; nothing was kept", it.Thread)
-			}
-			if it.Artifact != "" {
-				if _, _, err := workspace.Artifact(ws.p.Name, it.Artifact); err != nil {
-					return nil, nil, nil, fmt.Errorf("no artifact %q in this workspace; nothing was kept", it.Artifact)
-				}
-			}
-			out[i] = append(out[i], it)
-		}
-	}
-	return out[0], out[1], out[2], nil
-}
-
-// AskRecap asks a thread for a fresh recap, or the coordinator for a fresh
-// workspace recap. It runs a turn, so only the person asks, and an ask that
-// still waits is not queued twice.
-func (h *Hub) AskRecap(workspaceName, name string) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	ws, th, err := h.lookup(workspaceName, name)
-	if err != nil {
-		return err
-	}
-	if th.t.Resolved {
-		return fmt.Errorf("thread %q is resolved", name)
-	}
-	text := prompts.RecapAsked()
-	if th.t.Role == model.RoleCoordinator {
-		text = prompts.WorkspaceRecapAsked()
-	}
-	if slices.ContainsFunc(th.t.Queue, func(m workspace.Message) bool { return !m.Shown && m.Text == text }) {
-		return nil
-	}
-	h.enqueue(ws, th, model.User, text)
-	return nil
-}
-
-// workspaceLines and workspaceLineLimit keep the coordinator's part of the
-// workspace summary to a few short rows above the threads' parts.
-const (
-	workspaceLines     = 3
-	workspaceLineLimit = 200
-)
-
-// WorkspaceRecap keeps the coordinator's words on how the workspace stands:
-// its goal, and a few lines on the whole. An empty goal keeps the last one.
-func (h *Hub) WorkspaceRecap(workspaceName, name, goal string, lines []string) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	ws, th, err := h.lookup(workspaceName, name)
-	if err != nil {
-		return err
-	}
-	if th.t.Role != model.RoleCoordinator {
-		return errors.New("only the coordinator writes the workspace recap")
-	}
-	var kept []string
-	for _, l := range lines {
-		if l = oneLine(l, workspaceLineLimit); l != "" && len(kept) < workspaceLines {
-			kept = append(kept, l)
-		}
-	}
-	return h.saveRecap(ws, func(r *model.WorkspaceRecap) {
-		if goal = oneLine(goal, recapLimit); goal != "" {
-			r.Goal = goal
-		}
-		r.Lines, r.At = kept, time.Now().UTC()
-	})
-}
-
-// setGoal keeps what the workspace is for. Callers hold h.mu.
-func (h *Hub) setGoal(ws *space, goal string) {
-	if goal != "" {
-		_ = h.saveRecap(ws, func(r *model.WorkspaceRecap) { r.Goal = goal })
-	}
-}
-
-// saveRecap changes the stored part of the workspace recap. Callers hold h.mu.
-func (h *Hub) saveRecap(ws *space, change func(*model.WorkspaceRecap)) error {
-	p := ws.p
-	r := model.WorkspaceRecap{}
-	if p.Recap != nil {
-		r = *p.Recap
-	}
-	change(&r)
-	p.Recap = &r
-	if err := workspace.Save(p); err != nil {
-		return err
-	}
-	ws.p = p
-	h.publishWorkspace(ws)
-	return nil
-}
-
-// recapOf is a thread's recap after a turn: what the thread wrote, or else
-// the first line of its reply, with what the hub saw the turn do. A turn
-// that wrote none and did nothing keeps the old one, so a "thanks" does not
-// hide the work; nor does one that only looked around, such as an answer to
-// "is it committed?", hide the thread's own recap of its work.
-func recapOf(old, written *model.Recap, seen turnSeen, asked, reply, failure string) *model.Recap {
-	changed := len(seen.edited) > 0 || len(seen.artifacts) > 0 || failure != ""
-	if old != nil && written == nil && !changed && (seen.empty() || !old.FromReply) {
-		return old
-	}
-	var r model.Recap
-	if written != nil {
-		r = *written
-	}
-	if r.Outcome == "" && failure == "" {
-		r.Outcome = oneLine(firstLine(reply), recapLimit)
-		r.FromReply = r.Outcome != ""
-	}
-	if r.Asked == "" && old != nil {
-		r.Asked = old.Asked
-	}
-	if r.Asked == "" {
-		r.Asked = oneLine(firstLine(asked), recapLimit)
-	}
-	r.Headline = headline(r.Outcome)
-	r.Ran = len(seen.commands)
-	r.Commands, r.Failed = evidence(seen.commands, seen.lastEdit)
-	r.Edited, r.Artifacts, r.Error = seen.edited, seen.artifacts, failure
-	// The goal and the tasks stand as the last recap that named them said.
-	if old != nil {
-		if len(r.Done)+len(r.Doing)+len(r.Needs) == 0 {
-			r.Done, r.Doing, r.Needs = old.Done, old.Doing, old.Needs
-		}
-		r.Goal = cmp.Or(r.Goal, old.Goal)
-	}
-	r.At = time.Now().UTC()
-	return &r
-}
-
-// evidence is what of a turn's commands a recap shows, judged by what the
-// hub saw and not by their names: every command whose last run failed, and
-// the last few of those run after the last edit, which check the work as it
-// ended, or of all when none ran after it. A command shows once, at its last
-// run, so a failure that a later run mended is no failure. failed counts the
-// failures, shown or not.
-func evidence(cmds []model.RecapCommand, lastEdit int) (shown []model.RecapCommand, failed int) {
-	last := map[string]int{}
-	for i, c := range cmds {
-		last[c.Text] = i
-	}
-	if lastEdit >= len(cmds) {
-		lastEdit = 0
-	}
-	room, failRoom := recapCommands, recapCommands
-	for i := len(cmds) - 1; i >= 0; i-- {
-		c := cmds[i]
-		switch {
-		case last[c.Text] != i:
-		case c.Failed:
-			if failed++; failRoom > 0 {
-				failRoom--
-				shown = append(shown, c)
-			}
-		case room > 0 && i >= lastEdit:
-			room--
-			shown = append(shown, c)
-		}
-	}
-	slices.Reverse(shown)
-	return shown, failed
-}
-
-// headlineLimit is the most of an outcome a row shows.
-const headlineLimit = 120
-
-// headline is what a row shows of an outcome: its first sentence, cut at a
-// word to headlineLimit, so a long outcome reads whole or ends in "…".
-func headline(outcome string) string {
-	s := outcome
-	for i := 0; i+1 < len(s); i++ {
-		if strings.ContainsRune(".!?", rune(s[i])) && s[i+1] == ' ' {
-			s = s[:i+1]
-			break
-		}
-	}
-	if r := []rune(s); len(r) > headlineLimit {
-		cut := string(r[:headlineLimit])
-		if k := strings.LastIndexByte(cut, ' '); k > 0 {
-			cut = cut[:k]
-		}
-		s = strings.TrimRight(cut, " ,;:") + "…"
-	} else if s != outcome {
-		s += " …"
-	}
-	return s
-}
-
 // MaxWake is the furthest ahead a thread can ask to be woken.
 const MaxWake = 24 * time.Hour
 
@@ -1856,48 +1505,6 @@ func (h *Hub) report(ws *space) {
 		}
 		h.enqueue(ws, co, reportFrom, prompts.Reports(ws.ended))
 	})
-}
-
-// recap wakes the coordinator, after reportDelay, to write the workspace
-// recap once no thread runs and a thread's recap is newer than its lines, so
-// the lines are fresh when the person looks. Callers hold h.mu.
-func (h *Hub) recap(ws *space) {
-	if h.cfg.Notify || !h.cfg.RecapWake || ws.recapWake != nil || !recapDue(ws) {
-		return
-	}
-	ws.recapWake = time.AfterFunc(reportDelay, func() {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		ws.recapWake = nil
-		co, ok := ws.threads[model.Coordinator]
-		// A coordinator with a turn to come writes the recap in that turn.
-		if h.ctx.Err() != nil || !ok || co.deleted || co.busy || len(co.t.Queue) > 0 || !recapDue(ws) {
-			return
-		}
-		h.enqueue(ws, co, reportFrom, prompts.RecapDue())
-	})
-}
-
-// recapDue says no open thread runs and one has a recap newer than the
-// coordinator's lines.
-func recapDue(ws *space) bool {
-	var at time.Time
-	if ws.p.Recap != nil {
-		at = ws.p.Recap.At
-	}
-	due := false
-	for _, th := range ws.threads {
-		if th.t.Role != model.RoleThread || th.deleted || th.t.Resolved {
-			continue
-		}
-		if th.state == model.StateRunning {
-			return false
-		}
-		if th.t.Recap != nil && th.t.Recap.At.After(at) {
-			due = true
-		}
-	}
-	return due
 }
 
 // Notify shows the person a notice from the coordinator. needsYou keeps it
@@ -2087,12 +1694,6 @@ func (h *Hub) kick(ws *space, th *thread) {
 	th.started = false
 	th.interrupted, th.dropped = false, false
 	th.cancel = cancel
-	th.seen, th.recap = turnSeen{dirs: []string{t.Location.Dir}}, nil
-	if !t.Location.Remote() {
-		if d, err := filepath.EvalSymlinks(t.Location.Dir); err == nil && d != t.Location.Dir {
-			th.seen.dirs = append(th.seen.dirs, d)
-		}
-	}
 	h.changed(ws, th)
 
 	prompt := compose(batch, ws.threads, t.Role == model.RoleCoordinator)
@@ -2216,13 +1817,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	default:
 		ended = true
 		t.Started = true
-		e := model.Event{Kind: model.EventTurnEnd, Tools: res.Tools, Tokens: res.Tokens}
-		// The recap line under the reply says the turn in short, as the
-		// thread wrote it.
-		if r := th.recap; r != nil && !compact {
-			e.Text, e.Detail = r.Outcome, r.Open
-		}
-		h.event(ws, th, e)
+		h.event(ws, th, model.Event{Kind: model.EventTurnEnd, Tools: res.Tools, Tokens: res.Tokens})
 		switch {
 		case compact && strings.TrimSpace(res.Text) == "":
 			h.event(ws, th, model.Event{Kind: model.EventError, Text: "/compact got no summary; the conversation is unchanged"})
@@ -2235,23 +1830,18 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 			t.Summary = ""
 		}
 	}
-	if t.Role == model.RoleThread && !compact && (ended || failure != "") {
-		asked := ""
-		if len(batch) > 0 {
-			asked = batch[0].Text
+	if t.Role == model.RoleThread && !compact {
+		t.Reply, t.Failed = "", failure
+		if ended {
+			t.Reply = oneLine(res.Text, replyLimit)
 		}
-		t.Recap = recapOf(t.Recap, th.recap, th.seen, asked, res.Text, failure)
 	}
-	th.seen, th.recap = turnSeen{}, nil
 	th.quiet = false
 	h.changed(ws, th)
 	if h.ctx.Err() == nil {
 		h.kick(ws, th)
 		if len(ws.ended) > 0 {
 			h.report(ws)
-		}
-		if t.Role == model.RoleThread {
-			h.recap(ws)
 		}
 	}
 }
@@ -2270,10 +1860,8 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 	switch e.Kind {
 	case agent.KindToolStart:
 		h.event(ws, th, model.Event{Kind: model.EventTool, Tool: e.Tool, Detail: e.Detail, ID: e.ID})
-		th.seen.tool(e)
 	case agent.KindToolFailed:
 		h.event(ws, th, model.Event{Kind: model.EventTool, ID: e.ID, Exit: 1, Text: e.Text})
-		th.seen.failed(e.ID, e.Silent)
 	case agent.KindAssistantText:
 		h.event(ws, th, model.Event{Kind: model.EventText, Text: e.Text})
 	case agent.KindError:
@@ -2457,7 +2045,7 @@ func (h *Hub) images(ws *space, th *thread, batch []workspace.Message) []agent.I
 
 // board is every open thread, for the start of a coordinator turn, so the
 // coordinator manages without asking for the status. A thread that ended a
-// turn since its last turn adds its recap, unless its message
+// turn since its last turn adds the start of its reply, unless its message
 // is in the batch and says it there. Callers hold h.mu.
 func (h *Hub) board(ws *space, batch []workspace.Message) string {
 	var lines []string
@@ -2468,7 +2056,7 @@ func (h *Hub) board(ws *space, batch []workspace.Message) string {
 		}
 		ended := slices.Contains(ws.ended, n) &&
 			!slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From == n })
-		lines = append(lines, prompts.BoardLine(n, string(th.state), boardWait(th), boardRecap(th.t.Recap), ended))
+		lines = append(lines, prompts.BoardLine(n, string(th.state), boardWait(th), th.t.Reply, th.t.Failed, ended))
 	}
 	ws.ended = nil
 	if len(lines) == 0 {
@@ -2487,39 +2075,6 @@ func boardWait(th *thread) prompts.Wait {
 		return prompts.Wait{Question: th.t.Asking}
 	}
 	return prompts.Wait{Paused: th.t.Paused}
-}
-
-// boardRecap is a thread's recap in the plain form the prompts take.
-func boardRecap(r *model.Recap) *prompts.Recap {
-	if r == nil {
-		return nil
-	}
-	b := &prompts.Recap{Goal: r.Goal, Asked: r.Asked, Outcome: r.Outcome, Open: r.Open, Error: r.Error, FromReply: r.FromReply,
-		Ran: r.Ran, Edited: r.Edited, Artifacts: r.Artifacts,
-		Done: boardItems(r.Done), Doing: boardItems(r.Doing), Needs: boardItems(r.Needs)}
-	for _, c := range r.Commands {
-		if c.Failed {
-			b.Failed = append(b.Failed, c.Text)
-		}
-	}
-	return b
-}
-
-// boardItems are a summary's tasks with what holds each, so the coordinator
-// can link them in the workspace summary.
-func boardItems(items []model.RecapItem) []string {
-	var out []string
-	for _, it := range items {
-		switch {
-		case it.Thread != "":
-			out = append(out, it.Text+" (thread "+it.Thread+")")
-		case it.Artifact != "":
-			out = append(out, it.Text+" (artifact "+it.Artifact+")")
-		default:
-			out = append(out, it.Text)
-		}
-	}
-	return out
 }
 
 // --- state and updates ---
@@ -2639,8 +2194,7 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		State:         th.state,
 		Queued:        len(t.Queue),
 		Pending:       unshown(t.Queue),
-		Recap:         t.Recap,
-		RecapUnseen:   recapUnseen(ws, th),
+		Reply:         t.Reply,
 		WakeAt:        t.WakeAt,
 		Model:         t.Model,
 		Context:       t.Context,
@@ -2700,9 +2254,6 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 		v.Cost += th.t.Cost
 		if th.t.Role == model.RoleThread {
 			v.Counts[th.state]++
-			if !th.deleted && !th.t.Resolved && recapUnseen(ws, th) {
-				v.RecapUnseen = true
-			}
 		} else {
 			v.Coordinator = th.state
 		}
@@ -2712,104 +2263,7 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 			}
 		}
 	}
-	v.Recap = h.workspaceRecap(ws)
-	if r := ws.p.Recap; r != nil && len(r.Lines) > 0 && r.At.After(ws.p.RecapSeen) {
-		v.RecapUnseen = true
-	}
 	return v
-}
-
-// recapUnseen says a thread's recap came after the person last closed a box
-// that showed it: its own, or the workspace's, which shows every thread.
-func recapUnseen(ws *space, th *thread) bool {
-	r := th.t.Recap
-	return r != nil && r.At.After(th.t.RecapSeen) && r.At.After(ws.p.RecapSeen)
-}
-
-// SeenRecap marks a thread's recap seen, or with the coordinator, the
-// workspace's and so every thread's: the person closed the box.
-func (h *Hub) SeenRecap(workspaceName, name string) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	ws, th, err := h.lookup(workspaceName, name)
-	if err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	if th.t.Role != model.RoleCoordinator {
-		th.t.RecapSeen = now
-		h.changed(ws, th)
-		return nil
-	}
-	p := ws.p
-	p.RecapSeen = now
-	if err := workspace.Save(p); err != nil {
-		return err
-	}
-	ws.p = p
-	for _, t := range ws.threads {
-		if !t.deleted && t.t.Role == model.RoleThread {
-			v := h.view(ws, t)
-			h.publish(model.Update{Kind: model.UpdateThread, Workspace: ws.p.Name, Thread: t.t.Name, View: &v})
-		}
-	}
-	h.publishWorkspace(ws)
-	return nil
-}
-
-// workspaceRecap joins the stored goal and lines with what the open threads'
-// recaps say together: the files more than one edited, and the failures.
-func (h *Hub) workspaceRecap(ws *space) *model.WorkspaceRecap {
-	var r model.WorkspaceRecap
-	if ws.p.Recap != nil {
-		r = *ws.p.Recap
-	}
-	type file struct {
-		path    string
-		threads []string
-	}
-	var files []*file
-	byKey := map[string]*file{}
-	for _, n := range slices.Sorted(maps.Keys(ws.threads)) {
-		th := ws.threads[n]
-		t := th.t
-		if t.Role != model.RoleThread || th.deleted || t.Resolved || t.Recap == nil {
-			continue
-		}
-		if t.Recap.Error != "" && th.state == model.StateIdle {
-			r.Failed++
-		}
-		if !r.At.IsZero() && t.Recap.At.After(r.At) {
-			r.Newer++
-		}
-		for _, f := range t.Recap.Edited {
-			// A recap names a file inside the thread's folder relative to it.
-			if !filepath.IsAbs(f) {
-				f = filepath.Join(t.Location.Dir, f)
-			}
-			key := t.Location.Host + ":" + f
-			if byKey[key] == nil {
-				shown := f
-				if rel, err := filepath.Rel(ws.p.Pin, f); err == nil && ws.p.Pin != "" && !t.Location.Remote() && !strings.HasPrefix(rel, "..") {
-					shown = rel
-				} else if t.Location.Remote() {
-					shown = t.Location.Host + ":" + f
-				}
-				byKey[key] = &file{path: shown}
-				files = append(files, byKey[key])
-			}
-			byKey[key].threads = append(byKey[key].threads, n)
-		}
-	}
-	for _, f := range files {
-		if len(f.threads) > 1 {
-			r.Overlaps = append(r.Overlaps, model.Overlap{Path: f.path, Threads: f.threads})
-		}
-	}
-	if r.Goal == "" && len(r.Lines) == 0 && len(r.Overlaps) == 0 && r.Failed == 0 {
-		return nil
-	}
-	return &r
 }
 
 func (h *Hub) workspace(name string) (*space, error) {
@@ -2846,14 +2300,9 @@ func lastLine(texts ...string) string {
 	return "no output"
 }
 
-func firstLine(s string) string {
-	for _, l := range strings.Split(s, "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			return l
-		}
-	}
-	return ""
-}
+// replyLimit is how much of a reply the hub keeps for the board and the
+// threads pane: its start says what the turn came to.
+const replyLimit = 300
 
 // oneLine puts s on one line and cuts it to n runes.
 func oneLine(s string, n int) string {

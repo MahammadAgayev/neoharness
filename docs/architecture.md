@@ -68,7 +68,10 @@ UUID.
   a remote thread gets them through ssh.
 - Every coordinator turn starts with the board: each open thread, its state,
   the question or permission it waits for, the error of a failed last turn,
-  and its recap if it ended a turn since the coordinator's last one. With `notify = "coordinator"`, a
+  and the start of its reply if it ended a turn since the coordinator's last
+  one. The hub keeps the start of the last reply and the error in
+  `thread.json`; the threads pane shows the reply too. With
+  `notify = "coordinator"`, a
   thread's turn also wakes the coordinator, 15 seconds later so that threads
   that end close together make one turn. It decides with `notify` what
   reaches the person; these turns do not count toward the pause. With
@@ -94,8 +97,8 @@ so no thread can act for another thread or another workspace.
 | Who | Tools |
 |---|---|
 | all sessions | `whoami`, `workspace_status`, `send_message` (to threads only), `ask_user`, `wake_me`, `write_artifact`, `read_artifact` |
-| threads only | `recap`, `read_thread` |
-| coordinator only | `open_thread`, `resolve_thread`, `notify`, `workspace_recap` |
+| threads only | `read_thread` |
+| coordinator only | `open_thread`, `resolve_thread`, `notify` |
 | internal | `permission_prompt` |
 
 The coordinator has no `read_thread`: it decides from the board, and asks a
@@ -111,102 +114,6 @@ the computer sleeps, so the hub also checks the wall clock each minute: a
 wake-up comes at most a minute after the computer wakes. The threads list
 shows `wakes at 16:52` on an idle thread that has one, and never a time that
 has passed.
-
-## Recaps
-
-A thread's recap says what its work produced, so the person learns it
-without the transcript. It has two parts that stay apart, so a claim never
-reads as a check:
-
-- **The thread's words**: `recap(goal?, asked, outcome, open?, done?,
-  doing?, needs?)`, its last call in a turn in which its work moved.
-  `open` is optional, so "nothing open" is no value rather than words that
-  say so. `asked`, `outcome` and `open` are the turn: the turn end event
-  carries the outcome and `open` (`Event.Text`, `Event.Detail`), and the
-  UIs show them in one recap line under the reply. A turn end that an older
-  hub wrote without them gets them when it is read, from the thread's
-  saved recap of that turn. `goal`, `done`, `doing` and `needs` are the
-  thread's summary in plain words: what it is for and how its work stands,
-  each item a `RecapItem` with an optional `Thread` or `Artifact` that the
-  UIs open from it. The hub keeps at most 6 per list and refuses a link to
-  a thread or an artifact that does not exist, so a link always opens
-  something. A recap that names no goal or no tasks keeps the last ones.
-- **What the hub saw** that turn: the commands it ran and which failed, the
-  files it edited, the artifacts it wrote, and the error if the turn failed.
-  The adapter says which tool calls run a command or edit a file
-  (`agent.Act`), and which failed command printed nothing
-  (`agent.Event.Silent`, from Claude's bare `Exit code N`); only it knows its
-  tools and their output.
-
-The model's words are untrusted input: a different model, a long answer, no
-recap, or two calls must still give a good view. So the hub, not the UIs,
-shapes the recap, by rules that read no words:
-
-- `Headline` is the outcome's first sentence, at most 120 characters, cut at
-  a word. Rows show it; the full view shows `Outcome`.
-- `Commands` holds what the hub's facts say matters, not the commands'
-  names: each command whose last run failed, and the last 4 run after the
-  last edit, which checked the work as it ended, or the last 4 of all when
-  none ran after it. A command shows once, at its last run, so a failure a
-  later run mended is none, and a silent failure is a no, not a failure.
-  `Failed` counts the failures and `Ran` all commands. Paths in the
-  thread's folder are made relative to it.
-- A recap with no outcome, or none at all, takes the first line of the
-  reply, marked `FromReply`. A turn that wrote none and did nothing keeps
-  the old recap, and so does one that changed nothing (no edit, no
-  artifact, no failure) when the old recap is the thread's own: an answer
-  to "is it committed?" does not hide the recap of the work.
-
-The recap is kept in `thread.json` and sent as `ThreadView.Recap`. The
-person can ask for a fresh one (`POST …/threads/{t}/recap`, `:summary!`):
-the hub queues the ask as the person's message, at most once while it
-waits, so it runs a turn only on the person's act. The board shows each
-thread's summary to the coordinator, with its links, so the coordinator can
-join them.
-
-The workspace recap says how the whole workspace stands, as
-`WorkspaceView.Recap`. It holds only what no thread's recap says:
-
-- **The coordinator's words**: `workspace_recap(goal, lines)`, its last
-  call in a turn in which the board changed: what the workspace is for,
-  and at most three short lines on how it stands as a whole. Each thread's
-  own summary shows below them, so they say only what those do not. Until
-  it writes a goal, the goal is the first line of the person's first
-  message to it. Both are kept in `workspace.json`.
-  So the lines are fresh when the person looks, with `workspace_recap = true`
-  (the default) the hub wakes the coordinator once, 15 seconds after the last
-  running thread ends, when a thread's recap is newer than its lines. With
-  `notify = "coordinator"` the threads' reports wake it already.
-- **What the hub joins** from the open threads' recaps, at no cost: the files
-  that two or more threads edited (each path joined back to its thread's
-  folder), how many idle threads failed their last turn (`Failed`), and how
-  many recaps are newer than the lines (`Newer`). The UIs take the counts
-  from `WorkspaceView.Counts` and these fields, and count nothing
-  themselves.
-
-The UIs show the summaries in a card on the prompt: the person opens it
-(`:summary`, `<leader>ns`), and it pops up when they come back to news.
-What is news is the hub's; when to show it is the UI's, as only it knows
-focus and typing:
-
-- **Seen** is one mark in the hub, so the TUI and the app agree. Showing a
-  thread's card marks that thread (`thread.json`), and showing the
-  workspace's marks the workspace and so every thread (`workspace.json`):
-  `POST …/threads/{t}/recap/seen`, with the coordinator for the workspace.
-  `ThreadView.RecapUnseen` says the thread's recap is newer than both
-  marks; `WorkspaceView.RecapUnseen` says an open thread's is, or the
-  coordinator's lines are newer than the workspace's mark.
-- **When**: the card shows when the person comes back to news, and only
-  then: the window gets focus after `model.RecapAway` (two minutes) away,
-  or the person opens a workspace not looked at for as long. The TUI also
-  counts the first key after as long with none: a person may leave the
-  terminal in focus, and tmux may report focus once and then never.
-  Never while the person types (a draft in Insert, a command line), but
-  Insert with an empty prompt is not typing: the prompt often stays in
-  Insert while the person is away. Never over a permission or question
-  card in the window with focus, and never with `summary` off. In a
-  thread's window it shows the thread's when that is news, else the
-  workspace's.
 
 ## Permissions
 

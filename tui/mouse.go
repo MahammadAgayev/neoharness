@@ -24,17 +24,6 @@ func (a *App) mouse(ev *tcell.EventMouse) {
 		return
 	}
 	x, y := ev.Position()
-	if b := a.cardRect; pressed && x >= b.X && x < b.X+b.W && y >= b.Y && y < b.Y+b.H {
-		// The card covers the window; its × closes it and a row opens.
-		switch i := a.cardTop + y - b.Y - 1; {
-		case y == b.Y && x >= b.X+b.W-4:
-			a.closeSummary()
-		case y > b.Y && y < b.Y+b.H-1:
-			a.cardCur = i
-			a.openCardRow()
-		}
-		return
-	}
 	w := a.windowAt(x, y)
 	if w == nil {
 		return

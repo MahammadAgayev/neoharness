@@ -375,7 +375,6 @@ func (a *accumulator) consume(line []byte) {
 				a.emit(agent.Event{
 					Kind:   agent.KindToolStart,
 					Tool:   c.Name,
-					Act:    actOf(c.Name),
 					ID:     c.ID,
 					Detail: detailOf(c.Input),
 					Tokens: a.tokens,
@@ -396,8 +395,7 @@ func (a *accumulator) consume(line []byte) {
 		}
 		for _, c := range e.Message.Content {
 			if c.Type == "tool_result" && c.IsError {
-				out := resultText(c.Result)
-				a.emit(agent.Event{Kind: agent.KindToolFailed, ID: c.ToolUseID, Text: firstLine(out), Silent: silent(out)})
+				a.emit(agent.Event{Kind: agent.KindToolFailed, ID: c.ToolUseID, Text: firstLine(resultText(c.Result))})
 			}
 		}
 
@@ -422,24 +420,6 @@ func (a *accumulator) consume(line []byte) {
 		a.emit(agent.Event{Kind: agent.KindTurnEnd, Tokens: a.tokens})
 	}
 	// Other "system" records are hooks and progress — machinery, not work.
-}
-
-// actOf says what one of Claude Code's tools does, for the recap.
-func actOf(tool string) agent.Act {
-	switch {
-	case tool == "Bash":
-		return agent.ActRun
-	case tool == "Edit" || tool == "MultiEdit" || tool == "Write" || tool == "NotebookEdit":
-		return agent.ActEdit
-	}
-	return agent.ActOther
-}
-
-// silent says a failed command printed nothing: Bash's result is then only
-// its "Exit code N" line.
-func silent(out string) bool {
-	rest, ok := strings.CutPrefix(strings.TrimSpace(out), "Exit code ")
-	return ok && strings.TrimLeft(rest, "0123456789") == "" && rest != ""
 }
 
 // resultText is a tool result's content: a string, or text blocks.

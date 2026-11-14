@@ -23,9 +23,6 @@ type Window struct {
 	vLine, vCol   int
 	rect          Rect
 	textH, linesN int
-	// boxEnd is the row under the summary card when it shows in this
-	// window: it sits on the prompt, or on the card that waits.
-	boxEnd int
 	// jumps are the buffers the window showed before, the newest last, for
 	// <C-o>; views are where the window was in each.
 	jumps []*Buffer

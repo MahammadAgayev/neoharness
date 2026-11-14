@@ -54,12 +54,6 @@ func (a *App) runConfig(src, name string, defaults bool) {
 	}
 	a.cfgLoading = false
 	a.buildMaps()
-	hide := a.opt("recap") == lua.LFalse
-	for _, b := range a.bufs {
-		if b.Kind == KindChat && b.hideRecap != hide {
-			b.hideRecap, b.dirty = hide, true
-		}
-	}
 	// The commands run once the maps are in place, as Neovim runs init.lua
 	// before the first screen.
 	for _, c := range a.cfgCmds {

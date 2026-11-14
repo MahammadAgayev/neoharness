@@ -88,15 +88,6 @@ func (a *App) key(ev *tcell.EventKey) {
 	if k == "" {
 		return
 	}
-	// The key that wakes a terminal with no focus events must leave Normal
-	// as it was: a key that starts Insert is the person about to type.
-	if a.keyAfterAway() {
-		defer func() {
-			if a.mode == modeNormal {
-				a.cameBack()
-			}
-		}()
-	}
 	if run := a.confirm; run != nil {
 		a.confirm = nil
 		a.notice = ""
@@ -115,14 +106,6 @@ func (a *App) key(ev *tcell.EventKey) {
 	}
 	idle := func() bool {
 		return a.mode == modeNormal && len(a.pending) == 0 && a.count == 0 && !a.replacing && a.finding == "" && a.selecting == "" && a.marking == "" && a.macroKey == ""
-	}
-	if a.summaryOf != "" && idle() && a.recordInto == 0 && a.cardKey(k) {
-		return
-	}
-	// The card can show over an empty prompt in Insert: one Esc closes it
-	// and leaves Insert, as the person would not think of a second.
-	if a.summaryOf != "" && a.mode == modeInsert && k == "<Esc>" {
-		a.closeSummary()
 	}
 	if a.recordInto != 0 && a.playing == 0 {
 		if k == "q" && idle() {

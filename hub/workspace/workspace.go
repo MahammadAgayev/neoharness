@@ -41,11 +41,6 @@ type Workspace struct {
 	// AutoCompact is the :setlocal auto_compact here, a percent; empty is
 	// the config's.
 	AutoCompact string `json:"autoCompact,omitempty"`
-	// Recap holds the goal and the coordinator's lines; the hub works out
-	// the rest of the workspace recap when it shows it.
-	Recap *model.WorkspaceRecap `json:"recap,omitempty"`
-	// RecapSeen is when the person last closed the workspace's recap box.
-	RecapSeen time.Time `json:"recapSeen,omitzero"`
 }
 
 // Message is one queued input for a thread.
@@ -126,11 +121,10 @@ type Thread struct {
 	// Edits holds, per artifact the thread wrote, the version it last saw
 	// before the person edited it. The next turn's prompt gets the diff.
 	Edits map[string]Edit `json:"edits,omitempty"`
-	// Recap is what the thread's work produced, as of its last turn that did
-	// something.
-	Recap *model.Recap `json:"recap,omitempty"`
-	// RecapSeen is when the person last closed the thread's recap box.
-	RecapSeen time.Time `json:"recapSeen,omitzero"`
+	// Reply is the start of the last turn's reply, and Failed why the last
+	// turn failed, for the coordinator's board and the threads pane.
+	Reply  string `json:"reply,omitempty"`
+	Failed string `json:"failed,omitempty"`
 
 	Since     time.Time `json:"since"`
 	CreatedAt time.Time `json:"createdAt"`

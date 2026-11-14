@@ -50,8 +50,6 @@ type Client interface {
 	Stop(workspace, thread string) error
 	TakeBack(workspace, thread string) error
 	Unqueue(workspace, thread string, at time.Time) error
-	AskRecap(workspace, thread string) error
-	SeenRecap(workspace, thread string) error
 	Resolve(workspace, thread string) error
 	Delete(workspace, thread string) error
 	Reopen(workspace, thread string) error
@@ -169,24 +167,6 @@ type App struct {
 	mouseDown              bool
 	lastClick              time.Time
 	lastClickX, lastClickY int
-	// summaryOf is whose summary the card shows: a thread, the coordinator
-	// for the workspace's, or "" when it is closed. cardCur is its cursor
-	// row, cardTop its first row shown, cardG a g waiting for a second, and
-	// cardRect where it was drawn, for clicks. cardNews holds the resolved
-	// threads that had news when it opened: showing it marks them seen.
-	summaryOf string
-	cardNews  map[string]bool
-	cardCur   int
-	cardTop   int
-	cardG     bool
-	cardRect  Rect
-	// now is the clock, for tests. lastKey is the last key, blurAt when the
-	// terminal lost focus, and leftAt when each workspace was left: how long
-	// the person was away.
-	now     func() time.Time
-	lastKey time.Time
-	blurAt  time.Time
-	leftAt  map[string]time.Time
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key
@@ -276,8 +256,6 @@ func Run(c Client, hub Hub) error {
 	// Clicks and the wheel, no drags: the terminal still selects text with
 	// Shift (or Option) held.
 	s.EnableMouse(tcell.MouseButtonEvents)
-	// Focus tells when the person comes back, for the recap box.
-	s.EnableFocus()
 	a := newApp(s, c)
 	a.hub = hub
 	a.loadConfig(filepath.Join(filepath.Dir(hubapi.SocketPath()), "init.lua"))
@@ -299,8 +277,6 @@ func newApp(s tcell.Screen, c Client) *App {
 		comps:    map[string]model.Completions{},
 		compBusy: map[string]bool{},
 		menuShut: -1,
-		now:      time.Now,
-		leftAt:   map[string]time.Time{},
 	}
 	a.workspacesBuf = newBuffer("neoharness://workspaces", KindWorkspaces)
 	a.messagesBuf = newBuffer("neoharness://messages", KindMessages)
@@ -341,8 +317,6 @@ func (a *App) handle(ev tcell.Event) {
 			a.toWindow(a.cur)
 			a.settle(a.cur)
 		}
-	case *tcell.EventFocus:
-		a.focus(ev.Focused)
 	case *tcell.EventResize:
 		a.s.Sync()
 	case evUpdate:
@@ -726,7 +700,6 @@ func (a *App) chat(thread string) *Buffer {
 		return b
 	}
 	b := newChat(a.workspace, thread)
-	b.hideRecap = a.opt("recap") == lua.LFalse
 	a.bufs[name] = b
 	return b
 }
@@ -779,14 +752,6 @@ func (a *App) openWorkspace(name string) {
 		return
 	}
 	a.saveLayout()
-	now := a.now()
-	if a.workspace != "" {
-		a.leftAt[a.workspace] = now
-	}
-	// Opening a workspace not looked at for minutes is coming back to it.
-	if left, ok := a.leftAt[name]; !ok || now.Sub(left) >= model.RecapAway {
-		defer a.cameBack()
-	}
 	// The threads of the workspace left behind keep toasting from where
 	// they are now.
 	if a.away == nil {
@@ -1173,26 +1138,13 @@ func (a *App) renderWorkspaces() {
 			{pad(p.Name, nameW+3), th.Text},
 			{pad(truncate(displayPin(p.Pin), pinW), pinW+3), th.Muted},
 		}
-		failed := 0
-		if p.Recap != nil {
-			failed = p.Recap.Failed
-		}
-		spans = append(spans, countSpans(p.Counts, failed, th)...)
+		spans = append(spans, countSpans(p.Counts, th)...)
 		lines = append(lines, Line{Prefix: []Span{{"  ", th.Text}}, Spans: spans, Item: p.Name})
 	}
 	if len(a.workspaces) == 0 {
 		lines = append(lines, Line{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{":new <name> [folder]", th.Muted}}})
 	}
 	a.workspacesBuf.SetLines(lines)
-}
-
-// workspaceView is the open workspace as the hub last sent it.
-func (a *App) workspaceView() model.WorkspaceView {
-	i := slices.IndexFunc(a.workspaces, func(p model.WorkspaceView) bool { return p.Name == a.workspace })
-	if i < 0 {
-		return model.WorkspaceView{}
-	}
-	return a.workspaces[i]
 }
 
 // wakeLabel says when an idle thread wakes, if it asked to be woken. A
@@ -1211,14 +1163,11 @@ func displayPin(pin string) string {
 	return shortHome(pin)
 }
 
-func countSpans(c map[model.State]int, failed int, th *Theme) []Span {
+func countSpans(c map[model.State]int, th *Theme) []Span {
 	var out []Span
 	for _, s := range []model.State{model.StateRunning, model.StateWaiting, model.StateResolved} {
 		if n := c[s]; n > 0 {
 			out = append(out, Span{fmt.Sprintf("%s %d  ", stateGlyph(s), n), th.state(s)})
-		}
-		if s == model.StateWaiting && failed > 0 {
-			out = append(out, Span{fmt.Sprintf("✗ %d  ", failed), th.Love})
 		}
 	}
 	if len(out) == 0 {
@@ -1261,7 +1210,7 @@ func (a *App) renderThreads() {
 	}
 	row := func(n string) Line {
 		v := a.threads[n]
-		nameSt, info, infoSt := th.Subtle, "", th.Muted
+		nameSt, info, infoSt := th.Subtle, v.Reply, th.Muted
 		if shown[n] {
 			nameSt = th.Text.Bold(true)
 		}
@@ -1314,7 +1263,6 @@ func (a *App) renderThreads() {
 		lines = append(lines, Line{Prefix: []Span{{" ", th.Text}}, Spans: []Span{{stateLabel(s), th.Muted}}})
 		for _, n := range groups[s] {
 			lines = append(lines, row(n))
-			lines = append(lines, recapRows(a.threads[n], th)...)
 		}
 	}
 	if done := groups[model.StateResolved]; len(done) > 0 {

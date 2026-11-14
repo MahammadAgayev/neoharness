@@ -114,8 +114,7 @@ const (
 	EventText EventKind = "text"
 	// EventTool is one tool call the agent made.
 	EventTool EventKind = "tool"
-	// EventTurnEnd closes a turn; Tools and Tokens describe it. Text and
-	// Detail are the outcome and what is open, when the thread recapped it.
+	// EventTurnEnd closes a turn; Tools and Tokens describe it.
 	EventTurnEnd EventKind = "turn"
 	// EventError is a failed turn or a lost one.
 	EventError EventKind = "error"
@@ -186,84 +185,6 @@ type Permission struct {
 	Scope string `json:"scope,omitempty"`
 }
 
-// Recap is what a thread's work produced, for the person to read without
-// its transcript. Asked, Outcome and Open are the thread's own words; the
-// rest is what the hub saw its last turn do, so a claim never reads as a
-// check.
-type Recap struct {
-	Asked   string `json:"asked,omitempty"`
-	Outcome string `json:"outcome,omitempty"`
-	// Headline is what a row shows of Outcome: its first sentence, short.
-	Headline string `json:"headline,omitempty"`
-	Open     string `json:"open,omitempty"`
-	// FromReply says the thread wrote no outcome: Outcome is the first line
-	// of its reply.
-	FromReply bool `json:"fromReply,omitempty"`
-	// Ran counts the commands of the turn and Failed those whose last run
-	// failed. Commands holds the ones that tell the most, in the order they
-	// ran: the failed, and the last that checked the work.
-	Ran       int            `json:"ran,omitempty"`
-	Failed    int            `json:"failed,omitempty"`
-	Commands  []RecapCommand `json:"commands,omitempty"`
-	Edited    []string       `json:"edited,omitempty"`
-	Artifacts []string       `json:"artifacts,omitempty"`
-	// Error is why the turn failed; empty when it ended well.
-	Error string    `json:"error,omitempty"`
-	At    time.Time `json:"at"`
-	// Goal is what the thread is for, and Done, Doing and Needs how its
-	// tasks stand, in its own words, as of its last recap that named them.
-	Goal  string      `json:"goal,omitempty"`
-	Done  []RecapItem `json:"done,omitempty"`
-	Doing []RecapItem `json:"doing,omitempty"`
-	Needs []RecapItem `json:"needs,omitempty"`
-}
-
-// RecapItem is one task of a recap: done, in progress, or needing the
-// person. Thread or Artifact names what opens it, both empty when nothing
-// does.
-type RecapItem struct {
-	Text     string `json:"text"`
-	Thread   string `json:"thread,omitempty"`
-	Artifact string `json:"artifact,omitempty"`
-}
-
-// RecapCommand is a command a turn ran.
-type RecapCommand struct {
-	Text   string `json:"text"`
-	Failed bool   `json:"failed,omitempty"`
-}
-
-// RecapAway is how long the person must be away before coming back shows
-// the recap box, when there is news they have not seen. A shorter break
-// leaves what they did fresh in mind, and the toasts said what came.
-const RecapAway = 2 * time.Minute
-
-// WorkspaceRecap is how a workspace stands, for the person to read without
-// any transcript: what it is for and what its threads' work means together.
-// The thread recaps hold each thread's own part.
-type WorkspaceRecap struct {
-	// Goal and Lines are the coordinator's words: what the workspace is for,
-	// and how it stands as a whole. Until it writes a goal, Goal is the first
-	// line of the person's first message to it.
-	Goal  string   `json:"goal,omitempty"`
-	Lines []string `json:"lines,omitempty"`
-	// At is when the coordinator wrote them.
-	At time.Time `json:"at,omitempty"`
-	// Overlaps are files that the last recaps of two or more open threads
-	// edited.
-	Overlaps []Overlap `json:"overlaps,omitempty"`
-	// Failed counts the idle threads whose last turn failed.
-	Failed int `json:"failed,omitempty"`
-	// Newer counts the open threads whose recap is newer than At.
-	Newer int `json:"newer,omitempty"`
-}
-
-// Overlap is a file that more than one thread edited.
-type Overlap struct {
-	Path    string   `json:"path"`
-	Threads []string `json:"threads"`
-}
-
 // ThreadView is a thread as the API shows it.
 type ThreadView struct {
 	Workspace string   `json:"workspace"`
@@ -277,10 +198,9 @@ type ThreadView struct {
 	Waiting    string      `json:"waiting,omitempty"`
 	Permission *Permission `json:"permission,omitempty"`
 	Pending    []Event     `json:"pending,omitempty"` // queued, not yet in the transcript
-	Recap      *Recap      `json:"recap,omitempty"`
-	// RecapUnseen says the recap is newer than the last time the person
-	// closed a box that showed it.
-	RecapUnseen bool `json:"recapUnseen,omitempty"`
+	// Reply is the start of the last turn's reply; empty while a turn runs,
+	// as it is older news then.
+	Reply string `json:"reply,omitempty"`
 	// Quiet says the coordinator decides what of this thread reaches the
 	// person: only its questions and permission requests notify them.
 	Quiet bool `json:"quiet,omitempty"`
@@ -386,11 +306,6 @@ type WorkspaceView struct {
 	// AutoCompact is the context percent at which a session compacts
 	// before its next turn; 0 never.
 	AutoCompact int `json:"autoCompact"`
-	// Recap is nil until there is something to say.
-	Recap *WorkspaceRecap `json:"recap,omitempty"`
-	// RecapUnseen says an open thread's recap, or the coordinator's lines,
-	// came after the person last closed the workspace's recap box.
-	RecapUnseen bool `json:"recapUnseen,omitempty"`
 }
 
 // UpdateKind classifies a hub update.

@@ -53,25 +53,11 @@ func (k Kind) String() string {
 	return "unknown"
 }
 
-// Act is what a tool call does, for the recap of a turn. Only the adapter
-// knows its tools' names, so it says.
-type Act int
-
-const (
-	// ActOther reads, searches, calls the harness: nothing the recap counts.
-	ActOther Act = iota
-	// ActRun runs a command.
-	ActRun
-	// ActEdit changes a file: Detail is its path.
-	ActEdit
-)
-
 // Event is one thing that happened during a turn, already normalised.
 type Event struct {
 	Kind Kind
-	// Tool is the tool name, and Act what it does, for KindToolStart.
+	// Tool is the tool name, for KindToolStart.
 	Tool string
-	Act  Act
 	// ID ties a KindToolFailed to its KindToolStart.
 	ID string
 	// Detail is the interesting argument to that tool — a path, a command, a
@@ -80,9 +66,6 @@ type Event struct {
 	Detail string
 	// Text is prose, for KindAssistantText and KindError.
 	Text string
-	// Silent says a KindToolFailed printed nothing but its failure: a no, as
-	// from a search that found nothing, rather than an error.
-	Silent bool
 	// Tokens is cumulative total tokens as last reported. Providers report this
 	// at unpredictable points and some only at the end, so it is monotonic
 	// rather than incremental: see Result.Tokens.

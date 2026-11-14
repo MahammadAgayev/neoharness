@@ -148,7 +148,7 @@ func TestCoordinatorOpensThreadsAndThreadsCannot(t *testing.T) {
 	if !strings.Contains(out, "api-tests") || !strings.Contains(out, "coordinator (you)") {
 		t.Errorf("workspace_status = %q", out)
 	}
-	if out, isErr := call(t, th, "send_message", map[string]any{"to": "coordinator", "text": "done?"}); !isErr || !strings.Contains(out, "recap") {
+	if out, isErr := call(t, th, "send_message", map[string]any{"to": "coordinator", "text": "done?"}); !isErr || !strings.Contains(out, "board") {
 		t.Fatalf("a thread messaged the coordinator: %q", out)
 	}
 	if out, isErr := call(t, coord, "send_message", map[string]any{"to": "api-tests", "text": "add a test"}); isErr {
@@ -225,8 +225,8 @@ func TestOnlyThreadsReadThreads(t *testing.T) {
 	}
 }
 
-// TestNoSessionReportsProgress: the recap says what a turn did, and the hub
-// sees what a running turn does, so no one writes progress lines.
+// TestNoSessionReportsProgress: the reply says what a turn did, so no one
+// writes progress lines.
 func TestNoSessionReportsProgress(t *testing.T) {
 	h, srv := setup(t)
 	if err := h.OpenThread("demo", model.User, "api", "", ""); err != nil {
@@ -313,44 +313,6 @@ func TestArtifactListShowsThePersonsEdit(t *testing.T) {
 	got := Artifacts([]model.Artifact{{Name: "plan", Title: "Plan", Thread: "api", Version: 3, UserEdit: true}})
 	if !strings.Contains(got, `- plan: "Plan" by api, version 3, edited by the person`) {
 		t.Fatalf("artifacts = %q", got)
-	}
-}
-
-func TestOnlyThreadsWriteARecap(t *testing.T) {
-	h, srv := setup(t)
-	coord := connect(t, srv, token(t, model.Coordinator))
-	if slices.Contains(toolNames(t, coord), "recap") {
-		t.Fatal("the coordinator has no recap tool")
-	}
-	if err := h.OpenThread("demo", model.Coordinator, "api", "write tests", ""); err != nil {
-		t.Fatal(err)
-	}
-	th := connect(t, srv, token(t, "api"))
-	if out, isErr := call(t, th, "recap", map[string]any{"asked": "write tests", "outcome": "3 tests", "open": ""}); isErr || out == "" {
-		t.Fatalf("recap: %q", out)
-	}
-	// Nothing open is no open at all, not words that say so.
-	if out, isErr := call(t, th, "recap", map[string]any{"asked": "write tests", "outcome": "3 tests"}); isErr {
-		t.Fatalf("recap without open: %q", out)
-	}
-}
-
-func TestOnlyTheCoordinatorWritesTheWorkspaceRecap(t *testing.T) {
-	h, srv := setup(t)
-	coord := connect(t, srv, token(t, model.Coordinator))
-	if out, isErr := call(t, coord, "workspace_recap", map[string]any{"goal": "ship auth", "lines": []string{"answer lint first"}}); isErr || out == "" {
-		t.Fatalf("workspace_recap: %q", out)
-	}
-	if err := h.OpenThread("demo", model.Coordinator, "api", "write tests", ""); err != nil {
-		t.Fatal(err)
-	}
-	if slices.Contains(toolNames(t, connect(t, srv, token(t, "api"))), "workspace_recap") {
-		t.Fatal("a thread has the workspace_recap tool")
-	}
-	for _, v := range h.Workspaces() {
-		if v.Name == "demo" && (v.Recap == nil || v.Recap.Goal != "ship auth" || len(v.Recap.Lines) != 1) {
-			t.Fatalf("recap = %+v", v.Recap)
-		}
 	}
 }
 

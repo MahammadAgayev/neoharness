@@ -228,18 +228,6 @@ func (c *Client) Unqueue(workspace, thread string, at time.Time) error {
 	return c.do("DELETE", threadPath(workspace, thread)+"/queue?at="+url.QueryEscape(at.Format(time.RFC3339Nano)), nil, nil)
 }
 
-// AskRecap asks a thread, or the coordinator, for a fresh recap. It runs a
-// turn.
-func (c *Client) AskRecap(workspace, thread string) error {
-	return c.do("POST", threadPath(workspace, thread)+"/recap", nil, nil)
-}
-
-// SeenRecap says the person closed a thread's recap box, or with the
-// coordinator, the workspace's.
-func (c *Client) SeenRecap(workspace, thread string) error {
-	return c.do("POST", threadPath(workspace, thread)+"/recap/seen", nil, nil)
-}
-
 func (c *Client) Resolve(workspace, thread string) error {
 	return c.do("POST", threadPath(workspace, thread)+"/resolve", nil, nil)
 }

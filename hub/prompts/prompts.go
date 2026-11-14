@@ -53,22 +53,6 @@ func Reports(names []string) string {
 	return strings.Join(names, ", ") + " ended a turn. Decide whether the person needs to hear of it now."
 }
 
-// RecapDue wakes the coordinator to write the workspace recap.
-func RecapDue() string {
-	return "The threads that ran have ended their turns. Write the top of the workspace summary with workspace_recap. Your reply is not shown."
-}
-
-// RecapAsked is the person asking a thread for a fresh recap.
-func RecapAsked() string {
-	return "How does your work stand now? Say it with recap, with your summary, and start no other work."
-}
-
-// WorkspaceRecapAsked is the person asking the coordinator for a fresh
-// workspace recap.
-func WorkspaceRecapAsked() string {
-	return "How does the workspace stand now? Write the workspace summary with workspace_recap, and start no other work."
-}
-
 // Thread is the system prompt for a thread.
 func Thread(in SessionInput) string { return fill(threadMD, in) }
 
@@ -137,26 +121,8 @@ func ArtifactStarted(name, text string) string {
 	return head + "\n\n```markdown\n" + text + "\n```"
 }
 
-// Limits keep the board short: it starts every coordinator turn.
-const (
-	reportLimit = 150
-	replyLimit  = 200
-	boardFiles  = 5
-)
-
-// Recap is a thread's recap as the board shows it: its own words, then what
-// the hub saw its last turn do.
-type Recap struct {
-	Goal, Asked, Outcome, Open, Error string
-	// FromReply says Outcome is the first line of its reply.
-	FromReply bool
-	Ran       int
-	// Failed are the commands that failed.
-	Failed            []string
-	Edited, Artifacts []string
-	// Done, Doing and Needs are the thread's summary of its tasks.
-	Done, Doing, Needs []string
-}
+// replyLimit keeps the board short: it starts every coordinator turn.
+const replyLimit = 200
 
 // Wait is what a waiting thread waits for. Permission is the tool and what
 // it would do.
@@ -165,11 +131,11 @@ type Wait struct {
 	Paused               bool
 }
 
-// BoardLine is one thread on the board: its state, what it waits for, and,
-// when it ended a turn since the coordinator's last turn, its recap: its own
-// words, then what the hub saw it do. Without a new recap, a failed last
-// turn still shows, as the thread needs someone until it runs again.
-func BoardLine(name, state string, w Wait, r *Recap, ended bool) string {
+// BoardLine is one thread on the board: its state, what it waits for, why
+// its last turn failed, and, when it ended a turn since the coordinator's
+// last turn, the start of its reply. A failure shows until the thread runs
+// again, as the thread needs someone until then.
+func BoardLine(name, state string, w Wait, reply, failed string, ended bool) string {
 	s := "- " + name + ": " + state
 	if ended {
 		s += ", ended a turn"
@@ -188,64 +154,11 @@ func BoardLine(name, state string, w Wait, r *Recap, ended bool) string {
 	case w.Paused:
 		s += " Paused by the person."
 	}
-	if r == nil {
-		return s
+	part("Last turn failed", failed)
+	if ended {
+		part("Reply", reply)
 	}
-	if !ended {
-		part("Last turn failed", r.Error)
-		return s
-	}
-	part("For", r.Goal)
-	part("Asked", r.Asked)
-	if r.FromReply {
-		part("Reply", r.Outcome)
-	} else {
-		part("Outcome", r.Outcome)
-	}
-	part("Open", r.Open)
-	part("Failed", r.Error)
-	s += " Seen by neoharness: " + seen(r) + "."
-	list := func(label string, items []string) {
-		if len(items) > 0 {
-			s += " " + label + ": " + strings.Join(items, "; ") + "."
-		}
-	}
-	list("Done", r.Done)
-	list("In progress", r.Doing)
-	list("Needs the person", r.Needs)
 	return s
-}
-
-// seen is what the hub saw a turn do, in short: the failed commands by name,
-// the others only counted, as they are what the coordinator acts on.
-func seen(r *Recap) string {
-	var parts []string
-	switch r.Ran {
-	case 0:
-		parts = append(parts, "no commands")
-	case 1:
-		parts = append(parts, "1 command")
-	default:
-		parts = append(parts, fmt.Sprintf("%d commands", r.Ran))
-	}
-	if n := len(r.Failed); n > 0 {
-		var failed []string
-		for _, c := range r.Failed {
-			failed = append(failed, clip(c, reportLimit))
-		}
-		parts[0] += fmt.Sprintf(", %d failed: %s", n, strings.Join(failed, ", "))
-	}
-	if n := len(r.Edited); n > 0 {
-		files := strings.Join(r.Edited[:min(n, boardFiles)], ", ")
-		if n > boardFiles {
-			files += fmt.Sprintf(" and %d more", n-boardFiles)
-		}
-		parts = append(parts, "edited "+files)
-	}
-	for _, a := range r.Artifacts {
-		parts = append(parts, "wrote the artifact "+a)
-	}
-	return strings.Join(parts, "; ")
 }
 
 // sentence ends s with one full stop.

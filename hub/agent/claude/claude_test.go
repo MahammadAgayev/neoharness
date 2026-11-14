@@ -500,26 +500,6 @@ func TestFailedToolResultIsReported(t *testing.T) {
 	}
 }
 
-// TestACommandThatPrintedNothingFailedSilently: a search that found nothing
-// exits 1 and prints nothing; that is an answer, not an error.
-func TestACommandThatPrintedNothingFailedSilently(t *testing.T) {
-	_, got := feed(t, []string{
-		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"a","is_error":true,"content":"Exit code 1"}]}}`,
-		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"b","is_error":true,"content":"Exit code 1\n\n"}]}}`,
-		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"c","is_error":true,"content":"Exit code 1\n--- FAIL: TestX"}]}}`,
-		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"d","is_error":true,"content":"no such file"}]}}`,
-	})
-	want := []bool{true, true, false, false}
-	if len(got) != len(want) {
-		t.Fatalf("events = %+v", got)
-	}
-	for i, e := range got {
-		if e.Silent != want[i] {
-			t.Errorf("%s: silent %v, want %v", e.ID, e.Silent, want[i])
-		}
-	}
-}
-
 func TestPermissionPromptsInTheHubsTerms(t *testing.T) {
 	for _, c := range []struct {
 		tool, input string
@@ -804,26 +784,6 @@ func TestModelsFallBackToTheAliasesWhenClaudeFails(t *testing.T) {
 	got := New(script).Models(context.Background())
 	if len(got) != 3 || got[0].Name != "opus" {
 		t.Fatalf("models = %+v, want the aliases", got)
-	}
-}
-
-func TestToolCallsSayWhatTheyDo(t *testing.T) {
-	_, got := feed(t, []string{
-		`{"type":"assistant","message":{"content":[` +
-			`{"type":"tool_use","id":"a","name":"Bash","input":{"command":"go test ./..."}},` +
-			`{"type":"tool_use","id":"b","name":"Edit","input":{"file_path":"/r/a.go","old_string":"x","new_string":"y"}},` +
-			`{"type":"tool_use","id":"c","name":"Write","input":{"file_path":"/r/b.go","content":"z"}},` +
-			`{"type":"tool_use","id":"d","name":"mcp__neoharness__recap","input":{"asked":"x"}},` +
-			`{"type":"tool_use","id":"e","name":"Read","input":{"file_path":"/r/c.go"}}]}}`,
-	})
-	want := []agent.Act{agent.ActRun, agent.ActEdit, agent.ActEdit, agent.ActOther, agent.ActOther}
-	if len(got) != len(want) {
-		t.Fatalf("events = %+v", got)
-	}
-	for i, e := range got {
-		if e.Act != want[i] {
-			t.Errorf("%s: act %d, want %d", e.Tool, e.Act, want[i])
-		}
 	}
 }
 

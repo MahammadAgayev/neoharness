@@ -17,9 +17,6 @@ type HubSettings struct {
 	// Notify is "coordinator" when the coordinator decides what reaches the
 	// person, or "threads" when every thread notifies them itself.
 	Notify string
-	// WorkspaceRecap wakes the coordinator once the threads that ran have
-	// ended, to write the workspace recap.
-	WorkspaceRecap bool
 	// Coordinator names the entry of Agents that coordinators run, and
 	// Threads the one threads run; empty runs the coordinator's.
 	Coordinator, Threads string
@@ -136,8 +133,6 @@ func ReadHubSettings(path string) (HubSettings, error) {
 			}
 		case "neoharness.notify":
 			s.Notify = text(v)
-		case "neoharness.workspace_recap":
-			s.WorkspaceRecap = lua.LVAsBool(v)
 		case "neoharness.coordinator":
 			s.Coordinator = text(v)
 		case "neoharness.threads":

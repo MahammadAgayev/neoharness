@@ -134,12 +134,6 @@ func Handler(h *hub.Hub, info hubapi.Info, stop func()) http.Handler {
 		}
 		reply(w, nil, h.Unqueue(r.PathValue("p"), r.PathValue("t"), at))
 	})
-	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/recap", func(w http.ResponseWriter, r *http.Request) {
-		reply(w, nil, h.AskRecap(r.PathValue("p"), r.PathValue("t")))
-	})
-	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/recap/seen", func(w http.ResponseWriter, r *http.Request) {
-		reply(w, nil, h.SeenRecap(r.PathValue("p"), r.PathValue("t")))
-	})
 	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/resolve", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, nil, h.Resolve(r.PathValue("p"), model.User, r.PathValue("t")))
 	})

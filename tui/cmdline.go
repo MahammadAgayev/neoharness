@@ -31,7 +31,7 @@ type cmdline struct {
 
 var commands = []string{
 	"allow", "always", "artifacts", "b", "buffer", "deny", "diffoff", "edit", "folder", "help", "hub", "image", "ls", "messages", "new",
-	"only", "open", "q", "qa", "quit", "reopen", "resolve", "restore", "cost", "setlocal", "split", "summary", "threads",
+	"only", "open", "q", "qa", "quit", "reopen", "resolve", "restore", "cost", "setlocal", "split", "threads",
 	"vsplit", "workspace", "workspaces", "wq",
 }
 
@@ -462,26 +462,6 @@ func (a *App) exec(line string) {
 		a.showCost(arg(0) == "all")
 	case "image":
 		a.attachImage(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), cmd)))
-	case "summary":
-		if needWorkspace() {
-			a.toggleSummary()
-		}
-	case "summary!":
-		// Asking runs a turn, so it costs tokens: only this command asks.
-		n := target()
-		if n == "" && a.summaryOf != "" {
-			n = a.summaryOf
-		}
-		if !needWorkspace() || n == "" {
-			return
-		}
-		if err := a.c.AskRecap(a.workspace, n); err != nil {
-			a.notify(err.Error(), a.th.Love)
-			return
-		}
-		// The summary fills in when the recap comes.
-		a.openSummary(n)
-		a.notify("asked "+n+" for a fresh summary", a.th.Muted)
 	case "hub":
 		if arg(0) != "restart" {
 			a.notify("the hub commands here: :hub restart", a.th.Love)
@@ -719,7 +699,6 @@ func (a *App) helpBuf() *Buffer {
 		row("<leader>t", "threads list: goes to it, or opens it in a new column on the right; <CR> opens a thread in its place"),
 		row("<leader>c", "coordinator"),
 		row("<leader>nc  <leader>nh", "dismiss notifications, their history"),
-		row("<leader>ns", "open or close the summary card, as :summary"),
 		row("<leader>a A x", "allow, allow always (what the card names), deny a permission"),
 		{},
 		sec("commands"),
@@ -739,8 +718,6 @@ func (a *App) helpBuf() *Buffer {
 		row(":messages", "notice history"),
 		row(":hub restart", "restart the hub on this neoharness; after an update it does so on its own once no turn runs"),
 		row(":image [file]", "put the clipboard's picture, or a file's, in the prompt as [image 1]; it goes with the message"),
-		row(":summary", "open or close the summary card: each thread in plain words, the thread's own in its window; j k move, <CR> opens, q or Esc closes"),
-		row(":summary! [thread]", "ask for a fresh summary and open it; the coordinator's is the workspace's. It runs a turn"),
 		row(":cost  :cost all", "what this workspace, or every workspace, cost: by day, thread and model; <CR> opens a thread"),
 		row(":workspaces  :workspace <n>", "workspace list, switch workspace"),
 		row(":restore [name]", "bring back a deleted workspace; no name lists them"),
@@ -752,8 +729,6 @@ func (a *App) helpBuf() *Buffer {
 		row("defaults.lua", "every default map, color and setting; copy a line to init.lua and edit it"),
 		row("neoharness.o.leader", "the leader, <Space> by default; it moves the default maps"),
 		row("neoharness.o.equalalways", "on: a split or a close makes the windows the same size"),
-		row("neoharness.o.recap", "off: no recap line under each reply"),
-		row("neoharness.o.summary", "off: the summary card does not show by itself when you come back; :summary still opens it"),
 		row("neoharness.o.compactwarn", "past this context %, the status line says /compact; 0 never"),
 		row("neoharness.keymap.set / del", "n x i maps: keys, an ex command (:threads<CR>), a function"),
 		row("<Plug>(neoharness-…)", "threads grep yank dismiss coordinator: actions with no ex command"),

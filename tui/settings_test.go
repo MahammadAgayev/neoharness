@@ -16,7 +16,7 @@ func TestHubSettingsDefaultToOpus(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := s.Agents[s.Coordinator]
-	if s.MCPPort != 47821 || s.Notify != "threads" || !s.WorkspaceRecap || s.ReopenCompact != "ask" || s.CompactWarn != 80 || s.AutoCompact != 90 || s.Coordinator != "claude" || s.Threads != "" || s.Kind("claude") != "claude" || a.Model != "claude-opus-5-5[1m]" || a.Effort != "" || a.ContextWindow != 400000 ||
+	if s.MCPPort != 47821 || s.Notify != "threads" || s.ReopenCompact != "ask" || s.CompactWarn != 80 || s.AutoCompact != 90 || s.Coordinator != "claude" || s.Threads != "" || s.Kind("claude") != "claude" || a.Model != "claude-opus-5-5[1m]" || a.Effort != "" || a.ContextWindow != 400000 ||
 		!slices.Equal(a.Command, []string{"claude"}) || !slices.Equal(a.RemoteCommand, []string{"claude"}) {
 		t.Fatalf("settings = %+v", s)
 	}
@@ -126,19 +126,5 @@ func TestTUIAcceptsTheSetupCalls(t *testing.T) {
 require("neoharness.agents").setup({ claude = { model = "sonnet" } })`, "init.lua", false)
 	if h.a.notice != "" {
 		t.Fatalf("the TUI should accept setup calls, got %q", h.a.notice)
-	}
-}
-
-func TestInitLuaTurnsTheWorkspaceRecapWakeOff(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "init.lua")
-	if err := os.WriteFile(path, []byte(`require("neoharness").setup({ workspace_recap = false })`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	s, err := ReadHubSettings(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s.WorkspaceRecap {
-		t.Fatal("workspace_recap = false left it on")
 	}
 }

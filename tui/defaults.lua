@@ -12,14 +12,11 @@
 neoharness.o.leader = " "
 neoharness.o.equalalways = true -- after a split or a close, windows get the same size
 neoharness.o.compactwarn = 80   -- past this context %, the status line says /compact; 0 never
-neoharness.o.recap = true       -- one muted line under each reply says what the turn did
-neoharness.o.summary = true     -- coming back to news shows the summary card; :summary opens it
 
 -- The hub. Its settings take effect when it starts.
 require("neoharness").setup({
   mcp_port = 47821,              -- remote hosts reach the hub through a tunnel on it
   notify = "threads",            -- every thread notifies you; "coordinator": the coordinator decides
-  workspace_recap = true,        -- once the threads that ran end, wake the coordinator to write the workspace recap
   reopen_compact = "ask",        -- the coordinator reopens a thread past compactwarn: "compact" first, "ask" you, or "off"
   auto_compact = 90,             -- past this context %, a session compacts before its next turn; 0 never
   coordinator = "claude",        -- the agent below that coordinators run
@@ -65,7 +62,6 @@ map("n", "<leader>x", ":deny<CR>")
 -- Notifications.
 map("n", "<leader>nc", "<Plug>(neoharness-dismiss)")
 map("n", "<leader>nh", ":messages<CR>")
-map("n", "<leader>ns", ":summary<CR>")                -- the summary card; again closes it
 
 -- The system clipboard (OSC 52): the line, or the selection.
 map({ "n", "x" }, "<leader>y", "<Plug>(neoharness-yank)")

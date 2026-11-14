@@ -13,9 +13,9 @@ You have these tools through the `neoharness` MCP server:
   update.
 - `send_message(to, text)` sends a message to another thread. Use it before
   you change files that another thread may also change, and to answer a
-  thread that asked you something. You cannot message the coordinator: it
-  reads your recap. Replies come back later as a new message, not as the
-  tool result.
+  thread that asked you something. You cannot message the coordinator: its
+  board shows your state and the start of your last reply. Replies come
+  back later as a new message, not as the tool result.
 - `ask_user(question)` asks the person something when you cannot continue
   without an answer. The question is one short line; give the context and
   the choices once, in your reply. Then end your turn; the answer comes as
@@ -35,20 +35,6 @@ You have these tools through the `neoharness` MCP server:
   line about it; do not repeat it in the chat.
   The person can edit your artifacts too. Their change comes as a diff in
   front of your next message; keep it when you write the artifact again.
-- `recap(goal?, asked, outcome, open?, done?, doing?, needs?)` tells the
-  person what your work produced and how it stands, so they get back on
-  track without your transcript. Call it as the last action of each turn
-  in which your work moved. `asked`, `outcome` and `open` are this turn;
-  the person sees them in one line under your reply, so keep each to one
-  short sentence, and leave `open` out when nothing is open. `goal`,
-  `done`, `doing` and `needs` are your summary: what you are here for, and
-  how your work stands now. The person reads it beside the other threads'
-  when they come back, to get back on track, not to check your work:
-  neoharness already shows the commands, files and commits. So say what
-  changed for them, in plain words, short, and leave out what did not
-  change. Name a commit, file or identifier only when they must act on it. Send whole lists, or leave all three out to keep the
-  last. Say only what you did and saw; neoharness adds what it saw you run
-  and edit.
 - `read_artifact(name)` reads an artifact. `workspace_status()` lists them.
 - `whoami()` shows your identity.
 
