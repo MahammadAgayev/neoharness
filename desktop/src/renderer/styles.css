@@ -650,17 +650,39 @@ kbd {
 /* Under the box, close to it, one line. The parts come most important
    first and lay out from the right: what does not fit wraps to a hidden
    second line, so a narrow column drops the host before the model. */
-/* The recap, as Claude Code's: dim, above the prompt, two lines at most. */
-.recap {
+/* The recap card, at the top of a chat when you come back. */
+.recap-card {
   flex: 0 0 auto;
   max-width: calc(var(--measure) - 16px);
   width: calc(100% - 32px);
-  margin: 6px auto 0;
-  padding: 0 4px;
+  margin: 10px auto 0;
+  padding: 8px 14px 10px;
+  border: 1px solid color-mix(in srgb, var(--pine) 55%, transparent);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.recap-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--pine);
   font-size: var(--fs-small);
-  color: var(--muted);
+}
+.recap-close {
+  border: 0;
+  background: none;
+  color: var(--subtle);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.recap-close:hover {
+  color: var(--text);
+}
+.recap-text {
+  margin-top: 4px;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

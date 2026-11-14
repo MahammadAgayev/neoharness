@@ -149,9 +149,9 @@ export interface State {
   // workspaceCursor is the row of the workspaces screen.
   workspaceCursor: number
   pending: string
-  // recapOn says the person came back after a while and has not sent a
-  // message since: a chat shows its recap above the prompt.
-  recapOn: boolean
+  // recapOpen holds the chats, by workspace/thread, that show their recap
+  // card: the person came back to a recap they had not closed.
+  recapOpen: Record<string, boolean>
 }
 
 let ids = 1
@@ -206,7 +206,7 @@ class Store {
     folds: {},
     workspaceCursor: 0,
     pending: '',
-    recapOn: false,
+    recapOpen: {},
   }
   private listeners = new Set<() => void>()
   // writeDoc is a new doc whose editor opens ready to write.
@@ -267,10 +267,46 @@ class Store {
     nh().ready()
     setInterval(() => this.prune(), 1000)
     const away = new Away()
-    const back = (yes: boolean) => yes && !this.state.recapOn && this.set({ recapOn: true })
+    const back = (yes: boolean) => yes && this.cameBack()
     window.addEventListener('blur', () => away.blur(Date.now()))
     window.addEventListener('focus', () => back(away.focus(Date.now())))
     for (const e of ['keydown', 'mousedown']) window.addEventListener(e, () => back(away.input(Date.now())), true)
+  }
+
+  // recapSeen is the time of the recap the person closed last in each chat.
+  private recapSeen: Record<string, string> = {}
+
+  // cameBack opens the recap card of each chat with a recap the person has
+  // not closed.
+  private cameBack(): void {
+    const s = this.state
+    const open = { ...s.recapOpen }
+    for (const [n, v] of Object.entries(s.threads)) {
+      const k = `${s.workspace}/${n}`
+      if (v.recap && v.recapAt && v.recapAt > (this.recapSeen[k] ?? '')) open[k] = true
+    }
+    this.set({ recapOpen: open })
+  }
+
+  // showsRecap says a chat shows its recap card. A turn makes the recap old
+  // news, so a running chat does not.
+  showsRecap(thread: string): boolean {
+    const s = this.state
+    const v = s.threads[thread]
+    return !!s.recapOpen[`${s.workspace}/${thread}`] && !!v?.recap && v.state !== 'running'
+  }
+
+  // closeRecap closes a chat's recap card; it opens again only for a newer
+  // recap.
+  closeRecap(thread: string): void {
+    const s = this.state
+    const k = `${s.workspace}/${thread}`
+    this.recapSeen[k] = s.threads[thread]?.recapAt ?? ''
+    if (s.recapOpen[k]) {
+      const open = { ...s.recapOpen }
+      delete open[k]
+      this.set({ recapOpen: open })
+    }
   }
 
   private async reload(): Promise<void> {
@@ -440,7 +476,10 @@ class Store {
     let chat = s.chats[v.name] ?? []
     // A stopped turn sends no turn end, so its tool calls would spin forever.
     if (v.state === 'idle' || v.state === 'resolved') chat = settle(chat, false)
-    this.set({ threads, order, chats: { ...s.chats, [v.name]: chat } })
+    // A turn makes the recap old news; its next one waits for the next return.
+    const recapOpen = { ...s.recapOpen }
+    if (v.state === 'running') delete recapOpen[`${s.workspace}/${v.name}`]
+    this.set({ threads, order, chats: { ...s.chats, [v.name]: chat }, recapOpen })
     const spec = viewToast(s.workspace, old, v, { reply: lastText(chat), away: false, home: nh().home() })
     if (!old && this.opening.delete(v.name)) return
     if (spec) this.toast(spec)
@@ -963,7 +1002,7 @@ class Store {
     if (ok === undefined) return false
     const w = this.cur()
     if (w) this.updateWin(w.id, { follow: true, cursor: -1 })
-    if (this.state.recapOn) this.set({ recapOn: false })
+    this.closeRecap(thread)
     return true
   }
 

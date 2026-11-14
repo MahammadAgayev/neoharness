@@ -88,7 +88,7 @@ func (a *App) key(ev *tcell.EventKey) {
 	if k == "" {
 		return
 	}
-	a.keyAfterAway()
+	back := a.keyAfterAway()
 	if run := a.confirm; run != nil {
 		a.confirm = nil
 		a.notice = ""
@@ -107,6 +107,15 @@ func (a *App) key(ev *tcell.EventKey) {
 	}
 	idle := func() bool {
 		return a.mode == modeNormal && len(a.pending) == 0 && a.count == 0 && !a.replacing && a.finding == "" && a.selecting == "" && a.marking == "" && a.macroKey == ""
+	}
+	// The recap card closes with Esc or q; in Insert, one Esc closes it and
+	// leaves Insert, as the person would not think of a second. The key
+	// that brings the person back opens it and does not close it.
+	if !back && a.recordInto == 0 && a.cur.recapX > 0 && (idle() && (k == "q" || k == "<Esc>") || a.mode == modeInsert && k == "<Esc>") {
+		a.closeRecap(a.cur.Buf.Thread)
+		if a.mode != modeInsert {
+			return
+		}
 	}
 	if a.recordInto != 0 && a.playing == 0 {
 		if k == "q" && idle() {
@@ -1206,7 +1215,7 @@ func (a *App) send() {
 		}
 	}
 	p.Text, p.Cur, p.ed, p.Images = nil, 0, nil, nil
-	a.recapOn = false
+	a.closeRecap(b.Thread)
 	if a.cur.inPrompt {
 		a.cur.Cur, a.cur.Col = 0, width(" › ")
 	}

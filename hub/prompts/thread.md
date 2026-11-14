@@ -39,8 +39,8 @@ You have these tools through the `neoharness` MCP server:
 - `read_artifact(name)` reads an artifact. `workspace_status()` lists them.
 - `recap(text)` says where your work stands, in one or two short sentences:
   what it came to and what is next or needs the person. The person reads
-  it above your prompt when they come back. Call it last in a turn in which
-  your work moved.
+  it at the top of your chat when they come back. Call it last in a turn in
+  which your work moved.
 - `whoami()` shows your identity.
 
 Stay within your task.

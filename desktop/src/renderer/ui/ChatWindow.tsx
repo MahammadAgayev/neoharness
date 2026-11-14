@@ -287,7 +287,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   const v = useStore((s) => s.threads[thread])
   const blocks = useStore((s) => s.chats[thread]) ?? []
   const folds = useStore((s) => s.folds)
-  const recapOn = useStore((s) => s.recapOn)
+  const recap = useStore(() => store.showsRecap(thread)) ? v?.recap : undefined
   const artifactList = useStore((s) => s.artifacts)
   // A peek's artifacts are of its workspace: they open from their blocks.
   const artifacts = useMemo(() => new Set(peek ? [] : artifactList.map((a) => a.name)), [artifactList, peek])
@@ -548,6 +548,17 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           />
         </div>
       )}
+      {recap && (
+        <div className="recap-card">
+          <div className="recap-head">
+            <span>recap</span>
+            <button className="recap-close" data-tip="Close (Esc)" onClick={() => store.closeRecap(thread)}>
+              ×
+            </button>
+          </div>
+          <div className="recap-text">{recap}</div>
+        </div>
+      )}
       <div
         className="transcript"
         ref={scroller}
@@ -603,7 +614,6 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           ))}
         </div>
       </div>
-      {recapOn && v?.state === 'idle' && v.recap && <div className="recap">※ {v.recap}</div>}
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>
         <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
       </div>

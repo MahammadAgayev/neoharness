@@ -168,12 +168,15 @@ type App struct {
 	lastClick              time.Time
 	lastClickX, lastClickY int
 	// now is the clock, for tests. lastKey is the last key and blurAt when
-	// the terminal lost focus: how long the person was away. recapOn says
-	// they came back and have not sent a message since.
+	// the terminal lost focus: how long the person was away.
 	now     func() time.Time
 	lastKey time.Time
 	blurAt  time.Time
-	recapOn bool
+	// recapOpen holds the chats, by recapKey, that show their recap card:
+	// the person came back to a recap they had not closed. recapSeen is
+	// the time of the recap they closed last in each.
+	recapOpen map[string]bool
+	recapSeen map[string]time.Time
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key
@@ -277,16 +280,18 @@ func Run(c Client, hub Hub) error {
 
 func newApp(s tcell.Screen, c Client) *App {
 	a := &App{
-		s:        newCanvas(s),
-		c:        c,
-		th:       newTheme(),
-		openURL:  func(open, url string) error { return exec.Command(open, url).Start() },
-		bufs:     map[string]*Buffer{},
-		threads:  map[string]model.ThreadView{},
-		comps:    map[string]model.Completions{},
-		compBusy: map[string]bool{},
-		menuShut: -1,
-		now:      time.Now,
+		s:         newCanvas(s),
+		c:         c,
+		th:        newTheme(),
+		openURL:   func(open, url string) error { return exec.Command(open, url).Start() },
+		bufs:      map[string]*Buffer{},
+		threads:   map[string]model.ThreadView{},
+		comps:     map[string]model.Completions{},
+		compBusy:  map[string]bool{},
+		menuShut:  -1,
+		now:       time.Now,
+		recapOpen: map[string]bool{},
+		recapSeen: map[string]time.Time{},
 	}
 	a.workspacesBuf = newBuffer("neoharness://workspaces", KindWorkspaces)
 	a.messagesBuf = newBuffer("neoharness://messages", KindMessages)
@@ -687,6 +692,10 @@ func (a *App) onView(v model.ThreadView) {
 	}
 	a.chat(v.Name).SetPending(v.Pending)
 	a.chat(v.Name).SetWorking(v.State == model.StateRunning)
+	// A turn makes the recap old news; its next one waits for the next return.
+	if v.State == model.StateRunning {
+		delete(a.recapOpen, a.recapKey(v.Name))
+	}
 	// A turn that ended may have reported the thread's first command list.
 	if had && old.State == model.StateRunning && v.State != model.StateRunning {
 		if b := a.chat(v.Name); a.mode == modeInsert && a.cur.Buf == b {
@@ -1345,13 +1354,15 @@ func pad(s string, n int) string {
 
 // keyAfterAway shows the recap at the first key after a long pause, for a
 // terminal that sends no focus events: tmux may report focus once and
-// never again.
-func (a *App) keyAfterAway() {
+// never again. It says whether the key brought the person back.
+func (a *App) keyAfterAway() bool {
 	now := a.now()
-	if !a.lastKey.IsZero() && now.Sub(a.lastKey) >= model.RecapAway {
-		a.recapOn = true
+	back := !a.lastKey.IsZero() && now.Sub(a.lastKey) >= model.RecapAway
+	if back {
+		a.cameBack()
 	}
 	a.lastKey = now
+	return back
 }
 
 // focus is the terminal gaining or losing focus.
@@ -1361,8 +1372,28 @@ func (a *App) focus(in bool) {
 		return
 	}
 	if !a.blurAt.IsZero() && a.now().Sub(a.blurAt) >= model.RecapAway {
-		a.recapOn = true
+		a.cameBack()
 	}
 	// The person is here now; their next key is not a second return.
 	a.blurAt, a.lastKey = time.Time{}, a.now()
+}
+
+// cameBack opens the recap card of each chat with a recap the person has not
+// closed.
+func (a *App) cameBack() {
+	for n, v := range a.threads {
+		if k := a.recapKey(n); v.Recap != "" && v.RecapAt.After(a.recapSeen[k]) {
+			a.recapOpen[k] = true
+		}
+	}
+}
+
+func (a *App) recapKey(thread string) string { return a.workspace + "/" + thread }
+
+// closeRecap closes a chat's recap card; it opens again only for a newer
+// recap.
+func (a *App) closeRecap(thread string) {
+	k := a.recapKey(thread)
+	delete(a.recapOpen, k)
+	a.recapSeen[k] = a.threads[thread].RecapAt
 }

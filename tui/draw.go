@@ -121,8 +121,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		promptLines, promptCur, promptFirst = a.promptLines(w, focused)
 		promptTop = status - len(promptLines)
 	}
-	recap := a.recapLines(w)
-	textBottom := promptTop - len(recap)
+	textBottom := promptTop
 	if b.Prompt != nil {
 		textBottom-- // a blank line between transcript and prompt
 	}
@@ -130,6 +129,19 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	cardBottom := textBottom
 	if title, body, _ := a.card(w); title != "" && textBottom-len(body)-2 > top {
 		textBottom -= len(body) + 2
+	}
+	// The transcript starts under the recap card, so the card hides none of it.
+	bw := min(r.W-1, a.textWidth(w))
+	recap := a.recapBody(w, bw-4)
+	w.recapX = 0
+	if len(recap) > 0 && textBottom-top > len(recap)+3+minTranscript {
+		a.box(r.X, top, bw, len(recap)+2, "recap", a.th.Pine)
+		w.recapX = r.X + bw - 3
+		a.put(w.recapX-1, top, r.X+bw-1, " × ", a.th.Subtle)
+		for i, l := range recap {
+			a.drawLine(r.X+2, top+1+i, r.X+bw-2, l)
+		}
+		top += len(recap) + 3
 	}
 	h := max(textBottom-top, 1)
 	w.textH = h
@@ -247,9 +259,6 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		a.drawRail(w, lines, top, h)
 	}
 
-	for i, l := range recap {
-		a.drawLine(r.X, promptTop-len(recap)+i, right, l)
-	}
 	if b.Prompt != nil {
 		for i, l := range promptLines {
 			if i == promptCur {
@@ -281,18 +290,20 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	a.drawStatus(w, status, focused)
 }
 
-// recapLines are a chat's recap, dim above its prompt, once the person came
-// back; at most two rows, so the transcript keeps its room.
-func (a *App) recapLines(w *Window) []Line {
+// minTranscript is the fewest transcript rows the recap card leaves.
+const minTranscript = 3
+
+// recapBody is the text of a chat's recap card, w cells wide; nil when the
+// card does not show. A long recap is cut at 4 rows.
+func (a *App) recapBody(w *Window, width int) []Line {
 	v, ok := a.threads[w.Buf.Thread]
-	if !a.recapOn || w.Buf.Prompt == nil || !ok || v.State != model.StateIdle || v.Recap == "" {
+	if w.Buf.Kind != KindChat || !ok || !a.recapOpen[a.recapKey(v.Name)] || v.Recap == "" || v.State == model.StateRunning || width < 10 {
 		return nil
 	}
-	th := a.th
-	l := wrap([]Span{{v.Recap, th.Muted}}, a.textWidth(w), []Span{{" ※ ", th.Muted}}, []Span{{"   ", th.Text}})
-	if len(l) > 2 {
-		l = l[:2]
-		l[1].Spans = append(clone(l[1].Spans), Span{"…", th.Muted})
+	l := wrap([]Span{{v.Recap, a.th.Text}}, width, nil, nil)
+	if len(l) > 4 {
+		l = l[:4]
+		l[3].Spans = append(clone(l[3].Spans), Span{"…", a.th.Muted})
 	}
 	return l
 }

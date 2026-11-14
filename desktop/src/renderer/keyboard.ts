@@ -402,6 +402,17 @@ export function onKey(e: KeyboardEvent): void {
   }
 
   const ed = focusedEditor()
+  // The recap card closes with Esc, or q out of an editor. In Insert one Esc
+  // closes it and still leaves Insert.
+  const w = store.cur()
+  if (w?.buf.kind === 'chat' && store.showsRecap(w.buf.thread) && (key === '<Esc>' || (key === 'q' && !ed))) {
+    store.closeRecap(w.buf.thread)
+    if (!ed || !s.insert) {
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
+  }
   if (ed) {
     // Without Vim an editor keeps every key; its own <Esc> leaves it.
     if (!s.settings.vim) return

@@ -185,7 +185,7 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			return text("Question posted. End your turn now; the answer arrives as your next message."), nil, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "recap", Description: "Say where your work stands, so the person gets back on track when they come back. It shows above your prompt; it replaces your last one. Call it last in a turn in which your work moved. Plain words, short: outcomes, not steps."},
+	mcp.AddTool(s, &mcp.Tool{Name: "recap", Description: "Say where your work stands, so the person gets back on track when they come back. It shows at the top of your chat when they come back; it replaces your last one. Call it last in a turn in which your work moved. Plain words, short: outcomes, not steps."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in recapIn) (*mcp.CallToolResult, any, error) {
 			if err := h.Recap(p, me, in.Text); err != nil {
 				return nil, nil, err

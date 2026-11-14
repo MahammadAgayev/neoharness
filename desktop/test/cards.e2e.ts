@@ -779,27 +779,49 @@ test("an idle thread's row shows the start of its last reply, its group a count"
   await expect(row.locator('.list-detail')).toHaveCount(0)
 })
 
-test('the recap shows above the prompt after two minutes away, until a message', async () => {
+test('the recap card shows at the top after two minutes away; Esc, q or × closes it until a new recap', async () => {
   await page.keyboard.press('Escape')
   await page.keyboard.press('Space')
   await page.keyboard.press('c')
-  hub.setView(view('demo', 'coordinator', { state: 'idle', recap: 'Cache added; review next.' }))
-  const recap = page.locator('.pane.focused .recap')
-  await expect(page.locator('.pane.focused .prompt')).toBeVisible()
-  await expect(recap).toHaveCount(0)
+  const card = page.locator('.pane.focused .recap-card')
+  let n = 0
+  const recap = async (text: string) => {
+    n++
+    hub.setView(view('demo', 'coordinator', { state: 'idle', recap: text, recapAt: new Date(Date.now() + n * 1000).toISOString() }))
+    await expect(page.locator('.pane.focused .prompt')).toBeVisible()
+  }
   // Away: the window loses focus, and comes back three minutes later.
-  await page.evaluate(() => {
-    window.dispatchEvent(new Event('blur'))
-    const real = Date.now
-    Date.now = () => real() + 3 * 60_000
-    window.dispatchEvent(new Event('focus'))
-    Date.now = real
-  })
-  await expect(recap).toHaveText('※ Cache added; review next.')
+  const away = () =>
+    page.evaluate(() => {
+      window.dispatchEvent(new Event('blur'))
+      const real = Date.now
+      Date.now = () => real() + 3 * 60_000
+      window.dispatchEvent(new Event('focus'))
+      Date.now = real
+    })
+  await recap('Cache added; review next.')
+  await expect(card).toHaveCount(0)
+  await away()
+  await expect(card).toContainText('Cache added; review next.')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+  await expect(card).toHaveCount(0)
+  await away()
+  await expect(card).toHaveCount(0)
+
+  await recap('Docs updated.')
+  await away()
+  await expect(card).toContainText('Docs updated.')
+  await card.locator('.recap-close').click()
+  await expect(card).toHaveCount(0)
+
+  await recap('Store moved.')
+  await away()
+  await expect(card).toContainText('Store moved.')
   await page.locator('.pane.focused .prompt').click()
   await page.keyboard.type('go on')
   await page.keyboard.press('Enter')
-  await expect(recap).toHaveCount(0)
+  await expect(card).toHaveCount(0)
 })
 
 test('Copy on a message copies its markdown, and on a code block its code', async () => {

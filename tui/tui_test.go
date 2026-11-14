@@ -3629,51 +3629,99 @@ func TestFailedTurnToastStaysAnError(t *testing.T) {
 	}
 }
 
-// A session's recap shows dim above its prompt when the person comes back
-// after model.RecapAway, as in Claude Code, and goes when they send a
-// message. A short break shows nothing.
-func TestTheRecapShowsAboveThePromptAfterAway(t *testing.T) {
+// A session's recap shows as a card at the top of its chat when the person
+// comes back after model.RecapAway. Esc, q or × closes it, and it comes
+// back only with a new recap. A message to the session closes it too.
+func TestTheRecapCardShowsAtTheTopAfterAway(t *testing.T) {
 	h := start(t)
 	h.openDemo()
+	h.press("<Esc>")
 	clock := time.Now()
 	h.a.now = func() time.Time { return clock }
 	v := h.a.threads[model.Coordinator]
-	v.Recap = "Cache added; review next."
-	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
-	shows := func() bool {
+	recap := func(text string) {
+		clock = clock.Add(time.Second)
+		v.Recap, v.RecapAt = text, clock
+		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	}
+	row := func(text string) int {
 		h.a.draw()
-		return strings.Contains(h.screen(), "Cache added; review next.")
+		for i, l := range strings.Split(h.screen(), "\n") {
+			if strings.Contains(l, text) {
+				return i
+			}
+		}
+		return -1
 	}
 	away := func(d time.Duration) {
 		h.a.handle(tcell.NewEventFocus(false))
 		clock = clock.Add(d)
 		h.a.handle(tcell.NewEventFocus(true))
 	}
-	if shows() {
+	recap("Cache added; review next.")
+	if row("Cache added") >= 0 {
 		t.Fatal("the recap shows before the person was away")
 	}
 	away(30 * time.Second)
-	if shows() {
+	if row("Cache added") >= 0 {
 		t.Fatal("the recap shows after a short break")
 	}
 	away(model.RecapAway)
-	if !shows() {
-		t.Fatalf("no recap after the person came back:\n%s", h.screen())
+	if r := row("Cache added"); r < 0 || r > 3 {
+		t.Fatalf("no recap card at the top, row %d:\n%s", r, h.screen())
 	}
-	h.press("i", "go on", "<CR>", "<Esc>")
-	if shows() {
-		t.Fatal("the recap stays after a message")
+	h.see("recap")
+	h.press("<Esc>")
+	if row("Cache added") >= 0 {
+		t.Fatal("Esc does not close the card")
+	}
+	away(model.RecapAway)
+	if row("Cache added") >= 0 {
+		t.Fatal("a closed recap came back")
+	}
+
+	recap("Docs updated.")
+	away(model.RecapAway)
+	if row("Docs updated.") < 0 {
+		t.Fatal("a new recap does not show")
+	}
+	h.press("q")
+	if row("Docs updated.") >= 0 {
+		t.Fatal("q does not close the card")
 	}
 
 	// A terminal with no focus events: the first key after a long pause.
+	recap("Store moved.")
 	clock = clock.Add(model.RecapAway)
 	h.press("k")
-	if !shows() {
-		t.Fatal("no recap at the first key after away")
+	if row("Store moved.") < 0 {
+		t.Fatal("no card at the first key after away")
 	}
+	h.press("i", "go on", "<CR>")
+	if row("Store moved.") >= 0 {
+		t.Fatal("the card stays after a message to the session")
+	}
+	h.press("<Esc>")
+
+	recap("Bench done.")
+	away(model.RecapAway)
+	y := row("recap")
+	x := strings.Index(strings.Split(h.screen(), "\n")[y], "×")
+	if x < 0 {
+		t.Fatalf("no × on the card:\n%s", h.screen())
+	}
+	x = len([]rune(strings.Split(h.screen(), "\n")[y][:x]))
+	h.a.handle(tcell.NewEventMouse(x, y, tcell.Button1, 0))
+	h.a.handle(tcell.NewEventMouse(x, y, tcell.ButtonNone, 0))
+	if row("Bench done.") >= 0 {
+		t.Fatal("× does not close the card")
+	}
+
+	recap("Tests pass.")
+	away(model.RecapAway)
 	v.State = model.StateRunning
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
-	if shows() {
-		t.Fatal("the recap shows while a turn runs")
+	if row("Tests pass.") >= 0 {
+		t.Fatal("the card shows while a turn runs")
 	}
 }

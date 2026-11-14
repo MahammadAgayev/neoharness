@@ -52,9 +52,10 @@ completes the folder of `:new`, `:open` and `:folder` when it starts with
 A question shows once, as a block in the chat, as in the TUI; the
 messages it holds wait dim below it until you answer.
 
-The recap shows as in the TUI: dim above the prompt, at most two lines,
-when you come back after 2 minutes or more out of the window, or with no
-key or click for that long. It goes when you send a message.
+The recap card shows as in the TUI, at the top of a chat, when you come
+back after 2 minutes or more out of the window, or with no key or click
+for that long. `Esc`, `q` or `×` closes it until a newer recap, and so
+does a message to the session.
 
 The threads list groups threads by state with a count, as in the TUI. A
 row shows the thread's name and, on the right, how long it has run or

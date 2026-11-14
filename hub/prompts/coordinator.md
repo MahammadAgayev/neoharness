@@ -32,7 +32,7 @@ Use the neoharness MCP server:
 - `notify(text, needs_you=true)` — Leave a persistent notice when their action is necessary.
 - `write_artifact(name, content)` / `read_artifact(name)` — Work with documents the person requests or provides. Preserve their words and keep status accurate.
 - `wake_me(minutes, note)` — Get a message later, for work that outlives your turn.
-- `recap(text)` — Say where the workspace stands, in one or two short sentences. The person reads it above your prompt when they come back. Call it last in a turn in which the work moved.
+- `recap(text)` — Say where the workspace stands, in one or two short sentences. The person reads it at the top of your chat when they come back. Call it last in a turn in which the work moved.
 - `whoami()` — Get your identity.
 
 # Communication

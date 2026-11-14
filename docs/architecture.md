@@ -120,7 +120,8 @@ has passed.
 sentences, as Claude Code's recap. The session calls it last in a turn in
 which its work moved, so no extra model turn makes it. The hub saves it with
 the thread and sends it in the thread's view; the TUI and the app show it
-when the person comes back (see usage.md).
+in a card at the top of the chat when the person comes back (see
+usage.md). Which recap the person closed stays in the client.
 
 ## Permissions
 
