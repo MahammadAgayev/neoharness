@@ -777,6 +777,26 @@ test("an idle thread's row shows the start of its last reply, its group a count"
   await expect(row.locator('.list-detail')).toHaveCount(0)
 })
 
+test('Copy on a message copies its markdown, and on a code block its code', async () => {
+  const saved = await app.evaluate(({ clipboard }) => clipboard.readText())
+  try {
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Space')
+    await page.keyboard.press('c')
+    hub.event('demo', 'coordinator', { kind: 'text', text: 'Run **this**:\n\n```sh\n./check.sh\n```' })
+    const msg = page.locator('.pane.focused .copyable').last()
+    await msg.hover()
+    await msg.locator('.msg-copy').click()
+    await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('Run **this**:\n\n```sh\n./check.sh\n```')
+    await expect(msg.locator('.msg-copy')).toHaveText('Copied')
+    await msg.locator('pre.code').hover()
+    await msg.locator('pre.code .copy').click()
+    await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('./check.sh')
+  } finally {
+    await app.evaluate(({ clipboard }, t) => clipboard.writeText(t), saved)
+  }
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

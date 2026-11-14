@@ -156,7 +156,8 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   artifact or a queued message, drag the line between columns, the × at
   the end of a window's status line closes it (`⌘W`). A right
   click on a thread or a block gives its actions (open in a split,
-  resolve, stop, copy, delete); hints show on hover.
+  resolve, stop, copy, delete); hints show on hover. A reply shows Copy
+  on hover, which copies it as markdown; a code block has its own Copy.
 - **Images**: paste a picture (`⌘V`) into the prompt, and it goes to the
   agent with the message, as in Claude Code. The prompt shows it as a
   small `[image 1]`; delete the token and the image does not go. Up to 5

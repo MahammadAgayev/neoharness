@@ -802,6 +802,39 @@ kbd {
   font-size: var(--fs-secondary);
   line-height: 1.6;
 }
+/* copy buttons: a whole message, or a code block; quiet until hovered */
+.copyable {
+  position: relative;
+}
+.copy {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--subtle);
+  font: inherit;
+  font-size: var(--fs-small);
+  padding: 1px 8px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.msg-copy {
+  top: -4px;
+  right: 0;
+}
+.copyable:hover > .copy,
+.md pre.code:hover > .copy {
+  opacity: 1;
+}
+.copy:hover {
+  color: var(--text);
+}
+.md pre.code:hover > .code-lang {
+  opacity: 0;
+}
 .code-lang {
   position: absolute;
   top: 6px;

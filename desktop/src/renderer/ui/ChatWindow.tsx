@@ -5,7 +5,7 @@ import { blockText, shortTool, shortTools, type Block } from '../lib/transcript'
 import { wakeLabel } from '../lib/wake'
 import { elapsed, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
-import { Markdown } from './Markdown'
+import { copied, Markdown } from './Markdown'
 import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
@@ -84,6 +84,21 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
   )
 }
 
+// CopyButton copies a whole message as its markdown, on hover.
+function CopyButton(props: { text: string }) {
+  return (
+    <button
+      className="copy msg-copy"
+      onClick={(e) => {
+        e.stopPropagation()
+        copied(e.currentTarget, props.text)
+      }}
+    >
+      Copy
+    </button>
+  )
+}
+
 const BlockView = memo(function BlockView(props: {
   b: Block
   open: boolean
@@ -97,13 +112,19 @@ const BlockView = memo(function BlockView(props: {
     case 'message':
       if (b.from === User) return <div className="b-user">{b.text}</div>
       return (
-        <div className="b-from">
+        <div className="b-from copyable">
+          <CopyButton text={b.text} />
           <div className="b-label t-rose">from {b.from}</div>
           <Markdown text={b.text} artifacts={props.artifacts} />
         </div>
       )
     case 'text':
-      return <Markdown className="b-text" text={b.text} artifacts={props.artifacts} />
+      return (
+        <div className="copyable">
+          <CopyButton text={b.text} />
+          <Markdown className="b-text" text={b.text} artifacts={props.artifacts} />
+        </div>
+      )
     case 'tools': {
       const last = b.tools[b.tools.length - 1]
       const failed = b.tools.filter((t) => t.failed).length
