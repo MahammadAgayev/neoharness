@@ -64,6 +64,7 @@ map("n", "<leader>x", ":deny<CR>")
 -- Notifications.
 map("n", "<leader>nc", "<Plug>(neoharness-dismiss)")
 map("n", "<leader>nh", ":messages<CR>")
+map("n", "<leader>nr", ":recap<CR>")                  -- the recap box, as :recap
 
 -- The system clipboard (OSC 52): the line, or the selection.
 map({ "n", "x" }, "<leader>y", "<Plug>(neoharness-yank)")

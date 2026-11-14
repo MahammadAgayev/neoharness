@@ -862,6 +862,16 @@ test("a thread's recap shows under its row and in its box", async () => {
   await page.keyboard.press('q')
   await expect(box).toHaveCount(0)
   expect(seen()).toEqual(['/workspaces/demo/threads/api/recap/seen'])
+
+  // <leader>nr opens and closes it, as :recap.
+  await page.keyboard.press('Space')
+  await page.keyboard.press('n')
+  await page.keyboard.press('r')
+  await expect(box).toBeVisible()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('n')
+  await page.keyboard.press('r')
+  await expect(box).toHaveCount(0)
 })
 
 test('the recap box pops up when the person comes back to news', async () => {

@@ -91,8 +91,8 @@ thread yourself:
   card, and not when nothing changed.
 - `Esc`, `q` or a click on its `×` closes the box; the other keys still
   work while it shows. Closing marks it seen in the hub, so the app does
-  not show the same news again. `:recap` opens it, or closes it, at any
-  time. `neoharness.o.recap = false` in `init.lua` stops it showing by
+  not show the same news again. `:recap` or `<leader>nr` opens it, or
+  closes it, at any time. `neoharness.o.recap = false` in `init.lua` stops it showing by
   itself.
 - `:recap!` asks for a fresh recap, and opens its box: of the thread in the
   window or under the cursor, of a thread you name (`:recap! api`), or in
@@ -213,6 +213,7 @@ reports. They belong to the workspace, and every session can read them.
 | `v V y yy` `<leader>y` | select and yank; every yank also goes to the system clipboard |
 | `<C-h/j/k/l>` `<Tab>` | move between windows |
 | `<leader>nc` / `<leader>nh` | dismiss notifications / their history |
+| `<leader>nr` | open or close the recap box, as `:recap` |
 | in pickers: `<CR>` `<C-v>` `<C-x>` `<C-d>` | open, split right, split above, delete (after `y`) |
 
 The mouse works too: a click focuses a window and puts the cursor there, a

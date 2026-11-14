@@ -3647,6 +3647,14 @@ func TestARecapShowsUnderItsRowAndInTheThreadsBox(t *testing.T) {
 	if strings.Contains(h.screen(), "failed   the agent") || !slices.Equal(h.hub.seen, []string{"api-tests"}) {
 		t.Fatalf("q: seen %v\n%s", h.hub.seen, h.screen())
 	}
+
+	// <leader>nr opens and closes it, as :recap.
+	h.press("<Space>", "n", "r")
+	h.see("failed   the agent failed: boom")
+	h.press("<Space>", "n", "r")
+	if strings.Contains(h.screen(), "failed   the agent") {
+		t.Fatalf("a second <leader>nr leaves the box open:\n%s", h.screen())
+	}
 }
 
 // A row shows the hub's headline of an outcome; the box holds all of it.

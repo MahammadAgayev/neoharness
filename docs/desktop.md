@@ -60,7 +60,7 @@ one cell per thread, one row per thread (a click shows it), and the
 coordinator's lines; in a thread's window, that thread's recap in full.
 "ask again" asks for a fresh recap, which runs a turn. Esc, `q` or `×`
 closes it and marks it seen in the hub, so the TUI does not show it again.
-`:recap` opens or closes it, and `:recap!` asks for a fresh one. Settings'
+`:recap` or `<leader>nr` opens or closes it, and `:recap!` asks for a fresh one. Settings'
 "Recap pop-up" switch, or `:set norecap`, stops it showing by itself. The
 sidebar and the workspaces screen show `✗ N` beside a workspace whose
 threads failed.
