@@ -49,25 +49,30 @@ splits, toasts, marks (`ma`, `'a`, `''`), and the ex commands (`:new`, `:open`, 
 completes the folder of `:new`, `:open` and `:folder` when it starts with
 `~/` or `/`; the app has no working folder for a relative one.
 
-Each thread's recap shows under its row. The recap box pops up on the prompt
-of the chat it belongs to, as in the TUI, when you come back to news you have not seen:
-the window gets focus after two minutes away, or you open a workspace you
-have not looked at for two minutes. It never shows while you write a
-message, nor over a permission or question card. Its border takes the color
-of what matters most: gold for what waits for you, red for a failure, foam
-while threads run, pine when all is done. It holds the counts, a strip with
-one cell per thread, one row per thread (a click shows it), and the
-coordinator's lines; in a thread's window, that thread's recap in full.
-"ask again" asks for a fresh recap, which runs a turn. Esc, `q` or `×`
-closes it and marks it seen in the hub, so the TUI does not show it again.
-`:recap` or `<leader>nr` opens or closes it, and `:recap!` asks for a fresh one. Settings'
-"Recap pop-up" switch, or `:set norecap`, stops it showing by itself. The
-sidebar and the workspaces screen show `✗ N` beside a workspace whose
-threads failed.
+Each turn ends with a muted recap line under the reply, and each thread's
+recap shows under its row. Settings' "Recap line" switch, or `:set
+norecap`, hides the line.
+
+`:summary` or `<leader>ns` opens the summary in the window, as in the TUI:
+in a thread's window, what the thread has done, has in progress and needs
+from you, each item with its thread or artifact, then the facts of its last
+turn; elsewhere, the workspace's goal, counts and the coordinator's summary,
+or one row per open thread until it writes one. It is a window like any
+other: `j` `k` move its cursor line, `y` yanks, `<CR>` or a click opens the
+item's thread or artifact, and `<C-o>` or `<leader>ns` goes back. Opening it
+marks the news seen in the hub, so the TUI does not tell it again.
+`:summary!` asks for a fresh one, which runs a turn.
+
+When you come back to news you have not seen (the window gets focus after
+two minutes away, or you open a workspace you have not looked at for two
+minutes), a toast says `news in demo · <leader>ns`; a click opens the
+summary. It never comes while you write a message. Settings' "Summary
+toast" switch, or `:set nosummary`, turns it off. The sidebar and the
+workspaces screen show `✗ N` beside a workspace whose threads failed.
 
 A question sits on the prompt in the same place, in a gold card: the
 question in one line, the messages it holds until you answer, Reply and
-Send now. It takes the place of the recap box while it waits.
+Send now.
 
 The app does not read `init.lua`; the hub settings in it apply to both.
 What the TUI takes from `init.lua` for itself is in Settings instead.

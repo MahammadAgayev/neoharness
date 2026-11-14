@@ -55,18 +55,18 @@ func Reports(names []string) string {
 
 // RecapDue wakes the coordinator to write the workspace recap.
 func RecapDue() string {
-	return "The threads that ran have ended their turns. Write your workspace recap with workspace_recap."
+	return "The threads that ran have ended their turns. Write your workspace summary with workspace_recap."
 }
 
 // RecapAsked is the person asking a thread for a fresh recap.
 func RecapAsked() string {
-	return "How does your work stand now? Say it with recap, and start no other work."
+	return "How does your work stand now? Say it with recap, with your summary, and start no other work."
 }
 
 // WorkspaceRecapAsked is the person asking the coordinator for a fresh
 // workspace recap.
 func WorkspaceRecapAsked() string {
-	return "How does the workspace stand now? Say it with workspace_recap, and start no other work."
+	return "How does the workspace stand now? Write the workspace summary with workspace_recap, and start no other work."
 }
 
 // Thread is the system prompt for a thread.
@@ -154,6 +154,8 @@ type Recap struct {
 	// Failed are the commands that failed.
 	Failed            []string
 	Edited, Artifacts []string
+	// Done, Doing and Needs are the thread's summary of its tasks.
+	Done, Doing, Needs []string
 }
 
 // Wait is what a waiting thread waits for. Permission is the tool and what
@@ -201,7 +203,16 @@ func BoardLine(name, state string, w Wait, r *Recap, ended bool) string {
 	}
 	part("Open", r.Open)
 	part("Failed", r.Error)
-	return s + " Seen by neoharness: " + seen(r) + "."
+	s += " Seen by neoharness: " + seen(r) + "."
+	list := func(label string, items []string) {
+		if len(items) > 0 {
+			s += " " + label + ": " + strings.Join(items, "; ") + "."
+		}
+	}
+	list("Done", r.Done)
+	list("In progress", r.Doing)
+	list("Needs the person", r.Needs)
+	return s
 }
 
 // seen is what the hub saw a turn do, in short: the failed commands by name,

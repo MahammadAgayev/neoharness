@@ -934,33 +934,6 @@ kbd {
   font-style: italic;
 }
 
-/* a thread's recap, between its transcript and its prompt */
-.recap {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  border-top: 1px solid var(--hl-med);
-  padding: 10px 24px;
-  font-size: var(--fs-secondary);
-}
-.recap-inner {
-  flex: 1;
-  min-width: 0;
-  max-width: var(--measure);
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  column-gap: 14px;
-  row-gap: 2px;
-}
-.recap-label {
-  color: var(--muted);
-}
-.recap-body {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 /* the recap's own controls: quiet until pointed at */
 .recap-actions {
   display: flex;
@@ -976,9 +949,8 @@ kbd {
   justify-content: flex-end;
   padding: 0 24px;
 }
-/* the recap box: it pops up over the top of the work when the person comes
-   back, so it stands out on purpose, with a border in the color of what
-   matters most in it */
+/* the question card: it sits on the prompt and stands out on purpose,
+   with a gold border */
 .box-anchor {
   position: relative;
   flex: none;
@@ -1017,10 +989,6 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.recap-box.b-love { --box: var(--love); }
-.recap-box.b-foam { --box: var(--foam); }
-.recap-box.b-pine { --box: var(--pine); }
-.recap-box.b-muted { --box: var(--muted); }
 .box-head {
   display: flex;
   align-items: center;
@@ -1041,84 +1009,38 @@ kbd {
 .box-head .btn {
   color: var(--muted);
 }
-.box-close {
-  border: 0;
-  background: none;
-  color: var(--subtle);
-  font-size: 18px;
-  line-height: 1;
-  padding: 2px 6px;
+
+/* the summary: a list window, one row per line, with a cursor line */
+.summary-list {
+  padding: 14px 24px;
+}
+.summary-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  max-width: var(--measure);
+  padding: 2px 8px;
   border-radius: 6px;
+  min-height: 1.5em;
+}
+.summary-row.linked {
   cursor: pointer;
 }
-.box-close:hover {
+.summary-row.cursor {
   background: var(--hl-med);
-  color: var(--text);
 }
-.box-counts {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.summary-head {
+  margin-top: 2px;
 }
-.box-strip {
-  display: flex;
-  gap: 3px;
-}
-.box-cell {
-  width: 14px;
-  height: 6px;
-  border-radius: 3px;
-}
-.bg-gold { background: var(--gold); }
-.bg-love { background: var(--love); }
-.bg-foam { background: var(--foam); }
-.bg-pine { background: var(--pine); }
-.bg-muted { background: var(--hl-high); }
-.box-threads {
-  display: grid;
-  grid-template-columns: max-content max-content minmax(0, 1fr);
-  column-gap: 10px;
-  row-gap: 2px;
-  margin-top: 10px;
-}
-.box-row {
-  display: contents;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.box-row > span {
-  padding: 1px 0;
-}
-.box-detail {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.summary-link {
+  margin-left: auto;
+  padding-left: 12px;
   white-space: nowrap;
 }
-.box-lines {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--hl-med);
-}
-/* a thread's recap in the box: the box is its frame */
-.recap-box .recap {
-  border-top: 0;
-  padding: 0;
-}
-.recap-box .recap-inner {
-  max-width: none;
-}
-.recap-line {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-.recap-words {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
+
+/* a turn's recap: one muted line under the reply */
+.b-recap {
+  font-size: var(--fs-secondary);
 }
 
 /* documents */

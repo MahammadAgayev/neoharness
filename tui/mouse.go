@@ -24,13 +24,6 @@ func (a *App) mouse(ev *tcell.EventMouse) {
 		return
 	}
 	x, y := ev.Position()
-	if b := a.boxRect; pressed && x >= b.X && x < b.X+b.W && y >= b.Y && y < b.Y+b.H {
-		// The box covers the window's top; only its × does something.
-		if y == b.Y && x >= b.X+b.W-4 {
-			a.closeBox()
-		}
-		return
-	}
 	w := a.windowAt(x, y)
 	if w == nil {
 		return

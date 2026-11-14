@@ -33,7 +33,7 @@ const appMaps: Record<string, Action> = {
   '<leader>c': c('coordinator'),
   '<leader>nc': c('dismiss'),
   '<leader>nh': c('messages'),
-  '<leader>nr': c('recap'),
+  '<leader>ns': c('summary'),
   '<leader>a': c('allow'),
   '<leader>A': c('always'),
   '<leader>x': c('deny'),
@@ -387,15 +387,6 @@ export function onKey(e: KeyboardEvent): void {
   }
   // The picker, the command line and the settings are inputs of their own.
   if (s.picker || s.cmdline !== null || s.settingsOpen || s.helpOpen || s.cost || s.choice || s.newWorkspace || s.newDoc) return
-  if (s.recapBox && !s.insert && (key === '<Esc>' || key === 'q')) {
-    e.preventDefault()
-    e.stopPropagation()
-    void store.closeBox()
-    return
-  }
-  // The box can show over an empty prompt in Insert: one Esc closes it and
-  // still leaves Insert.
-  if (s.recapBox && s.insert && key === '<Esc>') void store.closeBox()
 
   const km = keymaps()
   if (key.startsWith('<D-')) {

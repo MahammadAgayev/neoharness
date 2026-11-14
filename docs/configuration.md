@@ -14,6 +14,7 @@ neoharness.o.leader = ","                                 -- default <Space>
 neoharness.o.equalalways = false                          -- default true
 neoharness.o.compactwarn = 60                             -- default 80; 0 never
 neoharness.o.recap = false                                -- default true
+neoharness.o.summary = false                              -- default true
 neoharness.keymap.set("n", "<leader>t", ":threads<CR>")   -- keys or an ex command
 neoharness.keymap.set("n", "gt", function() neoharness.cmd("threads") end)
 neoharness.keymap.set("n", "Q", "<leader>t", { remap = true })
@@ -26,7 +27,8 @@ neoharness.cmd("workspace demo")                          -- runs after start
 |---|---|
 | `neoharness.o.leader` | the leader; it moves the default maps |
 | `neoharness.o.equalalways` | a split or a close makes the windows the same size |
-| `neoharness.o.recap` | the recap box shows by itself when you come back to news; `:recap` opens it either way |
+| `neoharness.o.recap` | one muted recap line under each reply says what the turn did |
+| `neoharness.o.summary` | coming back to news shows a toast; `:summary` opens the summary either way |
 | `neoharness.o.compactwarn` | past this context percent, the status line shows `ctx 82% · /compact` in red: every turn sends the whole context again, so `/compact` then saves tokens |
 | `neoharness.keymap.set(mode, lhs, rhs, opts)` | `n`, `x` or `i`; `rhs` is keys, an ex command or a function; `{ remap = true }` |
 | `neoharness.keymap.del(mode, lhs)` | removes a map |
@@ -59,7 +61,7 @@ the hub starts: run `neoharness hub restart` after a change.
 require("neoharness").setup({
   mcp_port = 47821,                     -- remote hosts reach the hub through a tunnel on it
   notify = "threads",                   -- every thread notifies you; "coordinator": the coordinator decides
-  workspace_recap = true,               -- once the threads that ran end, wake the coordinator to write the workspace recap
+  workspace_recap = true,               -- once the threads that ran end, wake the coordinator to write the workspace summary
   reopen_compact = "ask",               -- the coordinator reopens a thread past compactwarn: "compact", "ask" or "off"
   auto_compact = 90,                    -- past this context %, a session compacts before its next turn; 0 never
   coordinator = "claude",               -- the agent coordinators run

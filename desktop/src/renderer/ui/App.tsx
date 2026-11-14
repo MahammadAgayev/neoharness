@@ -15,6 +15,7 @@ import { Icon } from './Icon'
 import { Choice } from './Choice'
 import { Cost } from './Cost'
 import { Sidebar } from './Sidebar'
+import { SummaryWindow } from './Recap'
 import { ThreadsList } from './ThreadsList'
 import { Workspaces } from './Workspaces'
 
@@ -29,6 +30,8 @@ function WindowView(props: { win: Win; focused: boolean }) {
       return <ArtifactWindow key={win.buf.name} {...props} />
     case 'messages':
       return <MessagesWindow {...props} />
+    case 'summary':
+      return <SummaryWindow key={win.buf.subject} {...props} />
   }
 }
 

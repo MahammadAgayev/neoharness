@@ -113,9 +113,17 @@ A thread's recap says what its work produced, so the person learns it
 without the transcript. It has two parts that stay apart, so a claim never
 reads as a check:
 
-- **The thread's words**: `recap(asked, outcome, open?)`, its last call in a
-  turn in which its work moved. `open` is optional, so "nothing open" is no
-  value rather than words that say so.
+- **The thread's words**: `recap(asked, outcome, open?, done?, doing?,
+  needs?)`, its last call in a turn in which its work moved. `open` is
+  optional, so "nothing open" is no value rather than words that say so.
+  `asked`, `outcome` and `open` are the turn: the turn end event carries
+  the outcome and `open` (`Event.Text`, `Event.Detail`), and the UIs show
+  them in one recap line under the reply. `done`, `doing` and `needs` are
+  the thread's summary: how all its tasks stand, each a `RecapItem` with an
+  optional `Thread` or `Artifact` that the UIs open from it. The hub keeps
+  at most 6 per list and refuses a link to a thread or an artifact that
+  does not exist, so a link always opens something. A recap that names no
+  tasks keeps the last ones.
 - **What the hub saw** that turn: the commands it ran and which failed, the
   files it edited, the artifacts it wrote, and the error if the turn failed.
   The adapter says which tool calls run a command or edit a file
@@ -143,50 +151,54 @@ shapes the recap, by rules that read no words:
   to "is it committed?" does not hide the recap of the work.
 
 The recap is kept in `thread.json` and sent as `ThreadView.Recap`. The
-person can ask for a fresh one (`POST …/threads/{t}/recap`, `:recap!`, the
-app's "ask again"): the hub queues the ask as the person's message, at most
-once while it waits, so it runs a turn only on the person's act.
+person can ask for a fresh one (`POST …/threads/{t}/recap`, `:summary!`):
+the hub queues the ask as the person's message, at most once while it
+waits, so it runs a turn only on the person's act. The board shows each
+thread's summary to the coordinator, with its links, so the coordinator can
+join them.
 
 The workspace recap says how the whole workspace stands, as
 `WorkspaceView.Recap`. It holds only what no thread's recap says:
 
-- **The coordinator's words**: `workspace_recap(goal, lines)`, its last call
-  in a turn in which the board changed: what the workspace is for, and at
-  most three lines on what the threads' work means together. Until it writes
-  a goal, the goal is the first line of the person's first message to it.
-  Both are kept in `workspace.json`.
-  So the lines are fresh when the person looks, with `workspace_recap = true`
+- **The coordinator's words**: `workspace_recap(goal, done, doing, needs)`,
+  its last call in a turn in which the board changed: what the workspace is
+  for, and the workspace summary at the level of the goal, in the same
+  `RecapItem` lists as a thread's. Until it writes a goal, the goal is the
+  first line of the person's first message to it. Both are kept in
+  `workspace.json`.
+  So the summary is fresh when the person looks, with `workspace_recap = true`
   (the default) the hub wakes the coordinator once, 15 seconds after the last
-  running thread ends, when a thread's recap is newer than its lines. With
+  running thread ends, when a thread's recap is newer than its summary. With
   `notify = "coordinator"` the threads' reports wake it already.
 - **What the hub joins** from the open threads' recaps, at no cost: the files
   that two or more threads edited (each path joined back to its thread's
   folder), how many idle threads failed their last turn (`Failed`), and how
-  many recaps are newer than the lines (`Newer`). The UIs take the counts
+  many recaps are newer than the summary (`Newer`). The UIs take the counts
   from `WorkspaceView.Counts` and these fields, and count nothing
   themselves.
 
-The UIs show the recaps in a box that pops up when the person comes back.
-What is news is the hub's; when to show it is the UI's, as only it knows
-focus and typing:
+The UIs show the summaries in a window the person opens (`:summary`,
+`<leader>ns`), and a toast when the person comes back to news. What is news
+is the hub's; when to tell it is the UI's, as only it knows focus and
+typing:
 
-- **Seen** is one mark in the hub, so the TUI and the app agree. Closing a
-  thread's box marks that thread (`thread.json`), and closing the
-  workspace's box marks the workspace and so every thread
-  (`workspace.json`): `POST …/threads/{t}/recap/seen`, with the coordinator
-  for the workspace. `ThreadView.RecapUnseen` says the thread's recap is
-  newer than both marks; `WorkspaceView.RecapUnseen` says an open thread's
-  is, or the coordinator's lines are newer than the workspace's mark.
-- **When**: the box shows when the person comes back to news, and only
+- **Seen** is one mark in the hub, so the TUI and the app agree. Opening a
+  thread's summary marks that thread (`thread.json`), and opening the
+  workspace's marks the workspace and so every thread (`workspace.json`):
+  `POST …/threads/{t}/recap/seen`, with the coordinator for the workspace.
+  `ThreadView.RecapUnseen` says the thread's recap is newer than both
+  marks; `WorkspaceView.RecapUnseen` says an open thread's is, or the
+  coordinator's summary is newer than the workspace's mark.
+- **When**: the toast comes when the person comes back to news, and only
   then: the window gets focus after `model.RecapAway` (two minutes) away,
   or the person opens a workspace not looked at for as long. The TUI also
   counts the first key after as long with none: a person may leave the
   terminal in focus, and tmux may report focus once and then never.
   Never while the person types (a draft in Insert, a command line), but
   Insert with an empty prompt is not typing: the prompt often stays in
-  Insert while the person is away. Never over a permission or question
-  card in the window with focus, and never with `recap` off. In a thread's window it shows the thread's recap when that
-  is news, else the workspace's.
+  Insert while the person is away. Never with `summary` off. In a thread's
+  window it tells the thread's news when there is some, else the
+  workspace's.
 
 ## Permissions
 

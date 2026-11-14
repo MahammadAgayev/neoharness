@@ -1,7 +1,9 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
-import { Coordinator, type Recap, type ThreadView, type WorkspaceView } from '../../shared/model'
-import { store, useStore } from '../store'
+import { Coordinator, type Recap, type RecapItem, type ThreadView, type WorkspaceView } from '../../shared/model'
+import { store, useStore, type Win } from '../store'
+import { CloseWindow } from './CloseWindow'
+import { handlers, yank, type WinAction } from './registry'
 
 const counted = (n: number, what: string) => (n === 1 ? `1 ${what}` : `${n} ${what}s`)
 
@@ -53,62 +55,6 @@ export function RecapRows(props: { v: ThreadView }) {
   )
 }
 
-// RecapHead is a thread's recap in its box, one row per part: the thread's
-// words, then what the hub saw.
-function RecapHead(props: { r?: Recap }) {
-  const r = props.r
-  if (!r) return null
-  // The thread's words wrap to a few lines; what the hub saw keeps to one.
-  const row = (label: string, body: ReactNode, words = false) => (
-    <>
-      <span className="recap-label">{label}</span>
-      <span className={words ? 'recap-words' : 'recap-body'}>{body}</span>
-    </>
-  )
-  const commands = r.commands ?? []
-  const more = (r.ran ?? 0) - commands.length
-  const changed: ReactNode[] = []
-  if (r.edited?.length) changed.push(<span key="e" className="t-muted">{r.edited.join(', ')}</span>)
-  for (const a of r.artifacts ?? [])
-    changed.push(
-      <span key={a}>
-        <span className="t-foam">◇ </span>
-        <span className="t-subtle">{a}</span>
-      </span>,
-    )
-  return (
-    <div className="recap">
-      <div className="recap-inner">
-        {r.asked && row('asked', <span className="t-subtle">{r.asked}</span>, true)}
-        {r.outcome && row(r.fromReply ? 'reply' : 'outcome', <span className="t-text">{r.outcome}</span>, true)}
-        {r.error && row('failed', <span className="t-love">{r.error}</span>, true)}
-        {r.open && row('open', <span className="t-text">{r.open}</span>, true)}
-        {row(
-          'ran',
-          commands.length === 0 ? (
-            <span className="t-muted">no commands</span>
-          ) : (
-            <span className="t-muted">
-              {/* The newest first: the last commands are most often the checks. */}
-              {joined([
-                ...[...commands].reverse().map((c, i) =>
-                  c.failed ? (
-                    <span key={i} className="recap-failed t-subtle">✗ {c.text}</span>
-                  ) : (
-                    <span key={i}>{c.text}</span>
-                  ),
-                ),
-                ...(more > 0 ? [<span key="more">+{more} more</span>] : []),
-              ])}
-            </span>
-          ),
-        )}
-        {changed.length > 0 && row('changed', <span className="t-muted">{joined(changed)}</span>)}
-      </div>
-    </div>
-  )
-}
-
 const hhmm = (at: string) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
 // workspaceCounts are the hub's counts of a workspace's threads, as the
@@ -120,10 +66,10 @@ export function workspaceCounts(w?: WorkspaceView) {
   return { ...counts, any: counts.waits + counts.running + counts.failed + counts.idle > 0 }
 }
 
-// boxRank orders the threads in the workspace's box: what needs the person,
-// what failed, what came out that they have not seen, what still runs, and
-// the rest.
-function boxRank(v: ThreadView): number {
+// rank orders the threads of a workspace summary with no items of its
+// coordinator: what needs the person, what failed, what came out that they
+// have not seen, what still runs, and the rest.
+function rank(v: ThreadView): number {
   if (v.state === 'waiting') return 0
   if (v.recap?.error) return 1
   if (v.state === 'idle' && v.recapUnseen) return 2
@@ -131,8 +77,8 @@ function boxRank(v: ThreadView): number {
   return 4
 }
 
-// tone is the color of a thread's state in the box: gold waits for the
-// person, love failed, foam runs, pine came out.
+// tone is the color of a thread's state: gold waits for the person, love
+// failed, foam runs, pine came out.
 function tone(v: ThreadView): string {
   if (v.state === 'waiting') return 'gold'
   if (v.recap?.error) return 'love'
@@ -143,149 +89,216 @@ function tone(v: ThreadView): string {
 const glyph = (v: ThreadView) =>
   v.state === 'waiting' ? '◆' : v.recap?.error ? '✗' : v.state === 'running' ? '●' : v.recap ? '✓' : '○'
 
-// boxThreads is how many threads the box lists before it counts the rest.
-const boxThreads = 8
-
-// BoxRow is one thread in the workspace's box: its state and its headline.
-// What came since the person last closed the box is in Text.
-function BoxRow(props: { v: ThreadView }) {
-  const { v } = props
-  const news = v.recapUnseen ? 't-text' : 't-muted'
-  let detail: ReactNode = null
-  if (v.state === 'waiting')
-    detail = v.permission ? (
-      <>
-        <span className="t-gold">permission · {v.permission.tool} </span>
-        <span className="t-text">{v.permission.detail}</span>
-      </>
-    ) : v.waiting === 'paused' ? (
-      <span className="t-gold">paused</span>
-    ) : (
-      <>
-        <span className="t-gold">asks: </span>
-        <span className="t-text">{v.waiting}</span>
-      </>
-    )
-  else if (v.recap?.error) detail = <span className={news}>{v.recap.error}</span>
-  // The last recap is old news while a new turn runs.
-  else if (v.state === 'running') detail = null
-  else if (v.recap) detail = <span className={news}>{v.recap.headline || v.recap.outcome}</span>
-  return (
-    <button className="box-row" onClick={() => void store.showThread(v.name)}>
-      <span className={`t-${tone(v)}`}>{glyph(v)}</span>
-      <span className={v.recapUnseen || v.state === 'waiting' ? 't-text' : 't-subtle'}>{v.name}</span>
-      <span className="box-detail">{detail}</span>
-    </button>
-  )
+// Row is one line of a summary. text is what y yanks; open, when set, is
+// what <CR> and a click open.
+interface Row {
+  node: ReactNode
+  text: string
+  open?: () => void
+  cls?: string
 }
 
-// WorkspaceBox is how the workspace stands: a strip of one cell per thread,
-// the counts of what needs a look, one row per open thread, then the coordinator's lines and the
-// files two threads edited. The hub counts; this only lays out.
-function WorkspaceBox(props: { w?: WorkspaceView; threads: ThreadView[] }) {
-  const r = props.w?.recap
-  const { waits, failed } = workspaceCounts(props.w)
-  const threads = [...props.threads].sort((a, b) => boxRank(a) - boxRank(b))
+// sections are the three lists of a summary, in the order the person acts
+// on them.
+const sections: { key: 'needs' | 'done' | 'doing'; title: string; glyph: string; tone: string }[] = [
+  { key: 'needs', title: 'Needs you', glyph: '◆', tone: 'gold' },
+  { key: 'done', title: 'Done', glyph: '✓', tone: 'pine' },
+  { key: 'doing', title: 'In progress', glyph: '●', tone: 'foam' },
+]
+
+function itemRows(lists: { done?: RecapItem[]; doing?: RecapItem[]; needs?: RecapItem[] }, win: number): Row[] {
+  const out: Row[] = []
+  for (const sec of sections) {
+    const items = lists[sec.key] ?? []
+    if (items.length === 0) continue
+    if (out.length) out.push({ node: '', text: '' })
+    out.push({ node: <span className="t-subtle">{sec.title}</span>, text: sec.title, cls: 'summary-head' })
+    for (const it of items) {
+      const link = it.thread ? `→ ${it.thread}` : it.artifact ? `◇ ${it.artifact}` : ''
+      out.push({
+        node: (
+          <>
+            <span className={`glyph t-${sec.tone}`}>{sec.glyph}</span>
+            <span className="t-text">{it.text}</span>
+            {link && <span className="t-muted summary-link">{link}</span>}
+          </>
+        ),
+        text: it.text,
+        open: it.thread ? () => store.show(win, { kind: 'chat', thread: it.thread! }) : it.artifact ? () => void store.openArtifact(it.artifact!, win) : undefined,
+      })
+    }
+  }
+  return out
+}
+
+function threadRows(v: ThreadView, win: number): Row[] {
+  const r = v.recap
+  const out: Row[] = [
+    {
+      node: (
+        <>
+          <span className="box-name">{v.name}</span>
+          <span className="t-subtle"> · {v.state}</span>
+        </>
+      ),
+      text: `${v.name} · ${v.state}`,
+      cls: 'summary-title',
+    },
+  ]
+  if (!r) return [...out, { node: <span className="t-muted">no summary yet · :summary! asks for one</span>, text: '' }]
+  if (r.error) out.push({ node: <span className="t-love">✗ {r.error}</span>, text: r.error })
+  out.push({ node: '', text: '' })
+  const lists = r.done?.length || r.doing?.length || r.needs?.length ? r : { done: r.outcome ? [{ text: r.outcome }] : [], needs: r.open ? [{ text: r.open }] : [] }
+  out.push(...itemRows(lists, win))
+  out.push({ node: '', text: '' })
+  out.push({ node: <span className="t-muted">last turn  {joined(evidence(r))}</span>, text: '' })
+  return out
+}
+
+function workspaceRows(name: string, w: WorkspaceView | undefined, threads: ThreadView[], win: number): Row[] {
+  const r = w?.recap
+  const out: Row[] = [
+    {
+      node: (
+        <>
+          <span className="box-name">{name}</span>
+          {r?.goal && <span className="t-subtle"> · {r.goal}</span>}
+        </>
+      ),
+      text: r?.goal ? `${name} · ${r.goal}` : name,
+      cls: 'summary-title',
+    },
+  ]
+  const { waits, failed } = workspaceCounts(w)
   const counts: ReactNode[] = []
   if (waits) counts.push(<span key="w"><span className="t-gold">◆ {waits}</span> {waits === 1 ? 'waits' : 'wait'} for you</span>)
   if (failed) counts.push(<span key="f"><span className="t-love">✗ {failed}</span> failed</span>)
+  if (counts.length) out.push({ node: <span className="t-muted">{joined(counts)}</span>, text: '' })
+  out.push({ node: '', text: '' })
+  if (r?.done?.length || r?.doing?.length || r?.needs?.length) out.push(...itemRows(r, win))
+  else
+    for (const v of [...threads].sort((a, b) => rank(a) - rank(b)))
+      out.push({
+        node: (
+          <>
+            <span className={`glyph t-${tone(v)}`}>{glyph(v)}</span>
+            <span className={v.recapUnseen || v.state === 'waiting' ? 't-text' : 't-subtle'}>{v.name}</span>
+            <span className={v.recapUnseen ? 't-text' : 't-muted'}>{v.state === 'waiting' ? `asks: ${v.waiting ?? ''}` : v.recap?.error || (v.state === 'running' ? '' : v.recap?.headline || v.recap?.outcome || '')}</span>
+          </>
+        ),
+        text: v.name,
+        open: () => store.show(win, { kind: 'chat', thread: v.name }),
+      })
+  const names = (ts: string[]) => (ts.length > 2 ? `${ts.slice(0, -1).join(', ')} and ${ts[ts.length - 1]} all` : `${ts[0]} and ${ts[1]} both`)
+  if (r?.overlaps?.length) out.push({ node: '', text: '' })
+  for (const o of r?.overlaps ?? [])
+    out.push({
+      node: (
+        <>
+          <span className="t-subtle">{names(o.threads)} edited </span>
+          <span className="t-text">{o.path}</span>
+        </>
+      ),
+      text: o.path,
+    })
   const newer = r?.newer ?? 0
-  const names = (ts: string[]) =>
-    ts.length > 2 ? `${ts.slice(0, -1).join(', ')} and ${ts[ts.length - 1]} all` : `${ts[0]} and ${ts[1]} both`
-  return (
-    <>
-      <div className="box-counts t-muted">
-        {threads.length > 0 && (
-          <span className="box-strip">
-            {threads.map((v) => (
-              <span key={v.name} className={`box-cell bg-${tone(v)}`} data-tip={v.name} />
-            ))}
-          </span>
-        )}
-        <span className="recap-counts">{joined(counts)}</span>
-      </div>
-      {threads.length > 0 && (
-        <div className="box-threads">
-          {threads.slice(0, boxThreads).map((v) => (
-            <BoxRow key={v.name} v={v} />
-          ))}
-          {threads.length > boxThreads && <div className="t-muted">+{threads.length - boxThreads} more in the threads list</div>}
-        </div>
-      )}
-      {(!!r?.lines?.length || !!r?.overlaps?.length) && (
-        <div className="box-lines">
-          {r?.lines?.map((l, i) => (
-            <div key={i} className="recap-line t-text">
-              {l}
-            </div>
-          ))}
-          {r?.overlaps?.map((o) => (
-            <div key={o.path} className="recap-body">
-              <span className="t-subtle">{names(o.threads)} edited </span>
-              <span className="t-text">{o.path}</span>
-            </div>
-          ))}
-          {!!r?.lines?.length && newer > 0 && (
-            <div className="t-muted">
-              as of {hhmm(r.at!)} · {newer === 1 ? '1 thread' : `${newer} threads`} ended since
-            </div>
-          )}
-        </div>
-      )}
-    </>
-  )
+  if (r?.at && newer > 0)
+    out.push({ node: <span className="t-muted">as of {hhmm(r.at)} · {newer === 1 ? '1 thread' : `${newer} threads`} ended since</span>, text: '' })
+  return out
 }
 
-// RecapBox pops up at the top of the window when the person comes back to
-// news, or on :recap: the workspace's, or a thread's in its window. Its
-// border takes the color of what matters most in it. Closing it marks it
-// seen in the hub.
-export function RecapBox() {
-  const subject = useStore((s) => s.recapBox)
-  const screen = useStore((s) => s.screen)
+// SummaryWindow is how a thread's work, or the workspace, stands: what
+// needs the person, what is done and what is in progress, in the agents'
+// words. It is a window like any other: j k move its cursor line, <CR> or
+// a click opens the thread or artifact of an item, and <C-o> goes back.
+export function SummaryWindow(props: { win: Win; focused: boolean }) {
+  const { win, focused } = props
+  const subject = win.buf.kind === 'summary' ? win.buf.subject : Coordinator
   const workspace = useStore((s) => s.workspace)
   const threads = useStore((s) => s.threads)
   const order = useStore((s) => s.order)
   const w = useStore((s) => s.workspaces.find((x) => x.name === s.workspace))
-  if (!subject || screen !== 'workspace') return null
-  let title: ReactNode
-  let body: ReactNode
-  let border: string
-  if (subject === Coordinator) {
-    const open = order.filter((n) => n !== Coordinator && !n.includes('/') && threads[n] && threads[n].state !== 'resolved').map((n) => threads[n])
-    const { waits, running, failed } = workspaceCounts(w)
-    border = waits ? 'gold' : failed ? 'love' : running ? 'foam' : 'pine'
-    title = (
-      <>
-        <span className="box-name">{workspace}</span>
-        {w?.recap?.goal && <span className="t-subtle"> · {w.recap.goal}</span>}
-      </>
-    )
-    body = <WorkspaceBox w={w} threads={open} />
-  } else {
-    const v = threads[subject]
-    if (!v?.recap) return null
-    border = tone(v)
-    title = (
-      <>
-        <span className="box-name">{v.name}</span>
-        <span className="t-subtle"> · {v.state}</span>
-      </>
-    )
-    body = <RecapHead r={v.recap} />
+  const rows: Row[] =
+    subject === Coordinator
+      ? workspaceRows(workspace, w, order.filter((n) => n !== Coordinator && !n.includes('/') && threads[n] && threads[n].state !== 'resolved').map((n) => threads[n]), win.id)
+      : threads[subject]
+        ? threadRows(threads[subject], win.id)
+        : [{ node: <span className="t-muted">no thread {subject}</span>, text: '' }]
+  const cursor = Math.min(Math.max(win.cursor, 0), rows.length - 1)
+  const el = useRef<HTMLDivElement>(null)
+
+  const handle = (a: WinAction, count: number): boolean => {
+    const set = (i: number) => store.updateWin(win.id, { cursor: Math.max(0, Math.min(i, rows.length - 1)) })
+    switch (a) {
+      case 'down':
+        set(cursor + count)
+        return true
+      case 'up':
+        set(cursor - count)
+        return true
+      case 'top':
+        set(0)
+        return true
+      case 'bottom':
+        set(rows.length - 1)
+        return true
+      case 'halfDown':
+      case 'pageDown':
+        set(cursor + 10)
+        return true
+      case 'halfUp':
+      case 'pageUp':
+        set(cursor - 10)
+        return true
+      case 'enter':
+        rows[cursor]?.open?.()
+        return true
+      case 'yank': {
+        const text = rows[cursor]?.text
+        if (!text) return true
+        yank.text = text
+        window.nh.copy(text)
+        store.say('yanked 1 line', 'muted')
+        return true
+      }
+    }
+    return false
   }
+  const ref = useRef(handle)
+  ref.current = handle
+  useEffect(() => {
+    handlers.set(win.id, (a, n) => ref.current(a, n))
+    return () => void handlers.delete(win.id)
+  }, [win.id])
+  useEffect(() => {
+    el.current?.querySelector(`[data-i="${cursor}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [cursor])
+
   return (
-    <div className={`recap-box b-${border}`} role="dialog" aria-label="recap">
-      <div className="box-head">
-        <span className="box-title">{title}</span>
-        <button className="btn ghost small" data-tip="Ask for a fresh recap. It runs a turn. · :recap!" onClick={() => void store.askRecap(subject)}>
-          ask again
-        </button>
-        <button className="box-close" aria-label="close" data-tip="Close · Esc  q" onClick={() => void store.closeBox()}>
-          ×
-        </button>
+    <div className="window summary" onMouseDown={() => store.focus(win.id)}>
+      <div className={`statusline ${focused ? 'focused' : ''}`}>
+        <span className="sl-ws">{workspace} · </span>
+        <span className="sl-name">summary</span>
+        <span className="sl-fill" />
+        <span className="sl-part t-muted">{subject === Coordinator ? 'workspace' : subject}</span>
+        <CloseWindow id={win.id} />
       </div>
-      {body}
+      <div className="list summary-list" ref={el} role="list" aria-label="summary">
+        {rows.map((r, i) => (
+          <div
+            key={i}
+            data-i={i}
+            role="listitem"
+            className={`summary-row ${r.cls ?? ''} ${r.open ? 'linked' : ''} ${focused && i === cursor ? 'cursor' : ''}`}
+            onClick={() => {
+              store.updateWin(win.id, { cursor: i })
+              r.open?.()
+            }}
+          >
+            {r.node || '\u00a0'}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

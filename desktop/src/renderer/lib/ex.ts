@@ -44,6 +44,7 @@ export const exCommands = [
   'threads',
   'artifacts',
   'messages',
+  'summary',
   'allow',
   'always',
   'deny',

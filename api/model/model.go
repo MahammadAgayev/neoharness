@@ -114,7 +114,8 @@ const (
 	EventText EventKind = "text"
 	// EventTool is one tool call the agent made.
 	EventTool EventKind = "tool"
-	// EventTurnEnd closes a turn; Tools and Tokens describe it.
+	// EventTurnEnd closes a turn; Tools and Tokens describe it. Text and
+	// Detail are the outcome and what is open, when the thread recapped it.
 	EventTurnEnd EventKind = "turn"
 	// EventError is a failed turn or a lost one.
 	EventError EventKind = "error"
@@ -209,6 +210,20 @@ type Recap struct {
 	// Error is why the turn failed; empty when it ended well.
 	Error string    `json:"error,omitempty"`
 	At    time.Time `json:"at"`
+	// Done, Doing and Needs are how the thread's tasks stand, in its own
+	// words, as of its last recap that named them.
+	Done  []RecapItem `json:"done,omitempty"`
+	Doing []RecapItem `json:"doing,omitempty"`
+	Needs []RecapItem `json:"needs,omitempty"`
+}
+
+// RecapItem is one task of a recap: done, in progress, or needing the
+// person. Thread or Artifact names what opens it, both empty when nothing
+// does.
+type RecapItem struct {
+	Text     string `json:"text"`
+	Thread   string `json:"thread,omitempty"`
+	Artifact string `json:"artifact,omitempty"`
 }
 
 // RecapCommand is a command a turn ran.
@@ -226,18 +241,21 @@ const RecapAway = 2 * time.Minute
 // any transcript: what it is for and what its threads' work means together.
 // The thread recaps hold each thread's own part.
 type WorkspaceRecap struct {
-	// Goal and Lines are the coordinator's words. Until it writes a goal,
-	// Goal is the first line of the person's first message to it.
-	Goal  string   `json:"goal,omitempty"`
-	Lines []string `json:"lines,omitempty"`
-	// At is when the coordinator wrote Lines.
+	// Goal, Done, Doing and Needs are the coordinator's words. Until it
+	// writes a goal, Goal is the first line of the person's first message to
+	// it.
+	Goal  string      `json:"goal,omitempty"`
+	Done  []RecapItem `json:"done,omitempty"`
+	Doing []RecapItem `json:"doing,omitempty"`
+	Needs []RecapItem `json:"needs,omitempty"`
+	// At is when the coordinator wrote them.
 	At time.Time `json:"at,omitempty"`
 	// Overlaps are files that the last recaps of two or more open threads
 	// edited.
 	Overlaps []Overlap `json:"overlaps,omitempty"`
 	// Failed counts the idle threads whose last turn failed.
 	Failed int `json:"failed,omitempty"`
-	// Newer counts the open threads whose recap is newer than Lines.
+	// Newer counts the open threads whose recap is newer than At.
 	Newer int `json:"newer,omitempty"`
 }
 

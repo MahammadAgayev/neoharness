@@ -19,6 +19,9 @@ export interface Toast {
   at: number
   // needsYou says the person must act: it also goes to macOS.
   needsYou?: boolean
+  // summary says news came while the person was away: a click opens the
+  // summary.
+  summary?: boolean
 }
 
 export type ToastSpec = Omit<Toast, 'id' | 'until' | 'at'> & { life: number }

@@ -169,11 +169,9 @@ type App struct {
 	mouseDown              bool
 	lastClick              time.Time
 	lastClickX, lastClickY int
-	// recapBox is whose recap the box at the top shows: a thread, the
-	// coordinator for the workspace's, or "" when it is closed. boxRect is
-	// where it was drawn, for clicks.
-	recapBox string
-	boxRect  Rect
+	// summaryOf is whose summary the summary buffer shows: a thread, or the
+	// coordinator for the workspace's.
+	summaryOf string
 	// now is the clock, for tests. lastKey is the last key, blurAt when the
 	// terminal lost focus, and leftAt when each workspace was left: how long
 	// the person was away.
@@ -495,6 +493,7 @@ func (a *App) apply(u model.Update) {
 			a.workspaces[i] = *u.Summary
 		}
 		a.renderWorkspaces()
+		a.renderSummary()
 		a.restartWhenIdle()
 	case model.UpdateThread:
 		switch {
@@ -718,6 +717,7 @@ func (a *App) chat(thread string) *Buffer {
 		return b
 	}
 	b := newChat(a.workspace, thread)
+	b.hideRecap = a.opt("recap") == lua.LFalse
 	a.bufs[name] = b
 	return b
 }
@@ -774,7 +774,6 @@ func (a *App) openWorkspace(name string) {
 	if a.workspace != "" {
 		a.leftAt[a.workspace] = now
 	}
-	a.recapBox = ""
 	// Opening a workspace not looked at for minutes is coming back to it.
 	if left, ok := a.leftAt[name]; !ok || now.Sub(left) >= model.RecapAway {
 		defer a.cameBack()
@@ -1233,6 +1232,7 @@ const resolvedRow = "\x00resolved"
 const queuedRow = "\x00queued"
 
 func (a *App) renderThreads() {
+	a.renderSummary()
 	if a.threadsBuf == nil {
 		return
 	}

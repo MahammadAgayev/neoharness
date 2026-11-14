@@ -37,6 +37,8 @@ export type BufRef =
   | { kind: 'threads' }
   | { kind: 'artifact'; name: string }
   | { kind: 'messages' }
+  // A summary's subject is a thread, or the coordinator for the workspace's.
+  | { kind: 'summary'; subject: string }
 
 export interface Win {
   id: number
@@ -113,8 +115,10 @@ export interface Settings {
   sidebarWidth: number
   // cost shows what each workspace cost in the sidebar.
   cost: boolean
-  // recap lets the recap box show by itself when the person comes back.
+  // recap shows the recap line under each reply.
   recap: boolean
+  // summary lets a toast say there is news when the person comes back.
+  summary: boolean
 }
 
 export interface State {
@@ -152,16 +156,13 @@ export interface State {
   // workspaceCursor is the row of the workspaces screen.
   workspaceCursor: number
   pending: string
-  // recapBox is whose recap the box at the top shows: a thread, the
-  // coordinator for the workspace's, or null when it is closed.
-  recapBox: string | null
 }
 
 let ids = 1
 const nextId = () => ids++
 
 function loadSettings(): Settings {
-  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true, sidebarWidth: 216, cost: true, recap: true }
+  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true, sidebarWidth: 216, cost: true, recap: true, summary: true }
   try {
     return { ...d, ...JSON.parse(localStorage.getItem('settings') || '{}') }
   } catch {
@@ -209,7 +210,6 @@ class Store {
     folds: {},
     workspaceCursor: 0,
     pending: '',
-    recapBox: null,
   }
   private listeners = new Set<() => void>()
   // writeDoc is a new doc whose editor opens ready to write.
@@ -220,7 +220,7 @@ class Store {
   private away: Record<string, ThreadView> = {}
   private awayText: Record<string, string> = {}
   // blurAt is when the window lost focus, and leftAt when each workspace
-  // was left: how long the person was away, for the recap box.
+  // was left: how long the person was away, for the summary toast.
   private blurAt = 0
   private leftAt: Record<string, number> = {}
   // typing says the person writes in an editor now; the keyboard sets it.
@@ -573,7 +573,7 @@ class Store {
     }
     if (!this.layouts[name]) layout.focus = layout.cols[0].wins[0].id
     localStorage.setItem('workspace', name)
-    this.set({ workspace: name, screen: 'workspace', layout, threads: {}, order: [], chats: {}, artifacts: [], docs: {}, recapBox: null })
+    this.set({ workspace: name, screen: 'workspace', layout, threads: {}, order: [], chats: {}, artifacts: [], docs: {} })
     await this.resync()
     // Windows of threads that are gone show the coordinator.
     const known = this.state.threads
@@ -595,50 +595,45 @@ class Store {
     this.blurAt = 0
   }
 
-  // cameBack shows the recap box when the person comes back to news they
-  // have not seen. Not while they type, nor over a card that waits for
-  // them, and not with the pop-up off in Settings. The hub says what is
-  // news; this says only when.
+  // cameBack tells the person, in a toast, that news came while they were
+  // away, and where: <leader>ns opens its summary. Nothing takes the
+  // window from them. Not with the toast off in Settings. The hub says
+  // what is news; this says only when.
   cameBack(): void {
     const s = this.state
-    if (!s.settings.recap || s.screen !== 'workspace' || s.recapBox || this.typing()) return
-    if (s.cmdline !== null || s.picker || s.confirm || s.settingsOpen || s.helpOpen || s.cost || s.choice || s.newWorkspace || s.newDoc) return
-    const w = this.cur()
-    const v = w?.buf.kind === 'chat' ? s.threads[w.buf.thread] : undefined
-    if (v?.state === 'waiting') return
-    if (v && v.name !== Coordinator && v.recapUnseen) this.set({ recapBox: v.name })
-    else if (s.workspaces.find((x) => x.name === s.workspace)?.recapUnseen) this.set({ recapBox: Coordinator })
+    if (!s.settings.summary || s.screen !== 'workspace' || this.typing()) return
+    const subject = this.summarySubject()
+    const news = subject === Coordinator ? s.workspaces.find((x) => x.name === s.workspace)?.recapUnseen : s.threads[subject]?.recapUnseen
+    if (!news) return
+    const name = subject === Coordinator ? s.workspace : subject
+    const now = Date.now()
+    const t: Toast = { id: nextId(), workspace: s.workspace, thread: subject, glyph: '✓', tone: 'muted', body: `news in ${name} · <leader>ns`, at: now, until: now + 8000, summary: true }
+    const toasts = s.toasts.filter((o) => !o.summary)
+    this.set({ toasts: [...toasts, t], log: [...s.log, t].slice(-500) })
   }
 
-  // boxSubject is whose recap the box shows from the window with focus: the
-  // thread's in its window, else the workspace's.
-  boxSubject(): string {
+  // summarySubject is whose summary opens from the window with focus: the
+  // thread's in its window when it has one, else the workspace's.
+  summarySubject(): string {
     const w = this.cur()
+    if (w?.buf.kind === 'summary') return w.buf.subject
     const t = w?.buf.kind === 'chat' ? w.buf.thread : ''
     return t && !t.includes('/') && this.state.threads[t]?.recap ? t : Coordinator
   }
 
-  // boxWindow is the window the recap box shows in: the chat of its
-  // subject, the one with focus first, or else the window with focus.
-  boxWindow(): number | undefined {
-    const subject = this.state.recapBox
-    const cur = this.cur()
-    const shows = (w?: Win) => w?.buf.kind === 'chat' && w.buf.thread === subject
-    return (shows(cur) ? cur : (this.wins().find(shows) ?? cur))?.id
-  }
-
-  // openBox shows a recap box: :recap opens it whether or not it holds news.
-  openBox(subject = this.boxSubject()): void {
-    if (this.needWorkspace()) this.set({ recapBox: subject })
-  }
-
-  // closeBox closes the recap box and tells the hub the person saw it, so
-  // the TUI does not show the same news again.
-  async closeBox(): Promise<void> {
-    const subject = this.state.recapBox
-    if (!subject) return
-    this.set({ recapBox: null })
+  // openSummary shows a summary in the window with focus, and tells the hub
+  // the person saw it, so the same news does not toast again.
+  async openSummary(subject = this.summarySubject()): Promise<void> {
+    const w = this.cur()
+    if (!this.needWorkspace() || !w) return
+    this.show(w.id, { kind: 'summary', subject })
     await this.try(this.call('seenRecap', { workspace: this.state.workspace, thread: subject }))
+  }
+
+  // toggleSummary is <leader>ns: it opens the summary, or goes back from it.
+  toggleSummary(): void {
+    if (this.cur()?.buf.kind === 'summary') this.goBack()
+    else void this.openSummary()
   }
 
   async createWorkspace(name: string, pin?: string): Promise<boolean> {
@@ -977,17 +972,18 @@ class Store {
     if (!w) return ''
     if (w.buf.kind === 'chat') return w.buf.thread
     if (w.buf.kind === 'threads') return this.threadRows()[w.cursor]?.name ?? ''
+    if (w.buf.kind === 'summary') return w.buf.subject
     return ''
   }
 
-  // askRecap asks a thread, or the coordinator, for a fresh recap. It runs
-  // a turn, so it costs tokens: only the person's click or :recap! asks.
+  // askRecap asks a thread, or the coordinator, for a fresh summary. It
+  // runs a turn, so it costs tokens: only :summary! asks.
   async askRecap(name = this.target()): Promise<void> {
     if (!this.needWorkspace() || !name) return
     if ((await this.try(this.call('askRecap', this.at(name)))) === undefined) return
-    // The box fills in when the recap comes.
-    if (!name.includes('/')) this.set({ recapBox: name })
-    this.say(`asked ${this.at(name).thread} for a fresh recap`, 'muted')
+    // The summary fills in when the recap comes.
+    if (!name.includes('/')) await this.openSummary(name)
+    this.say(`asked ${this.at(name).thread} for a fresh summary`, 'muted')
   }
 
   async resolve(name = this.target()): Promise<void> {
@@ -1449,9 +1445,9 @@ class Store {
         return this.say('the hub commands here: :hub restart', 'love')
       case 'cost':
         return this.openCost(a[0] === 'all' ? 'all' : 'workspace')
-      case 'recap':
-        if (e.bang) return this.askRecap(a[0])
-        return this.state.recapBox ? this.closeBox() : this.openBox()
+      case 'summary':
+        if (e.bang) return this.askRecap(a[0] || this.summarySubject())
+        return this.openSummary()
       case 'w':
       case 'write':
         if (!art) return this.say('nothing to write here; :w saves an artifact', 'muted')
@@ -1505,7 +1501,7 @@ class Store {
 
   private setOption(args: string[]): void {
     const s = this.state.settings
-    if (!args.length) return this.say(`vim=${s.vim} sidebar=${s.sidebar} cost=${s.cost} recap=${s.recap} fontsize=${s.fontSize} compactwarn=${s.compactwarn} colorscheme=${s.scheme}`)
+    if (!args.length) return this.say(`vim=${s.vim} sidebar=${s.sidebar} cost=${s.cost} recap=${s.recap} summary=${s.summary} fontsize=${s.fontSize} compactwarn=${s.compactwarn} colorscheme=${s.scheme}`)
     for (const arg of args) {
       const [k, v] = arg.split('=', 2)
       switch (k) {
@@ -1533,6 +1529,12 @@ class Store {
         case 'norecap':
           this.setSettings({ recap: false })
           break
+        case 'summary':
+          this.setSettings({ summary: true })
+          break
+        case 'nosummary':
+          this.setSettings({ summary: false })
+          break
         case 'fontsize':
         case 'fs':
           if (Number(v) >= 9 && Number(v) <= 28) this.setSettings({ fontSize: Number(v) })
@@ -1543,7 +1545,7 @@ class Store {
           else return this.say('compactwarn is 0 to 100', 'love')
           break
         default:
-          return this.say(`no option ${k}; the options are vim novim sidebar nosidebar cost nocost recap norecap fontsize compactwarn`, 'love')
+          return this.say(`no option ${k}; the options are vim novim sidebar nosidebar cost nocost recap norecap summary nosummary fontsize compactwarn`, 'love')
       }
     }
   }
@@ -1562,6 +1564,7 @@ export function sameBuf(a: BufRef, b: BufRef): boolean {
   if (a.kind !== b.kind) return false
   if (a.kind === 'chat' && b.kind === 'chat') return a.thread === b.thread
   if (a.kind === 'artifact' && b.kind === 'artifact') return a.name === b.name
+  if (a.kind === 'summary' && b.kind === 'summary') return a.subject === b.subject
   return true
 }
 

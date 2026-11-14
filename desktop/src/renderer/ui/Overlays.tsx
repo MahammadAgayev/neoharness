@@ -170,7 +170,7 @@ export function Toasts() {
   return (
     <div className="toasts">
       {shown.map((t) => (
-        <div key={t.id} className={`toast b-${t.tone}`} onClick={() => void store.goThread(t.workspace, t.thread)}>
+        <div key={t.id} className={`toast b-${t.tone}`} onClick={() => void (t.summary ? store.openSummary(t.thread) : store.goThread(t.workspace, t.thread))}>
           <div className="toast-head">
             <span className={`glyph t-${t.tone}`}>
               <Glyph g={t.glyph} />

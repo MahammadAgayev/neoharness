@@ -116,15 +116,6 @@ func (a *App) key(ev *tcell.EventKey) {
 	idle := func() bool {
 		return a.mode == modeNormal && len(a.pending) == 0 && a.count == 0 && !a.replacing && a.finding == "" && a.selecting == "" && a.marking == "" && a.macroKey == ""
 	}
-	if a.recapBox != "" && idle() && a.recordInto == 0 && (k == "<Esc>" || k == "q") {
-		a.closeBox()
-		return
-	}
-	// The box can show over an empty prompt in Insert: one Esc closes it
-	// and leaves Insert, as the person would not think of a second.
-	if a.recapBox != "" && a.mode == modeInsert && k == "<Esc>" {
-		a.closeBox()
-	}
 	if a.recordInto != 0 && a.playing == 0 {
 		if k == "q" && idle() {
 			a.recordInto = 0
@@ -1034,6 +1025,8 @@ func (a *App) enter() {
 		if strings.HasPrefix(l.Item, costRow) {
 			a.openCostRow(l.Item)
 		}
+	case KindSummary:
+		a.openSummaryItem(l.Item)
 	case KindThreads:
 		switch l.Item {
 		case "":

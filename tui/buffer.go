@@ -28,6 +28,8 @@ const (
 	KindDiff
 	// KindCost is what a workspace, or every workspace, cost.
 	KindCost
+	// KindSummary is how a thread's work, or the workspace's, stands.
+	KindSummary
 )
 
 type blockKind int
@@ -50,6 +52,9 @@ const (
 	// bKey is a row of :help: a key and what it does, or a heading when
 	// there is no key.
 	bKey
+	// bRecap is the turn in short, as the thread recapped it: text is the
+	// outcome, text2 what is open.
+	bRecap
 )
 
 // toolCall is one tool call; failed holds why it failed or was denied.
@@ -72,8 +77,10 @@ type block struct {
 	live     bool
 	open     bool
 	raw      []Line
-	cacheW   int
-	cache    []Line
+	// fn makes a raw block's lines for a width, in place of raw.
+	fn     func(w int) []Line
+	cacheW int
+	cache  []Line
 }
 
 // Prompt is the editable region at the end of a chat buffer.
@@ -96,8 +103,11 @@ type sentImages struct {
 
 // Buffer is a named, append-mostly list of blocks.
 type Buffer struct {
-	Name      string
-	Kind      BufKind
+	Name string
+	Kind BufKind
+	// hideRecap leaves out the recap line under each reply, as
+	// neoharness.o.recap = false asks.
+	hideRecap bool
 	Workspace string
 	Thread    string
 	Artifact  string
@@ -182,6 +192,13 @@ func (b *Buffer) SetLines(lines []Line) {
 	b.dirty = true
 }
 
+// SetRender fills the buffer with lines made for the window's width, so
+// they wrap.
+func (b *Buffer) SetRender(fn func(w int) []Line) {
+	b.blocks = []*block{{kind: bRaw, fn: fn}}
+	b.dirty = true
+}
+
 // Lines returns the buffer rendered at width w.
 func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 	if b.Edit != nil {
@@ -193,6 +210,9 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 	}
 	var out []Line
 	for i, bl := range b.blocks {
+		if bl.kind == bRecap && b.hideRecap {
+			continue
+		}
 		if i > 0 && bl.kind != bRaw && !b.joins(i) {
 			out = append(out, Line{Block: i})
 		}
@@ -371,6 +391,9 @@ func (b *Buffer) AddEvent(e model.Event) {
 		// A question or permission card after the tool calls is the last
 		// block, so ending only the last one left the tools spinning.
 		b.settle(false)
+		if e.Text != "" {
+			b.push(&block{kind: bRecap, text: e.Text, text2: e.Detail})
+		}
 	case model.EventError:
 		b.settle(false)
 		b.push(&block{kind: bError, text: e.Text})
@@ -423,6 +446,9 @@ func (b *Buffer) AddEvent(e model.Event) {
 
 func (bl *block) render(w int, th *Theme, spin int) []Line {
 	if bl.kind == bRaw {
+		if bl.fn != nil {
+			return bl.fn(w)
+		}
 		return bl.raw
 	}
 	if !bl.live && bl.cache != nil && bl.cacheW == w {
@@ -495,6 +521,12 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 		return wrap([]Span{{bl.text, th.Subtle}}, w, []Span{{"  ↳ ", th.Foam}}, []Span{{"    ", th.Text}})
 	case bNote:
 		return wrap([]Span{{bl.text, th.Muted.Italic(true)}}, w, []Span{{"  — ", th.Muted}}, []Span{{"    ", th.Text}})
+	case bRecap:
+		spans := []Span{{"recap  ", th.Muted}, {bl.text, th.Subtle}}
+		if bl.text2 != "" {
+			spans = append(spans, Span{" · open: ", th.Muted}, Span{bl.text2, th.Subtle})
+		}
+		return wrap(spans, w, []Span{{"  ※ ", th.Muted}}, []Span{{"    ", th.Text}})
 	case bNotice:
 		glyph := th.Foam
 		if bl.needsYou {

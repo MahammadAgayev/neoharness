@@ -80,6 +80,17 @@ export interface Recap {
   artifacts?: string[]
   error?: string
   at: string
+  // How the thread's tasks stand, in its own words: its summary.
+  done?: RecapItem[]
+  doing?: RecapItem[]
+  needs?: RecapItem[]
+}
+
+// RecapItem is one task of a summary; thread or artifact is what opens it.
+export interface RecapItem {
+  text: string
+  thread?: string
+  artifact?: string
 }
 
 export interface RecapCommand {
@@ -88,18 +99,20 @@ export interface RecapCommand {
 }
 
 // RecapAway is how long the person must be away before coming back shows
-// the recap box, when there is news they have not seen: model.RecapAway.
+// a toast, when there is news they have not seen: model.RecapAway.
 export const RecapAway = 2 * 60_000
 
 // WorkspaceRecap is how a workspace stands: the coordinator's goal and
-// lines, and what the hub joins from the threads' recaps.
+// summary, and what the hub joins from the threads' recaps.
 export interface WorkspaceRecap {
   goal?: string
-  lines?: string[]
+  done?: RecapItem[]
+  doing?: RecapItem[]
+  needs?: RecapItem[]
   at?: string
   overlaps?: Overlap[]
   failed?: number
-  // The open threads whose recap is newer than lines.
+  // The open threads whose recap is newer than the summary.
   newer?: number
 }
 
