@@ -114,7 +114,6 @@ export interface ThreadView {
   location: Location
   state: State
   queued: number
-  progress?: string
   wakeAt?: string
   waiting?: string
   permission?: Permission

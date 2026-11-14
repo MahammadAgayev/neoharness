@@ -139,9 +139,6 @@ func (a *App) toastView(workspace string, old, v model.ThreadView, had bool) {
 			key := workspace + "\x00" + v.Name
 			body, life = plain(a.awayText[key]), 10*time.Second
 			delete(a.awayText, key)
-			if body == "" {
-				body = plain(v.Progress)
-			}
 		}
 		if body == "" {
 			body = "finished a turn"

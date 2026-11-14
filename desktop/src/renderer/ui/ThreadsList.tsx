@@ -115,10 +115,9 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
             v.permission ? `permission · ${v.permission.tool}`
             : v.waiting === 'paused' ? 'paused · write to continue'
             : v.state === 'waiting' ? v.waiting || 'question'
-            // The recap says what the last turn produced; the report from
-            // during that turn is old news.
+            // The recap under the row says what the last turn produced.
             : v.recap && v.state === 'idle' ? ''
-            : v.progress || location(v.location)
+            : location(v.location)
           return (
             <div key={r.name}>
               {head && <div className="group-head">{head}</div>}

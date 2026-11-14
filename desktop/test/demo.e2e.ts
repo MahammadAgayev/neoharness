@@ -64,13 +64,13 @@ test('records the desktop demo', async () => {
     await wait(400)
     hub.setView(view('payments', 'coordinator', { state: 'running', model: 'claude-opus-5-5', context: 14000, contextWindow: 400000, cost: 0.2, branch: 'main' }))
     await wait(900)
-    for (const [i, name, progress] of [
-      ['1', 'api', 'reading the router'],
-      ['2', 'ledger-migration', 'writing migrate.sql'],
-      ['3', 'flaky-test', 'running checkout tests 20 times'],
+    for (const [i, name] of [
+      ['1', 'api'],
+      ['2', 'ledger-migration'],
+      ['3', 'flaky-test'],
     ]) {
       co({ kind: 'tool', tool: 'mcp__neoharness__open_thread', detail: name, id: i })
-      th(name, { state: 'running', progress })
+      th(name, { state: 'running' })
       await wait(700)
     }
     co({
@@ -80,7 +80,7 @@ test('records the desktop demo', async () => {
     co({ kind: 'turn' })
     hub.setView(view('payments', 'coordinator', { model: 'claude-opus-5-5', context: 21000, contextWindow: 400000, cost: 0.31, branch: 'main' }))
     await wait(1800)
-    th('api', { state: 'running', progress: 'adding the /healthz route', context: 38000, cost: 0.4 })
+    th('api', { state: 'running', context: 38000, cost: 0.4 })
     await wait(900)
 
     // The migration needs the person: a toast, and the card in the thread.
@@ -109,7 +109,7 @@ test('records the desktop demo', async () => {
     await wait(900)
     hub.event('payments', 'ledger-migration', { kind: 'text', text: 'Done: `settled_at` exists and **2,418** rows are backfilled.' })
     hub.event('payments', 'ledger-migration', { kind: 'turn' })
-    th('ledger-migration', { state: 'idle', progress: 'migration ran', context: 61000, cost: 0.71 })
+    th('ledger-migration', { state: 'idle', context: 61000, cost: 0.71 })
     th('flaky-test', { state: 'resolved' })
     await wait(2000)
 

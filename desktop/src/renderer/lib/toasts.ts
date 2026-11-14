@@ -67,7 +67,7 @@ export function viewToast(
   if (old?.state === 'resolved' && v.state !== 'resolved') return t('↺', 'foam', 'reopened', 4 * s)
   if (old?.state === 'running' && v.state === 'idle') {
     // You are less likely to be looking at a workspace that is not open.
-    const body = plain(opts.reply) || (opts.away ? plain(v.progress ?? '') : '') || 'finished a turn'
+    const body = plain(opts.reply) || 'finished a turn'
     return t('✓', 'pine', body, opts.away ? 10 * s : 4 * s)
   }
   return null

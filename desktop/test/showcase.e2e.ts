@@ -21,9 +21,9 @@ test('the whole app, populated', async () => {
     const list = hub.threads.payments
     list[list.findIndex((x) => x.name === n)] = view('payments', n, v)
   }
-  t('api', { state: 'running', progress: 'adding the /healthz route', model: 'claude-sonnet-5-5', context: 41000, contextWindow: 200000, cost: 0.42, branch: 'health-check' })
+  t('api', { state: 'running', model: 'claude-sonnet-5-5', context: 41000, contextWindow: 200000, cost: 0.42, branch: 'health-check' })
   t('ledger-migration', { state: 'waiting', permission: { id: 'p', tool: 'Bash', detail: 'psql -f migrate.sql' } })
-  t('docs', { state: 'idle', progress: 'README updated' })
+  t('docs', { state: 'idle' })
   t('flaky-test', { state: 'resolved' })
   t('coordinator', { state: 'idle', model: 'claude-opus-5-5', context: 12000, contextWindow: 200000, cost: 0.18 })
   const c = (e: Parameters<FakeHub['event']>[2]) => hub.event('payments', 'coordinator', e)

@@ -287,7 +287,7 @@ func boxRow(v model.ThreadView, th *Theme, nameW int) Line {
 	case r != nil && r.Error != "":
 		glyph, detail = "✗", []Span{{r.Error, news}}
 	case v.State == model.StateRunning:
-		detail = []Span{{plain(v.Progress), th.Muted}}
+		// The last recap is old news while a new turn runs.
 	case r != nil:
 		glyph, detail = "✓", []Span{{cmp.Or(r.Headline, r.Outcome), news}}
 	}

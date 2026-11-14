@@ -252,7 +252,6 @@ type ThreadView struct {
 	Location  Location `json:"location"`
 	State     State    `json:"state"`
 	Queued    int      `json:"queued"`
-	Progress  string   `json:"progress,omitempty"`
 	// WakeAt is when the thread asked to be woken; zero is never.
 	WakeAt     time.Time   `json:"wakeAt,omitzero"`
 	Waiting    string      `json:"waiting,omitempty"`

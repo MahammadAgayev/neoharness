@@ -169,7 +169,7 @@ func newFake() *fakeClient {
 		workspaces: []model.WorkspaceView{{Name: "demo", Pin: "/src/demo", Counts: map[model.State]int{model.StateRunning: 1}, Activity: []int{0, 1, 3}}},
 		threads: map[string][]model.ThreadView{"demo": {
 			{Workspace: "demo", Name: model.Coordinator, Role: model.RoleCoordinator, State: model.StateIdle, CreatedAt: now},
-			{Workspace: "demo", Name: "auth-refactor", Role: model.RoleThread, State: model.StateRunning, Progress: "moving store", CreatedAt: now, Since: now},
+			{Workspace: "demo", Name: "auth-refactor", Role: model.RoleThread, State: model.StateRunning, CreatedAt: now, Since: now},
 			{Workspace: "demo", Name: "api-tests", Role: model.RoleThread, State: model.StateIdle, CreatedAt: now},
 		}},
 		events: map[string][]model.Event{
@@ -2341,11 +2341,12 @@ func TestACutRowEndsWithAnEllipsis(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	v := h.a.threads["auth-refactor"]
-	v.Progress = strings.Repeat("long progress ", 20) + "END"
+	v.State, v.Permission = model.StateWaiting, &model.Permission{Tool: strings.Repeat("longtool ", 20) + "END"}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.toasts = nil
 	h.a.draw()
 	for _, l := range strings.Split(h.screen(), "\n") {
-		if strings.Contains(l, "auth-refactor") && strings.Contains(l, "long progress") {
+		if strings.Contains(l, "auth-refactor") && strings.Contains(l, "longtool") {
 			if strings.Contains(l, "END") || !strings.HasSuffix(strings.TrimRight(l, " "), "…") {
 				t.Fatalf("a cut row should end with …: %q", l)
 			}
@@ -3053,10 +3054,10 @@ func TestThreadsListShowsHowLongAThreadRuns(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	v := h.a.threads["auth-refactor"]
-	v.State, v.Since, v.Progress = model.StateRunning, time.Now().Add(-95*time.Second), "reading files"
+	v.State, v.Since = model.StateRunning, time.Now().Add(-95*time.Second)
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
-	h.see("1m35s · reading files")
+	h.see("1m35s")
 }
 
 func TestWorkspaceKeepsItsSplits(t *testing.T) {
@@ -3214,7 +3215,7 @@ func TestThreadsOfOtherWorkspacesToast(t *testing.T) {
 	h.openDemo()
 	view := func(state model.State, waiting string) {
 		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "ops", Thread: "git-init",
-			View: &model.ThreadView{Workspace: "ops", Name: "git-init", Role: model.RoleThread, State: state, Waiting: waiting, Progress: "tests pass"}})
+			View: &model.ThreadView{Workspace: "ops", Name: "git-init", Role: model.RoleThread, State: state, Waiting: waiting}})
 	}
 	last := func() *toast {
 		if len(h.a.toasts) == 0 {
@@ -3227,7 +3228,7 @@ func TestThreadsOfOtherWorkspacesToast(t *testing.T) {
 		t.Fatalf("toasts = %d: a thread seen first, running, is no news", len(h.a.toasts))
 	}
 	view(model.StateIdle, "")
-	if tt := last(); tt.workspace != "ops" || tt.thread != "git-init" || tt.body != "tests pass" {
+	if tt := last(); tt.workspace != "ops" || tt.thread != "git-init" || tt.body != "finished a turn" {
 		t.Fatalf("finished toast = %+v", tt)
 	}
 	view(model.StateWaiting, "which branch?")
@@ -3240,13 +3241,13 @@ func TestThreadsOfOtherWorkspacesToast(t *testing.T) {
 	}
 }
 
-// The thread's last report can be a turn old; the reply says what it just did.
+// The reply says what a turn just did.
 func TestAFinishedTurnElsewhereToastsItsReply(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	view := func(state model.State) {
 		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "ops", Thread: "api",
-			View: &model.ThreadView{Workspace: "ops", Name: "api", Role: model.RoleThread, State: state, Progress: "plan sent"}})
+			View: &model.ThreadView{Workspace: "ops", Name: "api", Role: model.RoleThread, State: state}})
 	}
 	text := func(s string) {
 		h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "ops", Thread: "api", Event: &model.Event{Kind: model.EventText, Text: s}})
@@ -3260,11 +3261,11 @@ func TestAFinishedTurnElsewhereToastsItsReply(t *testing.T) {
 		t.Fatalf("toast = %q for %v, want the reply's first line for longer than in the open workspace", tt.body, time.Until(tt.until))
 	}
 
-	// A turn with no reply falls back to the report, not the last turn's reply.
+	// A turn with no reply does not show the last turn's reply.
 	view(model.StateRunning)
 	view(model.StateIdle)
-	if tt := h.a.toasts[len(h.a.toasts)-1]; tt.body != "plan sent" {
-		t.Fatalf("toast = %q, want the report", tt.body)
+	if tt := h.a.toasts[len(h.a.toasts)-1]; tt.body != "finished a turn" {
+		t.Fatalf("toast = %q, want no old reply", tt.body)
 	}
 }
 
@@ -3418,16 +3419,16 @@ func TestThreadPickerShowsState(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	v := h.a.threads["api-tests"]
-	v.State, v.Waiting, v.Progress = model.StateWaiting, "Which branch?", "Blocked: asking"
+	v.State, v.Waiting = model.StateWaiting, "Which branch?"
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	details := map[string]string{}
 	for _, it := range h.a.threadItems() {
 		details[it.label] = it.detail
 	}
-	if d := details["api-tests"]; !strings.HasPrefix(d, "waiting · question") || strings.Contains(d, "Blocked") {
+	if d := details["api-tests"]; !strings.HasPrefix(d, "waiting · question") || strings.Contains(d, "Which branch") {
 		t.Errorf("api-tests: %q, want its state, not its message", d)
 	}
-	if d := details["auth-refactor"]; !strings.HasPrefix(d, "running · ") || strings.Contains(d, "moving store") {
+	if d := details["auth-refactor"]; !strings.HasPrefix(d, "running · ") {
 		t.Errorf("auth-refactor: %q, want running and how long", d)
 	}
 	if d := details[model.Coordinator]; d != "idle" {
@@ -3562,7 +3563,6 @@ func TestARecapShowsUnderItsRowAndInTheThreadsBox(t *testing.T) {
 	h.s.SetSize(170, 40)
 	h.openDemo()
 	v := h.a.threads["api-tests"]
-	v.Progress = "half way"
 	v.Recap = &model.Recap{
 		Asked: "write the api tests", Outcome: "Added 12 tests", Open: "keep slow test?",
 		Ran: 3, Failed: 1, Commands: []model.RecapCommand{{Text: "go test ./..."}, {Text: "golangci-lint run", Failed: true}},
@@ -3576,8 +3576,8 @@ func TestARecapShowsUnderItsRowAndInTheThreadsBox(t *testing.T) {
 	h.see("   Added 12 tests")
 	h.see("3 commands, 1 failed · 1 file edited · ◇ test-plan")
 	h.see("open: keep slow test?")
-	if s := h.screen(); strings.Contains(s, "half way") || strings.Contains(s, "an older turn") {
-		t.Errorf("an idle row with a recap drops its old report, and a running row shows no recap:\n%s", s)
+	if s := h.screen(); strings.Contains(s, "an older turn") {
+		t.Errorf("a running row shows no recap:\n%s", s)
 	}
 
 	// Above the prompt there is no recap any more; :recap opens the box.
@@ -3737,7 +3737,6 @@ func TestTheWorkspaceBoxShowsWhenThePersonComesBackToNews(t *testing.T) {
 	h.see("✓ api-tests")
 	h.see("Added 12 tests.")
 	h.see("● auth-refactor")
-	h.see("moving store")
 	h.see("answer lint first: migr waits on its API choice")
 	h.see("auth-refactor and api-tests both edited user/lookup.go")
 	// What needs the person first, then what failed, came out, still runs.

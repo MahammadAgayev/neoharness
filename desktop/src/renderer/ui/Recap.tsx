@@ -167,7 +167,8 @@ function BoxRow(props: { v: ThreadView }) {
       </>
     )
   else if (v.recap?.error) detail = <span className={news}>{v.recap.error}</span>
-  else if (v.state === 'running') detail = <span className="t-muted">{v.progress}</span>
+  // The last recap is old news while a new turn runs.
+  else if (v.state === 'running') detail = null
   else if (v.recap) detail = <span className={news}>{v.recap.headline || v.recap.outcome}</span>
   return (
     <button className="box-row" onClick={() => void store.showThread(v.name)}>

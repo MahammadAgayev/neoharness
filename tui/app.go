@@ -1252,12 +1252,7 @@ func (a *App) renderThreads() {
 	}
 	row := func(n string) Line {
 		v := a.threads[n]
-		nameSt, info, infoSt := th.Subtle, v.Progress, th.Muted
-		// The recap under the row says what the last turn produced; the
-		// report from during that turn is old news.
-		if v.State == model.StateIdle && v.Recap != nil {
-			info = ""
-		}
+		nameSt, info, infoSt := th.Subtle, "", th.Muted
 		if shown[n] {
 			nameSt = th.Text.Bold(true)
 		}

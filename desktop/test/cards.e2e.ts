@@ -762,7 +762,6 @@ test("a thread's recap shows under its row and in its box", async () => {
   await expect(row.locator('.list-recap').nth(1)).toHaveText('no commands')
   hub.setView(
     view('demo', 'api', {
-      progress: 'half way',
       recap: {
         asked: 'add a health check',
         outcome: 'Added /healthz and a test. It answers 200 when the store is up.',
@@ -781,7 +780,6 @@ test("a thread's recap shows under its row and in its box", async () => {
   await expect(row.locator('.list-recap').nth(0)).toHaveText('Added /healthz and a test. …')
   await expect(row.locator('.list-recap').nth(1)).toHaveText('3 commands, 1 failed · 1 file edited · ◇ health-plan')
   await expect(row.locator('.list-recap', { hasText: 'open: keep the old /ping?' })).toBeVisible()
-  await expect(row).not.toContainText('half way')
   await row.click()
   // No recap above the prompt any more; :recap opens the box.
   await expect(page.locator('.pane.focused .window.chat .recap')).toHaveCount(0)
@@ -855,7 +853,7 @@ test('the recap box pops up when the person comes back to news', async () => {
   hub.event('demo', 'db', { kind: 'permission', tool: 'Bash', detail: 'psql -c "drop table x"', id: 'p9' })
   hub.setView(view('demo', 'db', { state: 'waiting', permission: { id: 'p9', tool: 'Bash', detail: 'psql -c "drop table x"' } }))
   hub.setView(view('demo', 'api', { recapUnseen: true, recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
-  hub.setView(view('demo', 'web', { state: 'running', progress: 'half way' }))
+  hub.setView(view('demo', 'web', { state: 'running' }))
   hub.setView(view('demo', 'docs', { recapUnseen: true, recap: { outcome: 'Wrote the plan. Three pages.', headline: 'Wrote the plan.', at: new Date().toISOString() } }))
   const demo = hub.workspaces.find((w) => w.name === 'demo')!
   hub.setWorkspace({
@@ -890,7 +888,7 @@ test('the recap box pops up when the person comes back to news', async () => {
   await expect(rows.nth(0)).toContainText('◆dbpermission · Bash psql -c "drop table x"')
   await expect(rows.nth(1)).toContainText('✗apithe agent failed: boom')
   await expect(rows.nth(2)).toContainText('✓docsWrote the plan.')
-  await expect(rows.nth(3)).toContainText('●webhalf way')
+  await expect(rows.nth(3)).toContainText('●web')
   await expect(box).toContainText('answer db first: the health check needs its table')
   await expect(box).toContainText('api and db both edited server.go')
   const hhmm = at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
