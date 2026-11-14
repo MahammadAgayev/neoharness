@@ -105,14 +105,6 @@ export const calls = {
     method: 'DELETE',
     path: `${th(a.workspace, a.thread)}/queue?at=${e(a.at)}`,
   }),
-  askRecap: (a: { workspace: string; thread: string }): Req => ({
-    method: 'POST',
-    path: `${th(a.workspace, a.thread)}/recap`,
-  }),
-  seenRecap: (a: { workspace: string; thread: string }): Req => ({
-    method: 'POST',
-    path: `${th(a.workspace, a.thread)}/recap/seen`,
-  }),
   resolve: (a: { workspace: string; thread: string }): Req => ({
     method: 'POST',
     path: `${th(a.workspace, a.thread)}/resolve`,

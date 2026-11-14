@@ -6,7 +6,6 @@ import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
 import { Glyph } from './Icon'
 import { CloseWindow } from './CloseWindow'
-import { RecapRows } from './Recap'
 
 export function ThreadsList(props: { win: Win; focused: boolean }) {
   const { win, focused } = props
@@ -115,9 +114,7 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
             v.permission ? `permission · ${v.permission.tool}`
             : v.waiting === 'paused' ? 'paused · write to continue'
             : v.state === 'waiting' ? v.waiting || 'question'
-            // The recap under the row says what the last turn produced.
-            : v.recap && v.state === 'idle' ? ''
-            : location(v.location)
+            : v.reply || location(v.location)
           return (
             <div key={r.name}>
               {head && <div className="group-head">{head}</div>}
@@ -143,8 +140,7 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
                       <span className="t-muted right">{elapsed(v.since)}</span>
                     )}
                   </div>
-                  {detail && <div className={`list-detail ${v.state === 'waiting' ? 't-gold' : 't-muted'}`}>{detail}</div>}
-                  <RecapRows v={v} />
+                  <div className={`list-detail ${v.state === 'waiting' ? 't-gold' : 't-muted'}`}>{detail}</div>
                 </div>
               </div>
             </div>

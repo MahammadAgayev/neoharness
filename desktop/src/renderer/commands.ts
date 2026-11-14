@@ -62,8 +62,6 @@ export const commands: Command[] = [
   { id: 'start-hub', title: 'Start the hub', keys: ['neoharness hub start'], run: () => void s.startHub() },
   { id: 'help', title: 'Keys and commands', keys: ['<leader>h', '⌘/', ':help'], run: () => void s.ex('help') },
   { id: 'cost', title: 'Cost: what this workspace cost', keys: ['<leader>$', ':cost'], run: () => s.openCost('workspace') },
-  { id: 'summary', title: 'Summary: what is done, in progress and needs you', keys: ['<leader>ns', ':summary'], run: () => s.toggleSummary() },
-  { id: 'summary-ask', title: 'Ask for a fresh summary (runs a turn)', keys: [':summary!'], run: () => void s.ex('summary!') },
   { id: 'cost-all', title: 'Cost of every workspace', keys: [':cost all'], run: () => s.openCost('all') },
   { id: 'restart-hub', title: 'Restart the hub, as after an update', keys: [':hub restart'], run: () => s.askRestartHub() },
 ]

@@ -113,6 +113,11 @@ describe('toasts', () => {
     expect(t).toMatchObject({ glyph: '✓', body: 'Done with it', life: 4000 })
   })
 
+  it('falls back to the hub\'s start of the reply in a workspace that is not open', () => {
+    const t = viewToast('w', view({ state: 'running' }), view({ state: 'idle', reply: 'Plan sent.' }), { ...opts, away: true })
+    expect(t).toMatchObject({ glyph: '✓', body: 'Plan sent.', life: 10000 })
+  })
+
   it('says a resolved thread came back', () => {
     const t = viewToast('w', view({ state: 'resolved' }), view({ state: 'running' }), opts)
     expect(t).toMatchObject({ glyph: '↺', body: 'reopened', tone: 'foam' })

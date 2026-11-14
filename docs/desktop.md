@@ -49,30 +49,11 @@ splits, toasts, marks (`ma`, `'a`, `''`), and the ex commands (`:new`, `:open`, 
 completes the folder of `:new`, `:open` and `:folder` when it starts with
 `~/` or `/`; the app has no working folder for a relative one.
 
-Each turn ends with a muted recap line under the reply, and each thread's
-recap shows under its row. Settings' "Recap line" switch, or `:set
-norecap`, hides the line.
+A question sits on the prompt in a gold card: the question in one line,
+the messages it holds until you answer, Reply and Send now.
 
-`:summary` or `<leader>ns` opens or closes the summary card on the prompt,
-as in the TUI: the coordinator's short view on top, then each thread in
-plain words, what it is for and what needs you, failed, is done and in
-progress; in a thread's window, that thread's part, one row per item.
-`j` `k` move its cursor row, `<CR>` or a click opens the thread or artifact
-of the row, and `q`, `Esc` or `×` close it. Opening it marks the news seen
-in the hub, so the TUI does not show it again. `:summary!` asks for a fresh
-one, which runs a turn.
-
-The card pops up by itself when you come back to news you have not seen:
-the window gets focus after two minutes away, or you open a workspace you
-have not looked at for two minutes. It never shows while you write a
-message, nor over a permission or question card. Settings' "Summary
-pop-up" switch, or `:set nosummary`, stops it showing by itself. The
-sidebar and the workspaces screen show `✗ N` beside a workspace whose
-threads failed.
-
-A question sits on the prompt in the same place, in a gold card: the
-question in one line, the messages it holds until you answer, Reply and
-Send now. It takes the place of the summary card while it waits.
+An idle thread's row in the threads list shows the start of its last
+reply, as in the TUI.
 
 The app does not read `init.lua`; the hub settings in it apply to both.
 What the TUI takes from `init.lua` for itself is in Settings instead.

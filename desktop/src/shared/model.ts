@@ -63,64 +63,6 @@ export interface Permission {
   scope?: string
 }
 
-// Recap is what a thread's work produced. asked, outcome and open are the
-// thread's words; the rest is what the hub saw its last turn do.
-export interface Recap {
-  asked?: string
-  outcome?: string
-  // What a row shows of outcome: its first sentence, short.
-  headline?: string
-  open?: string
-  fromReply?: boolean
-  ran?: number
-  // The commands whose last run failed.
-  failed?: number
-  commands?: RecapCommand[]
-  edited?: string[]
-  artifacts?: string[]
-  error?: string
-  at: string
-  // What the thread is for and how its tasks stand, in its own words: its
-  // summary.
-  goal?: string
-  done?: RecapItem[]
-  doing?: RecapItem[]
-  needs?: RecapItem[]
-}
-
-// RecapItem is one task of a summary; thread or artifact is what opens it.
-export interface RecapItem {
-  text: string
-  thread?: string
-  artifact?: string
-}
-
-export interface RecapCommand {
-  text: string
-  failed?: boolean
-}
-
-// RecapAway is how long the person must be away before coming back shows
-// a toast, when there is news they have not seen: model.RecapAway.
-export const RecapAway = 2 * 60_000
-
-// WorkspaceRecap is how a workspace stands: the coordinator's goal and
-// lines, and what the hub joins from the threads' recaps.
-export interface WorkspaceRecap {
-  goal?: string
-  lines?: string[]
-  at?: string
-  overlaps?: Overlap[]
-  failed?: number
-  // The open threads whose recap is newer than the lines.
-  newer?: number
-}
-
-export interface Overlap {
-  path: string
-  threads: string[]
-}
-
 export interface ThreadView {
   workspace: string
   name: string
@@ -132,10 +74,8 @@ export interface ThreadView {
   waiting?: string
   permission?: Permission
   pending?: Event[]
-  recap?: Recap
-  // The recap is newer than the last time the person closed a box that
-  // showed it.
-  recapUnseen?: boolean
+  // The start of the last turn's reply; absent while a turn runs.
+  reply?: string
   quiet?: boolean
   model?: string
   context?: number
@@ -220,10 +160,6 @@ export interface WorkspaceView {
   // The context percent at which a session compacts before its next turn;
   // 0 never.
   autoCompact?: number
-  recap?: WorkspaceRecap
-  // An open thread's recap, or the coordinator's lines, came after the
-  // person last closed the workspace's recap box.
-  recapUnseen?: boolean
 }
 
 export type UpdateKind = 'event' | 'thread' | 'workspace' | 'deleted' | 'artifact' | 'stopped'

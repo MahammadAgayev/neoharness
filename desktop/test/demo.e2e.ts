@@ -109,7 +109,7 @@ test('records the desktop demo', async () => {
     await wait(900)
     hub.event('payments', 'ledger-migration', { kind: 'text', text: 'Done: `settled_at` exists and **2,418** rows are backfilled.' })
     hub.event('payments', 'ledger-migration', { kind: 'turn' })
-    th('ledger-migration', { state: 'idle', context: 61000, cost: 0.71 })
+    th('ledger-migration', { state: 'idle', reply: 'Done: settled_at exists and 2,418 rows are backfilled.', context: 61000, cost: 0.71 })
     th('flaky-test', { state: 'resolved' })
     await wait(2000)
 

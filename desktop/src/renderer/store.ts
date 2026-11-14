@@ -7,7 +7,6 @@ import { useSyncExternalStore } from 'react'
 import type { CallArgs, CallName, HubStatus, Result } from '../shared/api'
 import {
   Coordinator,
-  RecapAway,
   User,
   validName,
   type Artifact,
@@ -19,7 +18,6 @@ import {
 } from '../shared/model'
 import { parseEx } from './lib/ex'
 import { hunks, lines, take } from './lib/linediff'
-import { cardRows, rowText, type CardRow } from './lib/summary'
 import { schemeNames } from './lib/themes'
 import { endHidesError, errorToast, keep, noticeToast, viewToast, type Toast, type ToastSpec, type Tone } from './lib/toasts'
 import { addEvent, fromEvents, lastText, lastUserMessage, settle, type Block } from './lib/transcript'
@@ -114,10 +112,6 @@ export interface Settings {
   sidebarWidth: number
   // cost shows what each workspace cost in the sidebar.
   cost: boolean
-  // recap shows the recap line under each reply.
-  recap: boolean
-  // summary lets a toast say there is news when the person comes back.
-  summary: boolean
 }
 
 export interface State {
@@ -155,20 +149,13 @@ export interface State {
   // workspaceCursor is the row of the workspaces screen.
   workspaceCursor: number
   pending: string
-  // summaryOf is whose summary the card shows: a thread, the coordinator
-  // for the workspace's, or null when it is closed; cardCursor is its row.
-  summaryOf: string | null
-  cardCursor: number
-  // cardNews are the resolved threads that had news when the card opened:
-  // showing it marks them seen, and they stay while it shows.
-  cardNews: string[]
 }
 
 let ids = 1
 const nextId = () => ids++
 
 function loadSettings(): Settings {
-  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true, sidebarWidth: 216, cost: true, recap: true, summary: true }
+  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true, sidebarWidth: 216, cost: true }
   try {
     return { ...d, ...JSON.parse(localStorage.getItem('settings') || '{}') }
   } catch {
@@ -216,9 +203,6 @@ class Store {
     folds: {},
     workspaceCursor: 0,
     pending: '',
-    summaryOf: null,
-    cardCursor: 0,
-    cardNews: [],
   }
   private listeners = new Set<() => void>()
   // writeDoc is a new doc whose editor opens ready to write.
@@ -228,12 +212,6 @@ class Store {
   // their changes still toast.
   private away: Record<string, ThreadView> = {}
   private awayText: Record<string, string> = {}
-  // blurAt is when the window lost focus, and leftAt when each workspace
-  // was left: how long the person was away, for the summary toast.
-  private blurAt = 0
-  private leftAt: Record<string, number> = {}
-  // typing says the person writes in an editor now; the keyboard sets it.
-  typing: () => boolean = () => false
   private connected = false
   // opening are threads the person opens here: they see them open, so the
   // "opened" toast would only cover the screen.
@@ -550,7 +528,6 @@ class Store {
 
   showWorkspaces(): void {
     this.saveLayout()
-    if (this.state.workspace) this.leftAt[this.state.workspace] = Date.now()
     const i = this.state.workspaces.findIndex((w) => w.name === this.state.workspace)
     this.set({ screen: 'workspaces', workspaceCursor: Math.max(i, 0), insert: false })
   }
@@ -567,10 +544,6 @@ class Store {
       return
     }
     this.saveLayout()
-    // Opening a workspace not looked at for minutes is coming back to it.
-    const now = Date.now()
-    const back = !(name in this.leftAt) || now - this.leftAt[name] >= RecapAway
-    if (s.workspace && s.screen === 'workspace') this.leftAt[s.workspace] = now
     // The threads of the workspace left behind keep toasting.
     for (const [n, v] of Object.entries(s.threads)) if (!n.includes('/')) this.away[`${s.workspace}\0${n}`] = v
     const layout = this.layouts[name] ?? {
@@ -582,7 +555,7 @@ class Store {
     }
     if (!this.layouts[name]) layout.focus = layout.cols[0].wins[0].id
     localStorage.setItem('workspace', name)
-    this.set({ workspace: name, screen: 'workspace', layout, threads: {}, order: [], chats: {}, artifacts: [], docs: {}, summaryOf: null })
+    this.set({ workspace: name, screen: 'workspace', layout, threads: {}, order: [], chats: {}, artifacts: [], docs: {} })
     await this.resync()
     // Windows of threads that are gone show the coordinator.
     const known = this.state.threads
@@ -591,140 +564,6 @@ class Store {
         w.buf.kind === 'chat' && !known[w.buf.thread] ? { ...w, buf: { kind: 'chat', thread: Coordinator } } : w,
       ),
     })
-    if (back) this.cameBack()
-  }
-
-  // focused is the window gaining or losing focus.
-  focused(on: boolean): void {
-    if (!on) {
-      this.blurAt = Date.now()
-      return
-    }
-    if (this.blurAt && Date.now() - this.blurAt >= RecapAway) this.cameBack()
-    this.blurAt = 0
-  }
-
-  // cameBack shows the summary card when the person comes back to news
-  // they have not seen. Not while they type, nor over a card that waits for
-  // them, and not with it off in Settings. The hub says what is news; this
-  // says only when.
-  cameBack(): void {
-    const s = this.state
-    if (!s.settings.summary || s.screen !== 'workspace' || s.summaryOf || this.typing()) return
-    if (s.cmdline !== null || s.picker || s.confirm || s.settingsOpen || s.helpOpen || s.cost || s.choice || s.newWorkspace || s.newDoc) return
-    const w = this.cur()
-    const v = w?.buf.kind === 'chat' ? s.threads[w.buf.thread] : undefined
-    if (v?.state === 'waiting') return
-    if (v && v.name !== Coordinator && v.recapUnseen) void this.openSummary(v.name)
-    else if (s.workspaces.find((x) => x.name === s.workspace)?.recapUnseen) void this.openSummary(Coordinator)
-  }
-
-  // summarySubject is whose summary opens from the window with focus: the
-  // thread's in its window when it has one, else the workspace's.
-  summarySubject(): string {
-    const w = this.cur()
-    const t = w?.buf.kind === 'chat' ? w.buf.thread : ''
-    return t && !t.includes('/') && this.state.threads[t]?.recap ? t : Coordinator
-  }
-
-  // cardWindow is the window the card shows in: the chat of its subject,
-  // the one with focus first, or else the window with focus.
-  cardWindow(): number | undefined {
-    const subject = this.state.summaryOf
-    const cur = this.cur()
-    const shows = (w?: Win) => w?.buf.kind === 'chat' && w.buf.thread === subject
-    return (shows(cur) ? cur : (this.wins().find(shows) ?? cur))?.id
-  }
-
-  // openSummary shows the card and tells the hub the person saw it, so the
-  // same news does not show again.
-  async openSummary(subject = this.summarySubject()): Promise<void> {
-    if (!this.needWorkspace()) return
-    const news = Object.values(this.state.threads).filter((v) => v.state === 'resolved' && v.recapUnseen).map((v) => v.name)
-    this.set({ summaryOf: subject, cardCursor: 0, cardNews: news })
-    await this.try(this.call('seenRecap', { workspace: this.state.workspace, thread: subject }))
-  }
-
-  closeSummary(): void {
-    this.set({ summaryOf: null })
-  }
-
-  // toggleSummary is :summary and <leader>ns: it opens the card, or closes it.
-  toggleSummary(): void {
-    if (this.state.summaryOf) this.closeSummary()
-    else void this.openSummary()
-  }
-
-  cardRows(): CardRow[] {
-    const s = this.state
-    if (!s.summaryOf) return []
-    return cardRows(s.summaryOf, s.workspaces.find((x) => x.name === s.workspace), s.threads, s.order, s.cardNews)
-  }
-
-  // openCardRow opens what the card row under the cursor holds and closes
-  // the card.
-  openCardRow(i = this.state.cardCursor): void {
-    this.set({ cardCursor: i })
-    const open = this.cardRows()[i]?.open
-    if (!open) return
-    this.closeSummary()
-    const w = this.cur()
-    if (open.thread) void this.goThread(this.state.workspace, open.thread)
-    else if (open.artifact && w) void this.openArtifact(open.artifact, w.id)
-  }
-
-  // cardKey moves in the card while it shows, as in a window: j k G gg
-  // ^D ^U, <CR> opens what the row holds, y yanks it, q and Esc close.
-  // Other keys go on, so : and <leader>ns still work.
-  private cardG = false
-  cardKey(key: string): boolean {
-    const n = this.cardRows().length
-    const move = (i: number) => this.set({ cardCursor: Math.max(0, Math.min(i, n - 1)) })
-    const cur = this.state.cardCursor
-    const g = this.cardG
-    this.cardG = false
-    switch (key) {
-      case 'j':
-      case '<Down>':
-      case '<C-n>':
-        move(cur + 1)
-        return true
-      case 'k':
-      case '<Up>':
-      case '<C-p>':
-        move(cur - 1)
-        return true
-      case 'G':
-        move(n - 1)
-        return true
-      case 'g':
-        if (g) move(0)
-        else this.cardG = true
-        return true
-      case '<C-d>':
-        move(cur + 5)
-        return true
-      case '<C-u>':
-        move(cur - 5)
-        return true
-      case '<CR>':
-        this.openCardRow()
-        return true
-      case 'y': {
-        const r = this.cardRows()[cur]
-        if (r) {
-          const text = rowText(r).trim()
-          nh().copy(text)
-          this.say('yanked 1 line', 'muted')
-        }
-        return true
-      }
-      case 'q':
-      case '<Esc>':
-        this.closeSummary()
-        return true
-    }
-    return false
   }
 
   async createWorkspace(name: string, pin?: string): Promise<boolean> {
@@ -1064,16 +903,6 @@ class Store {
     if (w.buf.kind === 'chat') return w.buf.thread
     if (w.buf.kind === 'threads') return this.threadRows()[w.cursor]?.name ?? ''
     return ''
-  }
-
-  // askRecap asks a thread, or the coordinator, for a fresh summary. It
-  // runs a turn, so it costs tokens: only :summary! asks.
-  async askRecap(name = this.target()): Promise<void> {
-    if (!this.needWorkspace() || !name) return
-    if ((await this.try(this.call('askRecap', this.at(name)))) === undefined) return
-    // The summary fills in when the recap comes.
-    if (!name.includes('/')) await this.openSummary(name)
-    this.say(`asked ${this.at(name).thread} for a fresh summary`, 'muted')
   }
 
   async resolve(name = this.target()): Promise<void> {
@@ -1535,9 +1364,6 @@ class Store {
         return this.say('the hub commands here: :hub restart', 'love')
       case 'cost':
         return this.openCost(a[0] === 'all' ? 'all' : 'workspace')
-      case 'summary':
-        if (e.bang) return this.askRecap(a[0] || this.state.summaryOf || this.summarySubject())
-        return this.toggleSummary()
       case 'w':
       case 'write':
         if (!art) return this.say('nothing to write here; :w saves an artifact', 'muted')
@@ -1591,7 +1417,7 @@ class Store {
 
   private setOption(args: string[]): void {
     const s = this.state.settings
-    if (!args.length) return this.say(`vim=${s.vim} sidebar=${s.sidebar} cost=${s.cost} recap=${s.recap} summary=${s.summary} fontsize=${s.fontSize} compactwarn=${s.compactwarn} colorscheme=${s.scheme}`)
+    if (!args.length) return this.say(`vim=${s.vim} sidebar=${s.sidebar} cost=${s.cost} fontsize=${s.fontSize} compactwarn=${s.compactwarn} colorscheme=${s.scheme}`)
     for (const arg of args) {
       const [k, v] = arg.split('=', 2)
       switch (k) {
@@ -1613,18 +1439,6 @@ class Store {
         case 'nocost':
           this.setSettings({ cost: false })
           break
-        case 'recap':
-          this.setSettings({ recap: true })
-          break
-        case 'norecap':
-          this.setSettings({ recap: false })
-          break
-        case 'summary':
-          this.setSettings({ summary: true })
-          break
-        case 'nosummary':
-          this.setSettings({ summary: false })
-          break
         case 'fontsize':
         case 'fs':
           if (Number(v) >= 9 && Number(v) <= 28) this.setSettings({ fontSize: Number(v) })
@@ -1635,7 +1449,7 @@ class Store {
           else return this.say('compactwarn is 0 to 100', 'love')
           break
         default:
-          return this.say(`no option ${k}; the options are vim novim sidebar nosidebar cost nocost recap norecap summary nosummary fontsize compactwarn`, 'love')
+          return this.say(`no option ${k}; the options are vim novim sidebar nosidebar cost nocost fontsize compactwarn`, 'love')
       }
     }
   }

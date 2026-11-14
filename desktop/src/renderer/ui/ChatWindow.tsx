@@ -6,7 +6,6 @@ import { wakeLabel } from '../lib/wake'
 import { elapsed, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { Markdown } from './Markdown'
-import { SummaryCard } from './Recap'
 import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
@@ -208,13 +207,6 @@ const BlockView = memo(function BlockView(props: {
           {b.text}
         </div>
       )
-    case 'recap':
-      return (
-        <div className="b-recap t-muted">
-          <span className="t-subtle">recap</span>  {b.text}
-          {b.open && <> · open: {b.open}</>}
-        </div>
-      )
     case 'notice':
       return (
         <div className="b-line">
@@ -266,14 +258,14 @@ function Queued(props: { e: Event; selected: boolean; onClick: () => void }) {
   )
 }
 
-// QuestionCard sits on the prompt while a question waits, as the recap box
-// does, so the question does not get lost in the transcript. The thread's
+// QuestionCard sits on the prompt while a question waits, so the question
+// does not get lost in the transcript. The thread's
 // reply above it holds the context; the card holds the short question and
 // the messages that wait for the answer.
 function QuestionCard(props: { v: ThreadView; onReply: () => void; onSendNow: () => void }) {
   const held = props.v.pending ?? []
   return (
-    <div className="recap-box b-gold question-card" role="dialog" aria-label="question">
+    <div className="question-card" role="dialog" aria-label="question">
       <div className="box-head">
         <span className="box-title t-gold">question</span>
       </div>
@@ -305,10 +297,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   const { workspace, thread: name } = store.at(thread)
   const peek = workspace !== open
   const v = useStore((s) => s.threads[thread])
-  const cardHere = useStore((s) => !!s.summaryOf && store.cardWindow() === win.id)
-  const all = useStore((s) => s.chats[thread])
-  const recapLine = useStore((s) => s.settings.recap)
-  const blocks = useMemo(() => (recapLine ? (all ?? []) : (all ?? []).filter((b) => b.kind !== 'recap')), [all, recapLine])
+  const blocks = useStore((s) => s.chats[thread]) ?? []
   const folds = useStore((s) => s.folds)
   const artifactList = useStore((s) => s.artifacts)
   // A peek's artifacts are of its workspace: they open from their blocks.
@@ -626,11 +615,10 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           ))}
         </div>
       </div>
-      {/* The question card and the summary card sit on the prompt, where
-          the person looks. The question outranks the summary, as in the TUI. */}
-      {((question && v) || cardHere) && (
+      {/* The question card sits on the prompt, where the person looks. */}
+      {question && v && (
         <div className="box-anchor">
-          {question && v ? <QuestionCard v={v} onReply={() => toPrompt(true)} onSendNow={() => void store.sendQueuedNow(thread)} /> : <SummaryCard />}
+          <QuestionCard v={v} onReply={() => toPrompt(true)} onSendNow={() => void store.sendQueuedNow(thread)} />
         </div>
       )}
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>

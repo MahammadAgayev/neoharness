@@ -26,7 +26,6 @@ export type Block = Base &
     | { kind: 'ask'; text: string }
     | { kind: 'progress'; text: string }
     | { kind: 'note'; text: string }
-    | { kind: 'recap'; text: string; open: string }
     | { kind: 'notice'; text: string; needsYou: boolean }
     | { kind: 'shell'; id: string; command: string; output: string; exit: number; live: boolean }
     | { kind: 'artifact'; name: string; title: string; version: number; userEdit: boolean }
@@ -79,8 +78,7 @@ export function addEvent(bs: Block[], e: Event): Block[] {
       return [...quiet, { key: key(), kind: 'tools', tools: [call], live: true }]
     }
     case 'turn':
-      // The turn's recap ends it in the chat, in one muted line.
-      return text ? [...settle(bs, false), { key: key(), kind: 'recap', text, open: e.detail ?? '' }] : settle(bs, false)
+      return settle(bs, false)
     case 'error':
       return [...settle(bs, false), { key: key(), kind: 'error', text }]
     case 'permission':
@@ -217,7 +215,5 @@ export function blockText(b: Block): string {
       return `!${b.command}\n${b.output}`
     case 'artifact':
       return `${b.title} · ${b.name}`
-    case 'recap':
-      return b.open ? `recap  ${b.text} · open: ${b.open}` : `recap  ${b.text}`
   }
 }

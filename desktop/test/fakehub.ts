@@ -60,13 +60,6 @@ export class FakeHub {
     this.threads[name] = ['coordinator', ...threads].map((t) => view(name, t))
   }
 
-  setWorkspace(w: WorkspaceView): void {
-    const i = this.workspaces.findIndex((x) => x.name === w.name)
-    if (i < 0) this.workspaces.push(w)
-    else this.workspaces[i] = w
-    this.push({ kind: 'workspace', workspace: w.name, summary: w })
-  }
-
   setView(v: ThreadView): void {
     const list = this.threads[v.workspace]
     const i = list.findIndex((x) => x.name === v.name)
@@ -185,7 +178,6 @@ export class FakeHub {
         this.setView({ ...v, state: 'running', permission: undefined, waiting: undefined })
         return json({})
       }
-      if (kind === 'threads' && sub === 'recap') return json({})
       if (kind === 'threads' && sub === 'takeback') {
         const v = this.threads[ws].find((t) => t.name === name)!
         const last = (this.events[`${ws}/${name}`] ?? []).filter((e) => e.kind === 'message' && e.from === 'user').pop()

@@ -104,12 +104,6 @@ export function Settings() {
           <Row title="Cost in the sidebar" detail="What each workspace cost, beside its name. <leader>$ shows the breakdown.">
             <Toggle on={st.cost} set={(cost) => store.setSettings({ cost })} />
           </Row>
-          <Row title="Recap line" detail="One muted line under each reply says what the turn did.">
-            <Toggle on={st.recap} set={(recap) => store.setSettings({ recap })} />
-          </Row>
-          <Row title="Summary pop-up" detail="When you come back to news, the summary card says how each thread stands. :summary or <leader>ns opens it at any time.">
-            <Toggle on={st.summary} set={(summary) => store.setSettings({ summary })} />
-          </Row>
           <Row title="Key hints" detail="After a key that starts others, as <leader>, show what can follow, as which-key.">
             <Toggle on={st.keyhints} set={(keyhints) => store.setSettings({ keyhints })} />
           </Row>
