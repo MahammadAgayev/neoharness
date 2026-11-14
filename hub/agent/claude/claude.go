@@ -396,7 +396,8 @@ func (a *accumulator) consume(line []byte) {
 		}
 		for _, c := range e.Message.Content {
 			if c.Type == "tool_result" && c.IsError {
-				a.emit(agent.Event{Kind: agent.KindToolFailed, ID: c.ToolUseID, Text: firstLine(resultText(c.Result))})
+				out := resultText(c.Result)
+				a.emit(agent.Event{Kind: agent.KindToolFailed, ID: c.ToolUseID, Text: firstLine(out), Silent: silent(out)})
 			}
 		}
 
@@ -432,6 +433,13 @@ func actOf(tool string) agent.Act {
 		return agent.ActEdit
 	}
 	return agent.ActOther
+}
+
+// silent says a failed command printed nothing: Bash's result is then only
+// its "Exit code N" line.
+func silent(out string) bool {
+	rest, ok := strings.CutPrefix(strings.TrimSpace(out), "Exit code ")
+	return ok && strings.TrimLeft(rest, "0123456789") == "" && rest != ""
 }
 
 // resultText is a tool result's content: a string, or text blocks.

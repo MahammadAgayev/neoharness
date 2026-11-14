@@ -85,8 +85,8 @@ type notifyIn struct {
 
 type recapIn struct {
 	Asked   string `json:"asked" jsonschema:"your task, in a few words"`
-	Outcome string `json:"outcome" jsonschema:"what came out, in one short sentence: what changed or was decided, and how you checked it"`
-	Open    string `json:"open" jsonschema:"what is still to do or needs the person, in one short sentence; an empty string when nothing is open"`
+	Outcome string `json:"outcome" jsonschema:"what came out, in one short sentence: what changed or was decided. A row shows only the first sentence"`
+	Open    string `json:"open,omitempty" jsonschema:"what is still to do or needs the person, in one short sentence. Leave it out when nothing is open"`
 }
 
 type workspaceRecapIn struct {
@@ -228,7 +228,7 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 		})
 
 	if id.Role != model.RoleCoordinator {
-		mcp.AddTool(s, &mcp.Tool{Name: "recap", Description: "Say what your work produced, so the person learns it without reading your transcript. Call it last in a turn in which your work moved. It replaces your last recap; neoharness adds the commands it saw you run."},
+		mcp.AddTool(s, &mcp.Tool{Name: "recap", Description: "Say what your work produced, so the person learns it at a glance without reading your transcript. Call it last in a turn in which your work moved. It replaces your last recap; neoharness adds what it saw you run and edit."},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in recapIn) (*mcp.CallToolResult, any, error) {
 				if err := h.Recap(p, me, in.Asked, in.Outcome, in.Open); err != nil {
 					return nil, nil, err

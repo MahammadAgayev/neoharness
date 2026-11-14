@@ -80,6 +80,9 @@ type Event struct {
 	Detail string
 	// Text is prose, for KindAssistantText and KindError.
 	Text string
+	// Silent says a KindToolFailed printed nothing but its failure: a no, as
+	// from a search that found nothing, rather than an error.
+	Silent bool
 	// Tokens is cumulative total tokens as last reported. Providers report this
 	// at unpredictable points and some only at the end, so it is monotonic
 	// rather than incremental: see Result.Tokens.

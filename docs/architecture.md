@@ -102,16 +102,37 @@ A thread's recap says what its work produced, so the person learns it
 without the transcript. It has two parts that stay apart, so a claim never
 reads as a check:
 
-- **The thread's words**: `recap(asked, outcome, open)`, its last call in a
-  turn in which its work moved.
+- **The thread's words**: `recap(asked, outcome, open?)`, its last call in a
+  turn in which its work moved. `open` is optional, so "nothing open" is no
+  value rather than words that say so.
 - **What the hub saw** that turn: the commands it ran and which failed, the
   files it edited, the artifacts it wrote, and the error if the turn failed.
   The adapter says which tool calls run a command or edit a file
-  (`agent.Act`); only it knows its tools' names.
+  (`agent.Act`), and which failed command printed nothing
+  (`agent.Event.Silent`, from Claude's bare `Exit code N`); only it knows its
+  tools and their output.
 
-When the thread wrote no recap, the first line of its reply stands in, marked
-as such. A turn that wrote none and did nothing keeps the old recap. The
-recap is kept in `thread.json` and sent as `ThreadView.Recap`.
+The model's words are untrusted input: a different model, a long answer, no
+recap, or two calls must still give a good view. So the hub, not the UIs,
+shapes the recap, by rules that read no words:
+
+- `Headline` is the outcome's first sentence, at most 120 characters, cut at
+  a word. Rows show it; the full view shows `Outcome`.
+- `Commands` holds what the hub's facts say matters, not the commands'
+  names: each command whose last run failed, and the last 4 run after the
+  last edit, which checked the work as it ended, or the last 4 of all when
+  none ran after it. A command shows once, at its last run, so a failure a
+  later run mended is none, and a silent failure is a no, not a failure.
+  `Failed` counts the failures and `Ran` all commands. Paths in the
+  thread's folder are made relative to it.
+- A recap with no outcome, or none at all, takes the first line of the
+  reply, marked `FromReply`. A turn that wrote none and did nothing keeps
+  the old recap.
+
+The recap is kept in `thread.json` and sent as `ThreadView.Recap`. The
+person can ask for a fresh one (`POST …/threads/{t}/recap`, `:recap!`, the
+app's "ask again"): the hub queues the ask as the person's message, at most
+once while it waits, so it runs a turn only on the person's act.
 
 The workspace recap says how the whole workspace stands, as
 `WorkspaceView.Recap`. It holds only what no thread's recap says:
@@ -127,7 +148,10 @@ The workspace recap says how the whole workspace stands, as
   `notify = "coordinator"` the threads' reports wake it already.
 - **What the hub joins** from the open threads' recaps, at no cost: the files
   that two or more threads edited (each path joined back to its thread's
-  folder) and how many idle threads failed their last turn.
+  folder), how many idle threads failed their last turn (`Failed`), and how
+  many recaps are newer than the lines (`Newer`). The UIs take the counts
+  from `WorkspaceView.Counts` and these fields, and count nothing
+  themselves.
 
 ## Permissions
 

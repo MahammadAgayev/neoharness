@@ -936,11 +936,16 @@ kbd {
 
 /* a thread's recap, between its transcript and its prompt */
 .recap {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   border-top: 1px solid var(--hl-med);
   padding: 10px 24px;
   font-size: var(--fs-secondary);
 }
 .recap-inner {
+  flex: 1;
+  min-width: 0;
   max-width: var(--measure);
   margin: 0 auto;
   display: grid;
@@ -955,6 +960,21 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* the recap's own controls: quiet until pointed at */
+.recap-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+.recap-actions .btn,
+.recap-show {
+  color: var(--muted);
+}
+.recap-hidden {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 24px;
 }
 /* the workspace recap, above the coordinator's transcript: no label column */
 .recap-ws .recap-inner {

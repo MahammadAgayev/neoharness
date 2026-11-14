@@ -464,6 +464,18 @@ func (a *App) exec(line string) {
 		a.attachImage(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), cmd)))
 	case "recap":
 		a.recapShown, a.recapSet = !a.recapOn(), true
+	case "recap!":
+		// Asking runs a turn, so it costs tokens: only this command asks.
+		n := target()
+		if !needWorkspace() || n == "" {
+			return
+		}
+		if err := a.c.AskRecap(a.workspace, n); err != nil {
+			a.notify(err.Error(), a.th.Love)
+			return
+		}
+		a.recapShown, a.recapSet = true, true
+		a.notify("asked "+n+" for a fresh recap", a.th.Muted)
 	case "hub":
 		if arg(0) != "restart" {
 			a.notify("the hub commands here: :hub restart", a.th.Love)
@@ -721,6 +733,7 @@ func (a *App) helpBuf() *Buffer {
 		row(":hub restart", "restart the hub on this neoharness; after an update it does so on its own once no turn runs"),
 		row(":image [file]", "put the clipboard's picture, or a file's, in the prompt as [image 1]; it goes with the message"),
 		row(":recap", "hide or show the recaps above the prompts"),
+		row(":recap! [thread]", "ask for a fresh recap; the coordinator's is the workspace's. It runs a turn"),
 		row(":cost  :cost all", "what this workspace, or every workspace, cost: by day, thread and model; <CR> opens a thread"),
 		row(":workspaces  :workspace <n>", "workspace list, switch workspace"),
 		row(":restore [name]", "bring back a deleted workspace; no name lists them"),

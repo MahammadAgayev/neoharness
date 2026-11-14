@@ -189,13 +189,17 @@ type Permission struct {
 type Recap struct {
 	Asked   string `json:"asked,omitempty"`
 	Outcome string `json:"outcome,omitempty"`
-	Open    string `json:"open,omitempty"`
-	// FromReply says the thread wrote no recap: Outcome is the first line of
-	// its reply.
+	// Headline is what a row shows of Outcome: its first sentence, short.
+	Headline string `json:"headline,omitempty"`
+	Open     string `json:"open,omitempty"`
+	// FromReply says the thread wrote no outcome: Outcome is the first line
+	// of its reply.
 	FromReply bool `json:"fromReply,omitempty"`
-	// Ran counts the commands of the turn; Commands holds every failed one
-	// and the last of the others, in the order they ran.
+	// Ran counts the commands of the turn and Failed those whose last run
+	// failed. Commands holds the ones that tell the most, in the order they
+	// ran: the failed, and the last that checked the work.
 	Ran       int            `json:"ran,omitempty"`
+	Failed    int            `json:"failed,omitempty"`
 	Commands  []RecapCommand `json:"commands,omitempty"`
 	Edited    []string       `json:"edited,omitempty"`
 	Artifacts []string       `json:"artifacts,omitempty"`
@@ -208,17 +212,6 @@ type Recap struct {
 type RecapCommand struct {
 	Text   string `json:"text"`
 	Failed bool   `json:"failed,omitempty"`
-}
-
-// Failed counts the failed commands.
-func (r *Recap) Failed() int {
-	n := 0
-	for _, c := range r.Commands {
-		if c.Failed {
-			n++
-		}
-	}
-	return n
 }
 
 // WorkspaceRecap is how a workspace stands, for the person to read without
@@ -236,6 +229,8 @@ type WorkspaceRecap struct {
 	Overlaps []Overlap `json:"overlaps,omitempty"`
 	// Failed counts the idle threads whose last turn failed.
 	Failed int `json:"failed,omitempty"`
+	// Newer counts the open threads whose recap is newer than Lines.
+	Newer int `json:"newer,omitempty"`
 }
 
 // Overlap is a file that more than one thread edited.

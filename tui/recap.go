@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 
@@ -28,7 +29,7 @@ func recapRows(v model.ThreadView, th *Theme) []Line {
 		if r.FromReply {
 			st = st.Italic(true)
 		}
-		out = append(out, Line{Prefix: pre, Spans: []Span{{r.Outcome, st}}, Item: v.Name})
+		out = append(out, Line{Prefix: pre, Spans: []Span{{cmp.Or(r.Headline, r.Outcome), st}}, Item: v.Name})
 	}
 	var facts []Span
 	for i, s := range evidence(r, th) {
@@ -51,8 +52,8 @@ func evidence(r *model.Recap, th *Theme) [][]Span {
 	if r.Ran == 0 {
 		ran[0].Text = "no commands"
 	}
-	if f := r.Failed(); f > 0 {
-		ran = append(ran, Span{fmt.Sprintf(", %d failed", f), th.Subtle})
+	if r.Failed > 0 {
+		ran = append(ran, Span{fmt.Sprintf(", %d failed", r.Failed), th.Subtle})
 	}
 	out := [][]Span{ran}
 	if n := len(r.Edited); n > 0 {
@@ -110,8 +111,8 @@ func recapHead(r *model.Recap, th *Theme, w int) []Line {
 	if r.Open != "" {
 		words("open", r.Open, th.Text)
 	}
-	// The newest first: the last commands are most often the checks, and a
-	// long row is cut at its end.
+	// The newest first: the failures and what checked the work as it ended,
+	// and a long row is cut at its end.
 	var ran []Span
 	for i := len(r.Commands) - 1; i >= 0; i-- {
 		c := r.Commands[i]
@@ -125,7 +126,7 @@ func recapHead(r *model.Recap, th *Theme, w int) []Line {
 		}
 	}
 	if more := r.Ran - len(r.Commands); more > 0 {
-		ran = append(ran, Span{fmt.Sprintf(" · +%d earlier", more), th.Muted})
+		ran = append(ran, Span{fmt.Sprintf(" · +%d more", more), th.Muted})
 	}
 	if len(ran) == 0 {
 		ran = []Span{{"no commands", th.Muted}}
@@ -155,27 +156,15 @@ const workspaceLineRows = 2
 // window w cells wide: the goal, the counts, the files two threads edited,
 // then the coordinator's lines. It says only what no thread's row says, and
 // shows nothing while no thread is open. full false keeps only the counts,
-// for a short window.
-func workspaceHead(r *model.WorkspaceRecap, threads map[string]model.ThreadView, th *Theme, w int, full bool) []Line {
-	var waits, failed, running, idle, newer int
-	for _, v := range threads {
-		if v.Role != model.RoleThread {
-			continue
-		}
-		if r != nil && v.Recap != nil && !r.At.IsZero() && v.Recap.At.After(r.At) {
-			newer++
-		}
-		switch {
-		case v.State == model.StateWaiting:
-			waits++
-		case v.State == model.StateRunning:
-			running++
-		case v.State == model.StateIdle && v.Recap != nil && v.Recap.Error != "":
-			failed++
-		case v.State == model.StateIdle:
-			idle++
-		}
+// for a short window. The hub counts; this only lays out.
+func workspaceHead(v model.WorkspaceView, th *Theme, w int, full bool) []Line {
+	r := v.Recap
+	var failed, newer int
+	if r != nil {
+		failed, newer = r.Failed, r.Newer
 	}
+	waits, running := v.Counts[model.StateWaiting], v.Counts[model.StateRunning]
+	idle := v.Counts[model.StateIdle] - failed
 	if waits+failed+running+idle == 0 {
 		return nil
 	}

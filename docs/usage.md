@@ -51,10 +51,16 @@ thread yourself:
   asked, what came out and what is open; neoharness adds what it saw the turn
   do: the commands it ran and which failed, the files it edited, the
   artifacts it wrote, or why the turn failed. Under an idle or waiting row
-  the pane shows it in short, one row each: the outcome, the facts
-  (`3 commands, 1 failed · 1 file edited`), and `open: …`; in the thread's
-  window it shows in full just above the prompt, the newest commands first.
-  When the thread wrote none, the first line of its reply stands in, labeled
+  the pane shows it in short, one row each: the first sentence of the
+  outcome, the facts (`3 commands, 1 failed · 1 file edited`), and
+  `open: …`; in the thread's window it shows in full just above the prompt.
+  The `ran` row there names the commands that tell the most, newest first:
+  each one whose last run failed, and the last few run after the last edit,
+  which checked the work as it ended. A command that failed but printed
+  nothing, such as a search that found nothing, answered no and does not
+  count as failed; a failure that a later run of the same command mended
+  is gone. Paths in the thread's folder show relative to it. When the
+  thread wrote no outcome, the first line of its reply stands in, labeled
   `reply`, and `no commands` says that nothing was checked.
 - The coordinator's window shows the workspace recap above its prompt, so you
   learn how the whole workspace stands without opening a thread: the goal, then
@@ -70,6 +76,11 @@ thread yourself:
 - `:recap` hides the recaps above the prompts, and shows them again.
   `neoharness.o.recap = false` in `init.lua` starts with them hidden. A
   permission or question card takes the recap's place while it waits.
+- `:recap!` asks for a fresh recap: of the thread in the window or under the
+  cursor, of a thread you name (`:recap! api`), or in the coordinator's
+  window, of the workspace. It sends the ask as your message and runs a
+  turn, so it costs tokens; nothing asks on its own. A second ask while the
+  first still waits is not sent.
 - To delete a thread, press `<C-d>` on it in a picker, then `y`. This cannot
   be undone. The coordinator cannot be deleted.
 - A thread runs at most 20 turns in a row that you did not start. Then it

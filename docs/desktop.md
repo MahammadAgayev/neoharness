@@ -50,7 +50,10 @@ completes the folder of `:new`, `:open` and `:folder` when it starts with
 
 Each thread's recap shows under its row and above its prompt, and the
 coordinator's chat shows the workspace recap above its prompt, as in the
-TUI. `:recap` or `:set norecap` hides them; Settings has it too. The
+TUI. Each recap has two quiet buttons at its right: "ask again" asks for a
+fresh recap, which runs a turn, and "hide" hides the recaps. Hidden, a quiet
+"recap" button stays where the recap was and brings it back. `:recap`,
+`:recap!` and `:set norecap` do the same; Settings has it too. The
 sidebar and the workspaces screen show `✗ N` beside a workspace whose
 threads failed.
 

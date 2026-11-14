@@ -185,6 +185,7 @@ export class FakeHub {
         this.setView({ ...v, state: 'running', permission: undefined, waiting: undefined })
         return json({})
       }
+      if (kind === 'threads' && sub === 'recap') return json({})
       if (kind === 'threads' && (sub === 'stop' || sub === 'resolve' || sub === 'reopen')) {
         const v = this.threads[ws].find((t) => t.name === name)!
         this.setView({ ...v, state: sub === 'resolve' ? 'resolved' : 'idle' })

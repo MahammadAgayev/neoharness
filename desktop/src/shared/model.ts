@@ -67,9 +67,13 @@ export interface Permission {
 export interface Recap {
   asked?: string
   outcome?: string
+  // What a row shows of outcome: its first sentence, short.
+  headline?: string
   open?: string
   fromReply?: boolean
   ran?: number
+  // The commands whose last run failed.
+  failed?: number
   commands?: RecapCommand[]
   edited?: string[]
   artifacts?: string[]
@@ -90,6 +94,8 @@ export interface WorkspaceRecap {
   at?: string
   overlaps?: Overlap[]
   failed?: number
+  // The open threads whose recap is newer than lines.
+  newer?: number
 }
 
 export interface Overlap {

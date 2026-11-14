@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
-import type { Recap, ThreadView, WorkspaceRecap } from '../../shared/model'
+import type { Recap, ThreadView, WorkspaceView } from '../../shared/model'
+import { store } from '../store'
 
 const counted = (n: number, what: string) => (n === 1 ? `1 ${what}` : `${n} ${what}s`)
 
@@ -8,7 +9,7 @@ const counted = (n: number, what: string) => (n === 1 ? `1 ${what}` : `${n} ${wh
 // it tells a claim that nothing checked.
 function evidence(r: Recap): ReactNode[] {
   const ran = r.ran ?? 0
-  const failed = (r.commands ?? []).filter((c) => c.failed).length
+  const failed = r.failed ?? 0
   const out: ReactNode[] = [
     <span key="ran">
       {ran === 0 ? 'no commands' : counted(ran, 'command')}
@@ -40,7 +41,7 @@ export function RecapRows(props: { v: ThreadView }) {
       {r.error ? (
         <div className="list-detail list-recap t-love">✗ {r.error}</div>
       ) : (
-        r.outcome && <div className={`list-detail list-recap t-muted ${r.fromReply ? 'from-reply' : ''}`}>{r.outcome}</div>
+        r.outcome && <div className={`list-detail list-recap t-muted ${r.fromReply ? 'from-reply' : ''}`}>{r.headline || r.outcome}</div>
       )}
       <div className="list-detail list-recap t-muted">{joined(evidence(r))}</div>
       {r.open && (
@@ -52,9 +53,35 @@ export function RecapRows(props: { v: ThreadView }) {
   )
 }
 
-// RecapHead is a thread's recap at the top of its chat, one row per part:
-// the thread's words, then what the hub saw.
-export function RecapHead(props: { r?: Recap }) {
+// RecapActions are the recap's own controls, so a person finds them without
+// an ex command or a setting. Asking runs a turn, so only a click asks.
+export function RecapActions(props: { thread: string }) {
+  return (
+    <div className="recap-actions">
+      <button className="btn ghost small" data-tip="Ask for a fresh recap. It runs a turn." onClick={() => void store.askRecap(props.thread)}>
+        ask again
+      </button>
+      <button className="btn ghost small" data-tip="Hide the recaps · :recap" onClick={() => store.setSettings({ recap: false })}>
+        hide
+      </button>
+    </div>
+  )
+}
+
+// RecapShow stands where a hidden recap was, so it comes back with a click.
+export function RecapShow() {
+  return (
+    <div className="recap-hidden">
+      <button className="btn ghost small recap-show" data-tip="Show the recaps · :recap" onClick={() => store.setSettings({ recap: true })}>
+        recap
+      </button>
+    </div>
+  )
+}
+
+// RecapHead is a thread's recap above its prompt, one row per part: the
+// thread's words, then what the hub saw.
+export function RecapHead(props: { r?: Recap; actions?: ReactNode }) {
   const r = props.r
   if (!r) return null
   // The thread's words wrap to a few lines; what the hub saw keeps to one.
@@ -97,37 +124,43 @@ export function RecapHead(props: { r?: Recap }) {
                     <span key={i}>{c.text}</span>
                   ),
                 ),
-                ...(more > 0 ? [<span key="more">+{more} earlier</span>] : []),
+                ...(more > 0 ? [<span key="more">+{more} more</span>] : []),
               ])}
             </span>
           ),
         )}
         {changed.length > 0 && row('changed', <span className="t-muted">{joined(changed)}</span>)}
       </div>
+      {props.actions}
     </div>
   )
 }
 
 const hhmm = (at: string) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
-// WorkspaceRecapHead is the workspace recap at the top of the coordinator's
-// chat: the goal, the counts, the files two threads edited, then the
+// workspaceCounts are the hub's counts of a workspace's threads, as the
+// recap shows them: a thread whose last turn failed is not idle.
+export function workspaceCounts(w?: WorkspaceView) {
+  const c = w?.counts ?? {}
+  const failed = w?.recap?.failed ?? 0
+  const counts = { waits: c.waiting ?? 0, running: c.running ?? 0, failed, idle: Math.max(0, (c.idle ?? 0) - failed) }
+  return { ...counts, any: counts.waits + counts.running + counts.failed + counts.idle > 0 }
+}
+
+// WorkspaceRecapHead is the workspace recap above the coordinator's prompt:
+// the goal, the counts, the files two threads edited, then the
 // coordinator's lines. It says only what no thread's row says, and shows
-// nothing while no thread is open.
-export function WorkspaceRecapHead(props: { r?: WorkspaceRecap; threads: ThreadView[] }) {
-  const { r } = props
-  const threads = props.threads.filter((v) => v.role === 'thread')
-  const waits = threads.filter((v) => v.state === 'waiting').length
-  const running = threads.filter((v) => v.state === 'running').length
-  const failed = threads.filter((v) => v.state === 'idle' && v.recap?.error).length
-  const idle = threads.filter((v) => v.state === 'idle' && !v.recap?.error).length
-  if (waits + running + failed + idle === 0) return null
+// nothing while no thread is open. The hub counts; this only lays out.
+export function WorkspaceRecapHead(props: { w?: WorkspaceView; actions?: ReactNode }) {
+  const r = props.w?.recap
+  const { waits, running, failed, idle, any } = workspaceCounts(props.w)
+  if (!any) return null
   const counts: ReactNode[] = []
   if (waits) counts.push(<span key="w"><span className="t-gold">◆ {waits}</span> {waits === 1 ? 'waits' : 'wait'} for you</span>)
   if (failed) counts.push(<span key="f"><span className="t-love">✗ {failed}</span> failed</span>)
   if (running) counts.push(<span key="r"><span className="t-foam">● {running}</span> running</span>)
   if (idle) counts.push(<span key="i">{idle} idle</span>)
-  const newer = r?.at ? threads.filter((v) => v.recap && v.recap.at > r.at!).length : 0
+  const newer = r?.newer ?? 0
   const names = (ts: string[]) =>
     ts.length > 2 ? `${ts.slice(0, -1).join(', ')} and ${ts[ts.length - 1]} all` : `${ts[0]} and ${ts[1]} both`
   return (
@@ -152,6 +185,7 @@ export function WorkspaceRecapHead(props: { r?: WorkspaceRecap; threads: ThreadV
           </div>
         )}
       </div>
+      {props.actions}
     </div>
   )
 }

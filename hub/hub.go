@@ -17,6 +17,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -187,8 +188,10 @@ type thread struct {
 type turnSeen struct {
 	// dirs are the thread's folder as it was given and with its links
 	// resolved: an agent may name a file either way.
-	dirs      []string
-	commands  []model.RecapCommand
+	dirs     []string
+	commands []model.RecapCommand
+	// lastEdit is how many commands had run at the last edit.
+	lastEdit  int
 	ids       map[string]int
 	edited    []string
 	artifacts []string
@@ -205,8 +208,9 @@ func (s *turnSeen) tool(e agent.Event) {
 			s.ids = map[string]int{}
 		}
 		s.ids[e.ID] = len(s.commands)
-		s.commands = append(s.commands, model.RecapCommand{Text: oneLine(e.Detail, recapLimit)})
+		s.commands = append(s.commands, model.RecapCommand{Text: oneLine(s.short(e.Detail), recapLimit)})
 	case agent.ActEdit:
+		s.lastEdit = len(s.commands)
 		f := e.Detail
 		for _, d := range s.dirs {
 			if rel, ok := strings.CutPrefix(f, strings.TrimSuffix(d, "/")+"/"); ok {
@@ -220,10 +224,38 @@ func (s *turnSeen) tool(e agent.Event) {
 	}
 }
 
-func (s *turnSeen) failed(id string) {
-	if i, ok := s.ids[id]; ok {
+// failed marks a command failed, unless it failed silently: a search that
+// found nothing answered no, and that is no error.
+func (s *turnSeen) failed(id string, silent bool) {
+	if i, ok := s.ids[id]; ok && !silent {
 		s.commands[i].Failed = true
 	}
+}
+
+// short is a command as the person reads it: paths in the thread's folder
+// relative to it, and no step into the folder it runs in already.
+func (s *turnSeen) short(cmd string) string {
+	dirs := slices.Clone(s.dirs)
+	// A folder through a link may hold the other name: /private/tmp/x holds
+	// /tmp/x.
+	slices.SortFunc(dirs, func(a, b string) int { return len(b) - len(a) })
+	for _, d := range dirs {
+		if d = strings.TrimSuffix(d, "/"); d == "" {
+			continue
+		}
+		re := regexp.MustCompile(regexp.QuoteMeta(d) + "(/|$|[\\s'\"`;|&)])")
+		cmd = re.ReplaceAllStringFunc(cmd, func(m string) string {
+			if end := m[len(d):]; end != "/" {
+				return "." + end
+			}
+			return ""
+		})
+	}
+	cmd = strings.Join(strings.Fields(cmd), " ")
+	for _, step := range []string{"cd . && ", "cd .; "} {
+		cmd = strings.TrimPrefix(cmd, step)
+	}
+	return cmd
 }
 
 type pending struct {
@@ -1425,9 +1457,8 @@ func (h *Hub) ReportProgress(workspaceName, name, summary string) error {
 // recapLimit keeps each part of a recap to a few lines on screen.
 const recapLimit = 300
 
-// recapCommands is how many of the last commands that did not fail a recap
-// names.
-const recapCommands = 8
+// recapCommands is how many commands that did not fail a recap names.
+const recapCommands = 4
 
 // Recap keeps what a thread says its turn produced. The hub joins it with
 // what it saw the turn do when the turn ends.
@@ -1442,6 +1473,30 @@ func (h *Hub) Recap(workspaceName, name, asked, outcome, open string) error {
 		return errors.New("the coordinator writes no recap")
 	}
 	th.recap = &model.Recap{Asked: oneLine(asked, recapLimit), Outcome: oneLine(outcome, recapLimit), Open: oneLine(open, recapLimit)}
+	return nil
+}
+
+// AskRecap asks a thread for a fresh recap, or the coordinator for a fresh
+// workspace recap. It runs a turn, so only the person asks, and an ask that
+// still waits is not queued twice.
+func (h *Hub) AskRecap(workspaceName, name string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	if th.t.Resolved {
+		return fmt.Errorf("thread %q is resolved", name)
+	}
+	text := prompts.RecapAsked()
+	if th.t.Role == model.RoleCoordinator {
+		text = prompts.WorkspaceRecapAsked()
+	}
+	if slices.ContainsFunc(th.t.Queue, func(m workspace.Message) bool { return !m.Shown && m.Text == text }) {
+		return nil
+	}
+	h.enqueue(ws, th, model.User, text)
 	return nil
 }
 
@@ -1514,7 +1569,8 @@ func recapOf(old, written *model.Recap, seen turnSeen, asked, reply, failure str
 	var r model.Recap
 	if written != nil {
 		r = *written
-	} else if failure == "" {
+	}
+	if r.Outcome == "" && failure == "" {
 		r.Outcome = oneLine(firstLine(reply), recapLimit)
 		r.FromReply = r.Outcome != ""
 	}
@@ -1524,21 +1580,70 @@ func recapOf(old, written *model.Recap, seen turnSeen, asked, reply, failure str
 	if r.Asked == "" {
 		r.Asked = oneLine(firstLine(asked), recapLimit)
 	}
-	// The last commands are most often the checks: the tests, the commit.
+	r.Headline = headline(r.Outcome)
 	r.Ran = len(seen.commands)
-	room := recapCommands
-	for i := len(seen.commands) - 1; i >= 0; i-- {
-		if c := seen.commands[i]; c.Failed || room > 0 {
-			if !c.Failed {
-				room--
-			}
-			r.Commands = append(r.Commands, c)
-		}
-	}
-	slices.Reverse(r.Commands)
+	r.Commands, r.Failed = evidence(seen.commands, seen.lastEdit)
 	r.Edited, r.Artifacts, r.Error = seen.edited, seen.artifacts, failure
 	r.At = time.Now().UTC()
 	return &r
+}
+
+// evidence is what of a turn's commands a recap shows, judged by what the
+// hub saw and not by their names: every command whose last run failed, and
+// the last few of those run after the last edit, which check the work as it
+// ended, or of all when none ran after it. A command shows once, at its last
+// run, so a failure that a later run mended is no failure. failed counts the
+// failures, shown or not.
+func evidence(cmds []model.RecapCommand, lastEdit int) (shown []model.RecapCommand, failed int) {
+	last := map[string]int{}
+	for i, c := range cmds {
+		last[c.Text] = i
+	}
+	if lastEdit >= len(cmds) {
+		lastEdit = 0
+	}
+	room, failRoom := recapCommands, recapCommands
+	for i := len(cmds) - 1; i >= 0; i-- {
+		c := cmds[i]
+		switch {
+		case last[c.Text] != i:
+		case c.Failed:
+			if failed++; failRoom > 0 {
+				failRoom--
+				shown = append(shown, c)
+			}
+		case room > 0 && i >= lastEdit:
+			room--
+			shown = append(shown, c)
+		}
+	}
+	slices.Reverse(shown)
+	return shown, failed
+}
+
+// headlineLimit is the most of an outcome a row shows.
+const headlineLimit = 120
+
+// headline is what a row shows of an outcome: its first sentence, cut at a
+// word to headlineLimit, so a long outcome reads whole or ends in "…".
+func headline(outcome string) string {
+	s := outcome
+	for i := 0; i+1 < len(s); i++ {
+		if strings.ContainsRune(".!?", rune(s[i])) && s[i+1] == ' ' {
+			s = s[:i+1]
+			break
+		}
+	}
+	if r := []rune(s); len(r) > headlineLimit {
+		cut := string(r[:headlineLimit])
+		if k := strings.LastIndexByte(cut, ' '); k > 0 {
+			cut = cut[:k]
+		}
+		s = strings.TrimRight(cut, " ,;:") + "…"
+	} else if s != outcome {
+		s += " …"
+	}
+	return s
 }
 
 // MaxWake is the furthest ahead a thread can ask to be woken.
@@ -2044,7 +2149,7 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 		th.seen.tool(e)
 	case agent.KindToolFailed:
 		h.event(ws, th, model.Event{Kind: model.EventTool, ID: e.ID, Exit: 1, Text: e.Text})
-		th.seen.failed(e.ID)
+		th.seen.failed(e.ID, e.Silent)
 	case agent.KindAssistantText:
 		h.event(ws, th, model.Event{Kind: model.EventText, Text: e.Text})
 	case agent.KindError:
@@ -2466,6 +2571,9 @@ func (h *Hub) workspaceRecap(ws *space) *model.WorkspaceRecap {
 		}
 		if t.Recap.Error != "" && th.state == model.StateIdle {
 			r.Failed++
+		}
+		if !r.At.IsZero() && t.Recap.At.After(r.At) {
+			r.Newer++
 		}
 		for _, f := range t.Recap.Edited {
 			// A recap names a file inside the thread's folder relative to it.

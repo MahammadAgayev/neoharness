@@ -49,6 +49,7 @@ type Client interface {
 	SendNow(workspace, thread, text string, images ...[]byte) error
 	Stop(workspace, thread string) error
 	Unqueue(workspace, thread string, at time.Time) error
+	AskRecap(workspace, thread string) error
 	Resolve(workspace, thread string) error
 	Delete(workspace, thread string) error
 	Reopen(workspace, thread string) error
@@ -1150,13 +1151,13 @@ func (a *App) renderWorkspaces() {
 	a.workspacesBuf.SetLines(lines)
 }
 
-// workspaceRecap is the open workspace's recap, or nil.
-func (a *App) workspaceRecap() *model.WorkspaceRecap {
+// workspaceView is the open workspace as the hub last sent it.
+func (a *App) workspaceView() model.WorkspaceView {
 	i := slices.IndexFunc(a.workspaces, func(p model.WorkspaceView) bool { return p.Name == a.workspace })
 	if i < 0 {
-		return nil
+		return model.WorkspaceView{}
 	}
-	return a.workspaces[i].Recap
+	return a.workspaces[i]
 }
 
 // wakeLabel says when an idle thread wakes, if it asked to be woken.

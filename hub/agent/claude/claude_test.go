@@ -500,6 +500,26 @@ func TestFailedToolResultIsReported(t *testing.T) {
 	}
 }
 
+// TestACommandThatPrintedNothingFailedSilently: a search that found nothing
+// exits 1 and prints nothing; that is an answer, not an error.
+func TestACommandThatPrintedNothingFailedSilently(t *testing.T) {
+	_, got := feed(t, []string{
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"a","is_error":true,"content":"Exit code 1"}]}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"b","is_error":true,"content":"Exit code 1\n\n"}]}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"c","is_error":true,"content":"Exit code 1\n--- FAIL: TestX"}]}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"d","is_error":true,"content":"no such file"}]}}`,
+	})
+	want := []bool{true, true, false, false}
+	if len(got) != len(want) {
+		t.Fatalf("events = %+v", got)
+	}
+	for i, e := range got {
+		if e.Silent != want[i] {
+			t.Errorf("%s: silent %v, want %v", e.ID, e.Silent, want[i])
+		}
+	}
+}
+
 func TestPermissionPromptsInTheHubsTerms(t *testing.T) {
 	for _, c := range []struct {
 		tool, input string

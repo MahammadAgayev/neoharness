@@ -298,6 +298,10 @@ func TestOnlyThreadsWriteARecap(t *testing.T) {
 	if out, isErr := call(t, th, "recap", map[string]any{"asked": "write tests", "outcome": "3 tests", "open": ""}); isErr || out == "" {
 		t.Fatalf("recap: %q", out)
 	}
+	// Nothing open is no open at all, not words that say so.
+	if out, isErr := call(t, th, "recap", map[string]any{"asked": "write tests", "outcome": "3 tests"}); isErr {
+		t.Fatalf("recap without open: %q", out)
+	}
 }
 
 func TestOnlyTheCoordinatorWritesTheWorkspaceRecap(t *testing.T) {

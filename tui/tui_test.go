@@ -27,6 +27,7 @@ type fakeClient struct {
 	answers    []string
 	opened     []string
 	resolved   []string
+	recaps     []string
 	deleted    []string
 	folders    []string
 	locals     []string
@@ -134,6 +135,10 @@ func (f *fakeClient) Stop(p, t string) error {
 }
 func (f *fakeClient) Unqueue(p, t string, at time.Time) error {
 	f.sent = append(f.sent, "unqueue "+t+" "+at.UTC().Format(time.RFC3339))
+	return nil
+}
+func (f *fakeClient) AskRecap(p, t string) error {
+	f.recaps = append(f.recaps, t)
 	return nil
 }
 func (f *fakeClient) Resolve(p, t string) error {
@@ -3545,7 +3550,7 @@ func TestARecapShowsUnderItsRowAndAtTheTopOfTheThread(t *testing.T) {
 	v.Progress = "half way"
 	v.Recap = &model.Recap{
 		Asked: "write the api tests", Outcome: "Added 12 tests", Open: "keep slow test?",
-		Ran: 3, Commands: []model.RecapCommand{{Text: "go test ./..."}, {Text: "golangci-lint run", Failed: true}},
+		Ran: 3, Failed: 1, Commands: []model.RecapCommand{{Text: "go test ./..."}, {Text: "golangci-lint run", Failed: true}},
 		Edited: []string{"api_test.go"}, Artifacts: []string{"test-plan"},
 	}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
@@ -3564,7 +3569,7 @@ func TestARecapShowsUnderItsRowAndAtTheTopOfTheThread(t *testing.T) {
 	h.see("asked    write the api tests")
 	h.see("outcome  Added 12 tests")
 	h.see("open     keep slow test?")
-	h.see("ran      ✗ golangci-lint run · go test ./... · +1 earl…")
+	h.see("ran      ✗ golangci-lint run · go test ./... · +1 more")
 	h.see("changed  api_test.go · ◇ test-plan")
 
 	long := strings.Repeat("word ", 60)
@@ -3589,29 +3594,63 @@ func TestARecapShowsUnderItsRowAndAtTheTopOfTheThread(t *testing.T) {
 	h.see("✗ the agent failed: boom")
 }
 
+// A row shows the hub's headline of an outcome; the recap above the prompt
+// holds all of it.
+func TestARecapRowShowsTheFirstSentence(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads["api-tests"]
+	v.Recap = &model.Recap{Asked: "write the api tests", Outcome: "Added 12 tests. They cover the auth paths and the v1.2 errors.", Headline: "Added 12 tests. …"}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("   Added 12 tests. …")
+	if strings.Contains(h.screen(), "auth paths") {
+		t.Errorf("the row shows more than the first sentence:\n%s", h.screen())
+	}
+	h.press("<Esc>", ":b api-tests", "<CR>")
+	h.see("outcome  Added 12 tests. They cover")
+	h.see("v1.2 errors.")
+}
+
+// :recap! asks for a fresh recap: of the thread in the window, or of the
+// workspace in the coordinator's. It costs a turn, so only a command asks.
+func TestRecapBangAsksForAFreshRecap(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press(":recap!", "<CR>")
+	h.press("<Esc>", ":b api-tests", "<CR>")
+	h.press(":recap!", "<CR>")
+	h.press(":recap! auth-refactor", "<CR>")
+	want := []string{model.Coordinator, "api-tests", "auth-refactor"}
+	if !slices.Equal(h.hub.recaps, want) {
+		t.Fatalf("asked %v, want %v", h.hub.recaps, want)
+	}
+	if !h.a.recapOn() {
+		t.Error("asking for a recap hides it")
+	}
+}
+
 func TestTheCoordinatorsWindowShowsTheWorkspaceRecapAboveItsPrompt(t *testing.T) {
 	h := start(t)
 	h.openDemo()
+	// The hub counts; the window only lays the counts out.
+	ws := h.a.workspaces[0]
+	ws.Counts = map[model.State]int{model.StateRunning: 1, model.StateIdle: 1}
+	h.a.apply(model.Update{Kind: model.UpdateWorkspace, Workspace: "demo", Summary: &ws})
+	h.a.draw()
 	// With threads open and no recap yet, the counts show.
 	h.see("  ● 1 running · 1 idle")
 	at := time.Now().Add(-time.Hour)
-	ws := h.a.workspaces[0]
+	ws.Counts = map[model.State]int{model.StateWaiting: 1, model.StateRunning: 1, model.StateIdle: 2}
 	ws.Recap = &model.WorkspaceRecap{
 		Goal:     "Move auth into sessions, keep the public API",
 		Lines:    []string{"answer lint first: migr waits on its API choice"},
 		At:       at,
 		Overlaps: []model.Overlap{{Path: "user/lookup.go", Threads: []string{"auth-refactor", "api-tests"}}},
+		Failed:   1,
+		Newer:    1,
 	}
 	h.a.apply(model.Update{Kind: model.UpdateWorkspace, Workspace: "demo", Summary: &ws})
-	for _, n := range []string{"migr", "flaky"} {
-		v := model.ThreadView{Workspace: "demo", Name: n, Role: model.RoleThread, State: model.StateIdle, CreatedAt: time.Now()}
-		if n == "migr" {
-			v.State, v.Waiting = model.StateWaiting, "permission"
-		} else {
-			v.Recap = &model.Recap{Error: "the agent failed: boom", At: at.Add(time.Minute)}
-		}
-		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: n, View: &v})
-	}
 	h.a.draw()
 	h.see("  Move auth into sessions, keep the public API")
 	h.see("  ◆ 1 waits for you · ✗ 1 failed · ● 1 running · 1 idle")
@@ -3644,8 +3683,6 @@ func TestTheCoordinatorsWindowShowsTheWorkspaceRecapAboveItsPrompt(t *testing.T)
 
 	// The workspaces screen counts the failed threads too.
 	h.s.SetSize(120, 36)
-	ws.Counts = map[model.State]int{model.StateWaiting: 1, model.StateIdle: 2}
-	ws.Recap.Failed = 1
 	h.a.apply(model.Update{Kind: model.UpdateWorkspace, Workspace: "demo", Summary: &ws})
 	h.press(":workspaces", "<CR>")
 	h.see("✗ 1")

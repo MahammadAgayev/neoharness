@@ -907,6 +907,15 @@ class Store {
     return ''
   }
 
+  // askRecap asks a thread, or the coordinator, for a fresh recap. It runs
+  // a turn, so it costs tokens: only the person's click or :recap! asks.
+  async askRecap(name = this.target()): Promise<void> {
+    if (!this.needWorkspace() || !name) return
+    if ((await this.try(this.call('askRecap', this.at(name)))) === undefined) return
+    this.setSettings({ recap: true })
+    this.say(`asked ${this.at(name).thread} for a fresh recap`, 'muted')
+  }
+
   async resolve(name = this.target()): Promise<void> {
     if (this.needWorkspace() && name) await this.try(this.call('resolve', this.at(name)))
   }
@@ -1366,6 +1375,7 @@ class Store {
       case 'cost':
         return this.openCost(a[0] === 'all' ? 'all' : 'workspace')
       case 'recap':
+        if (e.bang) return this.askRecap(a[0])
         return this.setSettings({ recap: !this.state.settings.recap })
       case 'w':
       case 'write':

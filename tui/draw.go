@@ -407,9 +407,9 @@ func (a *App) recapRows(w *Window, room int) []Line {
 	width := w.rect.W - 2
 	head := recapHead(a.threads[w.Buf.Thread].Recap, a.th, width)
 	if w.Buf.Thread == model.Coordinator {
-		head = workspaceHead(a.workspaceRecap(), a.threads, a.th, width, true)
+		head = workspaceHead(a.workspaceView(), a.th, width, true)
 		if room-len(head)-1 < minTranscript {
-			head = workspaceHead(a.workspaceRecap(), a.threads, a.th, width, false)
+			head = workspaceHead(a.workspaceView(), a.th, width, false)
 		}
 	}
 	if room-len(head)-1 < minTranscript {

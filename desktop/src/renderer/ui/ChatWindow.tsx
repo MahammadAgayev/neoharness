@@ -9,7 +9,7 @@ import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
 import { CloseWindow } from './CloseWindow'
-import { RecapHead, WorkspaceRecapHead } from './Recap'
+import { RecapActions, RecapHead, RecapShow, WorkspaceRecapHead, workspaceCounts } from './Recap'
 
 const shellLines = 10
 
@@ -264,9 +264,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   const { workspace, thread: name } = store.at(thread)
   const peek = workspace !== open
   const v = useStore((s) => s.threads[thread])
-  const allThreads = useStore((s) => s.threads)
-  const threads = useMemo(() => Object.values(allThreads), [allThreads])
-  const wsRecap = useStore((s) => s.workspaces.find((w) => w.name === s.workspace)?.recap)
+  const wsView = useStore((s) => s.workspaces.find((w) => w.name === s.workspace))
   const showRecap = useStore((s) => s.settings.recap)
   const blocks = useStore((s) => s.chats[thread]) ?? []
   const folds = useStore((s) => s.folds)
@@ -586,10 +584,15 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
         </div>
       </div>
       {/* The recap sits above the prompt, where the person looks; a card that
-          waits for them takes its place. */}
-      {showRecap &&
-        v?.state !== 'waiting' &&
-        (name === Coordinator && !peek ? <WorkspaceRecapHead r={wsRecap} threads={threads} /> : <RecapHead r={v?.recap} />)}
+          waits for them takes its place. Hidden, it leaves a quiet way back. */}
+      {v?.state !== 'waiting' &&
+        (name === Coordinator && !peek
+          ? showRecap
+            ? <WorkspaceRecapHead w={wsView} actions={<RecapActions thread={thread} />} />
+            : workspaceCounts(wsView).any && <RecapShow />
+          : showRecap
+            ? <RecapHead r={v?.recap} actions={<RecapActions thread={thread} />} />
+            : v?.recap && <RecapShow />)}
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>
         <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
       </div>

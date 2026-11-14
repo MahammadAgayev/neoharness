@@ -58,6 +58,17 @@ func RecapDue() string {
 	return "The threads that ran have ended their turns. Write your workspace recap with workspace_recap."
 }
 
+// RecapAsked is the person asking a thread for a fresh recap.
+func RecapAsked() string {
+	return "How does your work stand now? Say it with recap, and start no other work."
+}
+
+// WorkspaceRecapAsked is the person asking the coordinator for a fresh
+// workspace recap.
+func WorkspaceRecapAsked() string {
+	return "How does the workspace stand now? Say it with workspace_recap, and start no other work."
+}
+
 // Thread is the system prompt for a thread.
 func Thread(in SessionInput) string { return fill(threadMD, in) }
 

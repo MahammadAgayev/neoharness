@@ -13,6 +13,7 @@ import (
 
 	"github.com/MahammadAgayev/neoharness/api/model"
 	"github.com/MahammadAgayev/neoharness/hub/agent"
+	"github.com/MahammadAgayev/neoharness/hub/prompts"
 	"github.com/MahammadAgayev/neoharness/hub/workspace"
 )
 
@@ -2322,6 +2323,164 @@ func TestTheRecapKeepsTheLastCommandsAndShortPathsThroughALink(t *testing.T) {
 	}
 }
 
+// TestTheRecapShowsWhatCheckedTheWorkAsItEnded: what the hub saw decides,
+// not the commands' names or the thread's words. A silent failure is a no,
+// a failure that a later run mended is none, a command shows once, the
+// commands after the last edit checked the work, and the folder goes.
+func TestTheRecapShowsWhatCheckedTheWorkAsItEnded(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	dir := view(t, h, "demo", model.Coordinator).Location.Dir
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if req.HarnessOnly {
+			return agent.Result{Text: "ok"}
+		}
+		run := func(id, cmd string) {
+			req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActRun, Detail: cmd, ID: id})
+		}
+		run("1", "git -C "+dir+" log --oneline -5")
+		run("2", "grep -rn TODO "+dir+"/cache")
+		req.OnEvent(agent.Event{Kind: agent.KindToolFailed, ID: "2", Silent: true})
+		run("3", "cd "+dir+" && go test ./... 2>&1 | tail -5")
+		req.OnEvent(agent.Event{Kind: agent.KindToolFailed, ID: "3", Text: "--- FAIL: TestCache"})
+		run("4", "go vet ./...")
+		req.OnEvent(agent.Event{Kind: agent.KindToolFailed, ID: "4", Text: "vet: x.go:3: unreachable code"})
+		run("5", "cat "+dir+"/cache/lru.go")
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActEdit, Detail: dir + "/cache/lru.go", ID: "e"})
+		run("6", "cd "+dir+" && go test ./... 2>&1 | tail -5")
+		run("7", "cd "+dir+" && git commit -am 'add cache'")
+		if err := h.Recap("demo", "cache", "Add a cache", "Added an LRU cache. It holds 100 entries.", ""); err != nil {
+			t.Error(err)
+		}
+		return agent.Result{Text: "Done."}
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "cache", "add a cache", ""); err != nil {
+		t.Fatal(err)
+	}
+	var r *model.Recap
+	eventually(t, "a recap", func() bool { r = view(t, h, "demo", "cache").Recap; return r != nil })
+	want := []model.RecapCommand{{Text: "go vet ./...", Failed: true}, {Text: "go test ./... 2>&1 | tail -5"}, {Text: "git commit -am 'add cache'"}}
+	if r.Ran != 7 || r.Failed != 1 || !slices.Equal(r.Commands, want) {
+		t.Errorf("commands: ran %d failed %d\n%+v\nwant\n%+v", r.Ran, r.Failed, r.Commands, want)
+	}
+	if r.Headline != "Added an LRU cache. …" {
+		t.Errorf("headline = %q", r.Headline)
+	}
+}
+
+// TestWithoutAnEditTheRecapShowsTheLastCommands: nothing ran after an edit,
+// so the last few show, short.
+func TestWithoutAnEditTheRecapShowsTheLastCommands(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	dir := view(t, h, "demo", model.Coordinator).Location.Dir
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if req.HarnessOnly {
+			return agent.Result{Text: "ok"}
+		}
+		for i := range recapCommands + 1 {
+			req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActRun, Detail: fmt.Sprintf("ls %s/d%d", dir, i), ID: fmt.Sprint(i)})
+		}
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActRun, Detail: "ls " + dir, ID: "x"})
+		return agent.Result{Text: "Looked."}
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "x", "look", ""); err != nil {
+		t.Fatal(err)
+	}
+	var r *model.Recap
+	eventually(t, "a recap", func() bool { r = view(t, h, "demo", "x").Recap; return r != nil })
+	if len(r.Commands) != recapCommands || r.Commands[recapCommands-1].Text != "ls ." || r.Commands[0].Text != "ls d2" {
+		t.Errorf("want the last %d, short: %+v", recapCommands, r.Commands)
+	}
+}
+
+// TestTheHeadlineIsTheFirstSentenceShort: a row shows the same whatever the
+// model writes: one sentence or many, short or long, or no recap at all.
+func TestTheHeadlineIsTheFirstSentenceShort(t *testing.T) {
+	long := strings.Repeat("word ", 40)
+	for _, c := range []struct{ in, want string }{
+		{"Added 12 tests.", "Added 12 tests."},
+		{"Added 12 tests. They cover v1.2 errors.", "Added 12 tests. …"},
+		{"Done! Next?", "Done! …"},
+		{"", ""},
+		{long, strings.TrimSpace(strings.Repeat("word ", 24)) + "…"},
+	} {
+		if got := headline(c.in); got != c.want {
+			t.Errorf("headline(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestAnEmptyOutcomeFallsBackToTheReply: a recap with no outcome says no
+// less than no recap.
+func TestAnEmptyOutcomeFallsBackToTheReply(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if !req.HarnessOnly {
+			_ = h.Recap("demo", "x", "Look", "", "")
+		}
+		return agent.Result{Text: "Found two callers."}
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "x", "look", ""); err != nil {
+		t.Fatal(err)
+	}
+	var r *model.Recap
+	eventually(t, "a recap", func() bool { r = view(t, h, "demo", "x").Recap; return r != nil })
+	if r.Outcome != "Found two callers." || !r.FromReply || r.Headline != r.Outcome {
+		t.Errorf("recap = %+v", r)
+	}
+}
+
+// TestThePersonAsksForAFreshRecap: asking runs a turn, so it is the
+// person's act, once however often they ask while it waits.
+func TestThePersonAsksForAFreshRecap(t *testing.T) {
+	gate := make(chan agent.Result)
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result { return <-gate }
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "api", "write tests", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "api", model.StateRunning)
+	for range 2 {
+		if err := h.AskRecap("demo", "api"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if q := view(t, h, "demo", "api").Queued; q != 1 {
+		t.Fatalf("queued %d, want one ask", q)
+	}
+	gate <- agent.Result{Text: "done"}
+	gate <- agent.Result{Text: "recap written"}
+	stateIs(t, h, "demo", "api", model.StateIdle)
+	reqs := f.requests()
+	if last := reqs[len(reqs)-1]; !strings.Contains(last.Prompt, prompts.RecapAsked()) {
+		t.Errorf("thread prompt = %q", last.Prompt)
+	}
+
+	if err := h.AskRecap("demo", model.Coordinator); err != nil {
+		t.Fatal(err)
+	}
+	gate <- agent.Result{Text: "ok"}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	reqs = f.requests()
+	if last := reqs[len(reqs)-1]; !strings.Contains(last.Prompt, prompts.WorkspaceRecapAsked()) {
+		t.Errorf("coordinator prompt = %q", last.Prompt)
+	}
+
+	if err := h.Resolve("demo", model.User, "api"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.AskRecap("demo", "api"); err == nil {
+		t.Error("a resolved thread was asked for a recap")
+	}
+}
+
 func workspaceView(t *testing.T, h *Hub, name string) model.WorkspaceView {
 	t.Helper()
 	for _, v := range h.Workspaces() {
@@ -2378,6 +2537,16 @@ func TestTheWorkspaceRecapNamesFilesTwoThreadsEditedAndCountsFailures(t *testing
 	}
 	if r.Failed != 1 {
 		t.Errorf("failed = %d, want 1", r.Failed)
+	}
+	if r.Newer != 0 {
+		t.Errorf("newer = %d with no lines yet", r.Newer)
+	}
+	// Lines written before the threads' recaps are old by all of them.
+	h.mu.Lock()
+	_ = h.saveRecap(h.workspaces["demo"], func(r *model.WorkspaceRecap) { r.Lines, r.At = []string{"x"}, time.Now().Add(-time.Hour) })
+	h.mu.Unlock()
+	if r := workspaceView(t, h, "demo").Recap; r.Newer != 3 {
+		t.Errorf("newer = %d, want 3", r.Newer)
 	}
 }
 
