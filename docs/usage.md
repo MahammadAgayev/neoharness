@@ -46,9 +46,10 @@ yourself:
 | waiting | a permission request, a question to you, or the loop guard paused it |
 | resolved | closed; `:reopen`, or a message from you or the coordinator, brings it back |
 
-- The threads pane groups threads by state. Resolved threads fold into
-  `▸ N resolved`. An idle thread's row shows the start of its last reply;
-  a waiting one shows what it waits for.
+- The threads pane groups threads by state, each group with its count
+  (`waiting · 1`). Resolved threads fold into `▸ N resolved`. An idle
+  thread's row shows the start of its last reply; a waiting one shows what
+  it waits for.
 - To delete a thread, press `<C-d>` on it in a picker, then `y`. This cannot
   be undone. The coordinator cannot be deleted.
 - A thread runs at most 20 turns in a row that you did not start. Then it
@@ -63,11 +64,11 @@ yourself:
 - Messages sent while a thread is busy wait in a queue and show dim at the
   end of the chat. `<CR>` on one sends it now: the running turn stops, and
   the queue goes in the next turn at once.
-- A question holds the messages of the coordinator and the other threads:
-  they wait, and show on the question card, until you answer. Your answer
-  goes first, with them. `<CR>` on one sends them without an answer, and
-  the question closes. The card holds the question in one line; the
-  thread's reply above it says the rest.
+- A question shows once, as a block in the chat, with what you need to
+  answer it; you answer by writing. It holds the messages of the
+  coordinator and the other threads: they wait, dim at the end of the
+  chat, until you answer. Your answer goes first, with them. `<CR>` on one
+  sends them without an answer, and the question closes.
 - `u` with an empty prompt is Esc in Claude Code: your last message comes
   back to the prompt to edit, while the agent has not answered it yet. A
   queued one leaves the queue; a running turn stops, and the message

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
-import { Coordinator, location } from '../../shared/model'
-import { elapsed, stateGlyph, stateTone } from '../search'
+import { Coordinator } from '../../shared/model'
+import { age, elapsed, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
 import { Glyph } from './Icon'
@@ -108,13 +108,14 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
           const v = threads[r.name]
           if (!v) return null
           const group = v.state === 'resolved' ? '' : v.state
-          const head = group && group !== lastGroup ? group : ''
+          const head = group && group !== lastGroup ? `${group} · ${rows.filter((o) => threads[o.name]?.state === group).length}` : ''
           lastGroup = group || lastGroup
           const detail =
             v.permission ? `permission · ${v.permission.tool}`
             : v.waiting === 'paused' ? 'paused · write to continue'
             : v.state === 'waiting' ? v.waiting || 'question'
-            : v.reply || location(v.location)
+            : v.state === 'idle' ? (v.reply ?? '')
+            : ''
           return (
             <div key={r.name}>
               {head && <div className="group-head">{head}</div>}
@@ -136,11 +137,9 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
                   <div className="list-title">
                     <span className="name">{v.name}</span>
                     {v.queued > 0 && <span className="t-muted"> +{v.queued}</span>}
-                    {(v.state === 'running' || v.state === 'waiting') && v.since && (
-                      <span className="t-muted right">{elapsed(v.since)}</span>
-                    )}
+                    <span className="t-muted right">{v.state === 'running' || v.state === 'waiting' ? elapsed(v.since) : age(v.updatedAt)}</span>
                   </div>
-                  <div className={`list-detail ${v.state === 'waiting' ? 't-gold' : 't-muted'}`}>{detail}</div>
+                  {detail && <div className={`list-detail ${v.state === 'waiting' ? 't-gold' : 't-muted'}`}>{detail}</div>}
                 </div>
               </div>
             </div>

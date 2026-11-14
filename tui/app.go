@@ -1260,7 +1260,7 @@ func (a *App) renderThreads() {
 		if len(lines) > 0 {
 			lines = append(lines, Line{})
 		}
-		lines = append(lines, Line{Prefix: []Span{{" ", th.Text}}, Spans: []Span{{stateLabel(s), th.Muted}}})
+		lines = append(lines, Line{Prefix: []Span{{" ", th.Text}}, Spans: []Span{{fmt.Sprintf("%s · %d", stateLabel(s), len(groups[s])), th.Muted}}})
 		for _, n := range groups[s] {
 			lines = append(lines, row(n))
 		}

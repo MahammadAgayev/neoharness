@@ -12,6 +12,7 @@ import type { Event, ThreadView } from '../src/shared/model'
 import { parseEx, words } from '../src/renderer/lib/ex'
 import { fuzzy, fuzzyScore, grep } from '../src/renderer/lib/fuzzy'
 import { keyName, Sequencer, split } from '../src/renderer/lib/keys'
+import { age } from '../src/renderer/search'
 import { imageToken, nextImage, used, withImages } from '../src/renderer/lib/images'
 import { wakeLabel } from '../src/renderer/lib/wake'
 import { hunks, lines, take } from '../src/renderer/lib/linediff'
@@ -333,5 +334,15 @@ describe('wakeLabel', () => {
   })
   it('says nothing once the time passed, as after the computer slept', () => {
     expect(wakeLabel(v, Date.parse('2026-11-14T12:23:00Z'))).toBe('')
+  })
+})
+
+describe('age', () => {
+  const now = Date.parse('2026-11-14T12:00:00Z')
+  it('says minutes, hours and days within a week, then the date', () => {
+    expect(age('2026-11-14T11:55:00Z', now)).toBe('5m')
+    expect(age('2026-11-14T09:00:00Z', now)).toBe('3h')
+    expect(age('2026-11-08T12:00:00Z', now)).toBe('6d')
+    expect(age('2026-11-01T12:00:00Z', now)).toBe(new Date('2026-11-01T12:00:00Z').toLocaleDateString([], { day: 'numeric', month: 'short' }))
   })
 })

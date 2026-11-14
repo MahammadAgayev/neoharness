@@ -1188,7 +1188,7 @@ func TestThreadsPaneGroupsByStateAndFoldsResolved(t *testing.T) {
 		return out
 	}
 	got := strings.Join(rows(), " | ")
-	want := "waiting | ◆ auth-refactor question | ▸ 1 resolved"
+	want := "waiting · 1 | ◆ auth-refactor question | ▸ 1 resolved"
 	if got != want {
 		t.Fatalf("rows = %q\nwant   %q", got, want)
 	}
@@ -3114,34 +3114,21 @@ func TestPopupMarginsAreBlank(t *testing.T) {
 	}
 }
 
-func TestTheQuestionCardHidesNoneOfTheTranscript(t *testing.T) {
+// A question shows once, as a block in the chat; no card repeats it.
+func TestAQuestionShowsOnceInTheChat(t *testing.T) {
 	h := start(t)
 	h.openDemo()
-	for i := 0; i < 40; i++ {
-		h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &model.Event{Kind: model.EventText, Text: fmt.Sprintf("line %d", i)}})
-	}
-	q := strings.Repeat("The roadmap has phases and dates to check. ", 8) + "Which phase first?"
+	q := "The roadmap has two phases. Which phase first?"
 	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &model.Event{Kind: model.EventAsk, Text: q}})
 	v := h.a.threads[model.Coordinator]
-	v.State = model.StateWaiting
-	v.Waiting = q
-	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
-	h.a.draw()
-	h.see("phase first?")
-	h.see("reply")
-}
-
-// The messages a question holds show on its card, where the person answers.
-func TestTheQuestionCardShowsTheMessagesItHolds(t *testing.T) {
-	h := start(t)
-	h.openDemo()
-	v := h.a.threads[model.Coordinator]
-	v.State, v.Waiting = model.StateWaiting, "Which phase first?"
+	v.State, v.Waiting = model.StateWaiting, q
 	v.Pending = []model.Event{{Kind: model.EventMessage, From: "docs", Text: "stop, the person wants one thread"}}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.toasts = nil
 	h.a.draw()
-	h.see("Which phase first?")
-	h.see("docs  stop, the person wants one thread")
+	if n := strings.Count(h.screen(), "Which phase first?"); n != 1 {
+		t.Fatalf("the question shows %d times:\n%s", n, h.screen())
+	}
 }
 
 func TestCtrlWHFromAChatWithManyLines(t *testing.T) {
@@ -3310,6 +3297,16 @@ func TestAThreadRowShowsTheStartOfItsReply(t *testing.T) {
 		}
 	}
 	t.Fatalf("no row with the reply:\n%s", h.screen())
+}
+
+// Each group says how many threads it holds, so a look tells how the work
+// stands.
+func TestThreadGroupsShowTheirCount(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("<leader>t")
+	h.a.draw()
+	h.see("running · 1")
 }
 
 func TestUTakesTheLastMessageBack(t *testing.T) {

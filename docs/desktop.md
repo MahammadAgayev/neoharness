@@ -49,11 +49,14 @@ splits, toasts, marks (`ma`, `'a`, `''`), and the ex commands (`:new`, `:open`, 
 completes the folder of `:new`, `:open` and `:folder` when it starts with
 `~/` or `/`; the app has no working folder for a relative one.
 
-A question sits on the prompt in a gold card: the question in one line,
-the messages it holds until you answer, Reply and Send now.
+A question shows once, as a block in the chat, as in the TUI; the
+messages it holds wait dim below it until you answer.
 
-An idle thread's row in the threads list shows the start of its last
-reply, as in the TUI.
+The threads list groups threads by state with a count, as in the TUI. A
+row shows the thread's name and, on the right, how long it has run or
+waited, or when it last changed (`5m`, `6d`, then the date). Under the
+name, a waiting thread shows what it waits for and an idle one the start
+of its last reply; with nothing to say, the row is the name alone.
 
 The app does not read `init.lua`; the hub settings in it apply to both.
 What the TUI takes from `init.lua` for itself is in Settings instead.
@@ -194,7 +197,7 @@ e2e` writes the screenshots named here to `test-results/`.
 | Work without the mouse | Vim keys, or keys as in Claude Code; marks; select and yank | cards: `<leader>a` allows; without Vim; `v` and `y`; marks (27) |
 | The mouse works too | Clicks on toasts, blocks and artifacts; right-click menus | cards: a toast click opens the thread; an artifact click; right click on a thread |
 | Quiet | A toast or notification only for what needs you; it goes when you look | cards: permission toast goes when the thread shows (20) |
-| No modal for the work | Permissions and questions are cards in the chat | cards: permission card (21), question (22) |
+| No modal for the work | Permissions are cards and questions blocks in the chat | cards: permission card (21), question (22) |
 | Settings in one place, applied at once | `<leader>s`, `⌘,` | cards: settings (28) |
 | Light and dark | System, Moon, Night, Dawn | app: Dawn (05); cards: settings |
 | Care with your edits | A refused save resolves change by change | cards: artifact conflict (25) |

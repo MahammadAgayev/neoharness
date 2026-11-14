@@ -86,7 +86,7 @@ test('a permission with no scope offers no always', async () => {
   await expect.poll(() => hub.calls.filter((c) => c.path.endsWith('/answer')).at(-1)?.body).toMatchObject({ id: 'p2', decision: 'deny' })
 })
 
-test('a question shows as a card you answer by writing', async () => {
+test('a question shows in the chat, and you answer by writing', async () => {
   hub.event('demo', 'api', { kind: 'ask', text: 'Which **port** should it listen on?' })
   hub.setView(view('demo', 'api', { state: 'waiting', waiting: 'Which port should it listen on?' }))
   await expect(page.locator('.b-ask', { hasText: 'Which port' })).toBeVisible()
@@ -98,32 +98,20 @@ test('a question shows as a card you answer by writing', async () => {
   await shot('22-question')
 })
 
-test('a question card sits on the prompt with the messages it holds, and Send now sends them without an answer', async () => {
+test('a question shows once, in the chat, and the messages it holds wait dim below it', async () => {
   const at = new Date().toISOString()
+  // The question block of the test above is the one place it shows.
   hub.setView(
     view('demo', 'api', {
       state: 'waiting',
-      waiting: 'Rename the script or add a wrapper?',
+      waiting: 'Which port should it listen on?',
       queued: 1,
       pending: [{ at, kind: 'message', from: 'coordinator', text: 'stop, the person wants one thread' }],
     }),
   )
-  const card = page.locator('.box-anchor .question-card')
-  await expect(card).toContainText('Rename the script or add a wrapper?')
-  await expect(card.locator('.question-held')).toContainText('coordinator')
-  await expect(card.locator('.question-held')).toContainText('stop, the person wants one thread')
-  // It sits right on the prompt.
-  const cardBox = (await card.boundingBox())!
-  const prompt = page.locator('.box-anchor:has(.question-card) + .prompt')
-  const promptBox = (await prompt.boundingBox())!
-  expect(Math.abs(cardBox.y + cardBox.height - promptBox.y)).toBeLessThan(24)
-  await shot('22b-question-card')
-  await card.locator('button', { hasText: 'Send now' }).click()
-  await expect.poll(() => hub.calls.filter((c) => c.path.endsWith('/messages')).pop()?.body).toMatchObject({ text: '', now: true })
+  await expect(page.locator('.pane.focused').getByText('Which port should it listen on?')).toHaveCount(1)
+  await expect(page.locator('.b-queued', { hasText: 'stop, the person wants one thread' })).toBeVisible()
   hub.setView(view('demo', 'api', { state: 'idle' }))
-  await expect(card).toHaveCount(0)
-  // The button took the focus; the next tests type in the prompt.
-  await page.locator('.prompt').last().click()
 })
 
 test('/ completes commands in the prompt', async () => {
@@ -786,10 +774,14 @@ test('<leader>$ shows what the workspace cost, the sidebar each workspace\'s cos
   await expect(demo.locator('.sb-cost')).toHaveText('$24.75')
 })
 
-test("an idle thread's row shows the start of its last reply", async () => {
+test("an idle thread's row shows the start of its last reply, its group a count", async () => {
   const row = page.locator('.list-row', { hasText: 'api' })
   hub.setView(view('demo', 'api', { state: 'idle', reply: 'Added /healthz and a test.' }))
   await expect(row.locator('.list-detail')).toHaveText('Added /healthz and a test.')
+  await expect(page.locator('.group-head', { hasText: 'idle' })).toHaveText(/^idle · \d+$/)
+  // Without a reply the row is its name alone, not its folder.
+  hub.setView(view('demo', 'api', { state: 'idle' }))
+  await expect(row.locator('.list-detail')).toHaveCount(0)
 })
 
 test('a hub that stops says so and offers to start it', async () => {

@@ -54,6 +54,18 @@ export function elapsed(since: string): string {
   return h < 24 ? `${h}h${m % 60 ? ` ${m % 60}m` : ''}` : `${Math.floor(h / 24)}d`
 }
 
+// age says how long ago a thread last changed: 5m, 3h or 6d within a week,
+// then the date, as an older one is found by its day.
+export function age(at: string, now = Date.now()): string {
+  const ms = now - Date.parse(at)
+  if (!(ms > 0)) return ''
+  const m = Math.floor(ms / 60000)
+  if (m < 60) return `${Math.max(m, 1)}m`
+  if (m < 24 * 60) return `${Math.floor(m / 60)}h`
+  if (m < 7 * 24 * 60) return `${Math.floor(m / (24 * 60))}d`
+  return new Date(at).toLocaleDateString([], { day: 'numeric', month: 'short' })
+}
+
 export function threadDetail(v: ThreadView): string {
   let d = v.state
   if (v.permission) d += ` · permission · ${v.permission.tool}`
