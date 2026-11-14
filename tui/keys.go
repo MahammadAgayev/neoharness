@@ -120,6 +120,11 @@ func (a *App) key(ev *tcell.EventKey) {
 		a.closeBox()
 		return
 	}
+	// The box can show over an empty prompt in Insert: one Esc closes it
+	// and leaves Insert, as the person would not think of a second.
+	if a.recapBox != "" && a.mode == modeInsert && k == "<Esc>" {
+		a.closeBox()
+	}
 	if a.recordInto != 0 && a.playing == 0 {
 		if k == "q" && idle() {
 			a.recordInto = 0

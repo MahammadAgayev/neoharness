@@ -392,6 +392,9 @@ export function onKey(e: KeyboardEvent): void {
     void store.closeBox()
     return
   }
+  // The box can show over an empty prompt in Insert: one Esc closes it and
+  // still leaves Insert.
+  if (s.recapBox && s.insert && key === '<Esc>') void store.closeBox()
 
   const km = keymaps()
   if (key.startsWith('<D-')) {

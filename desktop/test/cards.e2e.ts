@@ -911,8 +911,12 @@ test('the recap box pops up when the person comes back to news', async () => {
   await expect(box).toHaveCount(0)
   await page.keyboard.press('Meta+a')
   await page.keyboard.press('Backspace')
+  // An empty prompt in Insert is not typing, and one Esc closes the box.
+  await away()
+  await expect(box).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(box).toHaveCount(0)
   await normal()
-  // An empty prompt is not typing.
   await away()
   await expect(box).toBeVisible()
   await box.locator('.box-close').click()

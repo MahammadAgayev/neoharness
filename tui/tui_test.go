@@ -3791,7 +3791,11 @@ func TestTheBoxDoesNotShowWithoutNewsOrWhileThePersonTypes(t *testing.T) {
 	if h.a.recapBox != model.Coordinator {
 		t.Fatalf("box = %q in Insert with an empty prompt", h.a.recapBox)
 	}
-	h.press("<Esc>", "<Esc>")
+	// One Esc closes it there too, and leaves Insert as always.
+	h.press("<Esc>")
+	if h.a.recapBox != "" || h.a.mode != modeNormal {
+		t.Fatalf("Esc in Insert: box %q, mode %v", h.a.recapBox, h.a.mode)
+	}
 	// Over a card that waits for the person, it does not show either.
 	h.press(":b migr", "<CR>")
 	away()
