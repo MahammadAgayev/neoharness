@@ -979,17 +979,20 @@ kbd {
 /* the recap box: it pops up over the top of the work when the person comes
    back, so it stands out on purpose, with a border in the color of what
    matters most in it */
-.main {
+.box-anchor {
   position: relative;
+  flex: none;
+  align-self: stretch;
+  height: 0;
+  z-index: 35;
 }
 .recap-box {
   position: absolute;
-  top: 10px;
+  bottom: 6px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 35;
-  width: min(760px, calc(100% - 48px));
-  max-height: 70%;
+  width: min(var(--measure), calc(100% - 32px));
+  max-height: 60vh;
   overflow-y: auto;
   background: var(--surface);
   border: 1.5px solid var(--box);
@@ -1003,7 +1006,7 @@ kbd {
 }
 @keyframes box-in {
   from {
-    transform: translate(-50%, -8px);
+    transform: translate(-50%, 8px);
     opacity: 0;
   }
 }

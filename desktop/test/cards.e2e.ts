@@ -797,6 +797,12 @@ test("a thread's recap shows under its row and in its box", async () => {
   await expect(box).toContainText('✗ golangci-lint run · go test ./... · +1 more')
   await expect(box).toContainText('◇ health-plan')
   await expect(box).toHaveClass(/b-pine/)
+  // It sits on the prompt of the thread's window, where the person looks.
+  const b = (await box.boundingBox())!
+  const p = (await page.locator('.pane.focused .window.chat .prompt').boundingBox())!
+  expect(p.y - (b.y + b.height)).toBeGreaterThanOrEqual(0)
+  expect(p.y - (b.y + b.height)).toBeLessThan(20)
+  expect(b.x).toBeGreaterThanOrEqual((await page.locator('.pane.focused').boundingBox())!.x)
   await shot('27-recap')
 
   // Asking runs a turn, so only a click or :recap! asks.
@@ -877,7 +883,7 @@ test('the recap box pops up when the person comes back to news', async () => {
   await expect(box).toBeVisible()
   await expect(box.locator('.box-title')).toHaveText('demo · Add a health check and keep /ping')
   await expect(box).toHaveClass(/b-gold/)
-  await expect(box.locator('.recap-counts')).toHaveText('◆ 1 waits for you · ✗ 1 failed · ● 1 running · 1 idle')
+  await expect(box.locator('.recap-counts')).toHaveText('◆ 1 waits for you · ✗ 1 failed')
   await expect(box.locator('.box-cell')).toHaveCount(4)
   // What needs the person first, then what failed, came out, still runs.
   const rows = box.locator('.box-row')

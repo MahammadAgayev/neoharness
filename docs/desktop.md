@@ -48,8 +48,8 @@ splits, toasts, marks (`ma`, `'a`, `''`), and the ex commands (`:new`, `:open`, 
 completes the folder of `:new`, `:open` and `:folder` when it starts with
 `~/` or `/`; the app has no working folder for a relative one.
 
-Each thread's recap shows under its row. The recap box pops up at the top
-of the work, as in the TUI, when you come back to news you have not seen:
+Each thread's recap shows under its row. The recap box pops up on the prompt
+of the chat it belongs to, as in the TUI, when you come back to news you have not seen:
 the window gets focus after two minutes away, or you open a workspace you
 have not looked at for two minutes. It never shows while you write a
 message, nor over a permission or question card. Its border takes the color

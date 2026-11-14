@@ -187,14 +187,14 @@ func workspaceBox(v model.WorkspaceView, threads []model.ThreadView, th *Theme, 
 	if r != nil {
 		failed, newer = r.Failed, r.Newer
 	}
-	waits, running := v.Counts[model.StateWaiting], v.Counts[model.StateRunning]
-	idle := v.Counts[model.StateIdle] - failed
+	waits := v.Counts[model.StateWaiting]
 	if len(threads) == 0 && (r == nil || len(r.Lines) == 0) {
 		return nil
 	}
 	slices.SortStableFunc(threads, func(x, y model.ThreadView) int { return boxRank(x) - boxRank(y) })
 
-	// A strip of one cell per thread shows the state of the whole at a glance.
+	// A strip of one cell per thread shows the state of the whole at a
+	// glance, so the counts name only what needs a look.
 	var counts []Span
 	for _, t := range threads {
 		counts = append(counts, Span{"■", boxStyle(t, th)})
@@ -218,12 +218,6 @@ func workspaceBox(v model.WorkspaceView, threads []model.ThreadView, th *Theme, 
 	}
 	if failed > 0 {
 		add(Span{fmt.Sprintf("✗ %d", failed), th.Love}, Span{" failed", th.Muted})
-	}
-	if running > 0 {
-		add(Span{fmt.Sprintf("● %d", running), th.state(model.StateRunning)}, Span{" running", th.Muted})
-	}
-	if idle > 0 {
-		add(Span{fmt.Sprintf("%d idle", idle), th.Muted})
 	}
 	out := []Line{{Spans: counts}}
 
@@ -361,18 +355,18 @@ func (a *App) boxSubject() string {
 	return model.Coordinator
 }
 
-// keyAfterAway says a key comes after minutes with none: on a terminal that
-// sends no focus events, that is the person coming back.
+// keyAfterAway says a key comes after minutes with none: the person coming
+// back. Focus alone does not tell it: a person can leave the terminal in
+// focus, and tmux may report focus once and never again.
 func (a *App) keyAfterAway() bool {
 	now := a.now()
-	back := !a.focusKnown && !a.lastKey.IsZero() && now.Sub(a.lastKey) >= model.RecapAway
+	back := !a.lastKey.IsZero() && now.Sub(a.lastKey) >= model.RecapAway
 	a.lastKey = now
 	return back
 }
 
 // focus is the terminal gaining or losing focus.
 func (a *App) focus(in bool) {
-	a.focusKnown = true
 	if !in {
 		a.blurAt = a.now()
 		return
@@ -380,7 +374,8 @@ func (a *App) focus(in bool) {
 	if !a.blurAt.IsZero() && a.now().Sub(a.blurAt) >= model.RecapAway {
 		a.cameBack()
 	}
-	a.blurAt = time.Time{}
+	// The person is here now; their next key is not a second return.
+	a.blurAt, a.lastKey = time.Time{}, a.now()
 }
 
 // openBox shows a recap box: :recap and :recap! open it whether or not it
@@ -414,21 +409,21 @@ func (a *App) workspaceLines(w int) []Line {
 	return workspaceBox(a.workspaceView(), open, a.th, w)
 }
 
-// boxWidth is the widest the box grows, so its rows stay short enough to
-// read at a glance.
-const boxWidth = 100
-
-// drawBox draws the recap box at the top of the screen, over the windows
-// and the toasts: it holds what they say. Its border takes the color of
-// what matters most in it.
-func (a *App) drawBox(W, H int) {
+// drawBox draws the recap box in the chat window of its subject, the one
+// with focus first, or else the window with focus, sitting on the prompt: where the person looks.
+// It goes over the windows and the toasts, as it holds what they say. Its
+// border takes the color of what matters most in it.
+func (a *App) drawBox() {
 	a.boxRect = Rect{}
 	if a.recapBox == "" {
 		return
 	}
-	bw := min(W-2*margin, boxWidth)
-	r := Rect{(W - bw) / 2, 1, bw, H - 2}
-	if r.W < 30 || r.H < minTranscript+4 {
+	w := a.cur
+	if w.Buf.Kind != KindChat || w.Buf.Thread != a.recapBox {
+		w = cmp.Or(a.windowOf(a.recapBox), a.cur)
+	}
+	r := w.rect
+	if r.W < 30 || w.boxEnd-r.Y < minTranscript+3 {
 		return
 	}
 	inner := r.W - 4
@@ -467,8 +462,9 @@ func (a *App) drawBox(W, H int) {
 	if len(lines) == 0 {
 		return
 	}
-	lines = lines[:min(len(lines), r.H-minTranscript-2)]
+	lines = lines[:min(len(lines), w.boxEnd-r.Y-minTranscript-2)]
 	h := len(lines) + 2
+	r.Y = w.boxEnd - h
 	a.box(r.X, r.Y, r.W, h, "", border)
 	x := a.put(r.X+2, r.Y, r.X+r.W-4, " ", border)
 	for _, sp := range title {

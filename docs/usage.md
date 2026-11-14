@@ -63,11 +63,12 @@ thread yourself:
   thread wrote no outcome, the first line of its reply stands in, labeled
   `reply`, and `no commands` says that nothing was checked.
 - The recap box says how the whole workspace stands, so you learn it
-  without opening a thread. It pops up at the top of the screen, with a
-  colored border: gold when something waits for you, red when a thread
+  without opening a thread. It pops up on the prompt of the coordinator's
+  window, where you look, with a colored border: gold when something waits for you, red when a thread
   failed, foam while threads run, pine when all is done. Inside are the
-  goal, a strip with one cell per thread, the counts (`◆ 1 waits for you ·
-  ✗ 1 failed · ● 2 running · 3 idle`), then one row per thread: what waits
+  goal, a strip with one cell per thread in the color of its state, the
+  counts of what needs a look (`◆ 1 waits for you · ✗ 1 failed`), then one
+  row per thread: what waits
   for you, what failed, what came out, what still runs, each with its
   headline. What came since you last closed the box is bright; the rest is
   muted. Under them are up to three lines from the coordinator on what the
@@ -76,13 +77,15 @@ thread yourself:
   23:04 · 2 threads ended since` says so. The coordinator writes them ahead
   of time: once the threads that ran have ended, the hub wakes it for that
   (`workspace_recap = false` in the hub setup turns this off). In a
-  thread's window, the box shows that thread's recap in full. The
+  thread's window, the box sits on that thread's prompt and shows its
+  recap in full. The
   workspaces screen shows `✗ N` for the threads that failed.
 - The box shows by itself only when you come back to news you have not
   seen: the terminal gets focus after two minutes or more away, or you open
-  a workspace you have not looked at for two minutes. In a terminal that
-  sends no focus events (tmux without `focus-events on`), the first key in
-  Normal after two minutes with no key counts. Two minutes, because after a
+  a workspace you have not looked at for two minutes, or you press the
+  first key in Normal after two minutes with no key (you may leave the
+  terminal in focus, and some terminals send no focus events, as tmux
+  without `focus-events on`). Two minutes, because after a
   shorter break you still know what you left, and the toasts said what
   came. It never shows while you type, nor over a permission or question
   card, and not when nothing changed.

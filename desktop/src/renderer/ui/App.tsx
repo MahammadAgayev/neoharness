@@ -14,7 +14,6 @@ import { Help, MessagesWindow } from './Panels'
 import { Icon } from './Icon'
 import { Choice } from './Choice'
 import { Cost } from './Cost'
-import { RecapBox } from './Recap'
 import { Sidebar } from './Sidebar'
 import { ThreadsList } from './ThreadsList'
 import { Workspaces } from './Workspaces'
@@ -187,7 +186,6 @@ export function App() {
       <main className="main">
         <Sidebar folded={!sidebar} />
         {screen === 'workspaces' ? <Workspaces /> : <Layout />}
-        <RecapBox />
       </main>
       <CommandLine />
       <Toasts />

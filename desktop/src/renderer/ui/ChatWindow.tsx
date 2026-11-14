@@ -6,6 +6,7 @@ import { wakeLabel } from '../lib/wake'
 import { elapsed, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { Markdown } from './Markdown'
+import { RecapBox } from './Recap'
 import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
@@ -265,6 +266,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   const { workspace, thread: name } = store.at(thread)
   const peek = workspace !== open
   const v = useStore((s) => s.threads[thread])
+  const boxHere = useStore((s) => !!s.recapBox && store.boxWindow() === win.id)
   const blocks = useStore((s) => s.chats[thread]) ?? []
   const folds = useStore((s) => s.folds)
   const artifactList = useStore((s) => s.artifacts)
@@ -582,6 +584,12 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           ))}
         </div>
       </div>
+      {/* The recap box sits on the prompt, where the person looks. */}
+      {boxHere && (
+        <div className="box-anchor">
+          <RecapBox />
+        </div>
+      )}
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>
         <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
       </div>

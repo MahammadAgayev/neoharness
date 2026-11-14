@@ -618,6 +618,15 @@ class Store {
     return t && !t.includes('/') && this.state.threads[t]?.recap ? t : Coordinator
   }
 
+  // boxWindow is the window the recap box shows in: the chat of its
+  // subject, the one with focus first, or else the window with focus.
+  boxWindow(): number | undefined {
+    const subject = this.state.recapBox
+    const cur = this.cur()
+    const shows = (w?: Win) => w?.buf.kind === 'chat' && w.buf.thread === subject
+    return (shows(cur) ? cur : (this.wins().find(shows) ?? cur))?.id
+  }
+
   // openBox shows a recap box: :recap opens it whether or not it holds news.
   openBox(subject = this.boxSubject()): void {
     if (this.needWorkspace()) this.set({ recapBox: subject })

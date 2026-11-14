@@ -179,17 +179,15 @@ function BoxRow(props: { v: ThreadView }) {
 }
 
 // WorkspaceBox is how the workspace stands: a strip of one cell per thread,
-// the counts, one row per open thread, then the coordinator's lines and the
+// the counts of what needs a look, one row per open thread, then the coordinator's lines and the
 // files two threads edited. The hub counts; this only lays out.
 function WorkspaceBox(props: { w?: WorkspaceView; threads: ThreadView[] }) {
   const r = props.w?.recap
-  const { waits, running, failed, idle } = workspaceCounts(props.w)
+  const { waits, failed } = workspaceCounts(props.w)
   const threads = [...props.threads].sort((a, b) => boxRank(a) - boxRank(b))
   const counts: ReactNode[] = []
   if (waits) counts.push(<span key="w"><span className="t-gold">◆ {waits}</span> {waits === 1 ? 'waits' : 'wait'} for you</span>)
   if (failed) counts.push(<span key="f"><span className="t-love">✗ {failed}</span> failed</span>)
-  if (running) counts.push(<span key="r"><span className="t-foam">● {running}</span> running</span>)
-  if (idle) counts.push(<span key="i">{idle} idle</span>)
   const newer = r?.newer ?? 0
   const names = (ts: string[]) =>
     ts.length > 2 ? `${ts.slice(0, -1).join(', ')} and ${ts[ts.length - 1]} all` : `${ts[0]} and ${ts[1]} both`

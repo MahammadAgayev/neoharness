@@ -3559,6 +3559,7 @@ func TestFailedTurnToastStaysAnError(t *testing.T) {
 
 func TestARecapShowsUnderItsRowAndInTheThreadsBox(t *testing.T) {
 	h := start(t)
+	h.s.SetSize(170, 40)
 	h.openDemo()
 	v := h.a.threads["api-tests"]
 	v.Progress = "half way"
@@ -3591,8 +3592,11 @@ func TestARecapShowsUnderItsRowAndInTheThreadsBox(t *testing.T) {
 	h.see("open     keep slow test?")
 	h.see("ran      ✗ golangci-lint run · go test ./... · +1 more")
 	h.see("changed  api_test.go · ◇ test-plan")
-	if s := h.screen(); strings.Index(s, "asked    write") > strings.Index(s, "›") {
-		t.Errorf("the box is not at the top of the window:\n%s", s)
+	// It sits on the prompt, where the person looks, in the thread's window.
+	rows := strings.Split(h.screen(), "\n")
+	prompt := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "›") })
+	if prompt < 1 || !strings.Contains(rows[prompt-1], "╰") || strings.Index(rows[prompt-1], "╯") > strings.Index(rows[prompt-1], "│") {
+		t.Errorf("the box does not sit just above the prompt of its window:\n%s", h.screen())
 	}
 
 	long := strings.Repeat("word ", 60)
@@ -3701,6 +3705,7 @@ func (h *neoharness) clock() *time.Time {
 // stands; closing it marks it seen in the hub.
 func TestTheWorkspaceBoxShowsWhenThePersonComesBackToNews(t *testing.T) {
 	h := start(t)
+	h.s.SetSize(170, 40)
 	now := h.clock()
 	h.openDemo()
 	h.news()
@@ -3719,7 +3724,12 @@ func TestTheWorkspaceBoxShowsWhenThePersonComesBackToNews(t *testing.T) {
 	h.a.handle(tcell.NewEventFocus(true))
 	h.a.draw()
 	h.see("demo · Move auth into sessions, keep the public API")
-	h.see("◆ 1 waits for you · ✗ 1 failed · ● 1 running · 1 idle")
+	// The counts say only what needs a look; the strip and the rows show
+	// what runs and what is idle.
+	h.see("◆ 1 waits for you · ✗ 1 failed")
+	if s := h.screen(); strings.Contains(s, "1 running") || strings.Contains(s, "1 idle") {
+		t.Errorf("the counts name running or idle threads:\n%s", s)
+	}
 	h.see("◆ migr")
 	h.see("permission · Bash psql -c drop")
 	h.see("✗ flaky")
@@ -3732,6 +3742,7 @@ func TestTheWorkspaceBoxShowsWhenThePersonComesBackToNews(t *testing.T) {
 	h.see("auth-refactor and api-tests both edited user/lookup.go")
 	// What needs the person first, then what failed, came out, still runs.
 	s := h.screen()
+	s = s[strings.Index(s, "╭─ demo"):]
 	if !(strings.Index(s, "◆ migr") < strings.Index(s, "✗ flaky") && strings.Index(s, "✗ flaky") < strings.Index(s, "✓ api-tests") && strings.Index(s, "✓ api-tests") < strings.Index(s, "● auth-refactor")) {
 		t.Errorf("order:\n%s", s)
 	}
@@ -3804,11 +3815,13 @@ func TestTheBoxDoesNotShowWithoutNewsOrWhileThePersonTypes(t *testing.T) {
 	}
 }
 
-// A terminal that sends no focus events: the first key after minutes with
-// none is the person coming back.
-func TestWithoutFocusEventsTheFirstKeyAfterAwayBringsTheBox(t *testing.T) {
+// The first key after minutes with none is the person coming back, even
+// on a terminal that once said it reports focus: tmux reports it at start
+// and, with no client attached, never again.
+func TestTheFirstKeyAfterAwayBringsTheBox(t *testing.T) {
 	h := start(t)
 	now := h.clock()
+	h.a.handle(tcell.NewEventFocus(true))
 	h.openDemo()
 	h.news()
 	h.press("k")

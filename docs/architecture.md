@@ -176,8 +176,9 @@ focus and typing:
   is, or the coordinator's lines are newer than the workspace's mark.
 - **When**: the box shows when the person comes back to news, and only
   then: the window gets focus after `model.RecapAway` (two minutes) away,
-  or the person opens a workspace not looked at for as long. A terminal
-  that sends no focus events counts the first key after as long with none.
+  or the person opens a workspace not looked at for as long. The TUI also
+  counts the first key after as long with none: a person may leave the
+  terminal in focus, and tmux may report focus once and then never.
   Never while the person types (a draft in Insert, a command line), but
   Insert with an empty prompt is not typing: the prompt often stays in
   Insert while the person is away. Never over a permission or question

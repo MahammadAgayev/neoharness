@@ -175,12 +175,11 @@ type App struct {
 	boxRect  Rect
 	// now is the clock, for tests. lastKey is the last key, blurAt when the
 	// terminal lost focus, and leftAt when each workspace was left: how long
-	// the person was away. focusKnown says the terminal sends focus events.
-	now        func() time.Time
-	lastKey    time.Time
-	blurAt     time.Time
-	leftAt     map[string]time.Time
-	focusKnown bool
+	// the person was away.
+	now     func() time.Time
+	lastKey time.Time
+	blurAt  time.Time
+	leftAt  map[string]time.Time
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key
