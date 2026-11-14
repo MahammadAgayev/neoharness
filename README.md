@@ -98,11 +98,12 @@ cd neoharness
 ./install.sh            # builds to ~/.local/bin; BIN=/other/dir ./install.sh to change
 ```
 
-On macOS, `./install-mac.sh` installs the desktop app too. It also needs
+On macOS, `./install_all.sh` installs the desktop app too. It also needs
 Node.js and npm (`brew install node`). It builds the TUI as `install.sh`
 does, then builds the app and copies it to `~/Applications`
-(`APPS=/Applications ./install-mac.sh` to change). Quit the app before you
-run it; the hub and its turns go on. The app is signed ad hoc, not
+(`APPS=/Applications ./install_all.sh` to change). Quit the app before you
+run it. At the end it restarts the hub on the new binary, which stops the
+running turns, and prints the command that opens the app. The app is signed ad hoc, not
 notarized: that is enough on the Mac that built it.
 
 On Windows, run `.\install.ps1` in PowerShell instead. You also need
