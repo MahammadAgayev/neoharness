@@ -2457,6 +2457,55 @@ func TestAnEmptyOutcomeFallsBackToTheReply(t *testing.T) {
 	}
 }
 
+// TestATurnThatChangedNothingKeepsTheThreadsRecap: a thread that answers a
+// message with a look around and no recap has not undone its work, so its
+// own recap of it stays. One that came from a reply gives way.
+func TestATurnThatChangedNothingKeepsTheThreadsRecap(t *testing.T) {
+	gate := make(chan func(req agent.Request) agent.Result)
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if req.HarnessOnly {
+			return agent.Result{Text: "ok"}
+		}
+		return (<-gate)(req)
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	dir := view(t, h, "demo", model.Coordinator).Location.Dir
+	if err := h.OpenThread("demo", model.Coordinator, "add", "fix Add", ""); err != nil {
+		t.Fatal(err)
+	}
+	gate <- func(req agent.Request) agent.Result {
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActEdit, Detail: dir + "/calc.go", ID: "e"})
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActRun, Detail: "go test ./...", ID: "1"})
+		_ = h.Recap("demo", "add", "Fix Add", "Fixed Add; tests pass.", "")
+		return agent.Result{Text: "Done."}
+	}
+	eventually(t, "a recap", func() bool { r := view(t, h, "demo", "add").Recap; return r != nil && r.Outcome == "Fixed Add; tests pass." })
+	stateIs(t, h, "demo", "add", model.StateIdle)
+
+	_ = h.Send("demo", model.Coordinator, "add", "is it committed?")
+	gate <- func(req agent.Request) agent.Result {
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActRun, Detail: "git log --oneline -3", ID: "2"})
+		return agent.Result{Text: "Yes, it is in HEAD."}
+	}
+	stateIs(t, h, "demo", "add", model.StateIdle)
+	if r := view(t, h, "demo", "add").Recap; r.Outcome != "Fixed Add; tests pass." || r.FromReply {
+		t.Fatalf("a turn that changed nothing replaced the thread's recap: %+v", r)
+	}
+
+	// A turn that edits says something new, even without a recap.
+	_ = h.Send("demo", model.Coordinator, "add", "also fix Sub")
+	gate <- func(req agent.Request) agent.Result {
+		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActEdit, Detail: dir + "/calc.go", ID: "e2"})
+		return agent.Result{Text: "Fixed Sub."}
+	}
+	stateIs(t, h, "demo", "add", model.StateIdle)
+	if r := view(t, h, "demo", "add").Recap; r.Outcome != "Fixed Sub." || !r.FromReply {
+		t.Fatalf("an edit without a recap kept the old one: %+v", r)
+	}
+}
+
 // TestThePersonAsksForAFreshRecap: asking runs a turn, so it is the
 // person's act, once however often they ask while it waits.
 func TestThePersonAsksForAFreshRecap(t *testing.T) {

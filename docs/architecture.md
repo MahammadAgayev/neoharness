@@ -131,7 +131,9 @@ shapes the recap, by rules that read no words:
   thread's folder are made relative to it.
 - A recap with no outcome, or none at all, takes the first line of the
   reply, marked `FromReply`. A turn that wrote none and did nothing keeps
-  the old recap.
+  the old recap, and so does one that changed nothing (no edit, no
+  artifact, no failure) when the old recap is the thread's own: an answer
+  to "is it committed?" does not hide the recap of the work.
 
 The recap is kept in `thread.json` and sent as `ThreadView.Recap`. The
 person can ask for a fresh one (`POST …/threads/{t}/recap`, `:recap!`, the

@@ -1561,9 +1561,11 @@ func (h *Hub) saveRecap(ws *space, change func(*model.WorkspaceRecap)) error {
 // recapOf is a thread's recap after a turn: what the thread wrote, or else
 // the first line of its reply, with what the hub saw the turn do. A turn
 // that wrote none and did nothing keeps the old one, so a "thanks" does not
-// hide the work.
+// hide the work; nor does one that only looked around, such as an answer to
+// "is it committed?", hide the thread's own recap of its work.
 func recapOf(old, written *model.Recap, seen turnSeen, asked, reply, failure string) *model.Recap {
-	if old != nil && written == nil && seen.empty() && failure == "" {
+	changed := len(seen.edited) > 0 || len(seen.artifacts) > 0 || failure != ""
+	if old != nil && written == nil && !changed && (seen.empty() || !old.FromReply) {
 		return old
 	}
 	var r model.Recap
