@@ -484,6 +484,12 @@ kbd {
   font-size: var(--fs-secondary);
   min-width: 0;
 }
+/* Only the detail gives way in a narrow column; the rest keeps one line. */
+.b-tools-head > :not(.ellipsis),
+.b-line:has(> .ellipsis) > :not(.ellipsis) {
+  flex: none;
+  white-space: nowrap;
+}
 .b-tools-head:hover .t-muted {
   color: var(--subtle);
 }

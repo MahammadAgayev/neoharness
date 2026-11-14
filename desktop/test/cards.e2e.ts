@@ -117,6 +117,24 @@ test('queued messages show dim, and <CR> on one sends it now', async () => {
   hub.setView(view('demo', 'api', { state: 'idle' }))
 })
 
+test('a running tool call with a long command stays on one line, the count whole at its end', async () => {
+  hub.setView(view('demo', 'api', { state: 'running' }))
+  for (let i = 0; i < 8; i++) {
+    hub.event('demo', 'api', { kind: 'tool', tool: 'Bash', detail: `cd /tmp/a/long/path/to/the/project; go test ./tui/ > /tmp/out-${i}.txt 2>&1`, id: `long${i}` })
+  }
+  await page.setViewportSize({ width: 800, height: 860 })
+  const head = page.locator('.b-tools-head', { hasText: '8 tool calls' })
+  await expect(head).toBeVisible()
+  const line = await head.locator('.t-subtle').boundingBox()
+  expect((await head.boundingBox())!.height).toBeLessThan(line!.height * 1.5)
+  const denied = page.locator('.b-line', { hasText: '· deny' })
+  expect((await denied.boundingBox())!.height).toBeLessThan(line!.height * 1.5)
+  await shot('05-live-tool-narrow')
+  await page.setViewportSize({ width: 1400, height: 860 })
+  hub.event('demo', 'api', { kind: 'turn' })
+  hub.setView(view('demo', 'api', { state: 'idle' }))
+})
+
 test('an artifact opens, edits, saves, and a newer version is merged or forced', async () => {
   hub.artifact('demo', 'plan', 'Health check plan', '# Plan\n\n- add /healthz\n- test it\n')
   hub.event('demo', 'api', { kind: 'artifact', detail: 'plan', text: 'Health check plan', version: 1 })

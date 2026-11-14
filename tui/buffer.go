@@ -466,11 +466,12 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 		if strings.HasPrefix(bl.text2, string(model.Deny)) {
 			st = th.Love
 		}
-		spans := []Span{{shortTool(bl.from), th.Muted}}
+		tool, tail := shortTool(bl.from), "  · "+bl.text2
+		spans := []Span{{tool, th.Muted}}
 		if bl.text != "" {
-			spans = append(spans, Span{"  " + truncate(bl.text, max(w-30, 10)), th.Muted})
+			spans = append(spans, Span{"  " + truncate(bl.text, w-4-width(tool)-2-width(tail)), th.Muted})
 		}
-		spans = append(spans, Span{"  · " + bl.text2, st})
+		spans = append(spans, Span{tail, st})
 		return []Line{{Prefix: []Span{{"  ◇ ", th.Muted}}, Spans: spans}}
 	case bAnswer:
 		st := th.Pine
@@ -595,10 +596,11 @@ func (bl *block) renderTools(w int, th *Theme, spin int) []Line {
 	var head Line
 	switch {
 	case bl.live:
+		tool, tail := shortTool(last.tool), "  · "+count
 		head = Line{Prefix: []Span{{"  " + spinner[spin%len(spinner)] + " ", th.Foam}}, Spans: []Span{
-			{shortTool(last.tool), th.Subtle},
-			{"  " + truncate(shortTools(last.detail), max(w-30, 10)), th.Muted},
-			{"  · " + count, th.Muted},
+			{tool, th.Subtle},
+			{"  " + truncate(shortTools(last.detail), w-4-width(tool)-2-width(tail)), th.Muted},
+			{tail, th.Muted},
 		}}
 	case bl.open:
 		head = Line{Prefix: []Span{{"  ▾ ", th.Muted}}, Spans: append([]Span{{count, th.Muted}}, mark...)}

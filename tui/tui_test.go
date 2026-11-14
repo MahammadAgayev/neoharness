@@ -2827,6 +2827,31 @@ func TestEmptyMessagesSaySo(t *testing.T) {
 	h.see("no messages yet")
 }
 
+func TestARunningToolKeepsItsCountWholeInANarrowPane(t *testing.T) {
+	b := newChat("demo", "api")
+	for range 12 {
+		b.AddEvent(model.Event{Kind: model.EventTool, Tool: "mcp__neoharness__report_progress", Detail: strings.Repeat("a long summary ", 8)})
+	}
+	b.AddEvent(model.Event{Kind: model.EventPermission, Tool: "mcp__neoharness__report_progress", Detail: strings.Repeat("a long summary ", 8)})
+	b.AddEvent(model.Event{Kind: model.EventAnswer, Text: "deny"})
+	const w = 50
+	lines := b.Lines(w, newTheme(), 0)
+	for _, want := range []string{"· 12 tool calls", "· deny"} {
+		found := false
+		for _, l := range lines {
+			if strings.HasSuffix(l.Text(), want) {
+				found = true
+				if got := l.prefixWidth() + width(l.Text()); got > w {
+					t.Fatalf("%q is %d cells wide in a %d-cell pane", l.Text(), got, w)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("no line ends with %q", want)
+		}
+	}
+}
+
 func TestToolDetailsUseShortMCPNames(t *testing.T) {
 	if got := shortTools("select:mcp__neoharness__workspace_status,mcp__slack__read"); got != "select:neoharness·workspace_status,slack·read" {
 		t.Fatalf("shortTools = %q", got)
