@@ -241,8 +241,10 @@ type Hub struct {
 	Start func() error
 	// Restart stops the hub and starts the one of this binary.
 	Restart func() error
-	// Version is this binary's commit; a hub of another one restarts on it.
-	Version string
+	// Version is the commit of the binary Restart starts; a hub of another one
+	// restarts on it. Not this process's own commit: after an update a TUI
+	// still runs the old binary, and would restart the new hub without end.
+	Version func() string
 }
 
 // Run opens the workspace on a terminal and blocks until the user quits.

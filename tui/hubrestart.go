@@ -11,11 +11,15 @@ import (
 // turn runs, so an update cuts no turn.
 func (a *App) checkVersion() {
 	a.newer = ""
-	info, err := a.c.Info()
-	if err != nil || info.Version == "" || a.hub.Version == "" || info.Version == a.hub.Version || a.hub.Restart == nil {
+	if a.hub.Version == nil || a.hub.Restart == nil {
 		return
 	}
-	a.newer = a.hub.Version
+	info, err := a.c.Info()
+	disk := a.hub.Version()
+	if err != nil || info.Version == "" || disk == "" || info.Version == disk {
+		return
+	}
+	a.newer = disk
 	if a.running() > 0 {
 		a.notify("this neoharness is newer than the hub; it restarts when the turns end", a.th.Muted)
 	}

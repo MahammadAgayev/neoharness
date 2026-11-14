@@ -12,7 +12,7 @@ import (
 func TestANewerBinaryRestartsTheHubOnceTheTurnsEnd(t *testing.T) {
 	h := start(t)
 	var restarts atomic.Int32
-	h.a.hub = Hub{Restart: func() error { restarts.Add(1); return nil }, Version: "new1111"}
+	h.a.hub = Hub{Restart: func() error { restarts.Add(1); return nil }, Version: func() string { return "new1111" }}
 	h.hub.version = "old0000"
 	h.a.workspaces = []model.WorkspaceView{{Name: "demo", Counts: map[model.State]int{model.StateRunning: 1}}}
 	h.a.handle(evResync{})
@@ -37,6 +37,29 @@ func TestANewerBinaryRestartsTheHubOnceTheTurnsEnd(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if restarts.Load() != 1 {
 		t.Fatal("a hub of this version restarted")
+	}
+}
+
+// A TUI opened before an update runs the old binary, but Restart starts the
+// new one on disk. Comparing the hub with the TUI's own build restarted the
+// hub every second, without end.
+func TestAnOldTUIRestartsTheHubOnceOnTheBinaryOnDisk(t *testing.T) {
+	h := start(t)
+	var restarts atomic.Int32
+	h.a.hub = Hub{Restart: func() error { restarts.Add(1); return nil }, Version: func() string { return "new1111" }}
+	h.hub.version = "old0000"
+	h.hub.workspaces = []model.WorkspaceView{{Name: "demo", Counts: map[model.State]int{model.StateIdle: 1}}}
+	h.a.handle(evResync{})
+	for end := time.Now().Add(time.Second); restarts.Load() == 0 && time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+	}
+	if restarts.Load() != 1 {
+		t.Fatalf("restarts = %d, want 1 for a hub older than the binary on disk", restarts.Load())
+	}
+	h.hub.version = "new1111"
+	h.a.handle(evResync{})
+	time.Sleep(50 * time.Millisecond)
+	if restarts.Load() != 1 {
+		t.Fatalf("restarts = %d, want 1: the hub runs the binary on disk", restarts.Load())
 	}
 }
 

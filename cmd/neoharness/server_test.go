@@ -22,6 +22,28 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// TestBinaryVersionAsksTheBinaryOnDisk: a TUI opened before an update must
+// compare the hub with the binary it restarts it on, not with itself.
+func TestBinaryVersionAsksTheBinaryOnDisk(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, out string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("#!/bin/sh\necho "+out+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if v := binaryVersion(write("new", "new1111")); v != "new1111" {
+		t.Fatalf("version = %q, want new1111", v)
+	}
+	if v := binaryVersion(write("dev", "unknown")); v != "" {
+		t.Fatalf("version of a build without vcs data = %q, want empty", v)
+	}
+	if v := binaryVersion(filepath.Join(dir, "gone")); v != "" {
+		t.Fatalf("version of a missing binary = %q, want empty", v)
+	}
+}
+
 // TestHubRunsApartFromItsClients starts the hub as the first neoharness does,
 // checks that it is a process of its own that a second client shares, and
 // stops it as `neoharness hub stop` does.
