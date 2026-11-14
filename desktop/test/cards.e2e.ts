@@ -87,9 +87,11 @@ test('a permission with no scope offers no always', async () => {
 })
 
 test('a question shows in the chat, and you answer by writing', async () => {
-  hub.event('demo', 'api', { kind: 'ask', text: 'Which **port** should it listen on?' })
+  hub.event('demo', 'api', { kind: 'ask', text: 'Which **port** should it listen on?\n(A) 8080\n(B) 9090' })
   hub.setView(view('demo', 'api', { state: 'waiting', waiting: 'Which port should it listen on?' }))
   await expect(page.locator('.b-ask', { hasText: 'Which port' })).toBeVisible()
+  // Each choice on its own line, as the thread wrote it and as the TUI shows it.
+  await expect(page.locator('.b-ask br')).toHaveCount(2)
   await page.keyboard.press('i')
   await page.keyboard.type('8080')
   await page.keyboard.press('Enter')

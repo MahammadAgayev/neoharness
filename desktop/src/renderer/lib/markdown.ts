@@ -6,7 +6,8 @@ import { Marked } from 'marked'
 // page: no scripts, no handlers, no frames.
 const marked = new Marked({
   gfm: true,
-  breaks: false,
+  // A new line in a message is a new line, as in chat apps and the TUI.
+  breaks: true,
   renderer: {
     code({ text, lang }) {
       const language = lang && hljs.getLanguage(lang) ? lang : ''
