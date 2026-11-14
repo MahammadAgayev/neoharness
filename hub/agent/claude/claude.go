@@ -31,6 +31,8 @@ type Agent struct {
 	Dir  string
 
 	pool *pool
+	// oldCLI is a claude from before --system-prompt-snapshot.
+	oldCLI bool
 }
 
 // New returns an Agent driving the given command, defaulting to `claude`.
@@ -94,6 +96,11 @@ func (a *Agent) Run(ctx context.Context, req agent.Request) (agent.Result, error
 		strings.Contains(res.Stderr, "is already in use") {
 		req.Resume = true
 		return a.run(ctx, req)
+	}
+	if err == nil && res.ExitCode != 0 && !a.oldCLI && strings.Contains(res.Stderr, "unknown option '--system-prompt-snapshot'") {
+		old := *a
+		old.oldCLI = true
+		return old.Run(ctx, req)
 	}
 	// A turn that failed before claude made the session, such as one before
 	// login, can look started; claude's own files can also be gone.
@@ -198,13 +205,13 @@ func (a *Agent) command(args []string, cwd string) *exec.Cmd {
 }
 
 // sessionArgs are the start arguments a running session must match to take
-// a turn. The conversation flags differ between the first turn and the rest,
-// and claude keeps the system prompt of a conversation's first request.
+// a turn. The conversation flags differ between the first turn and the rest.
+// A process keeps the system prompt it started with, so that one counts.
 func sessionArgs(args []string) []string {
 	var out []string
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
-		case "--session-id", "--resume", "--append-system-prompt":
+		case "--session-id", "--resume":
 			i++
 		default:
 			out = append(out, args[i])
@@ -251,6 +258,11 @@ func (a *Agent) args(req agent.Request) []string {
 		// Appended, not replaced: the role in the workspace is an overlay on a
 		// working coding agent, not a replacement for one.
 		args = append(args, "--append-system-prompt", req.SystemPrompt)
+		if !a.oldCLI {
+			// Else claude keeps a conversation's first prompt on every resume,
+			// and a workspace outlives a version of its prompt.
+			args = append(args, "--system-prompt-snapshot", "off")
+		}
 	}
 	// The prompt goes on stdin, as a session's turns do.
 	return args

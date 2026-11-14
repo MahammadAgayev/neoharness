@@ -383,6 +383,41 @@ func TestResumeContinuesTheConversation(t *testing.T) {
 	}
 }
 
+// TestAResumedConversationTakesTheCurrentSystemPrompt: claude keeps a
+// conversation's first system prompt on resume unless told not to, and a
+// workspace lives longer than one version of its prompt.
+func TestAResumedConversationTakesTheCurrentSystemPrompt(t *testing.T) {
+	got := strings.Join(New().args(agent.Request{Prompt: "hi", Conversation: "abc", Resume: true, SystemPrompt: "be strict"}), " ")
+	if !strings.Contains(got, "--system-prompt-snapshot off") {
+		t.Errorf("args = %q, want --system-prompt-snapshot off", got)
+	}
+}
+
+// TestAnOlderClaudeRunsWithoutTheSnapshotFlag: a remote host can have a
+// claude from before --system-prompt-snapshot; it never kept the prompt.
+func TestAnOlderClaudeRunsWithoutTheSnapshotFlag(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake claude is a shell script")
+	}
+	script := filepath.Join(t.TempDir(), "claude")
+	body := `#!/bin/sh
+case "$*" in
+*--system-prompt-snapshot*) echo "error: unknown option '--system-prompt-snapshot'" >&2; exit 1 ;;
+*) echo '{"type":"result","result":"ok","is_error":false}' ;;
+esac
+`
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, err := New(script).Run(context.Background(), agent.Request{Prompt: "hi", Conversation: "abc", Resume: true, SystemPrompt: "be strict"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ExitCode != 0 || res.Text != "ok" {
+		t.Fatalf("result = %+v, want the turn run without the flag", res)
+	}
+}
+
 // --- remote ---
 
 func TestSSHCommandQuotesEverything(t *testing.T) {
@@ -638,6 +673,21 @@ func TestANewModelStartsANewProcess(t *testing.T) {
 	p, starts := fakeSession(t, false)
 	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1"})
 	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1", Resume: true, Model: "sonnet"})
+	if starts() != 2 {
+		t.Fatalf("%d starts, want 2", starts())
+	}
+}
+
+// TestANewSystemPromptStartsANewProcess: a running process keeps the prompt
+// it started with, so a changed prompt needs a new one.
+func TestANewSystemPromptStartsANewProcess(t *testing.T) {
+	p, starts := fakeSession(t, false)
+	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1", SystemPrompt: "old"})
+	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1", Resume: true, SystemPrompt: "old"})
+	if starts() != 1 {
+		t.Fatalf("%d starts with the same prompt, want 1", starts())
+	}
+	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1", Resume: true, SystemPrompt: "new"})
 	if starts() != 2 {
 		t.Fatalf("%d starts, want 2", starts())
 	}

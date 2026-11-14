@@ -1851,6 +1851,40 @@ func TestAWakeUpOutlivesARestart(t *testing.T) {
 	})
 }
 
+// TestARestartedSessionGetsTheCurrentPrompt: a workspace lives for long, so
+// after a restart its coordinator continues its conversation with the prompt
+// as it is now, here changed by the notify setting.
+func TestARestartedSessionGetsTheCurrentPrompt(t *testing.T) {
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	f := &fake{}
+	cfg := Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }}
+	h, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "hello")
+	eventually(t, "the first turn", func() bool { return len(f.requests()) == 1 })
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	h.Close()
+
+	cfg.Notify = true
+	h2, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h2.Close)
+	_ = h2.Send("demo", model.User, model.Coordinator, "again")
+	eventually(t, "the turn after the restart", func() bool { return len(f.requests()) == 2 })
+	first, second := f.requests()[0], f.requests()[1]
+	if !second.Resume || second.Conversation != first.Conversation {
+		t.Fatalf("the restarted coordinator must continue its conversation: %+v / %+v", first, second)
+	}
+	if second.SystemPrompt == first.SystemPrompt || !strings.Contains(second.SystemPrompt, "when threads end a turn") {
+		t.Errorf("the restarted coordinator got the old prompt: %q", second.SystemPrompt)
+	}
+}
+
 // TestThreadTurnsWakeTheCoordinator: with Notify on, threads that end a turn
 // close together wake the coordinator once, and those turns do not count
 // toward the pause.

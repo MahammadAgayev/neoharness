@@ -39,8 +39,13 @@ UUID.
 
 - The process stays for the next turn, so a turn does not pay for starting
   claude, its hooks and MCP servers. It ends after 5 minutes without a turn,
-  when the model, effort or folder changes, and when neoharness stops. The
-  next turn starts a new one with `--resume`.
+  when the model, effort, folder or system prompt changes, and when
+  neoharness stops. The next turn starts a new one with `--resume`.
+- The hub gives every turn the system prompt as it is now. Claude keeps a
+  conversation's first prompt on resume, so the adapter adds
+  `--system-prompt-snapshot off`: a workspace that lives for months gets the
+  current prompt after a restart, with its conversation. A claude too old to
+  know the flag runs without it.
 - Stopping a turn asks claude to interrupt it, and the process stays. A
   turn that does not end in 3 seconds is killed.
 - The coordinator runs with `--tools ""` and `--strict-mcp-config`: only the
