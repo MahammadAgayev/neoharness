@@ -9,6 +9,8 @@ import { Selection, TextSelection } from 'prosemirror-state'
 import { deleteRow, isInTable } from 'prosemirror-tables'
 import type { EditorView } from 'prosemirror-view'
 
+import { fatCursorKey } from './docedit'
+
 export type Mode = 'normal' | 'insert' | 'visual' | 'vline'
 
 interface Block {
@@ -75,6 +77,7 @@ export class DocVim {
     this.pending = ''
     this.count = ''
     this.view.dom.classList.toggle('vim-normal', m !== 'insert')
+    this.view.dispatch(this.view.state.tr.setMeta(fatCursorKey, m !== 'insert'))
     this.on.mode(m)
   }
 

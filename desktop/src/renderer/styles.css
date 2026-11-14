@@ -1057,9 +1057,19 @@ kbd {
   outline: none;
   caret-color: var(--iris);
 }
-/* In Normal mode the caret is the text's ink: Iris is for "you type here". */
+/* In Normal and Visual mode the cursor is a block, as the prompt's. */
 .doc-page.vim-normal {
-  caret-color: var(--text);
+  caret-color: transparent;
+}
+.doc-page:focus .doc-fat-cursor {
+  background: var(--iris);
+  color: var(--base);
+}
+.doc-fat-cursor.eol {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.2em;
+  vertical-align: text-bottom;
 }
 .doc-page ::selection {
   background: var(--hl-med);

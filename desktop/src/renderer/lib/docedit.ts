@@ -112,6 +112,7 @@ export function editorPlugins(leave: () => void): Plugin[] {
     keymap(baseKeymap),
     tableEditing(),
     decorations,
+    fatCursor,
   ]
 }
 
@@ -184,6 +185,32 @@ const decorations = new Plugin<{ deco: DecorationSet; artifacts: Set<string> }>(
   props: {
     decorations(s) {
       return this.getState(s)?.deco
+    },
+  },
+})
+
+export const fatCursorKey = new PluginKey<boolean>('fatCursor')
+
+// fatCursor draws Vim's block cursor on the letter at the head, in Normal
+// and Visual mode; a browser caret is always a line. At the end of a block,
+// where there is no letter, it is a space wide.
+const fatCursor = new Plugin<boolean>({
+  key: fatCursorKey,
+  state: {
+    init: () => true,
+    apply: (tr, on) => (tr.getMeta(fatCursorKey) as boolean | undefined) ?? on,
+  },
+  props: {
+    decorations(s) {
+      if (!fatCursorKey.getState(s)) return null
+      const $h = s.selection.$head
+      if (!$h.parent.isTextblock) return null
+      const h = $h.pos
+      const deco =
+        h < $h.end()
+          ? Decoration.inline(h, h + 1, { class: 'doc-fat-cursor' })
+          : Decoration.widget(h, () => Object.assign(document.createElement('span'), { className: 'doc-fat-cursor eol' }), { side: 1 })
+      return DecorationSet.create(s.doc, [deco])
     },
   },
 })

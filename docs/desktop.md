@@ -103,7 +103,8 @@ The keys are Vim's where they fit. Normal mode moves: `h j k l`, `w b e`,
 a heading, a list item, a table cell) is Vim's line, so `dd`, `yy`, `p`
 and `o` act on blocks, and `cw`, `ciw`, `x`, `u` and `<C-r>` work as in
 Vim. `v` and `V` select. `i`, `a` or `o` start Insert; `<Esc>` leaves it.
-Normal mode types nothing. Without Vim (`:set novim`) the page is always
+Normal mode types nothing. The cursor is a block in Normal and Visual mode and a
+line in Insert, as in Vim and in the prompt. Without Vim (`:set novim`) the page is always
 in Insert, as a text editor is.
 
 In Insert, markdown at the start of a line makes the block: `# ` a
