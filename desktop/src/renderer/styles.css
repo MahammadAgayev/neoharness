@@ -954,6 +954,20 @@ kbd {
   align-items: center;
   font-size: var(--fs-secondary);
 }
+.todo-row {
+  display: flex;
+  gap: 10px;
+  padding: 4px 10px;
+}
+.todo-row.done {
+  color: var(--muted);
+}
+.todo-row.active .glyph {
+  color: var(--gold);
+}
+.todo-count {
+  padding: 12px 10px 4px;
+}
 .list-main {
   flex: 1;
   min-width: 0;

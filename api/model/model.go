@@ -210,6 +210,9 @@ type ThreadView struct {
 	// comes back after RecapAway.
 	Recap   string    `json:"recap,omitempty"`
 	RecapAt time.Time `json:"recapAt,omitzero"`
+	// Todos is the todo list the session keeps while it works, in the
+	// order it made the items.
+	Todos []Todo `json:"todos,omitempty"`
 	// Quiet says the coordinator decides what of this thread reaches the
 	// person: only its questions and permission requests notify them.
 	Quiet bool `json:"quiet,omitempty"`
@@ -223,6 +226,22 @@ type ThreadView struct {
 	UpdatedAt     time.Time `json:"updatedAt"`
 	CreatedAt     time.Time `json:"createdAt"`
 }
+
+// Todo is one item of a session's todo list.
+type Todo struct {
+	ID    string    `json:"id"`
+	Text  string    `json:"text"`
+	State TodoState `json:"state"`
+}
+
+// TodoState is where a todo item stands.
+type TodoState string
+
+const (
+	TodoPending TodoState = "pending"
+	TodoActive  TodoState = "active"
+	TodoDone    TodoState = "done"
+)
 
 // Completions is what the prompt of a thread can complete: `/` commands,
 // and after `@` the threads of its workspace and the files in its folder.

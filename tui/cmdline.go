@@ -460,6 +460,10 @@ func (a *App) exec(line string) {
 		a.cur.Follow = true
 	case "cost":
 		a.showCost(arg(0) == "all")
+	case "todo":
+		if needWorkspace() {
+			a.showTodo(arg(0))
+		}
 	case "image":
 		a.attachImage(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), cmd)))
 	case "hub":
@@ -718,6 +722,7 @@ func (a *App) helpBuf() *Buffer {
 		row(":messages", "notice history"),
 		row(":hub restart", "restart the hub on this neoharness; after an update it does so on its own once no turn runs"),
 		row(":image [file]", "put the clipboard's picture, or a file's, in the prompt as [image 1]; it goes with the message"),
+		row(":todo [name]", "the todo list this thread, or another, keeps while it works; it follows the work, <C-o> goes back"),
 		row(":cost  :cost all", "what this workspace, or every workspace, cost: by day, thread and model; <CR> opens a thread"),
 		row(":workspaces  :workspace <n>", "workspace list, switch workspace"),
 		row(":restore [name]", "bring back a deleted workspace; no name lists them"),

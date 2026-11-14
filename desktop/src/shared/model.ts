@@ -83,6 +83,9 @@ export interface ThreadView {
   // prompt when the person comes back after RecapAwayMs.
   recap?: string
   recapAt?: string
+  // The todo list the session keeps while it works, in the order it made
+  // the items.
+  todos?: Todo[]
   quiet?: boolean
   model?: string
   context?: number
@@ -91,6 +94,12 @@ export interface ThreadView {
   since: string
   updatedAt: string
   createdAt: string
+}
+
+export interface Todo {
+  id: string
+  text: string
+  state: 'pending' | 'active' | 'done'
 }
 
 export interface Completions {

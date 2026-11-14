@@ -181,6 +181,12 @@ to select text with the terminal.
 `:b <name>`, `:ls`, `:split`, `:vsplit`, `:only`, `:threads`, `:artifacts`,
 `:messages`, `:help`, `:q`, `:qa`, `:q!`, `:qa!`.
 
+`:todo` shows the todo list of the thread in the window: what it plans to do,
+what it does now and what is done. It follows the work as the thread changes
+the list, and `<C-o>` goes back. `:todo <name>` shows another thread's. The
+list belongs to the conversation, so `/clear` empties it. A thread whose
+agent keeps no todo list shows none.
+
 `:cost` shows what the workspace cost: in all, today, the last 14 days as
 bars, by thread and by model, and the turns that cost the most. `<CR>` on a
 thread or a turn opens it. `:cost all` adds up every workspace. The days,

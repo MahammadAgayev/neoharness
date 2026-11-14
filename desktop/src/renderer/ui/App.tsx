@@ -10,7 +10,7 @@ import { KeyHints } from './KeyHints'
 import { NewDoc } from './NewDoc'
 import { NewWorkspace } from './NewWorkspace'
 import { Tooltip } from './Tooltip'
-import { Help, MessagesWindow } from './Panels'
+import { Help, MessagesWindow, TodoWindow } from './Panels'
 import { Icon } from './Icon'
 import { Choice } from './Choice'
 import { Cost } from './Cost'
@@ -29,6 +29,8 @@ function WindowView(props: { win: Win; focused: boolean }) {
       return <ArtifactWindow key={win.buf.name} {...props} />
     case 'messages':
       return <MessagesWindow {...props} />
+    case 'todo':
+      return <TodoWindow key={win.buf.thread} {...props} thread={win.buf.thread} />
   }
 }
 

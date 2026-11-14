@@ -624,6 +624,8 @@ func bufTitle(b *Buffer) string {
 		return "cost"
 	case KindArtifact:
 		return b.Artifact
+	case KindTodo:
+		return b.Thread + " todo"
 	}
 	return b.Name
 }

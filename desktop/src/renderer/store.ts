@@ -37,6 +37,7 @@ export type BufRef =
   | { kind: 'threads' }
   | { kind: 'artifact'; name: string }
   | { kind: 'messages' }
+  | { kind: 'todo'; thread: string }
 
 export interface Win {
   id: number
@@ -1341,6 +1342,13 @@ class Store {
       case 'mes':
         if (w) this.show(w.id, { kind: 'messages' })
         return
+      case 'todo': {
+        const cur = w?.buf.kind === 'chat' && !w.buf.thread.includes('/') ? w.buf.thread : Coordinator
+        const thread = a[0] || cur
+        if (!this.state.threads[thread]) return this.say(`no thread ${thread}`, 'love')
+        if (w) this.show(w.id, { kind: 'todo', thread })
+        return
+      }
       case 'vsplit':
       case 'vs':
       case 'split':
@@ -1471,6 +1479,7 @@ export function sameBuf(a: BufRef, b: BufRef): boolean {
   if (a.kind !== b.kind) return false
   if (a.kind === 'chat' && b.kind === 'chat') return a.thread === b.thread
   if (a.kind === 'artifact' && b.kind === 'artifact') return a.name === b.name
+  if (a.kind === 'todo' && b.kind === 'todo') return a.thread === b.thread
   return true
 }
 

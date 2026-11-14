@@ -80,8 +80,8 @@ const (
 )
 
 // env keeps Claude from giving up on a permission prompt while the person is
-// away from the keyboard.
-var env = []string{"MCP_TOOL_TIMEOUT=86400000"}
+// away from the keyboard, and gives it a todo list, which --print leaves out.
+var env = []string{"MCP_TOOL_TIMEOUT=86400000", "CLAUDE_CODE_ENABLE_TODO_TOOLS=1"}
 
 // Efforts are the levels `claude --effort` takes.
 func (a *Agent) Efforts() []string { return []string{"low", "medium", "high", "xhigh", "max"} }
@@ -282,6 +282,9 @@ type accumulator struct {
 	context  int
 	cost     float64
 	models   map[string]modelUsage
+	// creates holds the TaskCreate calls waiting for the id their result
+	// gives the new item.
+	creates map[string]bool
 }
 
 type wire struct {
@@ -301,6 +304,13 @@ type wire struct {
 		} `json:"content"`
 		Usage *usage `json:"usage"`
 	} `json:"message"`
+	// What a tool returned, as data, in a "user" record.
+	ToolUseResult struct {
+		Task *struct {
+			ID      string `json:"id"`
+			Subject string `json:"subject"`
+		} `json:"task"`
+	} `json:"tool_use_result"`
 	// Terminal record.
 	Result  string `json:"result"`
 	IsError bool   `json:"is_error"`
@@ -379,6 +389,7 @@ func (a *accumulator) consume(line []byte) {
 					Detail: detailOf(c.Input),
 					Tokens: a.tokens,
 				})
+				a.todo(c.Name, c.ID, c.Input)
 			}
 		}
 		if len(prose) > 0 {
@@ -396,6 +407,10 @@ func (a *accumulator) consume(line []byte) {
 		for _, c := range e.Message.Content {
 			if c.Type == "tool_result" && c.IsError {
 				a.emit(agent.Event{Kind: agent.KindToolFailed, ID: c.ToolUseID, Text: firstLine(resultText(c.Result))})
+			}
+			if t := e.ToolUseResult.Task; c.Type == "tool_result" && a.creates[c.ToolUseID] && t != nil {
+				delete(a.creates, c.ToolUseID)
+				a.emit(agent.Event{Kind: agent.KindTodo, ID: t.ID, Text: t.Subject, State: agent.TodoPending})
 			}
 		}
 
@@ -420,6 +435,35 @@ func (a *accumulator) consume(line []byte) {
 		a.emit(agent.Event{Kind: agent.KindTurnEnd, Tokens: a.tokens})
 	}
 	// Other "system" records are hooks and progress — machinery, not work.
+}
+
+// todoStates are Claude's task states in the hub's terms.
+var todoStates = map[string]string{
+	"pending":     agent.TodoPending,
+	"in_progress": agent.TodoActive,
+	"completed":   agent.TodoDone,
+	"deleted":     agent.TodoRemoved,
+}
+
+// todo follows Claude's task tools. A new task gets its id only in the
+// result, so TaskCreate waits for it; TaskUpdate names the task itself.
+func (a *accumulator) todo(tool, id string, input json.RawMessage) {
+	switch tool {
+	case "TaskCreate":
+		if a.creates == nil {
+			a.creates = map[string]bool{}
+		}
+		a.creates[id] = true
+	case "TaskUpdate":
+		var in struct {
+			TaskID  string `json:"taskId"`
+			Status  string `json:"status"`
+			Subject string `json:"subject"`
+		}
+		if json.Unmarshal(input, &in) == nil && in.TaskID != "" {
+			a.emit(agent.Event{Kind: agent.KindTodo, ID: in.TaskID, Text: in.Subject, State: todoStates[in.Status]})
+		}
+	}
 }
 
 // resultText is a tool result's content: a string, or text blocks.

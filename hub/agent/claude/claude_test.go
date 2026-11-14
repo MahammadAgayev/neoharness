@@ -830,3 +830,36 @@ func TestImagesGoAsContentBlocks(t *testing.T) {
 		t.Fatalf("content = %+v, want the image then the text", c)
 	}
 }
+
+func TestTaskToolsChangeTheTodoList(t *testing.T) {
+	_, got := feed(t, []string{
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu1","name":"TaskCreate","input":{"subject":"Write the parser","description":"d","activeForm":"Writing"}}]}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu1","content":"Task #1 created successfully: Write the parser"}]},"tool_use_result":{"task":{"id":"1","subject":"Write the parser"}}}`,
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu2","name":"TaskUpdate","input":{"taskId":"1","status":"in_progress"}}]}}`,
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu3","name":"TaskUpdate","input":{"taskId":"1","status":"completed","subject":"Write the lexer"}}]}}`,
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu4","name":"TaskUpdate","input":{"taskId":"2","status":"deleted"}}]}}`,
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu5","name":"Agent","input":{"prompt":"p"}}]}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu5","content":"done"}]},"tool_use_result":{"task":{"id":"9","subject":"not a todo"}}}`,
+	})
+	var todos []agent.Event
+	for _, e := range got {
+		if e.Kind == agent.KindTodo {
+			todos = append(todos, e)
+		}
+	}
+	want := []agent.Event{
+		{Kind: agent.KindTodo, ID: "1", Text: "Write the parser", State: agent.TodoPending},
+		{Kind: agent.KindTodo, ID: "1", State: agent.TodoActive},
+		{Kind: agent.KindTodo, ID: "1", Text: "Write the lexer", State: agent.TodoDone},
+		{Kind: agent.KindTodo, ID: "2", State: agent.TodoRemoved},
+	}
+	if !reflect.DeepEqual(todos, want) {
+		t.Fatalf("todo events = %+v\nwant %+v", todos, want)
+	}
+}
+
+func TestTodoToolsAreOn(t *testing.T) {
+	if !slices.Contains(env, "CLAUDE_CODE_ENABLE_TODO_TOOLS=1") {
+		t.Fatalf("env = %v: under --print Claude keeps no todo list without it", env)
+	}
+}

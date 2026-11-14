@@ -121,6 +121,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       [':set nosidebar  ⌘B', 'fold the sidebar to a rail of icons; the mouse on it shows it whole'],
       [':set fontsize=15  compactwarn=80', 'text size; the context % that says /compact'],
       [':settings  <leader>s  ⌘,', 'theme, text size, Vim keys, the leader and your own keys'],
+      [':todo [name]', 'the todo list this thread, or another, keeps while it works; it follows the work, <C-o> goes back'],
       [':cost  :cost all  <leader>$', 'what this workspace, or every workspace, cost: by day, thread and model, and the turns that cost the most'],
       [':hub restart', 'restart the hub on the installed neoharness; after an update it does so on its own once no turn runs'],
       [':q', 'close the window; ⌘Q quits, and the hub and its turns run on'],
@@ -224,6 +225,37 @@ export function MessagesWindow(props: { win: Win; focused: boolean }) {
               </div>
             </div>
           ))}
+      </div>
+    </div>
+  )
+}
+
+const todoMarks = { done: '✓', active: '●', pending: '○' }
+
+export function TodoWindow(props: { win: Win; focused: boolean; thread: string }) {
+  const todos = useStore((s) => s.threads[props.thread]?.todos) ?? []
+  const el = useRef<HTMLDivElement>(null)
+  useScrollKeys(props.win, el)
+  const done = todos.filter((t) => t.state === 'done').length
+  return (
+    <div className="window todo" onMouseDown={() => store.focus(props.win.id)}>
+      <div className={`statusline ${props.focused ? 'focused' : ''}`}>
+        <span className="sl-name">{props.thread} todo</span>
+        <CloseWindow id={props.win.id} />
+      </div>
+      <div className="list" ref={el} tabIndex={-1}>
+        {todos.length === 0 && <div className="empty">No todo list yet.</div>}
+        {todos.map((t) => (
+          <div key={t.id} className={`todo-row ${t.state}`}>
+            <span className="glyph">{todoMarks[t.state]}</span>
+            {t.text}
+          </div>
+        ))}
+        {todos.length > 0 && (
+          <div className="todo-count t-subtle">
+            {done} of {todos.length} done
+          </div>
+        )}
       </div>
     </div>
   )

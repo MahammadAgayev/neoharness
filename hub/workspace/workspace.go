@@ -128,6 +128,8 @@ type Thread struct {
 	// Recap is where the work stands, as the session last wrote it.
 	Recap   string    `json:"recap,omitempty"`
 	RecapAt time.Time `json:"recapAt,omitzero"`
+	// Todos is the todo list of the current conversation.
+	Todos []model.Todo `json:"todos,omitempty"`
 
 	Since     time.Time `json:"since"`
 	CreatedAt time.Time `json:"createdAt"`

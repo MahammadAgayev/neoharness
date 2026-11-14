@@ -129,6 +129,9 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   The arrows at the top left go back and forward too, as in Slack; their
   tooltips show the keys.
   Help opens as a dialog, as the settings do: Esc closes it, j and k scroll it.
+- **Todo list** (`:todo [name]`): the todo list of the thread in the
+  window, or of another, in the window as in the TUI. It follows the work,
+  and `<C-o>` goes back.
 - **Cost** (`<leader>$`, `:cost`, or Cost in the sidebar): what the
   workspace cost, in all and today, the last 14 days as bars, by thread and
   by model, and the turns that cost the most; a click opens the thread. Tab

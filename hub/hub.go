@@ -1016,7 +1016,7 @@ func (h *Hub) clear(ws *space, th *thread) error {
 		return errors.New("a turn is running; /clear when it ends")
 	}
 	t := th.t
-	t.SessionID, t.Started = workspace.NewID(), false
+	t.SessionID, t.Started, t.Todos = workspace.NewID(), false, nil
 	t.Context, t.Summary = 0, ""
 	t.Queue = []workspace.Message{}
 	t.Asking, t.Paused, t.AgentTurns = "", false, 0
@@ -1822,7 +1822,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		h.event(ws, th, model.Event{Kind: model.EventError, Text: failure})
 	case res.Lost:
 		// The agent never saw these messages.
-		t.SessionID, t.Started = workspace.NewID(), false
+		t.SessionID, t.Started, t.Todos = workspace.NewID(), false, nil
 		t.Queue = append(batch, t.Queue...)
 		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "The agent has no record of this conversation, so a new one starts."})
 	case res.ExitCode != 0:
@@ -1837,7 +1837,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 			h.event(ws, th, model.Event{Kind: model.EventError, Text: "/compact got no summary; the conversation is unchanged"})
 		case compact:
 			t.Summary = strings.TrimSpace(res.Text)
-			t.SessionID, t.Started, t.Context = workspace.NewID(), false, 0
+			t.SessionID, t.Started, t.Context, t.Todos = workspace.NewID(), false, 0, nil
 			th.autoTried = false
 			h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Compacted. The next message starts a new conversation from the summary above."})
 		default:
@@ -1876,11 +1876,42 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 		h.event(ws, th, model.Event{Kind: model.EventTool, Tool: e.Tool, Detail: e.Detail, ID: e.ID})
 	case agent.KindToolFailed:
 		h.event(ws, th, model.Event{Kind: model.EventTool, ID: e.ID, Exit: 1, Text: e.Text})
+	case agent.KindTodo:
+		th.t.Todos = changeTodo(th.t.Todos, e)
+		h.changed(ws, th)
 	case agent.KindAssistantText:
 		h.event(ws, th, model.Event{Kind: model.EventText, Text: e.Text})
 	case agent.KindError:
 		h.event(ws, th, model.Event{Kind: model.EventError, Text: e.Text})
 	}
+}
+
+// changeTodo applies one change to a todo list. A change to an item the list
+// never had is dropped: it has no text to show.
+func changeTodo(todos []model.Todo, e agent.Event) []model.Todo {
+	// Views already sent out share the old slice.
+	todos = slices.Clone(todos)
+	i := slices.IndexFunc(todos, func(t model.Todo) bool { return t.ID == e.ID })
+	switch {
+	case e.State == agent.TodoRemoved:
+		if i >= 0 {
+			todos = slices.Delete(todos, i, i+1)
+		}
+	case i >= 0:
+		if e.Text != "" {
+			todos[i].Text = e.Text
+		}
+		if e.State != "" {
+			todos[i].State = model.TodoState(e.State)
+		}
+	case e.Text != "":
+		state := model.TodoState(e.State)
+		if state == "" {
+			state = model.TodoPending
+		}
+		todos = append(todos, model.Todo{ID: e.ID, Text: e.Text, State: state})
+	}
+	return todos
 }
 
 // readBranch reads a thread's git branch in the background: over ssh it is a
@@ -2211,6 +2242,7 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		Reply:         t.Reply,
 		Recap:         t.Recap,
 		RecapAt:       t.RecapAt,
+		Todos:         t.Todos,
 		WakeAt:        t.WakeAt,
 		Model:         t.Model,
 		Context:       t.Context,

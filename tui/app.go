@@ -697,6 +697,7 @@ func (a *App) onView(v model.ThreadView) {
 	if v.State == model.StateIdle || v.State == model.StateResolved {
 		a.chat(v.Name).settle(false)
 	}
+	a.refreshTodo(v)
 	a.toastView(a.workspace, old, v, had)
 	a.renderThreads()
 }

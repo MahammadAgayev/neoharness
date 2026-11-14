@@ -2580,3 +2580,54 @@ func TestARecapStaysWithTheThread(t *testing.T) {
 		t.Fatalf("recap after restart = %q", v.Recap)
 	}
 }
+
+func TestTodoEventsKeepTheThreadsTodoList(t *testing.T) {
+	turns := [][]agent.Event{
+		{
+			{Kind: agent.KindTodo, ID: "1", Text: "Write the parser", State: agent.TodoPending},
+			{Kind: agent.KindTodo, ID: "2", Text: "Add tests", State: agent.TodoPending},
+			{Kind: agent.KindTodo, ID: "1", State: agent.TodoActive},
+		},
+		{
+			{Kind: agent.KindTodo, ID: "1", Text: "Write the lexer", State: agent.TodoDone},
+			{Kind: agent.KindTodo, ID: "2", State: agent.TodoRemoved},
+			{Kind: agent.KindTodo, ID: "3", Text: "Ship it", State: agent.TodoPending},
+			{Kind: agent.KindTodo, ID: "7", State: agent.TodoDone},
+		},
+	}
+	f := &fake{}
+	n := 0
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		for _, e := range turns[n] {
+			req.OnEvent(e)
+		}
+		n++
+		return agent.Result{Text: "ok"}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	todos := func() []model.Todo { return view(t, h, "demo", model.Coordinator).Todos }
+
+	if err := h.Send("demo", model.User, model.Coordinator, "plan"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	want := []model.Todo{{ID: "1", Text: "Write the parser", State: model.TodoActive}, {ID: "2", Text: "Add tests", State: model.TodoPending}}
+	if got := todos(); !slices.Equal(got, want) {
+		t.Fatalf("todos = %+v, want %+v", got, want)
+	}
+
+	if err := h.Send("demo", model.User, model.Coordinator, "go on"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	want = []model.Todo{{ID: "1", Text: "Write the lexer", State: model.TodoDone}, {ID: "3", Text: "Ship it", State: model.TodoPending}}
+	if got := todos(); !slices.Equal(got, want) {
+		t.Fatalf("an update to an item it never saw must not add it: todos = %+v, want %+v", got, want)
+	}
+
+	if err := h.Send("demo", model.User, model.Coordinator, "/clear"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the todo list to go with the conversation", func() bool { return len(todos()) == 0 })
+}

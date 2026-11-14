@@ -35,6 +35,17 @@ const (
 	// KindToolFailed is a tool call that failed or was denied: ID is the
 	// KindToolStart's, Text the first line of why.
 	KindToolFailed
+	// KindTodo changes one item of the session's todo list: ID names it,
+	// Text is its new text and State its new state. Empty ones are unchanged.
+	KindTodo
+)
+
+// The states of a todo item, for KindTodo.
+const (
+	TodoPending = "pending"
+	TodoActive  = "active"
+	TodoDone    = "done"
+	TodoRemoved = "removed"
 )
 
 func (k Kind) String() string {
@@ -49,6 +60,8 @@ func (k Kind) String() string {
 		return "error"
 	case KindToolFailed:
 		return "tool failed"
+	case KindTodo:
+		return "todo"
 	}
 	return "unknown"
 }
@@ -66,6 +79,8 @@ type Event struct {
 	Detail string
 	// Text is prose, for KindAssistantText and KindError.
 	Text string
+	// State is a todo item's new state, for KindTodo.
+	State string
 	// Tokens is cumulative total tokens as last reported. Providers report this
 	// at unpredictable points and some only at the end, so it is monotonic
 	// rather than incremental: see Result.Tokens.

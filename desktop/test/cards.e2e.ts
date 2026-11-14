@@ -820,6 +820,38 @@ test('Copy on a message copies its markdown, and on a code block its code', asyn
   }
 })
 
+test(':todo shows the thread\'s todo list, follows it, and <C-o> goes back', async () => {
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  const name = page.locator('.statusline.focused .sl-name')
+  await page.keyboard.type(':')
+  await page.keyboard.type('b api')
+  await page.keyboard.press('Enter')
+  await expect(name).toHaveText('api')
+  await page.keyboard.type(':')
+  await page.keyboard.type('todo')
+  await page.keyboard.press('Enter')
+  await expect(name).toHaveText('api todo')
+  await expect(page.locator('.todo .empty')).toHaveText('No todo list yet.')
+  hub.setView(
+    view('demo', 'api', {
+      todos: [
+        { id: '1', text: 'Add the /healthz route', state: 'done' },
+        { id: '2', text: 'Write its test', state: 'active' },
+        { id: '3', text: 'Document it', state: 'pending' },
+      ],
+    }),
+  )
+  await expect(page.locator('.todo .todo-row')).toHaveText(['✓Add the /healthz route', '●Write its test', '○Document it'])
+  await expect(page.locator('.todo .todo-row.done')).toHaveCount(1)
+  await expect(page.locator('.todo .todo-count')).toHaveText('1 of 3 done')
+  await shot('34-todo')
+  await page.keyboard.press('Control+o')
+  await expect(name).toHaveText('api')
+  hub.setView(view('demo', 'api'))
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

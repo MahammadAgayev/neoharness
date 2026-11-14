@@ -28,6 +28,8 @@ const (
 	KindDiff
 	// KindCost is what a workspace, or every workspace, cost.
 	KindCost
+	// KindTodo is a thread's todo list.
+	KindTodo
 )
 
 type blockKind int
