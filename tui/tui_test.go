@@ -3652,7 +3652,7 @@ func TestFailedTurnToastStaysAnError(t *testing.T) {
 // A session's recap shows as a card at the top of its chat when the person
 // comes back after model.RecapAway. Esc, q or × closes it, and it comes
 // back only with a new recap. A message to the session closes it too.
-func TestTheRecapCardShowsAtTheTopAfterAway(t *testing.T) {
+func TestTheRecapCardShowsAboveThePromptAfterAway(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	h.press("<Esc>")
@@ -3687,8 +3687,9 @@ func TestTheRecapCardShowsAtTheTopAfterAway(t *testing.T) {
 		t.Fatal("the recap shows after a short break")
 	}
 	away(model.RecapAway)
-	if r := row("Cache added"); r < 0 || r > 3 {
-		t.Fatalf("no recap card at the top, row %d:\n%s", r, h.screen())
+	// It sits on the prompt, where the eyes are, not at the top of the chat.
+	if r, w := row("Cache added"), h.a.cur.rect; r < w.Y+w.H-1-minPromptLines-4 || r >= w.Y+w.H-1-minPromptLines {
+		t.Fatalf("no recap card just above the prompt, row %d:\n%s", r, h.screen())
 	}
 	h.see("recap")
 	h.press("<Esc>")

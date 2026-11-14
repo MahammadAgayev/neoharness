@@ -53,7 +53,7 @@ A question waits as a card in the chat, as a permission request does:
 write your answer below, or Skip (`<leader>x`). Once answered it is a
 plain block.
 
-The recap card shows as in the TUI, at the top of a chat, when you come
+The recap card shows as in the TUI, just above the prompt, when you come
 back after 2 minutes or more out of the window, or with no key or click
 for that long. `Esc`, `q` or `×` closes it until a newer recap, and so
 does a message to the session. `:recap` shows it again.
@@ -215,8 +215,9 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
   artifact or a queued message, drag the line between columns, the × at
   the end of a window's status line closes it (`⌘W`). A right
   click on a thread or a block gives its actions (open in a split,
-  resolve, stop, copy, delete); hints show on hover. A reply shows Copy
-  on hover, which copies it as markdown; a code block has its own Copy.
+  resolve, stop, copy, delete); hints show on hover. A reply has Copy
+  under it on the left, which copies it as markdown; a code block has its
+  own Copy on hover.
 - **Images**: paste a picture (`⌘V`) into the prompt, and it goes to the
   agent with the message, as in Claude Code. The prompt shows it as a
   small `[image 1]`; delete the token and the image does not go. Up to 5

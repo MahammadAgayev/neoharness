@@ -704,16 +704,25 @@ kbd {
 /* Under the box, close to it, one line. The parts come most important
    first and lay out from the right: what does not fit wraps to a hidden
    second line, so a narrow column drops the host before the model. */
-/* The recap card, at the top of a chat when you come back. */
+/* The recap card, on the prompt when you come back: where the eyes go to
+   write. It rises in once, so the eye finds it. */
 .recap-card {
   flex: 0 0 auto;
   max-width: calc(var(--measure) - 16px);
   width: calc(100% - 32px);
-  margin: 10px auto 0;
+  margin: 0 auto 8px;
   padding: 8px 14px 10px;
-  border: 1px solid color-mix(in srgb, var(--pine) 55%, transparent);
+  border: 1px solid var(--pine);
   border-radius: 10px;
   background: var(--surface);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--pine) 18%, transparent);
+  animation: recap-in 260ms var(--ease);
+}
+@keyframes recap-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }
 .recap-head {
   display: flex;
@@ -913,10 +922,15 @@ kbd {
   transition: opacity 120ms;
 }
 .msg-copy {
-  top: -4px;
-  right: 0;
+  position: static;
+  display: block;
+  margin-top: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  opacity: 1;
 }
-.copyable:hover > .copy,
 .md pre.code:hover > .copy {
   opacity: 1;
 }

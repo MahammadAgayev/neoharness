@@ -801,7 +801,7 @@ test("an idle thread's row shows the start of its last reply, its group a count"
   await expect(row.locator('.list-detail')).toHaveCount(0)
 })
 
-test('the recap card shows at the top after two minutes away; Esc, q or × closes it until a new recap', async () => {
+test('the recap card shows above the prompt after two minutes away; Esc, q or × closes it until a new recap', async () => {
   await page.keyboard.press('Escape')
   await page.keyboard.press('Space')
   await page.keyboard.press('c')
@@ -825,6 +825,12 @@ test('the recap card shows at the top after two minutes away; Esc, q or × close
   await expect(card).toHaveCount(0)
   await away()
   await expect(card).toContainText('Cache added; review next.')
+  // It sits on the prompt, where the eyes are, not at the top of the chat.
+  const cardBox = (await card.boundingBox())!
+  const promptBox = (await page.locator('.pane.focused .prompt').boundingBox())!
+  expect(promptBox.y - (cardBox.y + cardBox.height)).toBeGreaterThanOrEqual(0)
+  expect(promptBox.y - (cardBox.y + cardBox.height)).toBeLessThan(40)
+  await shot('44-recap-on-prompt')
   await page.keyboard.press('Escape')
   await page.keyboard.press('Escape')
   await expect(card).toHaveCount(0)
@@ -861,8 +867,14 @@ test('Copy on a message copies its markdown, and on a code block its code', asyn
     await page.keyboard.press('c')
     hub.event('demo', 'coordinator', { kind: 'text', text: 'Run **this**:\n\n```sh\n./check.sh\n```' })
     const msg = page.locator('.pane.focused .copyable').last()
-    await msg.hover()
-    await msg.locator('.msg-copy').click()
+    // Copy shows without a hover, under the reply on its left, as in other chat apps.
+    const copy = msg.locator('.msg-copy')
+    await expect(copy).toHaveCSS('opacity', '1')
+    const copyBox = (await copy.boundingBox())!
+    const textBox = (await msg.locator('.md').boundingBox())!
+    expect(copyBox.y).toBeGreaterThanOrEqual(textBox.y + textBox.height - 1)
+    expect(Math.abs(copyBox.x - textBox.x)).toBeLessThan(12)
+    await copy.click()
     await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('Run **this**:\n\n```sh\n./check.sh\n```')
     await expect(msg.locator('.msg-copy')).toHaveText('Copied')
     await msg.locator('pre.code').hover()

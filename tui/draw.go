@@ -130,18 +130,20 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	if title, body, _ := a.card(w); title != "" && textBottom-len(body)-2 > top {
 		textBottom -= len(body) + 2
 	}
-	// The transcript starts under the recap card, so the card hides none of it.
+	// The recap card sits on the prompt, where the eyes go to write, and the
+	// transcript ends above it, so the card hides none of it.
 	bw := min(r.W-1, a.textWidth(w))
 	recap := a.recapBody(w, bw-4)
 	w.recapX = 0
 	if len(recap) > 0 && textBottom-top > len(recap)+3+minTranscript {
-		a.box(r.X, top, bw, len(recap)+2, "recap", a.th.Pine)
-		w.recapX = r.X + bw - 3
-		a.put(w.recapX-1, top, r.X+bw-1, " × ", a.th.Subtle)
+		y := textBottom - len(recap) - 2
+		a.box(r.X, y, bw, len(recap)+2, "recap", a.th.Pine)
+		w.recapX, w.recapY = r.X+bw-3, y
+		a.put(w.recapX-1, y, r.X+bw-1, " × ", a.th.Subtle)
 		for i, l := range recap {
-			a.drawLine(r.X+2, top+1+i, r.X+bw-2, l)
+			a.drawLine(r.X+2, y+1+i, r.X+bw-2, l)
 		}
-		top += len(recap) + 3
+		textBottom = y - 1
 	}
 	h := max(textBottom-top, 1)
 	w.textH = h

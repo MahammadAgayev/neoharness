@@ -85,7 +85,8 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
   )
 }
 
-// CopyButton copies a whole message as its markdown, on hover.
+// CopyButton copies a whole message as its markdown. It stays under the
+// message on its left, where chat apps keep it.
 function CopyButton(props: { text: string }) {
   return (
     <button
@@ -115,16 +116,16 @@ const BlockView = memo(function BlockView(props: {
       if (b.from === User) return <div className="b-user">{b.text}</div>
       return (
         <div className="b-from copyable">
-          <CopyButton text={b.text} />
           <div className="b-label t-rose">from {b.from}</div>
           <Markdown text={b.text} artifacts={props.artifacts} />
+          <CopyButton text={b.text} />
         </div>
       )
     case 'text':
       return (
         <div className="copyable">
-          <CopyButton text={b.text} />
           <Markdown className="b-text" text={b.text} artifacts={props.artifacts} />
+          <CopyButton text={b.text} />
         </div>
       )
     case 'tools': {
@@ -614,17 +615,6 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           />
         </div>
       )}
-      {recap && (
-        <div className="recap-card">
-          <div className="recap-head">
-            <span>recap</span>
-            <button className="recap-close" data-tip="Close (Esc)" onClick={() => store.closeRecap(thread)}>
-              ×
-            </button>
-          </div>
-          <div className="recap-text">{recap}</div>
-        </div>
-      )}
       <div
         className="transcript"
         ref={scroller}
@@ -685,6 +675,17 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           )}
         </div>
       </div>
+      {recap && (
+        <div className="recap-card">
+          <div className="recap-head">
+            <span>recap</span>
+            <button className="recap-close" data-tip="Close (Esc)" onClick={() => store.closeRecap(thread)}>
+              ×
+            </button>
+          </div>
+          <div className="recap-text">{recap}</div>
+        </div>
+      )}
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>
         <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
       </div>

@@ -29,7 +29,7 @@ func (a *App) mouse(ev *tcell.EventMouse) {
 		return
 	}
 	switch {
-	case pressed && w.recapX > 0 && y == w.rect.Y && x >= w.recapX-1 && x <= w.recapX+1:
+	case pressed && w.recapX > 0 && y == w.recapY && x >= w.recapX-1 && x <= w.recapX+1:
 		a.closeRecap(w.Buf.Thread)
 	case btn&tcell.WheelUp != 0:
 		a.wheel(w, -wheelLines)

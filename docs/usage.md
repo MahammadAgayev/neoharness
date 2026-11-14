@@ -76,7 +76,7 @@ yourself:
   messages. Your next message answers it, first in a new turn, with them;
   `<CR>` on one sends them without an answer, and the question closes.
 - When you come back after 2 minutes or more away, a chat shows its recap
-  in a card at its top: where the session's work stands, in its own words,
+  in a card just above the prompt: where the session's work stands, in its own words,
   as in Claude Code. Away is the terminal without focus, or no key for that
   long when the terminal sends no focus events. `<Esc>`, `q` or a click on
   `×` closes the card, and so does a message to the session; it comes back

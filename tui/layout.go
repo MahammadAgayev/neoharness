@@ -32,8 +32,8 @@ type Window struct {
 	chatCur, chatCol int
 	// promptW is the width the prompt's Cur and Col are for.
 	promptW int
-	// recapX is the column of the recap card's ×, when the card shows.
-	recapX int
+	// recapX and recapY are where the recap card's × is, when the card shows.
+	recapX, recapY int
 }
 
 // outOfPrompt puts Cur and Col back on the transcript.
