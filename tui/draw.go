@@ -668,6 +668,14 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 			}
 			body = append(body, l.Spans)
 		}
+		// The question holds these until the person answers; they go after it.
+		for i, e := range v.Pending {
+			if i == 2 {
+				body = append(body, []Span{{fmt.Sprintf("↳ %d more", len(v.Pending)-i), th.Muted}})
+				break
+			}
+			body = append(body, []Span{{"↳ " + e.From + "  ", th.Muted}, {truncate(flatten(e.Text), bw-8-width(e.From)), th.Subtle}})
+		}
 		body = append(body, []Span{{"i", th.Iris}, {" reply", th.Muted}})
 	}
 	return title, body, bw

@@ -56,6 +56,9 @@ UUID.
 
 - Messages that arrive while a thread is busy wait in a queue. All of them
   go into the next turn as one prompt.
+- While a question waits, the others' messages wait too, so the thread
+  does not move on from it. The person's answer goes first in the turn,
+  with them; send now with nothing written sends them without one.
 - The person's message can hold images: png, jpeg, gif or webp, at most 5
   per message and 3.75 MB each (5 MB as base64). The hub reads the type from
   the bytes and keeps each image in the thread's `images/` folder. The text

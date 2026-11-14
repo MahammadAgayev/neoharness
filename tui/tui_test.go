@@ -134,6 +134,10 @@ func (f *fakeClient) Stop(p, t string) error {
 	f.sent = append(f.sent, "stop "+t)
 	return nil
 }
+func (f *fakeClient) TakeBack(p, t string) error {
+	f.sent = append(f.sent, "takeback "+t)
+	return nil
+}
 func (f *fakeClient) Unqueue(p, t string, at time.Time) error {
 	f.sent = append(f.sent, "unqueue "+t+" "+at.UTC().Format(time.RFC3339))
 	return nil
@@ -3137,6 +3141,19 @@ func TestTheQuestionCardHidesNoneOfTheTranscript(t *testing.T) {
 	h.see("reply")
 }
 
+// The messages a question holds show on its card, where the person answers.
+func TestTheQuestionCardShowsTheMessagesItHolds(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads[model.Coordinator]
+	v.State, v.Waiting = model.StateWaiting, "Which phase first?"
+	v.Pending = []model.Event{{Kind: model.EventMessage, From: "docs", Text: "stop, the person wants one thread"}}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("Which phase first?")
+	h.see("docs  stop, the person wants one thread")
+}
+
 func TestCtrlWHFromAChatWithManyLines(t *testing.T) {
 	h := start(t)
 	h.openDemo()
@@ -3293,8 +3310,13 @@ func TestUTakesTheLastMessageBack(t *testing.T) {
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: model.Coordinator,
 		View: &model.ThreadView{Workspace: "demo", Name: model.Coordinator, Role: model.RoleCoordinator, State: model.StateRunning}})
 	h.press("u")
-	if got := string(chat.Prompt.Text); got != "fix it" || h.hub.sent[len(h.hub.sent)-1] != "stop coordinator" {
+	if got := string(chat.Prompt.Text); got != "fix it" || h.hub.sent[len(h.hub.sent)-1] != "takeback coordinator" {
 		t.Fatalf("prompt %q, sent %q", got, h.hub.sent)
+	}
+	// The hub says it is taken back: it leaves the transcript.
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &model.Event{Kind: model.EventTakeBack, Text: "fix it"}})
+	if chat.lastMessage() >= 0 && chat.blocks[chat.lastMessage()].text == "fix it" {
+		t.Fatal("the taken-back message still shows")
 	}
 
 	// Answered: nothing to take back.

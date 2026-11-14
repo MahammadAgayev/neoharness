@@ -128,6 +128,11 @@ export function addEvent(bs: Block[], e: Event): Block[] {
       ]
     case 'clear':
       return [{ key: key(), kind: 'note', text }]
+    case 'takeback': {
+      // The person took the message back to the prompt: it was never sent.
+      const i = bs.findLastIndex((b) => b.kind === 'message' && b.from === User && b.text === text)
+      return i < 0 ? bs : [...bs.slice(0, i), ...bs.slice(i + 1)]
+    }
   }
   return bs
 }

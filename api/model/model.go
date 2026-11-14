@@ -141,6 +141,9 @@ const (
 	// EventNotice is what the coordinator told the person with notify;
 	// NeedsYou says the person must act.
 	EventNotice EventKind = "notice"
+	// EventTakeBack takes the person's last message, Text, off the screen:
+	// they took it back to the prompt.
+	EventTakeBack EventKind = "takeback"
 )
 
 // Event is one transcript entry.

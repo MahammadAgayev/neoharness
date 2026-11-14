@@ -48,6 +48,7 @@ type Client interface {
 	Send(workspace, thread, text string, images ...[]byte) error
 	SendNow(workspace, thread, text string, images ...[]byte) error
 	Stop(workspace, thread string) error
+	TakeBack(workspace, thread string) error
 	Unqueue(workspace, thread string, at time.Time) error
 	AskRecap(workspace, thread string) error
 	SeenRecap(workspace, thread string) error

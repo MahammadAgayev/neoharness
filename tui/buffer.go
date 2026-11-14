@@ -410,6 +410,14 @@ func (b *Buffer) AddEvent(e model.Event) {
 	case model.EventClear:
 		b.blocks = nil
 		b.push(&block{kind: bNote, text: e.Text})
+	case model.EventTakeBack:
+		for i := len(b.blocks) - 1; i >= 0; i-- {
+			if bl := b.blocks[i]; bl.kind == bMessage && bl.from == model.User && bl.text == e.Text {
+				b.blocks = slices.Delete(b.blocks, i, i+1)
+				b.dirty = true
+				break
+			}
+		}
 	}
 }
 

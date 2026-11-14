@@ -66,7 +66,7 @@ type sendIn struct {
 }
 
 type askIn struct {
-	Question string `json:"question" jsonschema:"the question for the person"`
+	Question string `json:"question" jsonschema:"the question in one short line; the context and the choices go in your reply"`
 }
 
 type wakeIn struct {
@@ -184,7 +184,7 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			return text(fmt.Sprintf("You will be woken in %d minutes.", in.Minutes)), nil, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "ask_user", Description: "Ask the person a question you cannot continue without. End your turn after; the answer comes as your next message."},
+	mcp.AddTool(s, &mcp.Tool{Name: "ask_user", Description: "Ask the person a question you cannot continue without. The question shows in one short line on their prompt; write the context and the choices once, in your reply after this call, then end your turn. The answer comes as your next message; messages from others wait until then."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in askIn) (*mcp.CallToolResult, any, error) {
 			if err := h.AskUser(p, me, in.Question); err != nil {
 				return nil, nil, err

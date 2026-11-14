@@ -16,8 +16,9 @@ You have these tools through the `neoharness` MCP server:
   change, and to answer a thread that asked you something. Replies come back
   later as a new message, not as the tool result.
 - `ask_user(question)` asks the person something when you cannot continue
-  without an answer. Then end your turn; the answer comes as your next
-  message.
+  without an answer. The question is one short line; give the context and
+  the choices once, in your reply. Then end your turn; the answer comes as
+  your next message, and messages from others wait until then.
 - `wake_me(minutes, note)` wakes you after that many minutes with a message
   that holds the note. Nothing else wakes you once your turn ends; only a
   message does. When you start work that outlives your turn, such as a long

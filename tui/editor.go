@@ -1106,8 +1106,8 @@ func (a *App) saveEdit(force bool) bool {
 
 // takeBack is u in a chat with an empty prompt, as Esc in Claude Code: the
 // person's last message comes back to the prompt while the agent has not
-// answered it. A queued one leaves the queue; one whose turn runs stops it.
-// It reports whether there was such a message.
+// answered it. A queued one leaves the queue; one whose turn runs stops it
+// and leaves the transcript. It reports whether there was such a message.
 func (a *App) takeBack(w *Window) bool {
 	b := w.Buf
 	var text string
@@ -1125,7 +1125,7 @@ func (a *App) takeBack(w *Window) bool {
 		e := b.pending[queued]
 		text, err = e.Text, a.c.Unqueue(b.Workspace, b.Thread, e.At)
 	case last >= 0 && b.blocks[last].from == model.User && (state == model.StateRunning || state == model.StateWaiting):
-		text, err = b.blocks[last].text, a.c.Stop(b.Workspace, b.Thread)
+		text, err = b.blocks[last].text, a.c.TakeBack(b.Workspace, b.Thread)
 	default:
 		return false
 	}

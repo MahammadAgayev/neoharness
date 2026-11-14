@@ -65,6 +65,10 @@ closes it and marks it seen in the hub, so the TUI does not show it again.
 sidebar and the workspaces screen show `✗ N` beside a workspace whose
 threads failed.
 
+A question sits on the prompt in the same place, in a gold card: the
+question in one line, the messages it holds until you answer, Reply and
+Send now. It takes the place of the recap box while it waits.
+
 The app does not read `init.lua`; the hub settings in it apply to both.
 What the TUI takes from `init.lua` for itself is in Settings instead.
 

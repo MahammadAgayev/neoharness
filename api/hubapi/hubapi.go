@@ -217,6 +217,12 @@ func (c *Client) Stop(workspace, thread string) error {
 	return c.do("POST", threadPath(workspace, thread)+"/stop", nil, nil)
 }
 
+// TakeBack stops the running turn and takes the person's message in it off
+// the transcript.
+func (c *Client) TakeBack(workspace, thread string) error {
+	return c.do("POST", threadPath(workspace, thread)+"/takeback", nil, nil)
+}
+
 // Unqueue takes back a queued message; at is when it was queued.
 func (c *Client) Unqueue(workspace, thread string, at time.Time) error {
 	return c.do("DELETE", threadPath(workspace, thread)+"/queue?at="+url.QueryEscape(at.Format(time.RFC3339Nano)), nil, nil)

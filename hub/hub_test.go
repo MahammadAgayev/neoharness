@@ -416,6 +416,63 @@ func TestAskUserWaitsAndUserReplyClears(t *testing.T) {
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
 }
 
+// askThenHold has the coordinator ask a question, then another thread write
+// to it while the question waits.
+func askThenHold(t *testing.T) (*Hub, *fake) {
+	t.Helper()
+	f := &fake{}
+	h := newHub(t, f)
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if strings.Contains(req.Prompt, "set up storage") {
+			_ = h.AskUser("demo", model.Coordinator, "which database?")
+			return agent.Result{Text: "asked"}
+		}
+		return agent.Result{Text: "ok"}
+	}
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")
+	eventually(t, "the asking turn to end", func() bool {
+		evs, _ := h.Events("demo", model.Coordinator, 50)
+		return slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventTurnEnd })
+	})
+	_ = h.Send("demo", "docs", model.Coordinator, "fyi")
+	return h, f
+}
+
+func TestQuestionHoldsOtherMessagesUntilTheAnswer(t *testing.T) {
+	h, f := askThenHold(t)
+	time.Sleep(50 * time.Millisecond)
+	if n := len(f.requests()); n != 1 {
+		t.Fatalf("%d turns; a thread's message must wait behind the question", n)
+	}
+	if v := view(t, h, "demo", model.Coordinator); v.Waiting != "which database?" || v.Queued != 1 {
+		t.Fatalf("waiting %q, queued %d", v.Waiting, v.Queued)
+	}
+	_ = h.Send("demo", model.User, model.Coordinator, "postgres")
+	eventually(t, "the answer's turn", func() bool { return len(f.requests()) == 2 })
+	p := f.requests()[1].Prompt
+	if a, b := strings.Index(p, "postgres"), strings.Index(p, "fyi"); a < 0 || b < 0 || a > b {
+		t.Fatalf("the answer goes first, with the held message: %q", p)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+}
+
+func TestSendNowReleasesHeldMessagesAndClosesTheQuestion(t *testing.T) {
+	h, f := askThenHold(t)
+	if err := h.SendNow("demo", model.Coordinator, ""); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the held message to go", func() bool { return len(f.requests()) == 2 })
+	if p := f.requests()[1].Prompt; !strings.Contains(p, "fyi") {
+		t.Fatalf("prompt = %q", p)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	evs, _ := h.Events("demo", model.Coordinator, 50)
+	if !slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventNote && strings.Contains(e.Text, "not answered") }) {
+		t.Fatal("the transcript must say the question was not answered")
+	}
+}
+
 func TestAnswerStopsATurnThatStillRunsAfterItsQuestion(t *testing.T) {
 	f := &fake{}
 	h := newHub(t, f)
@@ -1697,6 +1754,60 @@ func TestUnqueueAndStop(t *testing.T) {
 }
 
 // A stop means stop: what you queued behind the turn waits for you.
+// takeBackRun starts a turn on "long task" that runs until stopped; started
+// says whether the agent gets to work on it first.
+func takeBackRun(t *testing.T, started bool) (*Hub, *fake) {
+	t.Helper()
+	f := &fake{}
+	h := newHub(t, f)
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if !strings.Contains(req.Prompt, "long task") {
+			return agent.Result{Text: "ok"}
+		}
+		if started {
+			req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "on it"})
+		}
+		<-ctx.Done()
+		return agent.Result{ExitCode: -1}
+	}
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "long task")
+	stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
+	if started {
+		eventually(t, "the agent to start", func() bool {
+			evs, _ := h.Events("demo", model.Coordinator, 50)
+			return slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventText })
+		})
+	}
+	if err := h.TakeBack("demo", model.Coordinator); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	evs, _ := h.Events("demo", model.Coordinator, 50)
+	if !slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventTakeBack && e.Text == "long task" }) {
+		t.Fatalf("the transcript must say the message was taken back: %+v", evs)
+	}
+	return h, f
+}
+
+func TestTakeBackBeforeTheAgentStartedTellsItNothing(t *testing.T) {
+	h, f := takeBackRun(t, false)
+	_ = h.Send("demo", model.User, model.Coordinator, "short task")
+	eventually(t, "the next turn", func() bool { return len(f.requests()) == 2 })
+	if p := f.requests()[1].Prompt; strings.Contains(p, "long task") {
+		t.Fatalf("the agent never saw it, so nothing to take back: %q", p)
+	}
+}
+
+func TestTakeBackAfterTheAgentStartedTellsItWithTheNextMessage(t *testing.T) {
+	h, f := takeBackRun(t, true)
+	_ = h.Send("demo", model.User, model.Coordinator, "short task")
+	eventually(t, "the next turn", func() bool { return len(f.requests()) == 2 })
+	if p := f.requests()[1].Prompt; !strings.Contains(p, "took back") || !strings.Contains(p, "long task") || !strings.Contains(p, "short task") {
+		t.Fatalf("prompt = %q", p)
+	}
+}
+
 func TestStopHoldsTheQueue(t *testing.T) {
 	f := &fake{}
 	gate := make(chan struct{})

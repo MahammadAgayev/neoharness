@@ -1048,7 +1048,8 @@ class Store {
 
   // takeBack is u with an empty prompt, as Esc in Claude Code: your last
   // message comes back while the agent has not answered it. A queued one
-  // leaves the queue; one whose turn runs stops it. It returns the text,
+  // leaves the queue; one whose turn runs stops it and leaves the
+  // transcript. It returns the text,
   // or null when there is no such message.
   async takeBack(thread: string): Promise<string | null> {
     const v = this.state.threads[thread]
@@ -1060,7 +1061,7 @@ class Store {
     }
     const last = lastUserMessage(bs)
     if (last >= 0 && (v?.state === 'running' || v?.state === 'waiting')) {
-      const ok = await this.try(this.call('stop', this.at(thread)))
+      const ok = await this.try(this.call('takeBack', this.at(thread)))
       const b = bs[last]
       return ok === undefined || b.kind !== 'message' ? '' : b.text
     }

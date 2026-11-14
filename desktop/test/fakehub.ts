@@ -186,6 +186,13 @@ export class FakeHub {
         return json({})
       }
       if (kind === 'threads' && sub === 'recap') return json({})
+      if (kind === 'threads' && sub === 'takeback') {
+        const v = this.threads[ws].find((t) => t.name === name)!
+        const last = (this.events[`${ws}/${name}`] ?? []).filter((e) => e.kind === 'message' && e.from === 'user').pop()
+        if (last) this.event(ws, name, { kind: 'takeback', text: last.text })
+        this.setView({ ...v, state: 'idle' })
+        return json({})
+      }
       if (kind === 'threads' && (sub === 'stop' || sub === 'resolve' || sub === 'reopen')) {
         const v = this.threads[ws].find((t) => t.name === name)!
         this.setView({ ...v, state: sub === 'resolve' ? 'resolved' : 'idle' })

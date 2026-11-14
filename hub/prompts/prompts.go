@@ -105,6 +105,12 @@ func Shell(command, out string, exit int) string {
 	return s
 }
 
+// TakenBack tells a session that the person took back a message it began
+// to work on.
+func TakenBack(text string) string {
+	return "The person stopped your turn and took back this message; do not act on it:\n> " + strings.ReplaceAll(text, "\n", "\n> ")
+}
+
 // ArtifactEdited tells a session what the person changed in an artifact,
 // from version from to version to. An empty diff means it was too long to
 // send: the counts and sections stand in for it.

@@ -28,6 +28,7 @@ export type EventKind =
   | 'shell'
   | 'artifact'
   | 'notice'
+  | 'takeback'
 
 export interface Event {
   at: string

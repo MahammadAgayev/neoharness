@@ -98,6 +98,34 @@ test('a question shows as a card you answer by writing', async () => {
   await shot('22-question')
 })
 
+test('a question card sits on the prompt with the messages it holds, and Send now sends them without an answer', async () => {
+  const at = new Date().toISOString()
+  hub.setView(
+    view('demo', 'api', {
+      state: 'waiting',
+      waiting: 'Rename the script or add a wrapper?',
+      queued: 1,
+      pending: [{ at, kind: 'message', from: 'coordinator', text: 'stop, the person wants one thread' }],
+    }),
+  )
+  const card = page.locator('.box-anchor .question-card')
+  await expect(card).toContainText('Rename the script or add a wrapper?')
+  await expect(card.locator('.question-held')).toContainText('coordinator')
+  await expect(card.locator('.question-held')).toContainText('stop, the person wants one thread')
+  // It sits right on the prompt, as the recap box does.
+  const cardBox = (await card.boundingBox())!
+  const prompt = page.locator('.box-anchor:has(.question-card) + .prompt')
+  const promptBox = (await prompt.boundingBox())!
+  expect(Math.abs(cardBox.y + cardBox.height - promptBox.y)).toBeLessThan(24)
+  await shot('22b-question-card')
+  await card.locator('button', { hasText: 'Send now' }).click()
+  await expect.poll(() => hub.calls.filter((c) => c.path.endsWith('/messages')).pop()?.body).toMatchObject({ text: '', now: true })
+  hub.setView(view('demo', 'api', { state: 'idle' }))
+  await expect(card).toHaveCount(0)
+  // The button took the focus; the next tests type in the prompt.
+  await page.locator('.prompt').last().click()
+})
+
 test('/ completes commands in the prompt', async () => {
   await page.keyboard.type('/cl')
   await expect(page.locator('.cm-tooltip-autocomplete', { hasText: 'clear' })).toBeVisible()
@@ -197,10 +225,12 @@ test('without Vim, keys work as in Claude Code: ⌃S stashes, Esc takes your mes
   await page.keyboard.type('a draft for later')
   await page.keyboard.press('Control+s')
   await expect(prompt.locator('.cm-placeholder')).toBeVisible()
-  // Esc stops the running turn and brings back your last message.
+  // Esc stops the running turn and brings back your last message; the
+  // transcript no longer shows it.
   await page.keyboard.press('Escape')
-  await expect.poll(() => hub.calls.some((c) => c.path.endsWith('/stop'))).toBe(true)
+  await expect.poll(() => hub.calls.some((c) => c.path.endsWith('/takeback'))).toBe(true)
   await expect(prompt).toHaveText('8080')
+  await expect(page.locator('.b-user', { hasText: '8080' })).toHaveCount(0)
   await page.keyboard.type(' please')
   await page.keyboard.press('Enter')
   await expect.poll(() => hub.calls.filter((c) => c.path.endsWith('/messages')).pop()?.body).toMatchObject({ text: '8080 please' })
@@ -236,7 +266,8 @@ async function yankTwo() {
   await expect(page.locator('.row.selected')).toHaveCount(0)
   const clip = await app.evaluate(({ clipboard }) => clipboard.readText())
   expect(clip).toContain('Which **port** should it listen on?')
-  expect(clip).toContain('8080')
+  // Its answer, 8080, was taken back with Esc above; the tool calls follow.
+  expect(clip).toContain('go test ./tui/')
 }
 
 test('a selection holds the chat still as new blocks arrive', async () => {

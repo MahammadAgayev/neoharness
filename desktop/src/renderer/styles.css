@@ -1011,6 +1011,12 @@ kbd {
   }
 }
 .recap-box.b-gold { --box: var(--gold); }
+.question-held {
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .recap-box.b-love { --box: var(--love); }
 .recap-box.b-foam { --box: var(--foam); }
 .recap-box.b-pine { --box: var(--pine); }

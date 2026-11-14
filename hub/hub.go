@@ -835,6 +835,17 @@ func (h *Hub) SendNow(workspaceName, to, text string, images ...[]byte) error {
 			h.kick(ws, th)
 			return nil
 		}
+		// The queue waited behind the question; it goes without an answer. A
+		// turn that still runs after its question is stopped below.
+		if err == nil && th.t.Asking != "" {
+			th.t.Asking = ""
+			h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Question not answered; the queued messages went in."})
+			h.changed(ws, th)
+			if !th.busy {
+				h.kick(ws, th)
+				return nil
+			}
+		}
 	} else {
 		th, err = h.send(workspaceName, model.User, to, text, images)
 	}
@@ -859,6 +870,34 @@ func (h *Hub) Stop(workspaceName, name string) error {
 	}
 	if !th.busy || th.cancel == nil {
 		return errors.New("nothing runs")
+	}
+	th.interrupted, th.dropped = true, true
+	th.cancel()
+	return nil
+}
+
+// TakeBack stops the running turn and takes back the person's message it
+// read, as Esc in Claude Code: the transcript drops it. An agent that began
+// on it hears with the next message that it was taken back.
+func (h *Hub) TakeBack(workspaceName, name string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	i := len(th.t.InFlight) - 1
+	for i >= 0 && (th.t.InFlight[i].From != model.User || th.t.InFlight[i].Compact) {
+		i--
+	}
+	if !th.busy || th.cancel == nil || i < 0 {
+		return errors.New("no message of yours runs")
+	}
+	text := th.t.InFlight[i].Text
+	h.event(ws, th, model.Event{Kind: model.EventTakeBack, Text: text})
+	if th.started {
+		// It goes before the next message, as `!` output does.
+		th.t.Shell = append(th.t.Shell, prompts.TakenBack(text))
 	}
 	th.interrupted, th.dropped = true, true
 	th.cancel()
@@ -1072,14 +1111,20 @@ func (h *Hub) clear(ws *space, th *thread) error {
 
 func (h *Hub) enqueue(ws *space, th *thread, from, text string, images ...string) {
 	t := th.t
+	m := workspace.Message{From: from, Text: text, At: time.Now().UTC(), Images: images}
+	// The message goes into the transcript when its turn starts (kick), so
+	// the transcript shows what the agent read in the order it read it. An
+	// answer goes before the messages its question held.
+	if from == model.User && t.Asking != "" && !t.Paused {
+		t.Queue = append([]workspace.Message{m}, t.Queue...)
+	} else {
+		t.Queue = append(t.Queue, m)
+	}
 	if from == model.User {
 		t.AgentTurns = 0
 		t.Paused = false
 		t.Asking = ""
 	}
-	// The message goes into the transcript when its turn starts (kick), so
-	// the transcript shows what the agent read in the order it read it.
-	t.Queue = append(t.Queue, workspace.Message{From: from, Text: text, At: time.Now().UTC(), Images: images})
 	h.changed(ws, th)
 	h.kick(ws, th)
 }
@@ -1923,7 +1968,9 @@ func (h *Hub) denyAll(th *thread, why string) {
 // kick starts a turn if the thread has work and nothing stops it.
 func (h *Hub) kick(ws *space, th *thread) {
 	t := th.t
-	if th.busy || t.Resolved || t.Paused || len(t.Queue) == 0 {
+	// An open question holds the others' messages: the person sees them
+	// beside it and answers first. The person's own message clears it.
+	if th.busy || t.Resolved || t.Paused || t.Asking != "" || len(t.Queue) == 0 {
 		return
 	}
 	fromUser := slices.ContainsFunc(t.Queue, func(m workspace.Message) bool { return m.From == model.User })

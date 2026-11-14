@@ -259,6 +259,38 @@ function Queued(props: { e: Event; selected: boolean; onClick: () => void }) {
   )
 }
 
+// QuestionCard sits on the prompt while a question waits, as the recap box
+// does, so the question does not get lost in the transcript. The thread's
+// reply above it holds the context; the card holds the short question and
+// the messages that wait for the answer.
+function QuestionCard(props: { v: ThreadView; onReply: () => void; onSendNow: () => void }) {
+  const held = props.v.pending ?? []
+  return (
+    <div className="recap-box b-gold question-card" role="dialog" aria-label="question">
+      <div className="box-head">
+        <span className="box-title t-gold">question</span>
+      </div>
+      <div className="t-text">{props.v.waiting}</div>
+      {held.slice(0, 2).map((e) => (
+        <div key={e.at} className="question-held t-muted">
+          ↳ {e.from} <span className="t-subtle">{e.text}</span>
+        </div>
+      ))}
+      {held.length > 2 && <div className="question-held t-muted">↳ {held.length - 2} more</div>}
+      <div className="card-actions">
+        <button className="btn primary" onClick={props.onReply}>
+          Reply <kbd>i</kbd>
+        </button>
+        {held.length > 0 && (
+          <button className="btn" data-tip="The held messages go in, and the question closes unanswered" onClick={props.onSendNow}>
+            Send now
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function ChatWindow(props: { win: Win; focused: boolean }) {
   const { win, focused } = props
   const thread = win.buf.kind === 'chat' ? win.buf.thread : Coordinator
@@ -273,6 +305,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   // A peek's artifacts are of its workspace: they open from their blocks.
   const artifacts = useMemo(() => new Set(peek ? [] : artifactList.map((a) => a.name)), [artifactList, peek])
   const pending = v?.pending ?? []
+  const question = v?.state === 'waiting' && !v.permission && !!v.waiting && v.waiting !== 'paused'
   const working = v?.state === 'running' && !blocks.some((b) => 'live' in b && b.live)
   const scroller = useRef<HTMLDivElement>(null)
   const [search, setSearch] = useState<string | null>(null)
@@ -584,10 +617,11 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           ))}
         </div>
       </div>
-      {/* The recap box sits on the prompt, where the person looks. */}
-      {boxHere && (
+      {/* The question card and the recap box sit on the prompt, where the
+          person looks. The question outranks the recap, as in the TUI. */}
+      {(question || boxHere) && (
         <div className="box-anchor">
-          <RecapBox />
+          {question && v ? <QuestionCard v={v} onReply={() => toPrompt(true)} onSendNow={() => void store.sendQueuedNow(thread)} /> : <RecapBox />}
         </div>
       )}
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>

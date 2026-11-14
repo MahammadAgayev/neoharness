@@ -123,6 +123,9 @@ func Handler(h *hub.Hub, info hubapi.Info, stop func()) http.Handler {
 	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/stop", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, nil, h.Stop(r.PathValue("p"), r.PathValue("t")))
 	})
+	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/takeback", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, nil, h.TakeBack(r.PathValue("p"), r.PathValue("t")))
+	})
 	mux.HandleFunc("DELETE /workspaces/{p}/threads/{t}/queue", func(w http.ResponseWriter, r *http.Request) {
 		at, err := time.Parse(time.RFC3339Nano, r.URL.Query().Get("at"))
 		if err != nil {

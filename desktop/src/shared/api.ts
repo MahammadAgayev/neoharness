@@ -97,6 +97,10 @@ export const calls = {
     method: 'POST',
     path: `${th(a.workspace, a.thread)}/stop`,
   }),
+  takeBack: (a: { workspace: string; thread: string }): Req => ({
+    method: 'POST',
+    path: `${th(a.workspace, a.thread)}/takeback`,
+  }),
   unqueue: (a: { workspace: string; thread: string; at: string }): Req => ({
     method: 'DELETE',
     path: `${th(a.workspace, a.thread)}/queue?at=${e(a.at)}`,

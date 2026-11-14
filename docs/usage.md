@@ -113,9 +113,16 @@ thread yourself:
 - Messages sent while a thread is busy wait in a queue and show dim at the
   end of the chat. `<CR>` on one sends it now: the running turn stops, and
   the queue goes in the next turn at once.
+- A question holds the messages of the coordinator and the other threads:
+  they wait, and show on the question card, until you answer. Your answer
+  goes first, with them. `<CR>` on one sends them without an answer, and
+  the question closes. The card holds the question in one line; the
+  thread's reply above it says the rest.
 - `u` with an empty prompt is Esc in Claude Code: your last message comes
   back to the prompt to edit, while the agent has not answered it yet. A
-  queued one leaves the queue; a running turn stops.
+  queued one leaves the queue; a running turn stops, and the message
+  leaves the chat. If the agent had begun on it, its next turn hears that
+  you took it back.
 - `:image` puts the picture on the clipboard in the prompt, after the
   cursor, as `[image 1]`; `:image <file>` takes a file. A terminal cannot
   paste a picture, so this does it. The picture goes to the agent with the
