@@ -3434,16 +3434,25 @@ func TestAnIdleThreadSaysWhenItWakes(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	v := h.a.threads["api-tests"]
-	v.WakeAt = time.Date(2026, 11, 11, 16, 52, 0, 0, time.Local)
+	v.WakeAt = time.Now().Add(time.Hour)
+	at := v.WakeAt.Format("15:04")
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
-	h.see("wakes at 16:52")
+	h.see("wakes at " + at)
 	h.press("<Esc>", ":b api-tests", "<CR>")
-	h.see("demo · api-tests  ○ idle  wakes at 16:52")
+	h.see("demo · api-tests  ○ idle  wakes at " + at)
 	for _, it := range h.a.threadItems() {
-		if it.label == "api-tests" && it.detail != "idle · wakes at 16:52" {
+		if it.label == "api-tests" && it.detail != "idle · wakes at "+at {
 			t.Errorf("picker: %q", it.detail)
 		}
+	}
+
+	// A passed time is not a future one, even before the hub says so.
+	v.WakeAt = time.Now().Add(-time.Hour)
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	if strings.Contains(h.screen(), "wakes at") {
+		t.Errorf("a passed wake-up shows:\n%s", h.screen())
 	}
 }
 

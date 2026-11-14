@@ -2,6 +2,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'rea
 
 import { Coordinator, User, type Event, type ThreadView } from '../../shared/model'
 import { blockText, shortTool, shortTools, type Block } from '../lib/transcript'
+import { wakeLabel } from '../lib/wake'
 import { elapsed, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { Markdown } from './Markdown'
@@ -63,11 +64,12 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
   const { v, focused } = props
   const [, tick] = useState(0)
   useEffect(() => {
-    if (v?.state !== 'running' && v?.state !== 'waiting') return
-    const t = setInterval(() => tick((n) => n + 1), 1000)
+    const ms = v?.state === 'running' || v?.state === 'waiting' ? 1000 : v?.wakeAt ? 60000 : 0
+    if (!ms) return
+    const t = setInterval(() => tick((n) => n + 1), ms)
     return () => clearInterval(t)
-  }, [v?.state])
-  const wake = v && v.state === 'idle' && v.wakeAt ? `wakes at ${new Date(v.wakeAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''
+  }, [v?.state, v?.wakeAt])
+  const wake = v ? wakeLabel(v) : ''
   return (
     <div className={`statusline ${focused ? 'focused' : ''}`}>
       <span className={`sl-ws ${props.peek ? 'peek' : ''}`}>{props.workspace} · </span>

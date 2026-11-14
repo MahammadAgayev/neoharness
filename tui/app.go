@@ -1160,9 +1160,10 @@ func (a *App) workspaceView() model.WorkspaceView {
 	return a.workspaces[i]
 }
 
-// wakeLabel says when an idle thread wakes, if it asked to be woken.
+// wakeLabel says when an idle thread wakes, if it asked to be woken. A
+// passed time says nothing: the hub clears it when the wake-up comes.
 func wakeLabel(v model.ThreadView) string {
-	if v.State != model.StateIdle || v.WakeAt.IsZero() {
+	if v.State != model.StateIdle || !v.WakeAt.After(time.Now()) {
 		return ""
 	}
 	return "wakes at " + v.WakeAt.Local().Format("15:04")

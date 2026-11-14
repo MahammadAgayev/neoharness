@@ -93,8 +93,12 @@ so no thread can act for another thread or another workspace.
 A turn ends when Claude's reply ends, and only a message starts the next
 one. `wake_me(minutes, note)` asks the hub for that message later, for work
 that outlives the turn, such as a long benchmark. A thread has at most one
-wake-up; it is saved with the thread, so it survives a restart. The threads
-list shows `wakes at 16:52` on an idle thread that has one.
+wake-up; it is saved with the thread, so it survives a restart, and one
+whose time passed while the hub was down comes at once. Go timers stop while
+the computer sleeps, so the hub also checks the wall clock each minute: a
+wake-up comes at most a minute after the computer wakes. The threads list
+shows `wakes at 16:52` on an idle thread that has one, and never a time that
+has passed.
 
 ## Recaps
 

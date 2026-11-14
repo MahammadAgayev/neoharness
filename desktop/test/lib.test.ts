@@ -13,6 +13,7 @@ import { parseEx, words } from '../src/renderer/lib/ex'
 import { fuzzy, fuzzyScore, grep } from '../src/renderer/lib/fuzzy'
 import { keyName, Sequencer, split } from '../src/renderer/lib/keys'
 import { imageToken, nextImage, used, withImages } from '../src/renderer/lib/images'
+import { wakeLabel } from '../src/renderer/lib/wake'
 import { hunks, lines, take } from '../src/renderer/lib/linediff'
 import { colors, contrast, ratios, resolveScheme, schemes } from '../src/renderer/lib/themes'
 import { endHidesError, keep, viewToast, type Toast } from '../src/renderer/lib/toasts'
@@ -315,5 +316,17 @@ describe('images', () => {
     expect(nextImage(imgs)).toBe(4)
     expect(imageToken(4)).toBe('[image 4]')
     expect(used('[image 2][image 2]', imgs)).toEqual([2])
+  })
+})
+
+describe('wakeLabel', () => {
+  const v = { state: 'idle', wakeAt: '2026-11-14T09:24:00Z' } as ThreadView
+  const at = new Date(v.wakeAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  it('says when an idle thread wakes', () => {
+    expect(wakeLabel(v, Date.parse('2026-11-14T09:00:00Z'))).toBe(`wakes at ${at}`)
+    expect(wakeLabel({ ...v, state: 'running' }, Date.parse('2026-11-14T09:00:00Z'))).toBe('')
+  })
+  it('says nothing once the time passed, as after the computer slept', () => {
+    expect(wakeLabel(v, Date.parse('2026-11-14T12:23:00Z'))).toBe('')
   })
 })

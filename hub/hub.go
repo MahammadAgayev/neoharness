@@ -1652,6 +1652,14 @@ const MaxWake = 24 * time.Hour
 // wakeFrom is the sender of a wake-up message.
 const wakeFrom = "neoharness"
 
+// wakeCheck is how often a wake-up timer looks at the wall clock. Go timers
+// stop while macOS sleeps, so without it a wake-up comes as late as the
+// computer slept, and its passed time stays on screen.
+var wakeCheck = time.Minute
+
+// wallClock is the time a wake-up is due by; tests move it.
+var wallClock = time.Now
+
 // WakeMe wakes a thread after d with a message that holds note, so it comes
 // back to work that outlives its turn: nothing else wakes it. A new call
 // replaces the old one; 0 cancels it.
@@ -1668,7 +1676,7 @@ func (h *Hub) WakeMe(workspaceName, name string, d time.Duration, note string) e
 	t := th.t
 	t.WakeAt, t.WakeNote = time.Time{}, ""
 	if d > 0 {
-		t.WakeAt, t.WakeNote = time.Now().UTC().Add(d), strings.TrimSpace(note)
+		t.WakeAt, t.WakeNote = wallClock().UTC().Add(d), strings.TrimSpace(note)
 	}
 	h.armWake(ws, th)
 	h.changed(ws, th)
@@ -1686,11 +1694,15 @@ func (h *Hub) armWake(ws *space, th *thread) {
 	if at.IsZero() {
 		return
 	}
-	th.wake = time.AfterFunc(time.Until(at), func() {
+	th.wake = time.AfterFunc(min(at.Sub(wallClock()), wakeCheck), func() {
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		t := th.t
 		if h.ctx.Err() != nil || th.deleted || t.Resolved || !t.WakeAt.Equal(at) {
+			return
+		}
+		if wallClock().Before(at) {
+			h.armWake(ws, th)
 			return
 		}
 		t.WakeAt, t.WakeNote, th.wake = time.Time{}, "", nil

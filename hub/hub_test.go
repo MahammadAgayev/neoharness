@@ -1852,6 +1852,28 @@ func TestAWakeUpOutlivesARestart(t *testing.T) {
 	})
 }
 
+// TestAWakeUpComesAfterTheComputerSleeps: Go timers stop while macOS sleeps,
+// but the wall clock goes on, so a wake-up whose time passed during sleep
+// must come soon after, not as late as the sleep was long.
+func TestAWakeUpComesAfterTheComputerSleeps(t *testing.T) {
+	defer func(d time.Duration, c func() time.Time) { wakeCheck, wallClock = d, c }(wakeCheck, wallClock)
+	wakeCheck = 20 * time.Millisecond
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	_ = h.WakeMe("demo", model.Coordinator, time.Hour, "after the sleep")
+	h.mu.Lock()
+	wallClock = func() time.Time { return time.Now().Add(time.Hour) }
+	h.mu.Unlock()
+	eventually(t, "the wake-up after the sleep", func() bool {
+		rs := f.requests()
+		return len(rs) == 1 && strings.Contains(rs[0].Prompt, "after the sleep")
+	})
+	if v := view(t, h, "demo", model.Coordinator); !v.WakeAt.IsZero() {
+		t.Error("a wake-up that came should be gone")
+	}
+}
+
 // TestARestartedSessionGetsTheCurrentPrompt: a workspace lives for long, so
 // after a restart its coordinator continues its conversation with the prompt
 // as it is now, here changed by the notify setting.
