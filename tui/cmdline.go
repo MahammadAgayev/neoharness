@@ -31,7 +31,7 @@ type cmdline struct {
 
 var commands = []string{
 	"allow", "always", "artifacts", "b", "buffer", "deny", "diffoff", "edit", "folder", "help", "hub", "image", "ls", "messages", "new",
-	"only", "open", "q", "qa", "quit", "reopen", "resolve", "restore", "cost", "setlocal", "split", "threads",
+	"only", "open", "q", "qa", "quit", "recap", "reopen", "resolve", "restore", "cost", "setlocal", "split", "threads",
 	"vsplit", "workspace", "workspaces", "wq",
 }
 
@@ -464,6 +464,8 @@ func (a *App) exec(line string) {
 		if needWorkspace() {
 			a.showTodo(arg(0))
 		}
+	case "recap":
+		a.openRecap()
 	case "image":
 		a.attachImage(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), cmd)))
 	case "hub":
@@ -723,6 +725,7 @@ func (a *App) helpBuf() *Buffer {
 		row(":messages", "notice history"),
 		row(":hub restart", "restart the hub on this neoharness; after an update it does so on its own once no turn runs"),
 		row(":image [file]", "put the clipboard's picture, or a file's, in the prompt as [image 1]; it goes with the message"),
+		row(":recap", "show the recap card of this chat again, even after you closed it"),
 		row(":todo [name]", "the todo list this thread, or another, keeps while it works; it follows the work, <C-o> goes back"),
 		row(":cost  :cost all", "what this workspace, or every workspace, cost: by day, thread and model; <CR> opens a thread"),
 		row(":workspaces  :workspace <n>", "workspace list, switch workspace"),

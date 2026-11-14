@@ -56,7 +56,7 @@ plain block.
 The recap card shows as in the TUI, at the top of a chat, when you come
 back after 2 minutes or more out of the window, or with no key or click
 for that long. `Esc`, `q` or `×` closes it until a newer recap, and so
-does a message to the session.
+does a message to the session. `:recap` shows it again.
 
 The threads list groups threads by state with a count, as in the TUI. A
 row shows the thread's name and, on the right, how long it has run or

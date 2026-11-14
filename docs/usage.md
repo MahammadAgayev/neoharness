@@ -80,7 +80,8 @@ yourself:
   as in Claude Code. Away is the terminal without focus, or no key for that
   long when the terminal sends no focus events. `<Esc>`, `q` or a click on
   `×` closes the card, and so does a message to the session; it comes back
-  only with a newer recap. A running turn hides it.
+  only with a newer recap. A running turn hides it. `:recap` shows the
+  card of the chat in the window again, even after you closed it.
 - `u` with an empty prompt is Esc in Claude Code: your last message comes
   back to the prompt to edit, while the agent has not answered it yet. A
   queued one leaves the queue; a running turn stops, and the message

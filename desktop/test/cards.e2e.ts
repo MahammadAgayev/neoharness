@@ -831,6 +831,13 @@ test('the recap card shows at the top after two minutes away; Esc, q or × close
   await page.keyboard.type('go on')
   await page.keyboard.press('Enter')
   await expect(card).toHaveCount(0)
+
+  // :recap shows it again, closed or not.
+  await normal()
+  await page.keyboard.type(':')
+  await page.keyboard.type('recap')
+  await page.keyboard.press('Enter')
+  await expect(card).toContainText('Store moved.')
 })
 
 test('Copy on a message copies its markdown, and on a code block its code', async () => {

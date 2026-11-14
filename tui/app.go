@@ -1391,6 +1391,20 @@ func (a *App) cameBack() {
 
 func (a *App) recapKey(thread string) string { return a.workspace + "/" + thread }
 
+// openRecap shows the recap card of the chat in the window, as :recap asks.
+func (a *App) openRecap() {
+	b := a.cur.Buf
+	v, ok := a.threads[b.Thread]
+	switch {
+	case b.Kind != KindChat || !ok || v.Recap == "":
+		a.notify("no recap yet", a.th.Muted)
+	case v.State == model.StateRunning:
+		a.notify("no recap while a turn runs", a.th.Muted)
+	default:
+		a.recapOpen[a.recapKey(b.Thread)] = true
+	}
+}
+
 // closeRecap closes a chat's recap card; it opens again only for a newer
 // recap.
 func (a *App) closeRecap(thread string) {

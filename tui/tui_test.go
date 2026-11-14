@@ -3745,3 +3745,23 @@ func TestTheRecapCardShowsAtTheTopAfterAway(t *testing.T) {
 		t.Fatal("the card shows while a turn runs")
 	}
 }
+
+// :recap opens the recap card of the chat in the window, even one the
+// person closed.
+func TestRecapCommandOpensTheCard(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("<Esc>", ":recap", "<CR>")
+	h.see("no recap yet")
+	v := h.a.threads[model.Coordinator]
+	v.Recap, v.RecapAt = "Cache added; review next.", time.Now()
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	for range 2 {
+		h.press(":recap", "<CR>")
+		h.see("Cache added; review next.")
+		h.press("<Esc>")
+		if strings.Contains(h.screen(), "Cache added") {
+			t.Fatal("Esc does not close the card")
+		}
+	}
+}

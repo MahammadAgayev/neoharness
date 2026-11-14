@@ -296,6 +296,16 @@ class Store {
     return !!s.recapOpen[`${s.workspace}/${thread}`] && !!v?.recap && v.state !== 'running'
   }
 
+  // openRecap shows the recap card of the chat in focus, as :recap asks.
+  openRecap(): void {
+    const s = this.state
+    const w = this.cur()
+    const v = w?.buf.kind === 'chat' ? s.threads[w.buf.thread] : undefined
+    if (!w || w.buf.kind !== 'chat' || !v?.recap) return this.say('no recap yet', 'muted')
+    if (v.state === 'running') return this.say('no recap while a turn runs', 'muted')
+    this.set({ recapOpen: { ...s.recapOpen, [`${s.workspace}/${w.buf.thread}`]: true } })
+  }
+
   // closeRecap closes a chat's recap card; it opens again only for a newer
   // recap.
   closeRecap(thread: string): void {
@@ -1388,6 +1398,8 @@ class Store {
       case 'mes':
         if (w) this.show(w.id, { kind: 'messages' })
         return
+      case 'recap':
+        return this.openRecap()
       case 'todo': {
         const cur = w?.buf.kind === 'chat' && !w.buf.thread.includes('/') ? w.buf.thread : Coordinator
         const thread = a[0] || cur

@@ -41,6 +41,7 @@ export const commands: Command[] = [
   { id: 'deny', title: 'Deny the permission, or skip the question', keys: ['<leader>x', ':deny [reason]'], run: () => void s.answer('deny') },
   { id: 'dismiss', title: 'Dismiss notifications', keys: ['<leader>nc'], run: () => s.dismissToasts() },
   { id: 'todo', title: "Todo list: what the thread plans and has done", keys: [':todo [name]'], run: () => void s.ex('todo') },
+  { id: 'recap', title: 'Show the recap card of this chat again', keys: [':recap'], run: () => void s.ex('recap') },
   { id: 'messages', title: 'Notification history', keys: ['<leader>nh', ':messages'], run: () => void s.ex('messages') },
   { id: 'vsplit', title: 'Split right', keys: ['<C-w>v', ':vsplit [name]', '⌘\\'], run: () => s.split(true) },
   { id: 'split', title: 'Split above', keys: ['<C-w>s', ':split [name]'], run: () => s.split(false) },
