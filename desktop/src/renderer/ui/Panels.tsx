@@ -90,7 +90,12 @@ const sections: { title: string; rows: [string, string][] }[] = [
     title: 'an artifact',
     rows: [
       ['<leader>d  ⌘⇧N  :doc <name>', 'start a doc you write; the coordinator works from it and keeps its status'],
-      ['i a o', 'write in it: it shows rendered, and the markdown only on the lines under the cursor'],
+      ['i a o', 'write in it; it stays rendered as you type, and saves as markdown'],
+      ['h j k l  w b e  0 $  gg G  { }', 'move in Normal mode; a block is a line'],
+      ['dd yy p  cw ciw  x  u <C-r>  v V  /', 'delete, yank and put blocks and words, undo, select, find'],
+      ['# - 1. > ``` [ ]', 'at the start of a line: a heading, a list, a quote, code, a task'],
+      ['**b** *i* `c` ~~s~~', 'bold, italic, code and struck text as you type'],
+      ['<Tab>  <S-Tab>', 'in a list: indent and outdent an item; in a table: the next cell, a new row at the end'],
       ['⌘-click', 'open an artifact named in code, or a link'],
       [':w  ⌘S', 'save, merged with a newer version; the writer gets the diff'],
       ['<leader>  <C-w>  g  ]  [', 'what can follow shows at once, as which-key; Settings turns it off'],

@@ -1040,131 +1040,185 @@ kbd {
   margin-bottom: 0.6em;
   letter-spacing: -0.01em;
 }
+/* The artifact as a page: one centered column of reading text, rendered
+   while you write in it. The type follows the chat's (headings in the
+   text's ink, sized by level; paragraphs a line apart), a size up. */
 .doc-editor {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
   font-size: calc(var(--font-size) + 2px);
 }
-.doc-editor .cm-editor {
-  height: 100%;
-}
-/* The live preview: rendered lines, as .md draws them in a chat. */
-.doc-editor .cm-h {
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--text);
-}
-.doc-editor .cm-h1 {
-  font-size: 1.6em;
-  padding-top: 0.6em;
-}
-.doc-editor .cm-h2 {
-  font-size: 1.3em;
-  padding-top: 0.5em;
-}
-.doc-editor .cm-h3 {
-  font-size: 1.1em;
-  padding-top: 0.35em;
-}
-.doc-editor .cm-h4,
-.doc-editor .cm-h5,
-.doc-editor .cm-h6 {
-  color: var(--subtle);
-}
-.doc-editor .cm-strong {
-  font-weight: 600;
-}
-.doc-editor .cm-em {
-  font-style: italic;
-}
-.doc-editor .cm-strike {
-  text-decoration: line-through;
-  color: var(--muted);
-}
-.doc-editor .cm-link {
-  color: var(--foam);
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--foam) 40%, transparent);
-  text-underline-offset: 3px;
-}
-.doc-editor .cm-icode {
-  font-family: var(--font-mono);
-  font-size: 0.9em;
-  color: var(--text);
-  background: color-mix(in srgb, var(--text) 9%, transparent);
-  padding: 0.1em 0.3em;
-  border-radius: 4px;
-}
-.doc-editor .cm-icode.artifact-link {
-  color: var(--foam);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.doc-editor .cm-fence {
-  font-family: var(--font-mono);
-  font-size: 0.86em;
+.doc-page {
+  max-width: 90ch;
+  margin: 0 auto;
+  padding: 48px 56px 40vh;
   line-height: 1.6;
-  background: color-mix(in srgb, var(--surface) 80%, var(--base));
-  padding-left: 12px !important;
+  outline: none;
+  caret-color: var(--iris);
 }
-.doc-editor .cm-fence-mark {
-  color: var(--muted);
-  font-size: 0.75em;
+/* In Normal mode the caret is the text's ink: Iris is for "you type here". */
+.doc-page.vim-normal {
+  caret-color: var(--text);
 }
-.doc-editor .cm-quote {
-  border-left: 2px solid var(--muted);
-  padding-left: 12px !important;
-  color: var(--subtle);
+.doc-page ::selection {
+  background: var(--hl-med);
 }
-.doc-editor .cm-alert {
-  border-left-width: 3px;
-  color: var(--text);
+.doc-page > h1:first-child {
+  font-size: 2em;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.5em;
 }
-.doc-editor .cm-alert-note { border-left-color: var(--foam); }
-.doc-editor .cm-alert-tip { border-left-color: var(--pine); }
-.doc-editor .cm-alert-important { border-left-color: var(--iris); }
-.doc-editor .cm-alert-warning { border-left-color: var(--gold); }
-.doc-editor .cm-alert-caution { border-left-color: var(--love); }
-.doc-editor .cm-alert-title {
-  font-weight: 600;
+.doc-page h1,
+.doc-page h2,
+.doc-page h3,
+.doc-page h4,
+.doc-page h5,
+.doc-page h6 {
+  margin: 1.6em 0 0.5em;
 }
-.doc-editor .cm-alert-note .cm-alert-title { color: var(--foam); }
-.doc-editor .cm-alert-tip .cm-alert-title { color: var(--pine); }
-.doc-editor .cm-alert-important .cm-alert-title { color: var(--iris); }
-.doc-editor .cm-alert-warning .cm-alert-title { color: var(--gold); }
-.doc-editor .cm-alert-caution .cm-alert-title { color: var(--love); }
-.doc-editor .cm-table-widget {
-  font-family: var(--font-text);
-  white-space: normal;
-  padding: 4px 0;
-}
-.doc-editor .cm-table {
-  font-family: var(--font-mono);
-  font-size: 0.86em;
-}
-.doc-editor .cm-hr {
-  background: linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat;
-}
-.doc-editor .cm-bullet {
+.doc-page h1 { font-size: 1.6em; }
+.doc-page h2 { font-size: 1.35em; }
+.doc-page h3 { font-size: 1.1em; }
+.doc-page h5,
+.doc-page h6 { font-size: 1em; color: var(--subtle); }
+.doc-page s {
   color: var(--muted);
 }
-.doc-editor .cm-check {
+.doc-page li > p,
+.doc-page .task-body > p {
+  margin: 0;
+}
+.doc-page li + li {
+  margin-top: 0.3em;
+}
+.doc-page li > ul,
+.doc-page li > ol {
+  margin: 0.3em 0 0;
+}
+.doc-page ul:has(> li.task) {
+  list-style: none;
+  padding-left: 0.2em;
+}
+.doc-page li.task {
+  display: flex;
+  gap: 0.55em;
+  align-items: baseline;
+}
+.doc-page .task-body {
+  flex: 1;
+  min-width: 0;
+}
+.doc-page .task-box {
+  flex: none;
+  width: 0.9em;
+  height: 0.9em;
+  border: 1.5px solid var(--muted);
+  border-radius: 4px;
+  transform: translateY(0.12em);
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 0.95em;
-  height: 0.95em;
-  margin-right: 0.15em;
-  vertical-align: -0.1em;
-  border: 1.5px solid var(--muted);
-  border-radius: 3px;
-  font-size: 0.75em;
   color: var(--base);
 }
-.doc-editor .cm-check.done {
+.doc-page li.task.done > .task-box {
   background: var(--pine);
   border-color: var(--pine);
+}
+.doc-page li.task.done > .task-box::after {
+  content: '✓';
+  font-size: 0.7em;
+  font-weight: 600;
+}
+.doc-page li.task.done > .task-body {
+  color: var(--subtle);
+}
+.doc-page pre.code {
+  padding: 14px 16px;
+}
+.doc-page pre.code code {
+  font-size: 0.86em;
+}
+.doc-page pre.code[data-lang]::after {
+  content: attr(data-lang);
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-family: var(--font-text);
+  font-size: var(--fs-small);
+  color: var(--muted);
+  pointer-events: none;
+}
+.doc-page pre.raw {
+  margin: 1em 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  white-space: pre-wrap;
+}
+.doc-page pre.raw code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+.doc-page .artifact-link {
+  color: var(--foam);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.doc-page blockquote.alert {
+  border-left-width: 3px;
+}
+/* An alert's [!NOTE] shows as its title; the text stays in the document. */
+.doc-page .alert-mark {
+  font-size: 0;
+}
+.doc-page .alert-mark::before {
+  content: attr(data-label);
+  font-size: calc(var(--font-size) + 2px);
+  font-weight: 600;
+}
+.doc-page .alert-note .alert-mark { color: var(--foam); }
+.doc-page .alert-tip .alert-mark { color: var(--pine); }
+.doc-page .alert-important .alert-mark { color: var(--iris); }
+.doc-page .alert-warning .alert-mark { color: var(--gold); }
+.doc-page .alert-caution .alert-mark { color: var(--love); }
+.doc-page .table-wrap {
+  margin: 1.2em 0;
+  overflow-x: auto;
+}
+.doc-page table {
+  display: table;
+  margin: 0;
+  font-size: 0.92em;
+  line-height: 1.5;
+  border-collapse: collapse;
+}
+/* A word breaks only when it is longer than its column can be. */
+.doc-page th,
+.doc-page td {
+  padding: 6px 12px;
+  vertical-align: top;
+  min-width: 3em;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+.doc-page th {
+  font-weight: 600;
+}
+.doc-page .selectedCell {
+  background: var(--hl-med);
+}
+.doc-page hr {
+  margin: 2em 0;
+}
+.doc-page img {
+  max-width: 100%;
+}
+.doc-page .ProseMirror-selectednode {
+  outline: 2px solid var(--hl-high);
 }
 
 /* help */

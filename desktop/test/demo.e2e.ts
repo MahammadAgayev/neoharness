@@ -130,7 +130,7 @@ test('records the desktop demo', async () => {
     await page.keyboard.type('health', { delay: 120 })
     await wait(1000)
     await page.keyboard.press('Enter')
-    await expect(page.locator('.window.artifact .cm-h1')).toBeVisible()
+    await expect(page.locator('.window.artifact .doc-page h1')).toBeVisible()
     await wait(3000)
   } finally {
     await app.close()

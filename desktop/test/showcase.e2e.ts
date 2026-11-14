@@ -82,7 +82,7 @@ test('the whole app, populated', async () => {
     await shot('33-show-search-query')
     await page.keyboard.press('Escape')
     await page.locator('code[data-artifact="health-plan"]').click()
-    await expect(page.locator('.window.artifact .cm-h1')).toBeVisible()
+    await expect(page.locator('.window.artifact .doc-page h1')).toBeVisible()
     await shot('34-show-artifact')
     await page.keyboard.type(':')
     await page.keyboard.type('colorscheme rose-pine-dawn')

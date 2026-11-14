@@ -10,7 +10,7 @@ import type { EditorView } from '@codemirror/view'
 import { command, commands } from './commands'
 import { keyName, Sequencer } from './lib/keys'
 import { store, type Hint, type Settings } from './store'
-import { editorKeys, editors, handlers, typeahead, type WinAction } from './ui/registry'
+import { docs, editorKeys, editors, handlers, typeahead, type DocKeys, type WinAction } from './ui/registry'
 
 // desc names an fn action in the key hints.
 type Action = { cmd: string } | { win: WinAction } | { move: 'h' | 'j' | 'k' | 'l' } | { fn: () => void; desc?: string }
@@ -295,6 +295,11 @@ function focusedEditor(): EditorView | null {
   return null
 }
 
+function focusedDoc(): DocKeys | null {
+  for (const d of docs) if (d.hasFocus()) return d
+  return null
+}
+
 function vimState(v: EditorView) {
   return getCM(v)?.state.vim as
     | { insertMode: boolean; visualMode: boolean; inputState: { operator?: string | null; keyBuffer: string[]; motion?: string | null } }
@@ -313,16 +318,16 @@ function vimBusy(v: EditorView): boolean {
 // it moves to a window instead: a doc you write in is no trap. The word
 // goes when another key comes, or after a pause.
 const windowKeys = new Set(['h', 'j', 'k', 'l', 'w', 'W', 'c', 'q', 'o', 's', 'v', '='])
-let insertCW: { ed: EditorView; timer: ReturnType<typeof setTimeout> } | null = null
+let insertCW: { ed: object; timer: ReturnType<typeof setTimeout> } | null = null
 
-function insertCtrlW(ed: EditorView, key: string, e: KeyboardEvent): boolean {
+function insertCtrlW(ed: object, delWord: () => void, leave: () => void, key: string, e: KeyboardEvent): boolean {
   if (insertCW && insertCW.ed !== ed) insertCW = null
   if (key === '<C-w>' && !insertCW) {
     e.preventDefault()
     e.stopPropagation()
     insertCW = { ed, timer: setTimeout(() => {
       insertCW = null
-      deleteGroupBackward(ed)
+      delWord()
     }, 600) }
     return true
   }
@@ -330,13 +335,12 @@ function insertCtrlW(ed: EditorView, key: string, e: KeyboardEvent): boolean {
   clearTimeout(insertCW.timer)
   insertCW = null
   if (!windowKeys.has(key)) {
-    deleteGroupBackward(ed)
+    delWord()
     return false
   }
   e.preventDefault()
   e.stopPropagation()
-  const cm = getCM(ed)
-  if (cm) Vim.exitInsertMode(cm as never)
+  leave()
   feed(keymaps().prompt, '<C-w>')
   feed(keymaps().prompt, key)
   return true
@@ -386,6 +390,8 @@ export function onKey(e: KeyboardEvent): void {
   }
   // The picker, the command line and the settings are inputs of their own.
   if (s.picker || s.cmdline !== null || s.settingsOpen || s.helpOpen || s.cost || s.choice || s.newWorkspace || s.newDoc) return
+  // So is a find bar: what you type there is the word you look for.
+  if (e.target instanceof HTMLInputElement) return
 
   const km = keymaps()
   if (key.startsWith('<D-')) {
@@ -413,10 +419,48 @@ export function onKey(e: KeyboardEvent): void {
       return
     }
   }
+  const doc = focusedDoc()
+  if (doc) {
+    if (!s.settings.vim) return
+    if (doc.insert()) {
+      if (insertCtrlW(doc, () => doc.deleteWord(), () => doc.leaveInsert(), key, e)) return
+      if (key === '<C-o>' || key === '<C-i>') {
+        e.preventDefault()
+        e.stopPropagation()
+        doc.leaveInsert()
+        command(key === '<C-o>' ? 'back' : 'forward').run()
+      }
+      return
+    }
+    // Normal mode: nothing types, and arrows and the like stay the page's.
+    const stop = () => {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    // : opens the command line from Visual mode too, so :w saves there.
+    if (key === ':') {
+      stop()
+      doc.leaveInsert()
+      store.openCmdline()
+      return
+    }
+    if (doc.busy() && doc.key(key)) return stop()
+    if (km.prompt.pending || key === s.settings.leader || key.startsWith('<C-w') || /^<C-[hjklio]>$/.test(key) || key === '<Tab>') {
+      stop()
+      feed(km.prompt, key)
+      return
+    }
+    if (doc.key(key) || key.length === 1 || /^<(CR|BS|Del|Space|S-.*)>$/.test(key)) stop()
+    return
+  }
   if (ed) {
     // Without Vim an editor keeps every key; its own <Esc> leaves it.
     if (!s.settings.vim) return
-    if (vimState(ed)?.insertMode && insertCtrlW(ed, key, e)) return
+    const leave = () => {
+      const cm = getCM(ed)
+      if (cm) Vim.exitInsertMode(cm as never)
+    }
+    if (vimState(ed)?.insertMode && insertCtrlW(ed, () => deleteGroupBackward(ed), leave, key, e)) return
     // Back and forward are the app's in Insert too, over Vim's one Normal
     // command: a doc you write in still goes back where you came from.
     if (vimState(ed)?.insertMode && (key === '<C-o>' || key === '<C-i>')) {

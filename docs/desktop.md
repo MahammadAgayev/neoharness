@@ -5,7 +5,7 @@ the TUI, so both show the same workspaces and threads at the same time, and a
 turn goes on when either one closes.
 
 It is an Electron app in `desktop/`: React and TypeScript, CodeMirror with Vim
-for the prompt and the artifact editor.
+for the prompt, and ProseMirror for the artifact page.
 
 ## Run it
 
@@ -90,11 +90,52 @@ What the TUI takes from `init.lua` for itself is in Settings instead.
   (`:colorscheme rose-pine-dawn`), or Nothing, which turns a default off.
   Your keys win over the defaults.
 
-An artifact opens as a document you can write in, as the TUI draws it:
-every line shows rendered, headings, lists, task boxes, tables, alerts and
-highlighted code, and the lines under the cursor show their markdown. There
-is no separate source mode. `:w` or `⌘S` saves; `⌘`-click opens a link or an
-artifact named in code.
+### Artifacts
+
+An artifact opens as a page: one centered column, about 90 characters
+wide, with the chat's type a size up. Headings, lists, task boxes,
+tables, quotes, alerts and highlighted code show rendered, and they stay
+rendered while you write, as in a word processor. No markdown shows in
+Insert mode.
+
+The keys are Vim's where they fit. Normal mode moves: `h j k l`, `w b e`,
+`0 $`, `gg G`, `{ }`, `<C-d> <C-u>`, `/` and `n N`. A block (a paragraph,
+a heading, a list item, a table cell) is Vim's line, so `dd`, `yy`, `p`
+and `o` act on blocks, and `cw`, `ciw`, `x`, `u` and `<C-r>` work as in
+Vim. `v` and `V` select. `i`, `a` or `o` start Insert; `<Esc>` leaves it.
+Normal mode types nothing. Without Vim (`:set novim`) the page is always
+in Insert, as a text editor is.
+
+In Insert, markdown at the start of a line makes the block: `# ` a
+heading, `- ` or `1. ` a list, `> ` a quote, ` ``` ` code, `[ ] ` a task.
+`**bold**`, `*italic*`, `` `code` `` and `~~struck~~` turn rich as you
+close them. `<Tab>` and `<S-Tab>` indent a list item; in a table `<Tab>`
+goes to the next cell and adds a row at the end. A click on a task box
+checks it. A link pasted over selected words links them. `:w` or `⌘S`
+saves; `⌘`-click opens a link, or an artifact named in code.
+
+What is saved is markdown, as agents write and read it. A block you did
+not touch is saved as the exact text it came from, with the blank lines
+around it; only a block you changed is written again, in plain GFM. So a
+save changes only the lines you changed, and the writer's diff and the
+merge stay small. Markdown the page has no block for (a link definition)
+shows as muted text and is kept as it is. `test/mdoc.test.ts` checks the
+round trip on the docs of this repository: unchanged text comes back
+byte for byte, and text with every block written again reads the same.
+`NEOHARNESS_ARTIFACTS=<folder>` adds the artifacts in a folder.
+
+Why ProseMirror: it keeps a document of typed blocks, so a heading stays
+a heading while you write in it, and `prosemirror-markdown` and
+`prosemirror-tables` give the markdown in and out and the tables. A
+CodeMirror live preview shows the markdown on the lines under the cursor,
+which is the raw text this page removes. Editors with their own markdown
+layer (Milkdown, Tiptap) add a framework over ProseMirror and change
+the text on save; here the untouched blocks must stay byte for byte.
+
+If an agent writes a new version while you edit, a line says so, and
+nothing in your edit changes. `:w` merges: the hub takes both sides when
+they changed different lines. When they changed the same lines, the save
+is refused and you take the changes one by one, as below.
 
 ### Docs
 
@@ -219,10 +260,10 @@ e2e` writes the screenshots named here to `test-results/`.
 ## Tests
 
 ```sh
-npm test           # unit tests: transcript, toasts, keys, search, themes, image tokens
+npm test           # unit tests: transcript, toasts, keys, search, themes, image tokens, the markdown round trip
 npm run e2e        # the app on a scratch hub and on a fake hub, with screenshots in test-results/
 NEOHARNESS_APP=dist/neoharness-darwin-arm64/neoharness.app/Contents/MacOS/neoharness npx playwright test cards   # the packaged app
-NEOHARNESS_LIVE=1 npx playwright test live   # one real turn with haiku
+NEOHARNESS_LIVE=1 npx playwright test live   # real turns with haiku: a reply, and an artifact the agent rewrites while you edit it
 NEOHARNESS_DEMO=1 npx playwright test demo   # records docs/demo/desktop.gif on the fake hub; needs ffmpeg
 ```
 

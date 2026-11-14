@@ -1,85 +1,16 @@
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { cssLanguage } from '@codemirror/lang-css'
-import { htmlLanguage } from '@codemirror/lang-html'
-import { javascriptLanguage, jsxLanguage, tsxLanguage, typescriptLanguage } from '@codemirror/lang-javascript'
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import { HighlightStyle, StreamLanguage, syntaxHighlighting, syntaxTree, type Language } from '@codemirror/language'
-import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile'
-import { go } from '@codemirror/legacy-modes/mode/go'
-import { python } from '@codemirror/legacy-modes/mode/python'
-import { rust } from '@codemirror/legacy-modes/mode/rust'
-import { shell } from '@codemirror/legacy-modes/mode/shell'
-import { standardSQL } from '@codemirror/legacy-modes/mode/sql'
-import { toml } from '@codemirror/legacy-modes/mode/toml'
-import { yaml } from '@codemirror/legacy-modes/mode/yaml'
-import { Compartment, EditorState, Transaction } from '@codemirror/state'
-import { EditorView, keymap } from '@codemirror/view'
-import { tags as t } from '@lezer/highlight'
-import { getCM, vim, Vim } from '@replit/codemirror-vim'
+import type { Node } from 'prosemirror-model'
+import { Selection, EditorState, TextSelection } from 'prosemirror-state'
+import { EditorView } from 'prosemirror-view'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { artifactsKey, editorPlugins, TaskItem } from '../lib/docedit'
+import { DocVim } from '../lib/docvim'
 import { hunks, lines, type Hunk } from '../lib/linediff'
-import { livePreview } from '../lib/livepreview'
-import { outline } from '../lib/markdown'
+import { MarkdownDoc } from '../lib/mdoc'
 import { store, useStore, type Doc, type Win } from '../store'
-import { editorKeys, editors, handlers, type WinAction } from './registry'
+import { docs, handlers, yank, type DocKeys, type WinAction } from './registry'
 import { CloseWindow } from './CloseWindow'
-
-const docTheme = EditorView.theme({
-  '&': { background: 'transparent', color: 'var(--text)', height: '100%' },
-  '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--font-text)', lineHeight: '1.7' },
-  // The column of a document, as a page.
-  '.cm-content': { caretColor: 'var(--iris)', padding: '32px max(32px, calc((100% - 680px) / 2)) 40vh' },
-  '.cm-cursor': { borderLeftColor: 'var(--iris)', borderLeftWidth: '2px' },
-  '.cm-fat-cursor': { background: 'var(--iris) !important', color: 'var(--base) !important' },
-  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { background: 'var(--hl-med) !important' },
-  '&:not(.cm-focused) .cm-cursorLayer': { display: 'none' },
-  '.cm-gutters': { display: 'none' },
-})
-
-const codeColors = HighlightStyle.define([
-  { tag: [t.keyword, t.controlKeyword, t.moduleKeyword, t.operatorKeyword], color: 'var(--pine)' },
-  { tag: [t.string, t.special(t.string), t.regexp], color: 'var(--gold)' },
-  { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--muted)', fontStyle: 'italic' },
-  { tag: [t.number, t.bool, t.null, t.atom], color: 'var(--rose)' },
-  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: 'var(--foam)' },
-  { tag: [t.typeName, t.className, t.tagName], color: 'var(--foam)' },
-  { tag: [t.propertyName, t.attributeName], color: 'var(--iris)' },
-])
-
-// Code blocks in these languages are highlighted; others show plain.
-const codeLanguages: Record<string, Language> = {
-  js: javascriptLanguage,
-  javascript: javascriptLanguage,
-  jsx: jsxLanguage,
-  ts: typescriptLanguage,
-  typescript: typescriptLanguage,
-  tsx: tsxLanguage,
-  html: htmlLanguage,
-  css: cssLanguage,
-  json: javascriptLanguage,
-  go: StreamLanguage.define(go),
-  py: StreamLanguage.define(python),
-  python: StreamLanguage.define(python),
-  rs: StreamLanguage.define(rust),
-  rust: StreamLanguage.define(rust),
-  sh: StreamLanguage.define(shell),
-  bash: StreamLanguage.define(shell),
-  shell: StreamLanguage.define(shell),
-  sql: StreamLanguage.define(standardSQL),
-  yaml: StreamLanguage.define(yaml),
-  yml: StreamLanguage.define(yaml),
-  toml: StreamLanguage.define(toml),
-  dockerfile: StreamLanguage.define(dockerFile),
-}
-
-// hunkAt is the change at a source line, as diffTake in the TUI: a line it
-// changes, or the line above lines it adds.
-function hunkAt(hs: Hunk[], line: number): number {
-  const i = hs.findIndex((h) => line >= h.mFrom && line < Math.max(h.mTo, h.mFrom + 1))
-  return i >= 0 ? i : hs.findIndex((h) => h.mFrom === h.mTo && h.mFrom === line + 1)
-}
+import 'prosemirror-view/style/prosemirror.css'
 
 function conflictHunks(name: string): Hunk[] | null {
   const d = store.state.docs[name]
@@ -87,9 +18,21 @@ function conflictHunks(name: string): Hunk[] | null {
   return hunks(lines(d.edit.text.split('\n'), d.text.split('\n')))
 }
 
-// DocEditor is the artifact as a document: rendered where you read, the
-// markdown where the cursor is, as the TUI shows it. A change starts an edit;
-// :w or ⌘S saves it.
+// blockStarts is the markdown line where each top-level block starts, so
+// ]c and do find the change in the block you are on.
+function blockStarts(md: MarkdownDoc, doc: Node): number[] {
+  const out: number[] = []
+  doc.forEach((_n, off, i) => {
+    const before = i === 0 ? '' : md.markdown(doc.copy(doc.content.cut(0, off))).replace(/\n+$/, '')
+    out.push(before ? before.split('\n').length + 1 : 0)
+  })
+  return out
+}
+
+// DocEditor is the artifact as a document you read and write in place:
+// headings, lists, tables and code stay rendered while you type, as in a
+// word processor, and what is saved is markdown. Vim's Normal mode moves
+// in it; i, a or o start Insert and <Esc> leaves it. :w or ⌘S saves.
 function DocEditor(props: {
   name: string
   text: string
@@ -100,113 +43,162 @@ function DocEditor(props: {
   onView: (v: EditorView | null) => void
 }) {
   const host = useRef<HTMLDivElement>(null)
+  const scroller = useRef<HTMLDivElement>(null)
   const vimOn = useStore((s) => s.settings.vim)
-  const comp = useRef(new Compartment())
   const viewRef = useRef<EditorView | null>(null)
+  const vimRef = useRef<DocVim | null>(null)
+  const md = useRef<MarkdownDoc | null>(null)
+  // last is the markdown the editor holds, so its own edit coming back as
+  // props is no new text.
+  const last = useRef(props.text)
   const onHunk = useRef(props.onHunk)
   onHunk.current = props.onHunk
-  const arts = useRef(props.artifacts)
-  arts.current = props.artifacts
+  const [find, setFind] = useState<string | null>(null)
 
   useEffect(() => {
-    const view = new EditorView({
-      parent: host.current!,
-      state: EditorState.create({
-        doc: props.text,
-        extensions: [
-          comp.current.of(store.state.settings.vim ? vim({ status: false }) : []),
-          history(),
-          keymap.of([indentWithTab, ...historyKeymap, ...defaultKeymap]),
-          markdown({ base: markdownLanguage, codeLanguages: (info) => codeLanguages[info.toLowerCase()] ?? null }),
-          syntaxHighlighting(codeColors),
-          livePreview(() => arts.current),
-          EditorView.lineWrapping,
-          docTheme,
-          EditorView.updateListener.of((u) => {
-            // A newer version or a merge comes in as remote: it is no edit.
-            if (u.docChanged && !u.transactions.some((tr) => tr.annotation(Transaction.remote)))
-              store.editText(props.name, u.state.doc.toString())
-            if (u.focusChanged) store.setInsert(u.view.hasFocus && (!store.state.settings.vim || !!getCM(u.view)?.state.vim?.insertMode))
-          }),
-          EditorView.domEventHandlers({
-            focus: () => store.focus(props.win),
-            // ⌘-click opens an artifact named in code, or a link.
-            mousedown: (e, v) => {
-              if (!e.metaKey) return false
-              const art = (e.target as HTMLElement).closest<HTMLElement>('[data-artifact]')?.dataset.artifact
-              if (art) {
-                void store.openArtifact(art)
-                return true
-              }
-              const pos = v.posAtCoords({ x: e.clientX, y: e.clientY })
-              for (let n = pos === null ? null : syntaxTree(v.state).resolveInner(pos, 1); n; n = n.parent) {
-                if (n.name !== 'Link') continue
-                const url = n.getChild('URL')
-                if (url) void window.nh.openExternal(v.state.sliceDoc(url.from, url.to))
-                return true
-              }
-              return false
-            },
-          }),
-        ],
-      }),
+    md.current = new MarkdownDoc(props.text)
+    last.current = props.text
+    let vimMode: DocVim | null = null
+    const leave = () => {
+      if (store.state.settings.vim) vimMode?.setMode('normal')
+    }
+    const view = new EditorView(host.current!, {
+      state: EditorState.create({ doc: md.current.doc, plugins: editorPlugins(leave) }),
+      nodeViews: { list_item: (node, v, getPos) => new TaskItem(node, v, getPos) },
+      attributes: { class: 'md doc-page', spellcheck: 'true' },
+      dispatchTransaction(tr) {
+        const v = viewRef.current!
+        v.updateState(v.state.apply(tr))
+        if (tr.docChanged && !tr.getMeta('remote')) {
+          const text = md.current!.markdown(v.state.doc)
+          last.current = text
+          store.editText(props.name, text)
+        }
+      },
+      handleDOMEvents: {
+        focus: () => {
+          store.focus(props.win)
+          store.setInsert(!store.state.settings.vim || vimMode?.mode === 'insert')
+          return false
+        },
+        blur: () => {
+          store.setInsert(false)
+          return false
+        },
+        // ⌘-click opens a link, or an artifact named in code.
+        mousedown: (v, e) => {
+          if (!e.metaKey) return false
+          const el = e.target as HTMLElement
+          const art = el.closest<HTMLElement>('[data-artifact]')?.dataset.artifact
+          if (art) {
+            e.preventDefault()
+            void store.openArtifact(art)
+            return true
+          }
+          const a = el.closest('a')
+          if (a?.getAttribute('href')) {
+            e.preventDefault()
+            void window.nh.openExternal(a.getAttribute('href')!)
+            return true
+          }
+          void v
+          return false
+        },
+      },
+      // A link pasted over selected words makes them a link.
+      handlePaste(v, e) {
+        const url = e.clipboardData?.getData('text/plain').trim() ?? ''
+        if (v.state.selection.empty || !/^https?:\/\/\S+$/.test(url)) return false
+        const { from, to } = v.state.selection
+        v.dispatch(v.state.tr.addMark(from, to, v.state.schema.marks.link.create({ href: url })))
+        return true
+      },
     })
     viewRef.current = view
     props.onView(view)
-    editors.add(view)
-    const cm = getCM(view)
-    const onMode = (e: { mode: string }) => store.setInsert(e.mode === 'insert')
-    cm?.on('vim-mode-change', onMode)
-    const line = () => view.state.doc.lineAt(view.state.selection.main.head).number - 1
+    const vim = new DocVim(view, () => scroller.current, {
+      mode: (m) => store.setInsert(view.hasFocus() && m === 'insert'),
+      find: () => setFind(''),
+      yank: (t) => (yank.text = t),
+      say: (t) => store.say(t, 'love'),
+    })
+    vimMode = vim
+    vimRef.current = vim
+    if (!store.state.settings.vim) vim.setMode('insert')
+    else view.dom.classList.add('vim-normal')
+    view.dispatch(view.state.tr.setMeta(artifactsKey, props.artifacts).setMeta('remote', true))
+
+    // block is the markdown lines of the block under the cursor.
+    const block = () => {
+      const starts = blockStarts(md.current!, view.state.doc)
+      const i = view.state.selection.$head.index(0)
+      return { starts, from: starts[i], to: starts[i + 1] ?? Infinity }
+    }
     const toLine = (n: number) => {
-      const l = view.state.doc.line(Math.min(n, view.state.doc.lines - 1) + 1)
-      view.dispatch({ selection: { anchor: l.from }, scrollIntoView: true })
+      const { starts } = block()
+      let i = 0
+      while (i + 1 < starts.length && starts[i + 1] <= n) i++
+      let at = 0
+      view.state.doc.forEach((_n, off, k) => {
+        if (k === i) at = off
+      })
+      view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(at + 1))).scrollIntoView())
     }
     // In a conflict ]c [c move between changes and do dp take one, as in
-    // Neovim's diff mode; Vim gets d back when o or p does not follow.
+    // Neovim's diff mode; d goes back to Vim when o or p does not follow.
     let held = ''
-    editorKeys.set(view, (key) => {
-      const hs = conflictHunks(props.name)
-      if (held) {
-        const first = held
-        held = ''
-        if (hs && (first === ']' || first === '[') && key === 'c') {
-          const at = line()
-          const h = first === ']' ? hs.find((x) => x.mFrom > at) : [...hs].reverse().find((x) => x.mFrom < at)
-          if (h) {
-            toLine(h.mFrom)
-            onHunk.current(hs.indexOf(h))
+    const keys: DocKeys = {
+      hasFocus: () => view.hasFocus(),
+      insert: () => vim.mode === 'insert',
+      busy: () => held !== '' || vim.busy(),
+      leaveInsert: () => vim.setMode('normal'),
+      deleteWord: () => vim.deleteWordBack(),
+      key: (key) => {
+        const hs = conflictHunks(props.name)
+        if (held) {
+          const first = held
+          held = ''
+          if (hs && (first === ']' || first === '[') && key === 'c') {
+            const b = block()
+            const h = first === ']' ? hs.find((x) => x.mFrom >= b.to) : [...hs].reverse().find((x) => x.mFrom < b.from)
+            if (h) {
+              toLine(h.mFrom)
+              onHunk.current(hs.indexOf(h))
+            }
+            return true
           }
+          if (hs && first === 'd' && (key === 'o' || key === 'p')) {
+            const b = block()
+            const i = hs.findIndex((h) => h.mFrom <= b.to && Math.max(h.mTo, h.mFrom + 1) > b.from)
+            if (i < 0) store.say('no change here', 'muted')
+            else store.takeHunk(props.name, i)
+            return true
+          }
+          vim.key(first)
+          return vim.key(key)
+        }
+        if (hs && !vim.busy() && (key === ']' || key === '[' || key === 'd')) {
+          held = key
           return true
         }
-        if (hs && first === 'd' && (key === 'o' || key === 'p')) {
-          const i = hunkAt(hs, line())
-          if (i < 0) store.say('no change here', 'muted')
-          else {
-            store.takeHunk(props.name, i)
-            requestAnimationFrame(() => toLine(hs[i].mFrom))
-          }
-          return true
-        }
-        if (cm) {
-          Vim.handleKey(cm as never, first, 'user')
-          Vim.handleKey(cm as never, key, 'user')
-        }
-        return true
-      }
-      if (hs && (key === ']' || key === '[' || key === 'd')) {
-        held = key
-        return true
-      }
-      return false
-    })
-    // gO picks a heading: the cursor goes to its line.
+        return vim.key(key)
+      },
+    }
+    docs.add(keys)
+
+    // gO picks a heading: the cursor goes to it.
     const onHeading = (e: Event) => {
       const d = (e as CustomEvent<{ win: number; index: number }>).detail
       if (d.win !== props.win) return
-      const h = outline(view.state.doc.toString())[d.index]
-      if (h) {
-        toLine(h.line)
+      let k = 0
+      let at = -1
+      view.state.doc.descendants((n, pos) => {
+        if (at >= 0) return false
+        if (n.type.name === 'heading' && k++ === d.index) at = pos + 1
+        return !n.isTextblock
+      })
+      if (at >= 0) {
+        view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)).scrollIntoView())
         view.focus()
       }
     }
@@ -215,28 +207,51 @@ function DocEditor(props: {
     if (store.writeDoc === props.name) {
       store.writeDoc = ''
       view.focus()
-      view.dispatch({ selection: { anchor: view.state.doc.length }, scrollIntoView: true })
-      if (cm && store.state.settings.vim) Vim.handleKey(cm as never, 'i', 'mapping')
+      // Under the title, on a line of its own; an empty line is no change.
+      const tr = view.state.tr
+      if (view.state.doc.lastChild?.type.name === 'heading') tr.insert(tr.doc.content.size, view.state.schema.nodes.paragraph.create())
+      view.dispatch(tr.setSelection(Selection.atEnd(tr.doc)).scrollIntoView())
+      vim.setMode('insert')
     }
     return () => {
       document.removeEventListener('nh:heading', onHeading)
-      cm?.off('vim-mode-change', onMode)
-      editors.delete(view)
+      docs.delete(keys)
       props.onView(null)
       view.destroy()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.name])
 
-  // A newer version, a merge or :e! changes the text under the editor.
+  // A newer version, a merge, a change taken in a conflict or :e! changes
+  // the text under the editor. Only the blocks that differ are replaced,
+  // so the cursor stays where it was.
   useEffect(() => {
     const v = viewRef.current
-    if (v && v.state.doc.toString() !== props.text)
-      v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.text }, annotations: Transaction.remote.of(true) })
+    if (!v || props.text === last.current) return
+    last.current = props.text
+    md.current = new MarkdownDoc(props.text)
+    const next = md.current.doc
+    const start = v.state.doc.content.findDiffStart(next.content)
+    if (start === null) return
+    const end = v.state.doc.content.findDiffEnd(next.content)!
+    let { a, b } = end
+    const over = start - Math.min(a, b)
+    if (over > 0) {
+      a += over
+      b += over
+    }
+    const tr = v.state.tr.replace(start, a, next.slice(start, b)).setMeta('remote', true).setMeta('addToHistory', false)
+    v.dispatch(tr)
   }, [props.text])
 
   useEffect(() => {
-    viewRef.current?.dispatch({ effects: comp.current.reconfigure(vimOn ? vim({ status: false }) : []) })
+    viewRef.current?.dispatch(viewRef.current.state.tr.setMeta(artifactsKey, props.artifacts).setMeta('remote', true))
+  }, [props.artifacts])
+
+  const wasVim = useRef(vimOn)
+  useEffect(() => {
+    if (wasVim.current !== vimOn) vimRef.current?.setMode(vimOn ? 'normal' : 'insert')
+    wasVim.current = vimOn
   }, [vimOn])
 
   // The window in focus has the cursor in its document; a window that
@@ -245,11 +260,36 @@ function DocEditor(props: {
   const over = useStore((s) => s.cmdline !== null || !!s.picker || s.settingsOpen || s.helpOpen || !!s.cost || !!s.choice || s.newDoc)
   useEffect(() => {
     const v = viewRef.current
-    if (props.focused && !over && !v?.hasFocus) v?.focus()
-    else if (!props.focused && v?.hasFocus) v.contentDOM.blur()
-  }, [props.focused, over])
+    if (find !== null) return
+    if (props.focused && !over && !v?.hasFocus()) v?.focus()
+    else if (!props.focused && v?.hasFocus()) (v.dom as HTMLElement).blur()
+  }, [props.focused, over, find])
 
-  return <div className="doc-editor" ref={host} />
+  return (
+    <>
+      {find !== null && (
+        <div className="findbar">
+          <span className="t-iris">/</span>
+          <input
+            autoFocus
+            value={find}
+            placeholder="search this document"
+            onChange={(e) => setFind(e.target.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation()
+              if (e.key === 'Enter') {
+                vimRef.current?.find(find, 1)
+                setFind(null)
+              } else if (e.key === 'Escape') setFind(null)
+            }}
+          />
+        </div>
+      )}
+      <div className="doc-editor" ref={scroller}>
+        <div className="doc-host" ref={host} />
+      </div>
+    </>
+  )
 }
 
 // Conflict is what a refused :w shows: your edit against the newer version,

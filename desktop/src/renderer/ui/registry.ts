@@ -44,6 +44,19 @@ export const handlers = new Map<number, WinHandler>()
 // one takes the keys and in which Vim mode it is.
 export const editors = new Set<EditorView>()
 
+// DocKeys is a rich-text document on screen (an artifact) with its own Vim
+// layer: the keymap sends it keys as it does to a CodeMirror editor.
+export interface DocKeys {
+  hasFocus(): boolean
+  insert(): boolean
+  busy(): boolean
+  key(key: string): boolean
+  leaveInsert(): void
+  deleteWord(): void
+}
+
+export const docs = new Set<DocKeys>()
+
 // lastYank is what y yanked last; p puts it in the prompt.
 export const yank = { text: '' }
 
