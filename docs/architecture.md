@@ -73,6 +73,11 @@ UUID.
   that end close together make one turn. It decides with `notify` what
   reaches the person; these turns do not count toward the pause. With
   `notify = "threads"` (the default), only the person's messages wake it.
+- The coordinator's chat is the person's. Threads cannot message the
+  coordinator; it learns of them from the board. A turn that only the hub's
+  report about threads starts is quiet: its message, reply, tool calls and
+  turn end stay out of the chat. A notice, a question or an error from it
+  still shows.
 - Send now stops the running turn, so the queue goes in the next turn at
   once. Stop leaves the queue waiting: the thread is paused until the
   person writes or sends now.
@@ -88,7 +93,7 @@ so no thread can act for another thread or another workspace.
 
 | Who | Tools |
 |---|---|
-| all sessions | `whoami`, `workspace_status`, `send_message`, `ask_user`, `wake_me`, `write_artifact`, `read_artifact` |
+| all sessions | `whoami`, `workspace_status`, `send_message` (to threads only), `ask_user`, `wake_me`, `write_artifact`, `read_artifact` |
 | threads only | `recap`, `read_thread` |
 | coordinator only | `open_thread`, `resolve_thread`, `notify`, `workspace_recap` |
 | internal | `permission_prompt` |

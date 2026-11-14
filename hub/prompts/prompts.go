@@ -55,7 +55,7 @@ func Reports(names []string) string {
 
 // RecapDue wakes the coordinator to write the workspace recap.
 func RecapDue() string {
-	return "The threads that ran have ended their turns. Write the top of the workspace summary with workspace_recap."
+	return "The threads that ran have ended their turns. Write the top of the workspace summary with workspace_recap. Your reply is not shown."
 }
 
 // RecapAsked is the person asking a thread for a fresh recap.

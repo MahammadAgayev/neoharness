@@ -181,6 +181,9 @@ type thread struct {
 	// autoTried stops a summary that fails from being asked for again
 	// before every turn of the same session.
 	autoTried bool
+	// quiet marks a coordinator turn that only the hub's report started: it
+	// manages and says nothing in the person's chat.
+	quiet bool
 }
 
 // turnSeen is what a turn did that the recap shows as fact: the commands it
@@ -962,6 +965,9 @@ func (h *Hub) send(workspaceName, from, to, text string, images [][]byte) (*thre
 	if from == to {
 		return nil, errors.New("a thread cannot message itself")
 	}
+	if to == model.Coordinator && from != model.User {
+		return nil, errors.New("threads do not message the coordinator: say how your work stands with recap, and ask the person with ask_user")
+	}
 	switch {
 	case th.t.Resolved && from == model.User:
 		// Writing to it says the person wants it back.
@@ -1134,7 +1140,8 @@ func (h *Hub) clear(ws *space, th *thread) error {
 
 func (h *Hub) enqueue(ws *space, th *thread, from, text string, images ...string) {
 	t := th.t
-	m := workspace.Message{From: from, Text: text, At: time.Now().UTC(), Images: images}
+	// A report is the hub's own, so it never shows in the chat.
+	m := workspace.Message{From: from, Text: text, At: time.Now().UTC(), Images: images, Shown: from == reportFrom}
 	// The message goes into the transcript when its turn starts (kick), so
 	// the transcript shows what the agent read in the order it read it. An
 	// answer goes before the messages its question held.
@@ -2071,6 +2078,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 		}
 	}
 	t.InFlight = batch
+	th.quiet = !slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From != reportFrom })
 	now := time.Now().UTC()
 	t.Turns = append(slices.DeleteFunc(t.Turns, func(at time.Time) bool { return now.Sub(at) > 24*time.Hour }), now)
 
@@ -2235,6 +2243,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		t.Recap = recapOf(t.Recap, th.recap, th.seen, asked, res.Text, failure)
 	}
 	th.seen, th.recap = turnSeen{}, nil
+	th.quiet = false
 	h.changed(ws, th)
 	if h.ctx.Err() == nil {
 		h.kick(ws, th)
@@ -2558,7 +2567,7 @@ func (h *Hub) publishWorkspace(ws *space) {
 
 // event appends to a transcript and tells subscribers. Callers hold h.mu.
 func (h *Hub) event(ws *space, th *thread, e model.Event) {
-	if th.deleted {
+	if th.deleted || th.quiet && quietKind(e.Kind) {
 		return
 	}
 	if e.At.IsZero() {
@@ -2566,6 +2575,16 @@ func (h *Hub) event(ws *space, th *thread, e model.Event) {
 	}
 	_ = workspace.AppendEvent(ws.p.Name, th.t.Name, e)
 	h.publish(model.Update{Kind: model.UpdateEvent, Workspace: ws.p.Name, Thread: th.t.Name, Event: &e})
+}
+
+// quietKind says an event is the turn's talk, which a quiet turn keeps out of
+// the chat. Errors, notices and questions still show.
+func quietKind(k model.EventKind) bool {
+	switch k {
+	case model.EventText, model.EventTool, model.EventProgress, model.EventTurnEnd:
+		return true
+	}
+	return false
 }
 
 // Subscribe returns a channel of every update from now on. A subscriber that

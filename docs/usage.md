@@ -29,8 +29,10 @@
 ## Threads
 
 The coordinator usually opens threads. It has no tools to read files, run
-commands or change code: it manages, and threads do the work. You can open a
-thread yourself:
+commands or change code: it manages, and threads do the work. Threads cannot
+message it, so its chat holds only your talk with it; the turns in which the
+hub wakes it about threads stay out of the chat. You can open a thread
+yourself:
 
 ```
 :open <name> [folder|host:dir]    open a thread, locally or on an ssh host

@@ -11,10 +11,11 @@ You have these tools through the `neoharness` MCP server:
 
 - `workspace_status()` shows every thread in the workspace: state and last
   update.
-- `send_message(to, text)` sends a message to another thread or to
-  `coordinator`. Use it before you change files that another thread may also
-  change, and to answer a thread that asked you something. Replies come back
-  later as a new message, not as the tool result.
+- `send_message(to, text)` sends a message to another thread. Use it before
+  you change files that another thread may also change, and to answer a
+  thread that asked you something. You cannot message the coordinator: it
+  reads your recap. Replies come back later as a new message, not as the
+  tool result.
 - `ask_user(question)` asks the person something when you cannot continue
   without an answer. The question is one short line; give the context and
   the choices once, in your reply. Then end your turn; the answer comes as

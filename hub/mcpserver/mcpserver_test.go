@@ -148,7 +148,10 @@ func TestCoordinatorOpensThreadsAndThreadsCannot(t *testing.T) {
 	if !strings.Contains(out, "api-tests") || !strings.Contains(out, "coordinator (you)") {
 		t.Errorf("workspace_status = %q", out)
 	}
-	if out, isErr := call(t, th, "send_message", map[string]any{"to": "coordinator", "text": "done?"}); isErr {
+	if out, isErr := call(t, th, "send_message", map[string]any{"to": "coordinator", "text": "done?"}); !isErr || !strings.Contains(out, "recap") {
+		t.Fatalf("a thread messaged the coordinator: %q", out)
+	}
+	if out, isErr := call(t, coord, "send_message", map[string]any{"to": "api-tests", "text": "add a test"}); isErr {
 		t.Fatalf("send_message: %s", out)
 	}
 	_ = h

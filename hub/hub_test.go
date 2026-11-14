@@ -260,7 +260,7 @@ func TestCoordinatorTurnsStartWithTheBoard(t *testing.T) {
 		}
 		stateIs(t, h, "demo", n, model.StateIdle)
 	}
-	_ = h.Send("demo", "lint", model.Coordinator, "lint done")
+	_ = h.Send("demo", model.User, model.Coordinator, "lint done")
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
 	_ = h.Send("demo", model.User, model.Coordinator, "status?")
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
@@ -274,7 +274,7 @@ func TestCoordinatorTurnsStartWithTheBoard(t *testing.T) {
 	if len(coord) != 2 {
 		t.Fatalf("%d coordinator turns, want 2", len(coord))
 	}
-	if want := "Threads:\n- docs: idle, ended a turn. Asked: work. Reply: ok. Seen by neoharness: no commands.\n- lint: idle.\n\n---\n\n"; !strings.HasPrefix(coord[0], want) {
+	if want := "Threads:\n- docs: idle, ended a turn. Asked: work. Reply: ok. Seen by neoharness: no commands.\n- lint: idle, ended a turn. Asked: work. Reply: ok. Seen by neoharness: no commands.\n\n---\n\n"; !strings.HasPrefix(coord[0], want) {
 		t.Errorf("first turn = %q, want it to start with %q", coord[0], want)
 	}
 	if want := "Threads:\n- docs: idle.\n- lint: idle.\n\n---\n\n"; !strings.HasPrefix(coord[1], want) {
@@ -435,7 +435,7 @@ func askThenHold(t *testing.T) (*Hub, *fake) {
 		evs, _ := h.Events("demo", model.Coordinator, 50)
 		return slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventTurnEnd })
 	})
-	_ = h.Send("demo", "docs", model.Coordinator, "fyi")
+	hubMessage(h, wakeFrom, "fyi")
 	return h, f
 }
 
@@ -1836,8 +1836,8 @@ func TestStopHoldsTheQueue(t *testing.T) {
 		t.Fatalf("%d turns; the queued message must wait", n)
 	}
 
-	// A thread's message does not start it again; <CR> on the queued one does.
-	_ = h.Send("demo", "docs", model.Coordinator, "fyi")
+	// A wake-up does not start it again; <CR> on the queued one does.
+	hubMessage(h, wakeFrom, "fyi")
 	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
 	if err := h.SendNow("demo", model.Coordinator, ""); err != nil {
 		t.Fatal(err)
@@ -2917,6 +2917,63 @@ func TestThreadsThatEndTogetherWakeTheCoordinatorOnceForTheWorkspaceRecap(t *tes
 	}
 }
 
+// hubMessage queues a message from the hub itself for the coordinator of
+// "demo", as a wake-up or a report does.
+func hubMessage(h *Hub, from, text string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws := h.workspaces["demo"]
+	h.enqueue(ws, ws.threads[model.Coordinator], from, text)
+}
+
+// TestThreadsDoNotMessageTheCoordinator: the coordinator's chat is the
+// person's and the coordinator's; threads say how they stand with recap.
+func TestThreadsDoNotMessageTheCoordinator(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	for _, n := range []string{"api", "docs"} {
+		if err := h.OpenThread("demo", model.Coordinator, n, "work", ""); err != nil {
+			t.Fatal(err)
+		}
+		stateIs(t, h, "demo", n, model.StateIdle)
+	}
+	if err := h.Send("demo", "api", model.Coordinator, "done"); err == nil || !strings.Contains(err.Error(), "recap") {
+		t.Fatalf("err = %v, want a refusal that points to recap", err)
+	}
+	if err := h.Send("demo", "api", "docs", "I change README.md"); err != nil {
+		t.Fatalf("a thread messages a thread: %v", err)
+	}
+}
+
+// TestTurnsAboutThreadsStayOutOfTheCoordinatorChat: the hub wakes the
+// coordinator to manage; that turn says nothing in its chat, but what it
+// shows the person on purpose, as a notice, still shows.
+func TestTurnsAboutThreadsStayOutOfTheCoordinatorChat(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if strings.Contains(req.Prompt, "workspace_recap") {
+			_ = h.Notify("demo", model.Coordinator, "tests are done", false)
+		}
+		return agent.Result{Text: "Recap written."}
+	}
+	pinned(t, h, "demo")
+	hubMessage(h, reportFrom, prompts.RecapDue())
+	eventually(t, "the recap turn", func() bool { return len(f.requests()) == 1 })
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	evs, _ := h.Events("demo", model.Coordinator, 50)
+	if len(evs) != 1 || evs[0].Kind != model.EventNotice {
+		t.Fatalf("events = %+v, want only the notice", evs)
+	}
+	// The person's own turn shows as before.
+	_ = h.Send("demo", model.User, model.Coordinator, "status?")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	evs, _ = h.Events("demo", model.Coordinator, 50)
+	if !slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventTurnEnd }) {
+		t.Fatalf("events = %+v, want the person's turn", evs)
+	}
+}
+
 func TestTheRecapWakeIsOffWhenTheSettingIs(t *testing.T) {
 	defer func(d time.Duration) { reportDelay = d }(reportDelay)
 	reportDelay = 10 * time.Millisecond
@@ -2985,7 +3042,7 @@ func TestImagesAreChecked(t *testing.T) {
 			return h.Send("demo", model.User, model.Coordinator, "x", slices.Repeat([][]byte{pngImage}, model.MaxImages+1)...)
 		},
 		"with a command": func() error { return h.Send("demo", model.User, model.Coordinator, "/model big", pngImage) },
-		"from an agent":  func() error { return h.Send("demo", "api", model.Coordinator, "x", pngImage) },
+		"from an agent":  func() error { return h.Send("demo", model.Coordinator, "api", "x", pngImage) },
 	} {
 		if err := send(); err == nil {
 			t.Errorf("%s: want an error", what)

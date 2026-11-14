@@ -61,7 +61,7 @@ func bearer(r *http.Request) string {
 type empty struct{}
 
 type sendIn struct {
-	To   string `json:"to" jsonschema:"thread name, or coordinator"`
+	To   string `json:"to" jsonschema:"thread name"`
 	Text string `json:"text" jsonschema:"the message"`
 }
 
@@ -184,7 +184,7 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			return text(body), nil, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "send_message", Description: "Send a message to another thread or to the coordinator. It arrives as their next turn; replies come back to you the same way."},
+	mcp.AddTool(s, &mcp.Tool{Name: "send_message", Description: "Send a message to a thread. It arrives as their next turn; replies come back to you the same way."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in sendIn) (*mcp.CallToolResult, any, error) {
 			if err := h.Send(p, me, in.To, in.Text); err != nil {
 				return nil, nil, err
