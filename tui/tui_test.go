@@ -28,6 +28,7 @@ type fakeClient struct {
 	opened     []string
 	resolved   []string
 	recaps     []string
+	seen       []string
 	deleted    []string
 	folders    []string
 	locals     []string
@@ -139,6 +140,10 @@ func (f *fakeClient) Unqueue(p, t string, at time.Time) error {
 }
 func (f *fakeClient) AskRecap(p, t string) error {
 	f.recaps = append(f.recaps, t)
+	return nil
+}
+func (f *fakeClient) SeenRecap(p, t string) error {
+	f.seen = append(f.seen, t)
 	return nil
 }
 func (f *fakeClient) Resolve(p, t string) error {
@@ -3552,7 +3557,7 @@ func TestFailedTurnToastStaysAnError(t *testing.T) {
 	}
 }
 
-func TestARecapShowsUnderItsRowAndAtTheTopOfTheThread(t *testing.T) {
+func TestARecapShowsUnderItsRowAndInTheThreadsBox(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	v := h.a.threads["api-tests"]
@@ -3574,20 +3579,29 @@ func TestARecapShowsUnderItsRowAndAtTheTopOfTheThread(t *testing.T) {
 		t.Errorf("an idle row with a recap drops its old report, and a running row shows no recap:\n%s", s)
 	}
 
+	// Above the prompt there is no recap any more; :recap opens the box.
 	h.press("<Esc>", ":b api-tests", "<CR>")
+	if strings.Contains(h.screen(), "asked    write") {
+		t.Fatalf("the recap shows above the prompt:\n%s", h.screen())
+	}
+	h.press(":recap", "<CR>")
+	h.see("api-tests · idle")
 	h.see("asked    write the api tests")
 	h.see("outcome  Added 12 tests")
 	h.see("open     keep slow test?")
 	h.see("ran      ✗ golangci-lint run · go test ./... · +1 more")
 	h.see("changed  api_test.go · ◇ test-plan")
+	if s := h.screen(); strings.Index(s, "asked    write") > strings.Index(s, "›") {
+		t.Errorf("the box is not at the top of the window:\n%s", s)
+	}
 
 	long := strings.Repeat("word ", 60)
 	v.Recap = &model.Recap{Asked: "write the api tests", Outcome: long + "END"}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
 	h.see("outcome  word word")
-	if rows := strings.Count(h.screen(), "         word word"); rows != 2 || strings.Contains(h.screen(), "END") {
-		t.Errorf("a long outcome wraps to 3 rows at most, the last cut; %d more rows:\n%s", rows, h.screen())
+	if strings.Contains(h.screen(), "END") {
+		t.Errorf("a long outcome wraps to 3 rows at most, the last cut:\n%s", h.screen())
 	}
 
 	v.Recap = &model.Recap{Asked: "write the api tests", Outcome: "All tests pass.", FromReply: true}
@@ -3601,10 +3615,15 @@ func TestARecapShowsUnderItsRowAndAtTheTopOfTheThread(t *testing.T) {
 	h.a.draw()
 	h.see("failed   the agent failed: boom")
 	h.see("✗ the agent failed: boom")
+
+	// q closes it, and tells the hub the person saw it.
+	h.press("q")
+	if strings.Contains(h.screen(), "failed   the agent") || !slices.Equal(h.hub.seen, []string{"api-tests"}) {
+		t.Fatalf("q: seen %v\n%s", h.hub.seen, h.screen())
+	}
 }
 
-// A row shows the hub's headline of an outcome; the recap above the prompt
-// holds all of it.
+// A row shows the hub's headline of an outcome; the box holds all of it.
 func TestARecapRowShowsTheFirstSentence(t *testing.T) {
 	h := start(t)
 	h.openDemo()
@@ -3616,7 +3635,7 @@ func TestARecapRowShowsTheFirstSentence(t *testing.T) {
 	if strings.Contains(h.screen(), "auth paths") {
 		t.Errorf("the row shows more than the first sentence:\n%s", h.screen())
 	}
-	h.press("<Esc>", ":b api-tests", "<CR>")
+	h.press("<Esc>", ":b api-tests", "<CR>", ":recap", "<CR>")
 	h.see("outcome  Added 12 tests. They cover")
 	h.see("v1.2 errors.")
 }
@@ -3634,65 +3653,191 @@ func TestRecapBangAsksForAFreshRecap(t *testing.T) {
 	if !slices.Equal(h.hub.recaps, want) {
 		t.Fatalf("asked %v, want %v", h.hub.recaps, want)
 	}
-	if !h.a.recapOn() {
-		t.Error("asking for a recap hides it")
+	if h.a.recapBox != "auth-refactor" {
+		t.Errorf("box = %q: asking for a recap opens its box", h.a.recapBox)
 	}
 }
 
-func TestTheCoordinatorsWindowShowsTheWorkspaceRecapAboveItsPrompt(t *testing.T) {
-	h := start(t)
-	h.openDemo()
-	// The hub counts; the window only lays the counts out.
+// news gives the demo workspace a recap the person has not seen.
+func (h *neoharness) news() model.WorkspaceView {
 	ws := h.a.workspaces[0]
-	ws.Counts = map[model.State]int{model.StateRunning: 1, model.StateIdle: 1}
-	h.a.apply(model.Update{Kind: model.UpdateWorkspace, Workspace: "demo", Summary: &ws})
-	h.a.draw()
-	// With threads open and no recap yet, the counts show.
-	h.see("  ● 1 running · 1 idle")
-	at := time.Now().Add(-time.Hour)
 	ws.Counts = map[model.State]int{model.StateWaiting: 1, model.StateRunning: 1, model.StateIdle: 2}
+	ws.RecapUnseen = true
 	ws.Recap = &model.WorkspaceRecap{
 		Goal:     "Move auth into sessions, keep the public API",
 		Lines:    []string{"answer lint first: migr waits on its API choice"},
-		At:       at,
+		At:       time.Now().Add(-time.Hour),
 		Overlaps: []model.Overlap{{Path: "user/lookup.go", Threads: []string{"auth-refactor", "api-tests"}}},
 		Failed:   1,
 		Newer:    1,
 	}
 	h.a.apply(model.Update{Kind: model.UpdateWorkspace, Workspace: "demo", Summary: &ws})
+	v := h.a.threads["api-tests"]
+	v.Recap = &model.Recap{Outcome: "Added 12 tests. More.", Headline: "Added 12 tests."}
+	v.RecapUnseen = true
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	for _, n := range []string{"migr", "flaky"} {
+		v := model.ThreadView{Workspace: "demo", Name: n, Role: model.RoleThread, State: model.StateIdle}
+		if n == "migr" {
+			v.State, v.Permission = model.StateWaiting, &model.Permission{Tool: "Bash", Detail: "psql -c drop"}
+		} else {
+			v.Recap, v.RecapUnseen = &model.Recap{Error: "crashed on purpose"}, true
+		}
+		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: n, View: &v})
+	}
 	h.a.draw()
-	h.see("  Move auth into sessions, keep the public API")
-	h.see("  ◆ 1 waits for you · ✗ 1 failed · ● 1 running · 1 idle")
-	h.see("  auth-refactor and api-tests both edited user/lookup.go")
-	h.see("  answer lint first: migr waits on its API choice")
-	h.see("  as of " + at.Local().Format("15:04") + " · 1 thread ended since")
-	// It sits under the transcript, just above the prompt.
-	rows := strings.Split(h.screen(), "\n")
-	row := func(text string) int {
-		return slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, text) })
+	return ws
+}
+
+// clock makes the TUI's time a value the test moves.
+func (h *neoharness) clock() *time.Time {
+	now := time.Now()
+	h.a.now = func() time.Time { return now }
+	return &now
+}
+
+// TestTheWorkspaceBoxShowsWhenThePersonComesBackToNews: away for minutes,
+// the person comes back to a box at the top that says how the workspace
+// stands; closing it marks it seen in the hub.
+func TestTheWorkspaceBoxShowsWhenThePersonComesBackToNews(t *testing.T) {
+	h := start(t)
+	now := h.clock()
+	h.openDemo()
+	h.news()
+	if h.a.recapBox != "" {
+		t.Fatal("the box showed while the person was here")
 	}
-	if t1, r1, p1 := row("Opened auth-refactor"), row("answer lint first"), row("›"); !(t1 < r1 && r1 < p1) {
-		t.Errorf("transcript %d, recap %d, prompt %d: want the recap between them:\n%s", t1, r1, p1, h.screen())
+	// A short break is not coming back: the toasts said what came.
+	h.a.handle(tcell.NewEventFocus(false))
+	*now = now.Add(time.Minute)
+	h.a.handle(tcell.NewEventFocus(true))
+	if h.a.recapBox != "" {
+		t.Fatal("the box showed after a minute away")
 	}
-	// :recap hides it, and again shows it.
-	h.press(":recap", "<CR>")
+	h.a.handle(tcell.NewEventFocus(false))
+	*now = now.Add(model.RecapAway)
+	h.a.handle(tcell.NewEventFocus(true))
+	h.a.draw()
+	h.see("demo · Move auth into sessions, keep the public API")
+	h.see("◆ 1 waits for you · ✗ 1 failed · ● 1 running · 1 idle")
+	h.see("◆ migr")
+	h.see("permission · Bash psql -c drop")
+	h.see("✗ flaky")
+	h.see("crashed on purpose")
+	h.see("✓ api-tests")
+	h.see("Added 12 tests.")
+	h.see("● auth-refactor")
+	h.see("moving store")
+	h.see("answer lint first: migr waits on its API choice")
+	h.see("auth-refactor and api-tests both edited user/lookup.go")
+	// What needs the person first, then what failed, came out, still runs.
+	s := h.screen()
+	if !(strings.Index(s, "◆ migr") < strings.Index(s, "✗ flaky") && strings.Index(s, "✗ flaky") < strings.Index(s, "✓ api-tests") && strings.Index(s, "✓ api-tests") < strings.Index(s, "● auth-refactor")) {
+		t.Errorf("order:\n%s", s)
+	}
+	// Other keys still work under it; Esc closes it and the hub keeps the mark.
+	h.press("k")
+	if h.a.recapBox == "" {
+		t.Fatal("a motion closed the box")
+	}
+	h.press("<Esc>")
+	if h.a.recapBox != "" || !slices.Equal(h.hub.seen, []string{model.Coordinator}) {
+		t.Fatalf("Esc: box %q, seen %v", h.a.recapBox, h.hub.seen)
+	}
 	if strings.Contains(h.screen(), "answer lint first") {
-		t.Fatalf(":recap did not hide the recap:\n%s", h.screen())
+		t.Errorf("the box stays:\n%s", h.screen())
 	}
-	h.press(":recap", "<CR>")
-	h.see("answer lint first")
-
-	// In a short window only the counts stay.
-	h.s.SetSize(120, 13)
-	h.a.draw()
-	h.see("◆ 1 waits for you")
-	if s := h.screen(); strings.Contains(s, "answer lint first") || strings.Contains(s, "Move auth into") {
-		t.Errorf("a short window keeps only the counts:\n%s", s)
-	}
-
 	// The workspaces screen counts the failed threads too.
-	h.s.SetSize(120, 36)
-	h.a.apply(model.Update{Kind: model.UpdateWorkspace, Workspace: "demo", Summary: &ws})
 	h.press(":workspaces", "<CR>")
 	h.see("✗ 1")
+}
+
+func TestTheBoxDoesNotShowWithoutNewsOrWhileThePersonTypes(t *testing.T) {
+	h := start(t)
+	now := h.clock()
+	h.openDemo()
+	away := func() {
+		h.a.handle(tcell.NewEventFocus(false))
+		*now = now.Add(model.RecapAway + time.Second)
+		h.a.handle(tcell.NewEventFocus(true))
+	}
+	away()
+	if h.a.recapBox != "" {
+		t.Fatal("the box showed with no news")
+	}
+	h.news()
+	h.press("i")
+	away()
+	if h.a.recapBox != "" {
+		t.Fatal("the box showed while the person types")
+	}
+	h.press("<Esc>")
+	// Over a card that waits for the person, it does not show either.
+	h.press(":b migr", "<CR>")
+	away()
+	if h.a.recapBox != "" {
+		t.Fatal("the box showed over a permission card")
+	}
+	// The setting turns the pop-up off; :recap still opens it.
+	h.press("<C-^>")
+	h.a.runConfig("neoharness.o.recap = false", "init.lua", false)
+	away()
+	if h.a.recapBox != "" {
+		t.Fatal("the box showed with norecap")
+	}
+	h.press(":recap", "<CR>")
+	if h.a.recapBox != model.Coordinator {
+		t.Fatalf("box = %q after :recap", h.a.recapBox)
+	}
+	h.press(":recap", "<CR>")
+	if h.a.recapBox != "" {
+		t.Fatal(":recap again closes it")
+	}
+}
+
+// A terminal that sends no focus events: the first key after minutes with
+// none is the person coming back.
+func TestWithoutFocusEventsTheFirstKeyAfterAwayBringsTheBox(t *testing.T) {
+	h := start(t)
+	now := h.clock()
+	h.openDemo()
+	h.news()
+	h.press("k")
+	if h.a.recapBox != "" {
+		t.Fatal("the box showed at once")
+	}
+	*now = now.Add(model.RecapAway)
+	h.press("i")
+	if h.a.recapBox != "" {
+		t.Fatal("the box showed when the key started typing")
+	}
+	h.press("<Esc>")
+	*now = now.Add(model.RecapAway)
+	h.press("j")
+	if h.a.recapBox != model.Coordinator {
+		t.Fatalf("box = %q", h.a.recapBox)
+	}
+}
+
+// Opening a workspace not looked at for minutes is coming back to it.
+func TestOpeningAWorkspaceAfterAwayShowsItsNews(t *testing.T) {
+	h := start(t)
+	now := h.clock()
+	h.hub.workspaces[0].RecapUnseen = true
+	h.hub.workspaces = append(h.hub.workspaces, model.WorkspaceView{Name: "ops", Counts: map[model.State]int{}})
+	h.a.loadWorkspaces()
+	h.openDemo()
+	if h.a.recapBox != model.Coordinator {
+		t.Fatal("the first open of a workspace with news shows no box")
+	}
+	h.press("<Esc>", ":p ops", "<CR>", ":p demo", "<CR>")
+	if h.a.recapBox != "" {
+		t.Fatal("back in a moment: no box")
+	}
+	h.press(":p ops", "<CR>")
+	*now = now.Add(model.RecapAway)
+	h.press(":p demo", "<CR>")
+	if h.a.recapBox != model.Coordinator {
+		t.Fatal("back after minutes: the box shows")
+	}
 }

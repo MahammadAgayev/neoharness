@@ -2486,6 +2486,7 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		Queued:        len(t.Queue),
 		Pending:       unshown(t.Queue),
 		Recap:         t.Recap,
+		RecapUnseen:   recapUnseen(ws, th),
 		Progress:      t.Progress,
 		WakeAt:        t.WakeAt,
 		Model:         t.Model,
@@ -2551,6 +2552,9 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 		v.Cost += th.t.Cost
 		if th.t.Role == model.RoleThread {
 			v.Counts[th.state]++
+			if !th.deleted && !th.t.Resolved && recapUnseen(ws, th) {
+				v.RecapUnseen = true
+			}
 		} else {
 			v.Coordinator = th.state
 		}
@@ -2561,7 +2565,48 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 		}
 	}
 	v.Recap = h.workspaceRecap(ws)
+	if r := ws.p.Recap; r != nil && len(r.Lines) > 0 && r.At.After(ws.p.RecapSeen) {
+		v.RecapUnseen = true
+	}
 	return v
+}
+
+// recapUnseen says a thread's recap came after the person last closed a box
+// that showed it: its own, or the workspace's, which shows every thread.
+func recapUnseen(ws *space, th *thread) bool {
+	r := th.t.Recap
+	return r != nil && r.At.After(th.t.RecapSeen) && r.At.After(ws.p.RecapSeen)
+}
+
+// SeenRecap marks a thread's recap seen, or with the coordinator, the
+// workspace's and so every thread's: the person closed the box.
+func (h *Hub) SeenRecap(workspaceName, name string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	if th.t.Role != model.RoleCoordinator {
+		th.t.RecapSeen = now
+		h.changed(ws, th)
+		return nil
+	}
+	p := ws.p
+	p.RecapSeen = now
+	if err := workspace.Save(p); err != nil {
+		return err
+	}
+	ws.p = p
+	for _, t := range ws.threads {
+		if !t.deleted && t.t.Role == model.RoleThread {
+			v := h.view(ws, t)
+			h.publish(model.Update{Kind: model.UpdateThread, Workspace: ws.p.Name, Thread: t.t.Name, View: &v})
+		}
+	}
+	h.publishWorkspace(ws)
+	return nil
 }
 
 // workspaceRecap joins the stored goal and lines with what the open threads'

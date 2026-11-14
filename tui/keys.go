@@ -88,6 +88,9 @@ func (a *App) key(ev *tcell.EventKey) {
 	if k == "" {
 		return
 	}
+	if a.keyAfterAway() {
+		defer a.cameBack()
+	}
 	if run := a.confirm; run != nil {
 		a.confirm = nil
 		a.notice = ""
@@ -106,6 +109,10 @@ func (a *App) key(ev *tcell.EventKey) {
 	}
 	idle := func() bool {
 		return a.mode == modeNormal && len(a.pending) == 0 && a.count == 0 && !a.replacing && a.finding == "" && a.selecting == "" && a.marking == "" && a.macroKey == ""
+	}
+	if a.recapBox != "" && idle() && a.recordInto == 0 && (k == "<Esc>" || k == "q") {
+		a.closeBox()
+		return
 	}
 	if a.recordInto != 0 && a.playing == 0 {
 		if k == "q" && idle() {

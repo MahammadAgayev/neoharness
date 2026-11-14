@@ -60,6 +60,7 @@ func (a *App) draw() {
 		a.drawWindow(w, false)
 	}
 	a.drawToasts(W, H)
+	a.drawBox(W, H)
 	if a.picker != nil {
 		a.drawPicker(W, H)
 	}
@@ -129,18 +130,6 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	title, body, _ := a.card(w)
 	if title != "" && textBottom-len(body)-2 > top {
 		textBottom -= len(body) + 2
-	}
-	// The recap sits between the transcript and the prompt, where the person
-	// looks; a card that waits for them takes its place.
-	w.recapY, w.recapH = 0, 0
-	if head := a.recapRows(w, textBottom-top); title == "" && len(head) > 0 {
-		y := textBottom - len(head)
-		a.put(r.X, y-1, right, strings.Repeat("─", r.W), a.th.Muted)
-		for i, l := range head {
-			a.drawCut(r.X, y+i, right, l)
-		}
-		w.recapY, w.recapH = y-1-r.Y, len(head)+1
-		textBottom = y - 1
 	}
 	h := max(textBottom-top, 1)
 	w.textH = h
@@ -393,38 +382,9 @@ func (a *App) matchCols(w *Window, li int, l Line) [][2]int {
 	return cols
 }
 
-// minTranscript is the fewest rows a chat window keeps for its transcript
-// before its recap gives way.
+// minTranscript is the fewest rows of a window the recap box leaves
+// uncovered.
 const minTranscript = 4
-
-// recapRows are the recap of a chat window with room rows for its transcript
-// and recap: the thread's, or in the coordinator's window the workspace's.
-// None when the person hid recaps or the window is too short.
-func (a *App) recapRows(w *Window, room int) []Line {
-	if w.Buf.Kind != KindChat || !a.recapOn() {
-		return nil
-	}
-	width := w.rect.W - 2
-	head := recapHead(a.threads[w.Buf.Thread].Recap, a.th, width)
-	if w.Buf.Thread == model.Coordinator {
-		head = workspaceHead(a.workspaceView(), a.th, width, true)
-		if room-len(head)-1 < minTranscript {
-			head = workspaceHead(a.workspaceView(), a.th, width, false)
-		}
-	}
-	if room-len(head)-1 < minTranscript {
-		return nil
-	}
-	return head
-}
-
-// recapOn says recaps show: neoharness.o.recap, until :recap turns them over.
-func (a *App) recapOn() bool {
-	if a.recapSet {
-		return a.recapShown
-	}
-	return a.opt("recap") != lua.LFalse
-}
 
 // drawCut draws a line and marks with … a row that does not fit.
 func (a *App) drawCut(x, y, maxX int, l Line) {

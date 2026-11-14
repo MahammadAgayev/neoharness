@@ -463,7 +463,14 @@ func (a *App) exec(line string) {
 	case "image":
 		a.attachImage(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), cmd)))
 	case "recap":
-		a.recapShown, a.recapSet = !a.recapOn(), true
+		if !needWorkspace() {
+			return
+		}
+		if a.recapBox != "" {
+			a.closeBox()
+		} else {
+			a.openBox(a.boxSubject())
+		}
 	case "recap!":
 		// Asking runs a turn, so it costs tokens: only this command asks.
 		n := target()
@@ -474,7 +481,8 @@ func (a *App) exec(line string) {
 			a.notify(err.Error(), a.th.Love)
 			return
 		}
-		a.recapShown, a.recapSet = true, true
+		// The box fills in when the recap comes.
+		a.recapBox = n
 		a.notify("asked "+n+" for a fresh recap", a.th.Muted)
 	case "hub":
 		if arg(0) != "restart" {
@@ -711,7 +719,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<leader>pm", "pick a notification; it opens its thread, in any workspace"),
 		row("<leader>pv", "workspaces screen"),
 		row("<leader>t", "threads list: goes to it, or opens it in a new column on the right; <CR> opens a thread in its place"),
-		row("<leader>c", "coordinator; above its prompt, the workspace recap"),
+		row("<leader>c", "coordinator"),
 		row("<leader>nc  <leader>nh", "dismiss notifications, their history"),
 		row("<leader>a A x", "allow, allow always (what the card names), deny a permission"),
 		{},
@@ -732,8 +740,8 @@ func (a *App) helpBuf() *Buffer {
 		row(":messages", "notice history"),
 		row(":hub restart", "restart the hub on this neoharness; after an update it does so on its own once no turn runs"),
 		row(":image [file]", "put the clipboard's picture, or a file's, in the prompt as [image 1]; it goes with the message"),
-		row(":recap", "hide or show the recaps above the prompts"),
-		row(":recap! [thread]", "ask for a fresh recap; the coordinator's is the workspace's. It runs a turn"),
+		row(":recap", "open or close the recap box: the thread's in its window, else the workspace's; Esc or q closes it"),
+		row(":recap! [thread]", "ask for a fresh recap and open its box; the coordinator's is the workspace's. It runs a turn"),
 		row(":cost  :cost all", "what this workspace, or every workspace, cost: by day, thread and model; <CR> opens a thread"),
 		row(":workspaces  :workspace <n>", "workspace list, switch workspace"),
 		row(":restore [name]", "bring back a deleted workspace; no name lists them"),
@@ -745,7 +753,7 @@ func (a *App) helpBuf() *Buffer {
 		row("defaults.lua", "every default map, color and setting; copy a line to init.lua and edit it"),
 		row("neoharness.o.leader", "the leader, <Space> by default; it moves the default maps"),
 		row("neoharness.o.equalalways", "on: a split or a close makes the windows the same size"),
-		row("neoharness.o.recap", "off: recaps start hidden; :recap shows them"),
+		row("neoharness.o.recap", "off: the recap box does not show by itself when you come back; :recap still opens it"),
 		row("neoharness.o.compactwarn", "past this context %, the status line says /compact; 0 never"),
 		row("neoharness.keymap.set / del", "n x i maps: keys, an ex command (:threads<CR>), a function"),
 		row("<Plug>(neoharness-…)", "threads grep yank dismiss coordinator: actions with no ex command"),

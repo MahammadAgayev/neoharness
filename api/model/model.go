@@ -214,6 +214,11 @@ type RecapCommand struct {
 	Failed bool   `json:"failed,omitempty"`
 }
 
+// RecapAway is how long the person must be away before coming back shows
+// the recap box, when there is news they have not seen. A shorter break
+// leaves what they did fresh in mind, and the toasts said what came.
+const RecapAway = 2 * time.Minute
+
 // WorkspaceRecap is how a workspace stands, for the person to read without
 // any transcript: what it is for and what its threads' work means together.
 // The thread recaps hold each thread's own part.
@@ -254,6 +259,9 @@ type ThreadView struct {
 	Permission *Permission `json:"permission,omitempty"`
 	Pending    []Event     `json:"pending,omitempty"` // queued, not yet in the transcript
 	Recap      *Recap      `json:"recap,omitempty"`
+	// RecapUnseen says the recap is newer than the last time the person
+	// closed a box that showed it.
+	RecapUnseen bool `json:"recapUnseen,omitempty"`
 	// Quiet says the coordinator decides what of this thread reaches the
 	// person: only its questions and permission requests notify them.
 	Quiet bool `json:"quiet,omitempty"`
@@ -361,6 +369,9 @@ type WorkspaceView struct {
 	AutoCompact int `json:"autoCompact"`
 	// Recap is nil until there is something to say.
 	Recap *WorkspaceRecap `json:"recap,omitempty"`
+	// RecapUnseen says an open thread's recap, or the coordinator's lines,
+	// came after the person last closed the workspace's recap box.
+	RecapUnseen bool `json:"recapUnseen,omitempty"`
 }
 
 // UpdateKind classifies a hub update.

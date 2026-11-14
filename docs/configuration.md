@@ -26,7 +26,7 @@ neoharness.cmd("workspace demo")                          -- runs after start
 |---|---|
 | `neoharness.o.leader` | the leader; it moves the default maps |
 | `neoharness.o.equalalways` | a split or a close makes the windows the same size |
-| `neoharness.o.recap` | recaps show above the prompt; `:recap` turns them over |
+| `neoharness.o.recap` | the recap box shows by itself when you come back to news; `:recap` opens it either way |
 | `neoharness.o.compactwarn` | past this context percent, the status line shows `ctx 82% · /compact` in red: every turn sends the whole context again, so `/compact` then saves tokens |
 | `neoharness.keymap.set(mode, lhs, rhs, opts)` | `n`, `x` or `i`; `rhs` is keys, an ex command or a function; `{ remap = true }` |
 | `neoharness.keymap.del(mode, lhs)` | removes a map |

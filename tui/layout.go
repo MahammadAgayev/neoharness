@@ -23,9 +23,6 @@ type Window struct {
 	vLine, vCol   int
 	rect          Rect
 	textH, linesN int
-	// recapY and recapH are the rows of the recap above the prompt, from
-	// the window's top.
-	recapY, recapH int
 	// jumps are the buffers the window showed before, the newest last, for
 	// <C-o>; views are where the window was in each.
 	jumps []*Buffer

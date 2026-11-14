@@ -53,7 +53,7 @@ thread yourself:
   artifacts it wrote, or why the turn failed. Under an idle or waiting row
   the pane shows it in short, one row each: the first sentence of the
   outcome, the facts (`3 commands, 1 failed · 1 file edited`), and
-  `open: …`; in the thread's window it shows in full just above the prompt.
+  `open: …`; the thread's recap box shows it in full.
   The `ran` row there names the commands that tell the most, newest first:
   each one whose last run failed, and the last few run after the last edit,
   which checked the work as it ended. A command that failed but printed
@@ -62,23 +62,38 @@ thread yourself:
   is gone. Paths in the thread's folder show relative to it. When the
   thread wrote no outcome, the first line of its reply stands in, labeled
   `reply`, and `no commands` says that nothing was checked.
-- The coordinator's window shows the workspace recap above its prompt, so you
-  learn how the whole workspace stands without opening a thread: the goal, then
-  `◆ 1 waits for you · ✗ 1 failed · ● 2 running · 3 idle`, the files that
-  two threads both edited, and up to three lines from the coordinator on
-  what the threads' work means together. Each thread's own outcome stays on
-  its row. When threads ended after the coordinator wrote its lines, `as of
+- The recap box says how the whole workspace stands, so you learn it
+  without opening a thread. It pops up at the top of the screen, with a
+  colored border: gold when something waits for you, red when a thread
+  failed, foam while threads run, pine when all is done. Inside are the
+  goal, a strip with one cell per thread, the counts (`◆ 1 waits for you ·
+  ✗ 1 failed · ● 2 running · 3 idle`), then one row per thread: what waits
+  for you, what failed, what came out, what still runs, each with its
+  headline. What came since you last closed the box is bright; the rest is
+  muted. Under them are up to three lines from the coordinator on what the
+  threads' work means together, and the files that two threads both
+  edited. When threads ended after the coordinator wrote its lines, `as of
   23:04 · 2 threads ended since` says so. The coordinator writes them ahead
   of time: once the threads that ran have ended, the hub wakes it for that
-  (`workspace_recap = false` in the hub setup turns this off). In a short
-  window only the counts stay. The workspaces screen shows `✗ N` for the
-  threads that failed.
-- `:recap` hides the recaps above the prompts, and shows them again.
-  `neoharness.o.recap = false` in `init.lua` starts with them hidden. A
-  permission or question card takes the recap's place while it waits.
-- `:recap!` asks for a fresh recap: of the thread in the window or under the
-  cursor, of a thread you name (`:recap! api`), or in the coordinator's
-  window, of the workspace. It sends the ask as your message and runs a
+  (`workspace_recap = false` in the hub setup turns this off). In a
+  thread's window, the box shows that thread's recap in full. The
+  workspaces screen shows `✗ N` for the threads that failed.
+- The box shows by itself only when you come back to news you have not
+  seen: the terminal gets focus after two minutes or more away, or you open
+  a workspace you have not looked at for two minutes. In a terminal that
+  sends no focus events (tmux without `focus-events on`), the first key in
+  Normal after two minutes with no key counts. Two minutes, because after a
+  shorter break you still know what you left, and the toasts said what
+  came. It never shows while you type, nor over a permission or question
+  card, and not when nothing changed.
+- `Esc`, `q` or a click on its `×` closes the box; the other keys still
+  work while it shows. Closing marks it seen in the hub, so the app does
+  not show the same news again. `:recap` opens it, or closes it, at any
+  time. `neoharness.o.recap = false` in `init.lua` stops it showing by
+  itself.
+- `:recap!` asks for a fresh recap, and opens its box: of the thread in the
+  window or under the cursor, of a thread you name (`:recap! api`), or in
+  the coordinator's window, of the workspace. It sends the ask as your message and runs a
   turn, so it costs tokens; nothing asks on its own. A second ask while the
   first still waits is not sent.
 - To delete a thread, press `<C-d>` on it in a picker, then `y`. This cannot

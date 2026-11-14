@@ -24,6 +24,13 @@ func (a *App) mouse(ev *tcell.EventMouse) {
 		return
 	}
 	x, y := ev.Position()
+	if b := a.boxRect; pressed && x >= b.X && x < b.X+b.W && y >= b.Y && y < b.Y+b.H {
+		// The box covers the window's top; only its × does something.
+		if y == b.Y && x >= b.X+b.W-4 {
+			a.closeBox()
+		}
+		return
+	}
 	w := a.windowAt(x, y)
 	if w == nil {
 		return
@@ -71,8 +78,8 @@ func (a *App) click(w *Window, x, y int, when time.Time) {
 	r := w.rect
 	row := y - r.Y
 	switch {
-	case y == r.Y+r.H-1 || row >= w.recapY && row < w.recapY+w.recapH:
-		// The statusline and the recap only focus.
+	case y == r.Y+r.H-1:
+		// The statusline only focuses.
 	case row < w.textH:
 		if w.Top+row >= w.linesN {
 			return

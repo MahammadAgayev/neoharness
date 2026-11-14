@@ -228,6 +228,12 @@ func (c *Client) AskRecap(workspace, thread string) error {
 	return c.do("POST", threadPath(workspace, thread)+"/recap", nil, nil)
 }
 
+// SeenRecap says the person closed a thread's recap box, or with the
+// coordinator, the workspace's.
+func (c *Client) SeenRecap(workspace, thread string) error {
+	return c.do("POST", threadPath(workspace, thread)+"/recap/seen", nil, nil)
+}
+
 func (c *Client) Resolve(workspace, thread string) error {
 	return c.do("POST", threadPath(workspace, thread)+"/resolve", nil, nil)
 }

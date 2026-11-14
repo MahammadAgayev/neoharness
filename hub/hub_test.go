@@ -2880,3 +2880,65 @@ func TestAutoCompactBeforeTheNextTurn(t *testing.T) {
 		t.Fatalf("turns = %d, want no compact with auto_compact=0", n)
 	}
 }
+
+// TestARecapIsUnseenUntilThePersonClosesItsBox: the hub keeps when the person
+// last closed a recap box, so the TUI and the app agree on what is news.
+func TestARecapIsUnseenUntilThePersonClosesItsBox(t *testing.T) {
+	gate := make(chan agent.Result)
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result { return <-gate }
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if workspaceView(t, h, "demo").RecapUnseen {
+		t.Fatal("a new workspace has news")
+	}
+	for _, n := range []string{"auth", "cache"} {
+		if err := h.OpenThread("demo", model.Coordinator, n, "work", ""); err != nil {
+			t.Fatal(err)
+		}
+		gate <- agent.Result{Text: "Done."}
+		stateIs(t, h, "demo", n, model.StateIdle)
+	}
+	if !view(t, h, "demo", "auth").RecapUnseen || !workspaceView(t, h, "demo").RecapUnseen {
+		t.Fatal("a new recap is not news")
+	}
+	// Closing a thread's box marks only that thread seen.
+	if err := h.SeenRecap("demo", "auth"); err != nil {
+		t.Fatal(err)
+	}
+	if view(t, h, "demo", "auth").RecapUnseen || !view(t, h, "demo", "cache").RecapUnseen || !workspaceView(t, h, "demo").RecapUnseen {
+		t.Fatal("seen on auth")
+	}
+	// The workspace's box shows every thread, so closing it marks them all.
+	if err := h.SeenRecap("demo", model.Coordinator); err != nil {
+		t.Fatal(err)
+	}
+	if view(t, h, "demo", "cache").RecapUnseen || workspaceView(t, h, "demo").RecapUnseen {
+		t.Fatal("seen on the workspace")
+	}
+	// New lines from the coordinator are news again.
+	if err := h.WorkspaceRecap("demo", model.Coordinator, "", []string{"answer lint first"}); err != nil {
+		t.Fatal(err)
+	}
+	if !workspaceView(t, h, "demo").RecapUnseen || view(t, h, "demo", "cache").RecapUnseen {
+		t.Fatal("new lines")
+	}
+	_ = h.SeenRecap("demo", model.Coordinator)
+	// So is a thread's next turn, and the mark is kept across a restart.
+	_ = h.Send("demo", model.User, "cache", "more")
+	stateIs(t, h, "demo", "cache", model.StateRunning)
+	_ = h.Recap("demo", "cache", "more", "More done.", "")
+	gate <- agent.Result{Text: "More done."}
+	stateIs(t, h, "demo", "cache", model.StateIdle)
+	h2, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return &fake{} }, MCPPort: 4243})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h2.Close()
+	if !view(t, h2, "demo", "cache").RecapUnseen || view(t, h2, "demo", "auth").RecapUnseen || !workspaceView(t, h2, "demo").RecapUnseen {
+		t.Fatal("after a restart")
+	}
+	if err := h2.SeenRecap("demo", "nope"); err == nil {
+		t.Fatal("no thread nope")
+	}
+}

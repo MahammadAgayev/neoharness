@@ -50,6 +50,7 @@ type Client interface {
 	Stop(workspace, thread string) error
 	Unqueue(workspace, thread string, at time.Time) error
 	AskRecap(workspace, thread string) error
+	SeenRecap(workspace, thread string) error
 	Resolve(workspace, thread string) error
 	Delete(workspace, thread string) error
 	Reopen(workspace, thread string) error
@@ -167,8 +168,19 @@ type App struct {
 	mouseDown              bool
 	lastClick              time.Time
 	lastClickX, lastClickY int
-	// recapSet says :recap chose whether recaps show, recapShown.
-	recapSet, recapShown bool
+	// recapBox is whose recap the box at the top shows: a thread, the
+	// coordinator for the workspace's, or "" when it is closed. boxRect is
+	// where it was drawn, for clicks.
+	recapBox string
+	boxRect  Rect
+	// now is the clock, for tests. lastKey is the last key, blurAt when the
+	// terminal lost focus, and leftAt when each workspace was left: how long
+	// the person was away. focusKnown says the terminal sends focus events.
+	now        func() time.Time
+	lastKey    time.Time
+	blurAt     time.Time
+	leftAt     map[string]time.Time
+	focusKnown bool
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key
@@ -256,6 +268,8 @@ func Run(c Client, hub Hub) error {
 	// Clicks and the wheel, no drags: the terminal still selects text with
 	// Shift (or Option) held.
 	s.EnableMouse(tcell.MouseButtonEvents)
+	// Focus tells when the person comes back, for the recap box.
+	s.EnableFocus()
 	a := newApp(s, c)
 	a.hub = hub
 	a.loadConfig(filepath.Join(filepath.Dir(hubapi.SocketPath()), "init.lua"))
@@ -277,6 +291,8 @@ func newApp(s tcell.Screen, c Client) *App {
 		comps:    map[string]model.Completions{},
 		compBusy: map[string]bool{},
 		menuShut: -1,
+		now:      time.Now,
+		leftAt:   map[string]time.Time{},
 	}
 	a.workspacesBuf = newBuffer("neoharness://workspaces", KindWorkspaces)
 	a.messagesBuf = newBuffer("neoharness://messages", KindMessages)
@@ -317,6 +333,8 @@ func (a *App) handle(ev tcell.Event) {
 			a.toWindow(a.cur)
 			a.settle(a.cur)
 		}
+	case *tcell.EventFocus:
+		a.focus(ev.Focused)
 	case *tcell.EventResize:
 		a.s.Sync()
 	case evUpdate:
@@ -752,6 +770,15 @@ func (a *App) openWorkspace(name string) {
 		return
 	}
 	a.saveLayout()
+	now := a.now()
+	if a.workspace != "" {
+		a.leftAt[a.workspace] = now
+	}
+	a.recapBox = ""
+	// Opening a workspace not looked at for minutes is coming back to it.
+	if left, ok := a.leftAt[name]; !ok || now.Sub(left) >= model.RecapAway {
+		defer a.cameBack()
+	}
 	// The threads of the workspace left behind keep toasting from where
 	// they are now.
 	if a.away == nil {

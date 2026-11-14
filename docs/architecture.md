@@ -159,6 +159,26 @@ The workspace recap says how the whole workspace stands, as
   from `WorkspaceView.Counts` and these fields, and count nothing
   themselves.
 
+The UIs show the recaps in a box that pops up when the person comes back.
+What is news is the hub's; when to show it is the UI's, as only it knows
+focus and typing:
+
+- **Seen** is one mark in the hub, so the TUI and the app agree. Closing a
+  thread's box marks that thread (`thread.json`), and closing the
+  workspace's box marks the workspace and so every thread
+  (`workspace.json`): `POST …/threads/{t}/recap/seen`, with the coordinator
+  for the workspace. `ThreadView.RecapUnseen` says the thread's recap is
+  newer than both marks; `WorkspaceView.RecapUnseen` says an open thread's
+  is, or the coordinator's lines are newer than the workspace's mark.
+- **When**: the box shows when the person comes back to news, and only
+  then: the window gets focus after `model.RecapAway` (two minutes) away,
+  or the person opens a workspace not looked at for as long. A terminal
+  that sends no focus events counts the first key after as long with none.
+  Never while the person types (Insert, a command line) or over a
+  permission or question card in the window with focus, and never with
+  `recap` off. In a thread's window it shows the thread's recap when that
+  is news, else the workspace's.
+
 ## Permissions
 
 When Claude asks for approval, it calls `permission_prompt`. The hub holds
