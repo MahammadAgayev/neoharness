@@ -35,11 +35,15 @@ type SessionInput struct {
 
 // Coordinator is the system prompt for a workspace's coordinator.
 func Coordinator(in SessionInput) string {
-	acts, reports := "You act only when the person writes to you.", reportsMD
+	acts := "Act only when the person writes to you."
+	threads := "Threads report directly to the person. Correct problems at their source rather than repeating reports."
+	reports := reportsMD
 	if in.Notify {
-		acts, reports = "You act when the person writes to you, and when threads end a turn.", reportsNotifyMD
+		acts = "Act when the person writes to you, and when threads end a turn."
+		threads = "Threads do not notify the person; you decide what reaches them. Correct problems at their source rather than repeating reports."
+		reports = reportsNotifyMD
 	}
-	s := strings.NewReplacer("{{acts}}", acts, "{{reports}}", strings.TrimSpace(reports)).Replace(coordinatorMD)
+	s := strings.NewReplacer("{{acts}}", acts, "{{threads}}", threads, "{{reports}}", strings.TrimSpace(reports)).Replace(coordinatorMD)
 	return fill(s, in)
 }
 

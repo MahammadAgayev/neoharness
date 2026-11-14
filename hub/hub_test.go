@@ -156,7 +156,7 @@ func TestTurnLifecycleAndResume(t *testing.T) {
 	if reqs[0].Harness.URL != "http://127.0.0.1:4242/mcp" || reqs[0].Harness.Token == "" {
 		t.Errorf("turn not wired to the MCP server: %+v", reqs[0])
 	}
-	if !strings.Contains(reqs[0].SystemPrompt, "coordinator") {
+	if !strings.Contains(reqs[0].SystemPrompt, "You coordinate the") {
 		t.Error("coordinator should get the coordinator prompt")
 	}
 
@@ -296,7 +296,7 @@ func TestOnlyTheCoordinatorIsHarnessOnly(t *testing.T) {
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
 	var coord, thread int
 	for _, r := range f.requests() {
-		switch coordinator := strings.Contains(r.SystemPrompt, "coordinator of the workspace"); {
+		switch coordinator := strings.Contains(r.SystemPrompt, "You coordinate the"); {
 		case coordinator && r.HarnessOnly:
 			coord++
 		case !coordinator && !r.HarnessOnly:

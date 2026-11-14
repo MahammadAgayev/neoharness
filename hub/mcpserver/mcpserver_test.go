@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/MahammadAgayev/neoharness/api/model"
 	"github.com/MahammadAgayev/neoharness/hub"
 	"github.com/MahammadAgayev/neoharness/hub/agent"
+	"github.com/MahammadAgayev/neoharness/hub/prompts"
 	"github.com/MahammadAgayev/neoharness/hub/workspace"
 )
 
@@ -313,6 +315,30 @@ func TestOnlyTheCoordinatorWritesTheWorkspaceRecap(t *testing.T) {
 	for _, v := range h.Workspaces() {
 		if v.Name == "demo" && (v.Recap == nil || v.Recap.Goal != "ship auth" || len(v.Recap.Lines) != 1) {
 			t.Fatalf("recap = %+v", v.Recap)
+		}
+	}
+}
+
+// TestTheCoordinatorPromptNamesItsTools: the prompt lists every tool the
+// coordinator has, and no other.
+func TestTheCoordinatorPromptNamesItsTools(t *testing.T) {
+	_, srv := setup(t)
+	var want []string
+	for _, n := range toolNames(t, connect(t, srv, token(t, model.Coordinator))) {
+		if n != "permission_prompt" {
+			want = append(want, n)
+		}
+	}
+	slices.Sort(want)
+	named := regexp.MustCompile("`([a-z_]+)\\(")
+	for _, notify := range []bool{false, true} {
+		var got []string
+		for _, m := range named.FindAllStringSubmatch(prompts.Coordinator(prompts.SessionInput{Notify: notify}), -1) {
+			got = append(got, m[1])
+		}
+		slices.Sort(got)
+		if got = slices.Compact(got); !slices.Equal(got, want) {
+			t.Errorf("notify=%v: the prompt names %v, the coordinator has %v", notify, got, want)
 		}
 	}
 }
