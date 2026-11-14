@@ -521,7 +521,7 @@ test('without Vim a window closes with ⌘W from its prompt, or with the × on i
   await page.keyboard.press('Enter')
 })
 
-test('in a narrow column the prompt keeps its width and one line, with no sideways scroll, the model and cost under it', async () => {
+test('in a narrow column the prompt keeps its width and one line, with no sideways scroll, the model under it', async () => {
   await normal()
   await page.keyboard.press('Space')
   await page.keyboard.press('c')
@@ -531,7 +531,6 @@ test('in a narrow column the prompt keeps its width and one line, with no sidewa
       model: 'claude-opus-5-5[1m]',
       context: 9000,
       contextWindow: 1000000,
-      cost: 0.75,
       branch: 'main',
     }),
   )
@@ -736,7 +735,7 @@ test('the send button turns to the accent with text, and a click sends', async (
   await expect(send).not.toHaveClass(/ready/)
 })
 
-test('<leader>$ shows what the workspace cost, the sidebar each workspace\'s cost, Tab every workspace, and a turn opens its thread', async () => {
+test('<leader>$ shows what the workspace cost, Tab every workspace, and a turn opens its thread', async () => {
   await normal()
   await page.keyboard.press('Meta+1')
   await page.keyboard.press('Space')
@@ -763,18 +762,9 @@ test('<leader>$ shows what the workspace cost, the sidebar each workspace\'s cos
   await page.keyboard.press('Escape')
   await expect(d).toHaveCount(0)
 
-  // Each workspace shows its cost in the sidebar; :set nocost hides it.
-  const demo = page.locator('.sb-item', { hasText: 'demo' })
-  await expect(demo.locator('.sb-cost')).toHaveText('$24.75')
-  await expect(page.locator('.sb-item', { hasText: 'billing' }).locator('.sb-cost')).toHaveCount(0)
-  await page.keyboard.type(':')
-  await page.keyboard.type('set nocost')
-  await page.keyboard.press('Enter')
-  await expect(demo.locator('.sb-cost')).toHaveCount(0)
-  await page.keyboard.type(':')
-  await page.keyboard.type('set cost')
-  await page.keyboard.press('Enter')
-  await expect(demo.locator('.sb-cost')).toHaveText('$24.75')
+  // A workspace in the sidebar shows no cost; only the dialog does.
+  await expect(page.locator('.sb-item', { hasText: 'demo' })).toBeVisible()
+  await expect(page.locator('.sb-item', { hasText: 'demo' })).not.toContainText('$')
 })
 
 test("an idle thread's row shows the start of its last reply, its group a count", async () => {

@@ -27,10 +27,9 @@ test('records the desktop demo', async () => {
   hub.workspace('search', ['indexer'])
   hub.workspace('infra', [])
   hub.workspaces[0].counts = {}
-  hub.workspaces[0].cost = 3.4
   hub.workspaces[1].counts = { running: 1 }
   hub.workspaces[0].activity = [0, 0, 1, 3, 2, 4, 6, 5, 8, 7, 4, 3, 5, 9, 6, 4, 2, 3, 5, 7, 8, 6, 4, 3]
-  hub.setView(view('payments', 'coordinator', { model: 'claude-opus-5-5', context: 9000, contextWindow: 400000, cost: 0.12, branch: 'main' }))
+  hub.setView(view('payments', 'coordinator', { model: 'claude-opus-5-5', context: 9000, contextWindow: 400000, branch: 'main' }))
   await hub.listen()
 
   const video = path.join(tmp, 'video')
@@ -62,7 +61,7 @@ test('records the desktop demo', async () => {
     await wait(500)
     await page.keyboard.press('Enter')
     await wait(400)
-    hub.setView(view('payments', 'coordinator', { state: 'running', model: 'claude-opus-5-5', context: 14000, contextWindow: 400000, cost: 0.2, branch: 'main' }))
+    hub.setView(view('payments', 'coordinator', { state: 'running', model: 'claude-opus-5-5', context: 14000, contextWindow: 400000, branch: 'main' }))
     await wait(900)
     for (const [i, name] of [
       ['1', 'api'],
@@ -78,9 +77,9 @@ test('records the desktop demo', async () => {
       text: 'I split this into three threads:\n\n- **api** adds `GET /healthz` and a test\n- **ledger-migration** writes the migration; it asks before it touches the database\n- **flaky-test** finds why checkout fails one run in ten',
     })
     co({ kind: 'turn' })
-    hub.setView(view('payments', 'coordinator', { model: 'claude-opus-5-5', context: 21000, contextWindow: 400000, cost: 0.31, branch: 'main' }))
+    hub.setView(view('payments', 'coordinator', { model: 'claude-opus-5-5', context: 21000, contextWindow: 400000, branch: 'main' }))
     await wait(1800)
-    th('api', { state: 'running', context: 38000, cost: 0.4 })
+    th('api', { state: 'running', context: 38000 })
     await wait(900)
 
     // The migration needs the person: a toast, and the card in the thread.
@@ -92,7 +91,7 @@ test('records the desktop demo', async () => {
       { kind: 'permission', tool: 'Bash', detail: 'psql -f db/migrate.sql', id: 'p1' },
     ] as const)
       hub.event('payments', 'ledger-migration', e)
-    th('ledger-migration', { state: 'waiting', permission: { id: 'p1', tool: 'Bash', detail: 'psql -f db/migrate.sql' }, context: 52000, cost: 0.55 })
+    th('ledger-migration', { state: 'waiting', permission: { id: 'p1', tool: 'Bash', detail: 'psql -f db/migrate.sql' }, context: 52000 })
     const toast = page.locator('.toast', { hasText: 'needs permission' })
     await expect(toast).toBeVisible()
     await wait(1600)
@@ -109,7 +108,7 @@ test('records the desktop demo', async () => {
     await wait(900)
     hub.event('payments', 'ledger-migration', { kind: 'text', text: 'Done: `settled_at` exists and **2,418** rows are backfilled.' })
     hub.event('payments', 'ledger-migration', { kind: 'turn' })
-    th('ledger-migration', { state: 'idle', reply: 'Done: settled_at exists and 2,418 rows are backfilled.', context: 61000, cost: 0.71 })
+    th('ledger-migration', { state: 'idle', reply: 'Done: settled_at exists and 2,418 rows are backfilled.', context: 61000 })
     th('flaky-test', { state: 'resolved' })
     await wait(2000)
 

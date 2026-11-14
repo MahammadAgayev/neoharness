@@ -18,7 +18,7 @@ function shortModel(m: string): string {
 }
 
 // PromptInfo is the line under the prompt, as in Claude Code: what the next
-// message goes with, and what the turns cost. It has a line of its own, so
+// message goes with. It has a line of its own, so
 // a narrow column never squeezes the text you write.
 function PromptInfo(props: { v: ThreadView | undefined; focused: boolean; thread: string }) {
   const { v, focused } = props
@@ -39,7 +39,6 @@ function PromptInfo(props: { v: ThreadView | undefined; focused: boolean; thread
           : { text: `ctx ${pct}%`, tone: 'gold', title: 'context used' },
       )
     }
-    if (v.cost) right.push({ text: `$${v.cost.toFixed(2)}`, tone: 'pine', title: 'cost of every turn' })
   }
   if (!right.length) return null
   return (

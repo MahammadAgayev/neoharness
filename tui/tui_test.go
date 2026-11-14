@@ -967,10 +967,10 @@ func TestStatusLineShowsUsage(t *testing.T) {
 	h.openDemo()
 	h.press("<C-w>", "o")
 	v := h.a.threads[model.Coordinator]
-	v.Model, v.Context, v.ContextWindow, v.Cost, v.Branch = "claude-opus-5[1m]", 81000, 1000000, 9.17, "neoharness-hub-tui"
+	v.Model, v.Context, v.ContextWindow, v.Branch = "claude-opus-5[1m]", 81000, 1000000, "neoharness-hub-tui"
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
-	h.see("neoharness-hub-tui · opus-5 1m · ctx 8% · $9.17")
+	h.see("neoharness-hub-tui · opus-5 1m · ctx 8%")
 
 	// Narrow windows drop the branch and model first; context stays.
 	h.press("<C-w>", "v", "<C-w>", "v", "<C-w>", "h", "<C-w>", "h")
@@ -1041,11 +1041,11 @@ func TestStatusColorsAndPromptHeight(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	v := h.a.threads[model.Coordinator]
-	v.Model, v.Context, v.ContextWindow, v.Cost, v.Branch = "claude-opus-5[1m]", 100, 1000, 9.17, "trunk"
+	v.Model, v.Context, v.ContextWindow, v.Branch = "claude-opus-5[1m]", 100, 1000, "trunk"
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.s.SetSize(160, 36)
 	h.a.draw()
-	for want, color := range map[string]tcell.Color{"trunk": rpFoam, "opus-5 1m": rpRose, "ctx 10%": rpGold, "$9.17": rpPine} {
+	for want, color := range map[string]tcell.Color{"trunk": rpFoam, "opus-5 1m": rpRose, "ctx 10%": rpGold} {
 		if got := h.fgAt(want); got != color {
 			t.Errorf("%s: color %v, want %v", want, got, color)
 		}

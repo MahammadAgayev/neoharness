@@ -80,7 +80,6 @@ export interface ThreadView {
   model?: string
   context?: number
   contextWindow?: number
-  cost?: number
   branch?: string
   since: string
   updatedAt: string
@@ -149,8 +148,6 @@ export interface WorkspaceView {
   counts: Partial<Record<State, number>>
   coordinator?: State
   activity: number[]
-  // cost is what every thread of the workspace cost, the coordinator too.
-  cost?: number
   coordinatorAgent?: string
   threadsAgent?: string
   agentNames?: string[]

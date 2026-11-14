@@ -648,7 +648,7 @@ kbd {
 }
 /* Under the box, close to it, one line. The parts come most important
    first and lay out from the right: what does not fit wraps to a hidden
-   second line, so a narrow column drops the host before the cost. */
+   second line, so a narrow column drops the host before the model. */
 .prompt-info {
   display: flex;
   flex-direction: row-reverse;
@@ -1816,21 +1816,6 @@ kbd {
 }
 .sb-count {
   font-size: var(--fs-small);
-}
-.sb-cost {
-  font-size: var(--fs-small);
-  color: var(--subtle);
-  font-variant-numeric: tabular-nums;
-}
-/* The ⌘ key shows on hover in the place of the cost. */
-.sb-item:hover .sb-kbd + .sb-cost {
-  display: none;
-}
-.sb-item:not(:hover) .sb-kbd:has(+ .sb-cost) {
-  display: none;
-}
-.sidebar.rail .sb-cost {
-  display: none;
 }
 .sb-kbd {
   background: var(--panel);

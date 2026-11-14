@@ -541,9 +541,6 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 			}
 			add(label, ctxSt, 4)
 		}
-		if v.Cost > 0 {
-			add(fmt.Sprintf("$%.2f", v.Cost), color(a.th.Pine), 3)
-		}
 		if v.Location.Remote() {
 			add("ssh:"+v.Location.Host, dim, 0)
 		}

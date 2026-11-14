@@ -849,7 +849,8 @@ func TestStatusUsageAddsCostAndReadsBranch(t *testing.T) {
 	}
 	eventually(t, "both turns and the branch", func() bool {
 		v := view(t, h, "demo", model.Coordinator)
-		return v.Cost == 1.0 && v.Context == 2000 && v.Branch == "main"
+		sp, _ := h.Cost("demo")
+		return sp.Total == 1.0 && v.Context == 2000 && v.Branch == "main"
 	})
 	v := view(t, h, "demo", model.Coordinator)
 	if v.Model != "claude-opus-5[1m]" || v.ContextWindow != 1000000 {
@@ -2244,9 +2245,6 @@ func TestCostAddsUpTurnsByThreadModelDayAndWorkspace(t *testing.T) {
 	}
 	if len(sp.Top) != 3 || sp.Top[0].Cost != 2 || sp.Top[0].Workspace != "demo" || len(sp.Workspaces) != 0 {
 		t.Fatalf("top = %+v, workspaces = %+v", sp.Top, sp.Workspaces)
-	}
-	if ws := h.Workspaces(); ws[0].Cost != 2.75 || ws[1].Cost != 0.5 {
-		t.Fatalf("workspace costs = %v, %v", ws[0].Cost, ws[1].Cost)
 	}
 	all, _ := h.Cost("")
 	if all.Total != 3.25 || len(all.Workspaces) != 2 || all.Workspaces[0].Name != "demo" || all.Workspaces[1].Cost != 0.5 {

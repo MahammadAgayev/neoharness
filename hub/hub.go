@@ -2199,7 +2199,6 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		Model:         t.Model,
 		Context:       t.Context,
 		ContextWindow: t.ContextWindow,
-		Cost:          t.Cost,
 		Branch:        th.branch,
 		Quiet:         h.cfg.Notify,
 		Since:         t.Since,
@@ -2251,7 +2250,6 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 	}
 	now := time.Now()
 	for _, th := range ws.threads {
-		v.Cost += th.t.Cost
 		if th.t.Role == model.RoleThread {
 			v.Counts[th.state]++
 		} else {

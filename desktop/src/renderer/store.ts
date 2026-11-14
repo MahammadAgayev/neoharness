@@ -110,8 +110,6 @@ export interface Settings {
   maps: UserMap[]
   keyhints: boolean
   sidebarWidth: number
-  // cost shows what each workspace cost in the sidebar.
-  cost: boolean
 }
 
 export interface State {
@@ -155,7 +153,7 @@ let ids = 1
 const nextId = () => ids++
 
 function loadSettings(): Settings {
-  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true, sidebarWidth: 216, cost: true }
+  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true, sidebarWidth: 216 }
   try {
     return { ...d, ...JSON.parse(localStorage.getItem('settings') || '{}') }
   } catch {
@@ -1417,7 +1415,7 @@ class Store {
 
   private setOption(args: string[]): void {
     const s = this.state.settings
-    if (!args.length) return this.say(`vim=${s.vim} sidebar=${s.sidebar} cost=${s.cost} fontsize=${s.fontSize} compactwarn=${s.compactwarn} colorscheme=${s.scheme}`)
+    if (!args.length) return this.say(`vim=${s.vim} sidebar=${s.sidebar} fontsize=${s.fontSize} compactwarn=${s.compactwarn} colorscheme=${s.scheme}`)
     for (const arg of args) {
       const [k, v] = arg.split('=', 2)
       switch (k) {
@@ -1433,12 +1431,6 @@ class Store {
         case 'nosidebar':
           this.setSettings({ sidebar: false })
           break
-        case 'cost':
-          this.setSettings({ cost: true })
-          break
-        case 'nocost':
-          this.setSettings({ cost: false })
-          break
         case 'fontsize':
         case 'fs':
           if (Number(v) >= 9 && Number(v) <= 28) this.setSettings({ fontSize: Number(v) })
@@ -1449,7 +1441,7 @@ class Store {
           else return this.say('compactwarn is 0 to 100', 'love')
           break
         default:
-          return this.say(`no option ${k}; the options are vim novim sidebar nosidebar cost nocost fontsize compactwarn`, 'love')
+          return this.say(`no option ${k}; the options are vim novim sidebar nosidebar fontsize compactwarn`, 'love')
       }
     }
   }

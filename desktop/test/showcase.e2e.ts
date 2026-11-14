@@ -21,11 +21,11 @@ test('the whole app, populated', async () => {
     const list = hub.threads.payments
     list[list.findIndex((x) => x.name === n)] = view('payments', n, v)
   }
-  t('api', { state: 'running', model: 'claude-sonnet-5-5', context: 41000, contextWindow: 200000, cost: 0.42, branch: 'health-check' })
+  t('api', { state: 'running', model: 'claude-sonnet-5-5', context: 41000, contextWindow: 200000, branch: 'health-check' })
   t('ledger-migration', { state: 'waiting', permission: { id: 'p', tool: 'Bash', detail: 'psql -f migrate.sql' } })
   t('docs', { state: 'idle' })
   t('flaky-test', { state: 'resolved' })
-  t('coordinator', { state: 'idle', model: 'claude-opus-5-5', context: 12000, contextWindow: 200000, cost: 0.18 })
+  t('coordinator', { state: 'idle', model: 'claude-opus-5-5', context: 12000, contextWindow: 200000 })
   const c = (e: Parameters<FakeHub['event']>[2]) => hub.event('payments', 'coordinator', e)
   c({ kind: 'message', from: 'user', text: 'Add a health check to the API, migrate the ledger table, and fix the flaky checkout test.' })
   c({ kind: 'tool', tool: 'mcp__neoharness__open_thread', detail: 'api', id: '1' })

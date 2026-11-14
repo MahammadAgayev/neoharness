@@ -56,7 +56,7 @@ export class FakeHub {
   }
 
   workspace(name: string, threads: string[]): void {
-    this.workspaces.push({ name, pin: '/tmp/fake', createdAt: now(), counts: { idle: threads.length }, activity: [0, 1, 3, 2, 5, 1], cost: name === 'demo' ? 24.75 : 0 })
+    this.workspaces.push({ name, pin: '/tmp/fake', createdAt: now(), counts: { idle: threads.length }, activity: [0, 1, 3, 2, 5, 1] })
     this.threads[name] = ['coordinator', ...threads].map((t) => view(name, t))
   }
 

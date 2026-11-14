@@ -128,9 +128,8 @@ change, `:w` saves the result, `:e!` takes all of the newer version.
 - **Cost** (`<leader>$`, `:cost`, or Cost in the sidebar): what the
   workspace cost, in all and today, the last 14 days as bars, by thread and
   by model, and the turns that cost the most; a click opens the thread. Tab
-  shows every workspace (`:cost all`), by workspace. The sidebar shows
-  what each workspace cost beside its name; `:set nocost` or Settings hides
-  it. The hub keeps a log of
+  shows every workspace (`:cost all`), by workspace. Cost shows nowhere
+  else: not in the sidebar, not under the prompt. The hub keeps a log of
   each paid turn for it; the totals count the turns from before the log too.
 - **`/model` and `/effort`** with no name open a picker, as in Claude Code;
   a click on the model under the prompt opens it too. The models, their

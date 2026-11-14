@@ -180,7 +180,8 @@ to select text with the terminal.
 bars, by thread and by model, and the turns that cost the most. `<CR>` on a
 thread or a turn opens it. `:cost all` adds up every workspace. The days,
 the models and the turns count from when the hub began to log each turn;
-the totals count every turn.
+the totals count every turn. Cost shows nowhere else, not on the status
+line.
 
 `:q` on the last window and `:qa` quit. The hub and its turns run on, so a
 thread that works keeps working, and the next `neoharness` shows where it

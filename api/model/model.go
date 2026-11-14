@@ -204,13 +204,11 @@ type ThreadView struct {
 	// Quiet says the coordinator decides what of this thread reaches the
 	// person: only its questions and permission requests notify them.
 	Quiet bool `json:"quiet,omitempty"`
-	// Model, Context and ContextWindow are as of the last turn; Cost is the
-	// total of every turn, in US dollars. Branch is the git branch of the
-	// thread's folder, empty outside a repository.
+	// Model, Context and ContextWindow are as of the last turn. Branch is
+	// the git branch of the thread's folder, empty outside a repository.
 	Model         string    `json:"model,omitempty"`
 	Context       int       `json:"context,omitempty"`
 	ContextWindow int       `json:"contextWindow,omitempty"`
-	Cost          float64   `json:"cost,omitempty"`
 	Branch        string    `json:"branch,omitempty"`
 	Since         time.Time `json:"since"`
 	UpdatedAt     time.Time `json:"updatedAt"`
@@ -293,8 +291,6 @@ type WorkspaceView struct {
 	Coordinator State `json:"coordinator,omitempty"`
 	// Activity is turns per hour over the last 24 hours, oldest first.
 	Activity []int `json:"activity"`
-	// Cost is what every thread of the workspace cost, the coordinator too.
-	Cost float64 `json:"cost,omitempty"`
 	// CoordinatorAgent and ThreadsAgent are the agents the roles run here,
 	// and AgentNames every agent of the config, for :setlocal.
 	CoordinatorAgent string   `json:"coordinatorAgent,omitempty"`

@@ -85,7 +85,8 @@ UUID.
   once. Stop leaves the queue waiting: the thread is paused until the
   person writes or sends now.
 - From each turn the adapter reads the slash commands, the model, the
-  context size and the cost. The status line shows them.
+  context size and the cost. The status line shows the model and the
+  context; the cost shows only in the cost view.
 - Under `-p`, `/clear`, `/compact`, `/model`, `/effort` and `!` do not work
   as in the interactive CLI, so the hub does them itself.
 
