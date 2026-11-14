@@ -142,11 +142,8 @@ type fileList struct {
 type space struct {
 	p       workspace.Workspace
 	threads map[string]*thread
-	// ended holds the threads that ended a turn since the coordinator's last
-	// turn began. A thread's report does not wake the coordinator, so its
-	// next turn starts with a note about them.
-	ended []string
-	// reports wakes the coordinator about ended, when Config.Notify is on.
+	// reports wakes the coordinator about the threads' news, when
+	// Config.Notify is on.
 	reports *time.Timer
 }
 
@@ -172,6 +169,8 @@ type thread struct {
 	// quiet marks a coordinator turn that only the hub's report started: it
 	// manages and says nothing in the person's chat.
 	quiet bool
+	// recapped says the current turn wrote a recap.
+	recapped bool
 }
 
 type pending struct {
@@ -226,6 +225,10 @@ func New(cfg Config) (*Hub, error) {
 	}
 	for _, ws := range h.workspaces {
 		h.start(ws)
+		// News from before a restart still reaches the coordinator.
+		if len(withNews(ws)) > 0 {
+			h.report(ws)
+		}
 	}
 	return h, nil
 }
@@ -1238,6 +1241,12 @@ func (h *Hub) WriteArtifact(workspaceName, by, name, text string) (model.Artifac
 	}
 	h.event(ws, th, model.Event{Kind: model.EventArtifact, Detail: name, Text: a.Title, Version: a.Version})
 	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: by, Artifact: &a})
+	h.news(ws, th, func(n *workspace.News) {
+		if !slices.Contains(n.Artifacts, name) {
+			n.Artifacts = append(n.Artifacts, name)
+		}
+	})
+	h.changed(ws, th)
 	return a, nil
 }
 
@@ -1486,6 +1495,8 @@ func (h *Hub) Recap(workspaceName, name, text string) error {
 		return err
 	}
 	th.t.Recap, th.t.RecapAt = oneLine(text, replyLimit), time.Now().UTC()
+	th.recapped = true
+	h.news(ws, th, func(n *workspace.News) { n.Recap = true })
 	h.changed(ws, th)
 	return nil
 }
@@ -1511,14 +1522,39 @@ func (h *Hub) report(ws *space) {
 		defer h.mu.Unlock()
 		ws.reports = nil
 		co, ok := ws.threads[model.Coordinator]
-		if h.ctx.Err() != nil || !ok || co.deleted || co.busy || len(ws.ended) == 0 {
+		names := withNews(ws)
+		if h.ctx.Err() != nil || !ok || co.deleted || co.busy || len(names) == 0 {
 			return
 		}
 		if slices.ContainsFunc(co.t.Queue, func(m workspace.Message) bool { return m.From == reportFrom }) {
 			return
 		}
-		h.enqueue(ws, co, reportFrom, prompts.Reports(ws.ended))
+		h.enqueue(ws, co, reportFrom, prompts.Reports(names))
 	})
+}
+
+// news adds to what a thread brings the coordinator's next board, and wakes
+// the coordinator for it. Callers hold h.mu and save the thread.
+func (h *Hub) news(ws *space, th *thread, add func(*workspace.News)) {
+	if th.t.Role != model.RoleThread {
+		return
+	}
+	if th.t.News == nil {
+		th.t.News = &workspace.News{}
+	}
+	add(th.t.News)
+	h.report(ws)
+}
+
+// withNews are the open threads with news for the coordinator, by name.
+func withNews(ws *space) []string {
+	var out []string
+	for _, n := range slices.Sorted(maps.Keys(ws.threads)) {
+		if th := ws.threads[n]; th.t.News != nil && !th.deleted && !th.t.Resolved {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // Notify shows the person a notice from the coordinator. needsYou keeps it
@@ -1700,6 +1736,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 	}
 	t.InFlight = batch
 	th.quiet = !slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From != reportFrom })
+	th.recapped = false
 	now := time.Now().UTC()
 	t.Turns = append(slices.DeleteFunc(t.Turns, func(at time.Time) bool { return now.Sub(at) > 24*time.Hour }), now)
 
@@ -1727,7 +1764,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 		}
 	}
 	if t.Role == model.RoleCoordinator && !batch[0].Compact {
-		if b := h.board(ws, batch); b != "" {
+		if b := h.board(ws); b != "" {
 			prompt = b + "\n\n---\n\n" + prompt
 		}
 	}
@@ -1762,11 +1799,6 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	defer h.mu.Unlock()
 	t := th.t
 	compact := len(t.InFlight) > 0 && t.InFlight[0].Compact
-	if t.Role != model.RoleCoordinator && !compact {
-		if !slices.Contains(ws.ended, t.Name) {
-			ws.ended = append(ws.ended, t.Name)
-		}
-	}
 	batch := t.InFlight
 	th.busy = false
 	th.cancel = nil
@@ -1849,12 +1881,18 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		if ended {
 			t.Reply = oneLine(res.Text, replyLimit)
 		}
+		switch {
+		case failure != "":
+			h.news(ws, th, func(n *workspace.News) { n.Failed = true })
+		case ended && res.Tools > 0 && !th.recapped && t.Reply != "":
+			h.news(ws, th, func(n *workspace.News) { n.Reply = t.Reply })
+		}
 	}
 	th.quiet = false
 	h.changed(ws, th)
 	if h.ctx.Err() == nil {
 		h.kick(ws, th)
-		if len(ws.ended) > 0 {
+		if t.Role == model.RoleCoordinator && len(withNews(ws)) > 0 {
 			h.report(ws)
 		}
 	}
@@ -1877,7 +1915,11 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 	case agent.KindToolFailed:
 		h.event(ws, th, model.Event{Kind: model.EventTool, ID: e.ID, Exit: 1, Text: e.Text})
 	case agent.KindTodo:
+		was := slices.IndexFunc(th.t.Todos, func(t model.Todo) bool { return t.ID == e.ID && t.State == model.TodoDone })
 		th.t.Todos = changeTodo(th.t.Todos, e)
+		if i := slices.IndexFunc(th.t.Todos, func(t model.Todo) bool { return t.ID == e.ID }); i >= 0 && was < 0 && th.t.Todos[i].State == model.TodoDone {
+			h.news(ws, th, func(n *workspace.News) { n.Done = append(n.Done, th.t.Todos[i].Text) })
+		}
 		h.changed(ws, th)
 	case agent.KindAssistantText:
 		h.event(ws, th, model.Event{Kind: model.EventText, Text: e.Text})
@@ -2089,21 +2131,32 @@ func (h *Hub) images(ws *space, th *thread, batch []workspace.Message) []agent.I
 }
 
 // board is every open thread, for the start of a coordinator turn, so the
-// coordinator manages without asking for the status. A thread that ended a
-// turn since its last turn adds the start of its reply, unless its message
-// is in the batch and says it there. Callers hold h.mu.
-func (h *Hub) board(ws *space, batch []workspace.Message) string {
+// coordinator manages without asking for the status. Each thread's news
+// shows on one board, then it is cleared. Callers hold h.mu.
+func (h *Hub) board(ws *space) string {
 	var lines []string
 	for _, n := range slices.Sorted(maps.Keys(ws.threads)) {
 		th := ws.threads[n]
 		if n == model.Coordinator || th.deleted || th.t.Resolved {
 			continue
 		}
-		ended := slices.Contains(ws.ended, n) &&
-			!slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From == n })
-		lines = append(lines, prompts.BoardLine(n, string(th.state), boardWait(th), th.t.Reply, th.t.Failed, ended))
+		t := th.t
+		b := prompts.BoardThread{Name: n, State: string(th.state), Wait: boardWait(th), Recap: t.Recap, Failed: t.Failed, Total: len(t.Todos)}
+		for _, td := range t.Todos {
+			switch td.State {
+			case model.TodoDone:
+				b.Done++
+			case model.TodoActive:
+				b.Now = td.Text
+			}
+		}
+		if nw := t.News; nw != nil {
+			b.News = prompts.News{Recap: nw.Recap, Done: nw.Done, Artifacts: nw.Artifacts, Reply: nw.Reply}
+			t.News = nil
+			_ = workspace.SaveThread(ws.p.Name, t)
+		}
+		lines = append(lines, prompts.BoardLine(b))
 	}
-	ws.ended = nil
 	if len(lines) == 0 {
 		return ""
 	}

@@ -68,14 +68,18 @@ UUID.
   a remote thread gets them through ssh.
 - Every coordinator turn starts with the board: each open thread, its state,
   the question or permission it waits for, the error of a failed last turn,
-  and the start of its reply if it ended a turn since the coordinator's last
-  one. The hub keeps the start of the last reply and the error in
-  `thread.json`; the threads pane shows the reply too. With
-  `notify = "coordinator"`, a
-  thread's turn also wakes the coordinator, 15 seconds later so that threads
-  that end close together make one turn. It decides with `notify` what
-  reaches the person; these turns do not count toward the pause. With
-  `notify = "threads"` (the default), only the person's messages wake it.
+  its recap, and its tasks (`3/5 done, now: …`). A turn end is not progress
+  by itself: a thread can end a turn only to answer a message. So the hub
+  keeps the thread's news instead, in `thread.json`: a new recap, todo
+  items done, artifacts written, a failed turn, and, for a turn that ran
+  tools and wrote no recap, the start of its reply. The board shows the news
+  once, as a `New:` line under the thread, then clears it; a restart keeps
+  it. With `notify = "coordinator"`, news also wakes the coordinator, 15
+  seconds later so that news close together makes one turn, and again when
+  the hub starts if news waits. A turn with no news wakes nothing. The
+  coordinator decides with `notify` what reaches the person; these turns do
+  not count toward the pause. With `notify = "threads"` (the default), only
+  the person's messages wake it, and its next board has the news.
 - The coordinator's chat is the person's. Threads cannot message the
   coordinator; it learns of them from the board. A turn that only the hub's
   report about threads starts is quiet: its message, reply, tool calls and

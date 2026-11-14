@@ -47,10 +47,14 @@ func Coordinator(in SessionInput) string {
 	return fill(s, in)
 }
 
-// Reports wakes the coordinator about the threads that ended a turn. The
-// note on each comes before it, as in every coordinator turn.
+// Reports wakes the coordinator about the threads with news. The board,
+// as in every coordinator turn, says what it is.
 func Reports(names []string) string {
-	return strings.Join(names, ", ") + " ended a turn. Decide whether the person needs to hear of it now."
+	verb := " has"
+	if len(names) > 1 {
+		verb = " have"
+	}
+	return strings.Join(names, ", ") + verb + " news. Decide whether the person needs to hear of it now."
 }
 
 // Thread is the system prompt for a thread.
@@ -131,32 +135,79 @@ type Wait struct {
 	Paused               bool
 }
 
+// News is what changed in a thread since the coordinator's last board: a
+// new recap, todo items done, artifacts written, and, for a turn that ran
+// tools and wrote no recap, the start of its reply.
+type News struct {
+	Recap     bool
+	Done      []string
+	Artifacts []string
+	Reply     string
+}
+
+// BoardThread is one thread on the board. Done and Total count its todo
+// items, and Now is the one it works on.
+type BoardThread struct {
+	Name, State string
+	Wait        Wait
+	Recap       string
+	Done, Total int
+	Now         string
+	Failed      string
+	News        News
+}
+
+// boardDone is how many done items the board names; it counts the rest.
+const boardDone = 10
+
 // BoardLine is one thread on the board: its state, what it waits for, why
-// its last turn failed, and, when it ended a turn since the coordinator's
-// last turn, the start of its reply. A failure shows until the thread runs
-// again, as the thread needs someone until then.
-func BoardLine(name, state string, w Wait, reply, failed string, ended bool) string {
-	s := "- " + name + ": " + state
-	if ended {
-		s += ", ended a turn"
-	}
-	s += "."
+// its last turn failed, its recap and tasks, and then what is new since the
+// coordinator's last board. A failure shows until the thread runs again,
+// as the thread needs someone until then.
+func BoardLine(t BoardThread) string {
+	s := "- " + t.Name + ": " + t.State + "."
 	part := func(label, text string) {
 		if text = clip(text, replyLimit); text != "" {
 			s += " " + label + ": " + sentence(text)
 		}
 	}
 	switch {
-	case w.Permission != "":
-		part("Waits for permission", w.Permission)
-	case w.Question != "":
-		part("Asks the person", w.Question)
-	case w.Paused:
+	case t.Wait.Permission != "":
+		part("Waits for permission", t.Wait.Permission)
+	case t.Wait.Question != "":
+		part("Asks the person", t.Wait.Question)
+	case t.Wait.Paused:
 		s += " Paused by the person."
 	}
-	part("Last turn failed", failed)
-	if ended {
-		part("Reply", reply)
+	part("Last turn failed", t.Failed)
+	part("Recap", t.Recap)
+	if t.Total > 0 {
+		tasks := fmt.Sprintf("%d/%d done", t.Done, t.Total)
+		if t.Now != "" {
+			tasks += ", now: " + clip(t.Now, replyLimit)
+		}
+		part("Tasks", tasks)
+	}
+	var news []string
+	if t.News.Recap {
+		news = append(news, "recap")
+	}
+	if done := t.News.Done; len(done) > 0 {
+		more := ""
+		if len(done) > boardDone {
+			more = fmt.Sprintf(" and %d more", len(done)-boardDone)
+			done = done[:boardDone]
+		}
+		news = append(news, "done: "+strings.Join(done, ", ")+more)
+	}
+	if len(t.News.Artifacts) > 0 {
+		news = append(news, "wrote "+strings.Join(t.News.Artifacts, ", "))
+	}
+	if r := clip(t.News.Reply, replyLimit); r != "" {
+		news = append(news, "reply: "+r)
+	}
+	if len(news) > 0 {
+		s += "\n  New: " + sentence(strings.Join(news, "; "))
 	}
 	return s
 }

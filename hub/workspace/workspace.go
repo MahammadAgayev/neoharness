@@ -125,6 +125,9 @@ type Thread struct {
 	// turn failed, for the coordinator's board and the threads pane.
 	Reply  string `json:"reply,omitempty"`
 	Failed string `json:"failed,omitempty"`
+	// News is what changed since the coordinator's last board; nil when
+	// nothing did.
+	News *News `json:"news,omitempty"`
 	// Recap is where the work stands, as the session last wrote it.
 	Recap   string    `json:"recap,omitempty"`
 	RecapAt time.Time `json:"recapAt,omitzero"`
@@ -134,6 +137,18 @@ type Thread struct {
 	Since     time.Time `json:"since"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// News is what a thread brings the coordinator's next board: a new recap,
+// todo items done, artifacts written, the start of the reply of a turn that
+// ran tools and wrote no recap, or a failed turn, which the board shows as
+// the thread's state.
+type News struct {
+	Recap     bool     `json:"recap,omitempty"`
+	Done      []string `json:"done,omitempty"`
+	Artifacts []string `json:"artifacts,omitempty"`
+	Reply     string   `json:"reply,omitempty"`
+	Failed    bool     `json:"failed,omitempty"`
 }
 
 // Root is the folder that holds every workspace. It follows NEOHARNESS_HOME like

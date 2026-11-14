@@ -1,6 +1,7 @@
 package prompts
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -29,12 +30,27 @@ func TestCompactPrompt(t *testing.T) {
 	}
 }
 
-func TestTheBoardShowsTheStartOfAReplyWhenTheThreadEndedATurn(t *testing.T) {
-	if got, want := BoardLine("cache", "idle", Wait{}, "All tests pass.", "", true), "- cache: idle, ended a turn. Reply: All tests pass."; got != want {
+func TestTheBoardShowsTheRecapTasksAndNews(t *testing.T) {
+	got := BoardLine(BoardThread{
+		Name: "api", State: "idle", Recap: "Added /healthz; tests pass", Done: 3, Total: 5, Now: "Write the docs",
+		News: News{Recap: true, Done: []string{"Add the route", "Add a test"}, Artifacts: []string{"health-plan"}},
+	})
+	want := "- api: idle. Recap: Added /healthz; tests pass. Tasks: 3/5 done, now: Write the docs.\n  New: recap; done: Add the route, Add a test; wrote health-plan."
+	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
-	if got := BoardLine("cache", "idle", Wait{}, "All tests pass.", "", false); got != "- cache: idle." {
-		t.Errorf("a reply comes once: %q", got)
+	if got := BoardLine(BoardThread{Name: "api", State: "idle", News: News{Reply: "Moved the store."}}); got != "- api: idle.\n  New: reply: Moved the store." {
+		t.Errorf("reply: %q", got)
+	}
+	if got := BoardLine(BoardThread{Name: "api", State: "idle", Recap: "Done"}); got != "- api: idle. Recap: Done." {
+		t.Errorf("no news: %q", got)
+	}
+	many := News{}
+	for i := range 12 {
+		many.Done = append(many.Done, strconv.Itoa(i))
+	}
+	if got := BoardLine(BoardThread{Name: "api", State: "idle", News: many}); !strings.HasSuffix(got, "done: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 and 2 more.") {
+		t.Errorf("many done: %q", got)
 	}
 }
 
@@ -50,7 +66,7 @@ func TestTheBoardSaysWhatAThreadWaitsForAndThatItsLastTurnFailed(t *testing.T) {
 		{"waiting", Wait{Paused: true}, "", "- api: waiting. Paused by the person."},
 		{"idle", Wait{}, "the agent failed: crashed", "- api: idle. Last turn failed: the agent failed: crashed."},
 	} {
-		if got := BoardLine("api", c.state, c.w, "", c.fail, false); got != c.want {
+		if got := BoardLine(BoardThread{Name: "api", State: c.state, Wait: c.w, Failed: c.fail}); got != c.want {
 			t.Errorf("got  %q\nwant %q", got, c.want)
 		}
 	}

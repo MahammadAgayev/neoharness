@@ -274,11 +274,11 @@ func TestCoordinatorTurnsStartWithTheBoard(t *testing.T) {
 	if len(coord) != 2 {
 		t.Fatalf("%d coordinator turns, want 2", len(coord))
 	}
-	if want := "Threads:\n- docs: idle, ended a turn. Reply: ok.\n- lint: idle, ended a turn. Reply: ok.\n\n---\n\n"; !strings.HasPrefix(coord[0], want) {
-		t.Errorf("first turn = %q, want it to start with %q", coord[0], want)
-	}
-	if want := "Threads:\n- docs: idle.\n- lint: idle.\n\n---\n\n"; !strings.HasPrefix(coord[1], want) {
-		t.Errorf("second turn = %q, want it to start with %q: a reply comes once", coord[1], want)
+	// Turns that only talked are no news.
+	for _, c := range coord {
+		if want := "Threads:\n- docs: idle.\n- lint: idle.\n\n---\n\n"; !strings.HasPrefix(c, want) {
+			t.Errorf("turn = %q, want it to start with %q", c, want)
+		}
 	}
 }
 
@@ -1992,13 +1992,16 @@ func TestARestartedSessionGetsTheCurrentPrompt(t *testing.T) {
 	}
 }
 
-// TestThreadTurnsWakeTheCoordinator: with Notify on, threads that end a turn
-// close together wake the coordinator once, and those turns do not count
-// toward the pause.
+// TestThreadTurnsWakeTheCoordinator: with Notify on, threads whose turns
+// bring news close together wake the coordinator once, and those turns do
+// not count toward the pause.
 func TestThreadTurnsWakeTheCoordinator(t *testing.T) {
 	defer func(d time.Duration) { reportDelay = d }(reportDelay)
 	reportDelay = 50 * time.Millisecond
 	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		return agent.Result{Text: "Ran the tests.", Tools: 1}
+	}
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
 	h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }, Notify: true})
 	if err != nil {
@@ -2335,8 +2338,8 @@ func TestAFailedTurnShowsOnTheBoardUntilTheThreadRunsAgain(t *testing.T) {
 			coord = append(coord, r.Prompt)
 		}
 	}
-	failed := "- flaky: idle, ended a turn. Last turn failed: the agent failed: fake: crashed on purpose.\n"
-	if len(coord) != 2 || !strings.Contains(coord[0], failed) || !strings.Contains(coord[1], "- flaky: idle. Last turn failed:") {
+	failed := "- flaky: idle. Last turn failed: the agent failed: fake: crashed on purpose.\n"
+	if len(coord) != 2 || !strings.Contains(coord[0], failed) || !strings.Contains(coord[1], failed) {
 		t.Fatalf("coordinator turns = %q, want the failure on both", coord)
 	}
 	if v := view(t, h, "demo", "flaky"); v.Reply != "" {
@@ -2408,7 +2411,7 @@ func TestTurnsAboutThreadsStayOutOfTheCoordinatorChat(t *testing.T) {
 	f := &fake{}
 	h := newHub(t, f)
 	f.script = func(ctx context.Context, req agent.Request) agent.Result {
-		if strings.Contains(req.Prompt, "ended a turn") {
+		if strings.Contains(req.Prompt, "has news") {
 			_ = h.Notify("demo", model.Coordinator, "tests are done", false)
 		}
 		return agent.Result{Text: "Nothing to tell."}
@@ -2630,4 +2633,148 @@ func TestTodoEventsKeepTheThreadsTodoList(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the todo list to go with the conversation", func() bool { return len(todos()) == 0 })
+}
+
+// newsHub is a hub whose coordinator hears of the threads' news at once.
+func newsHub(t *testing.T, f *fake, notify bool) *Hub {
+	t.Helper()
+	defer func(d time.Duration) { t.Cleanup(func() { reportDelay = d }) }(reportDelay)
+	reportDelay = 30 * time.Millisecond
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }, Notify: notify})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	return h
+}
+
+// newsScript is a thread that does what its message asks: talk, recap,
+// finish a todo item, write an artifact, fail, or run tools without a recap.
+func newsScript(h **Hub) func(ctx context.Context, req agent.Request) agent.Result {
+	return func(ctx context.Context, req agent.Request) agent.Result {
+		name := ""
+		if _, rest, ok := strings.Cut(req.Prompt, "as "); ok {
+			name = strings.Fields(rest)[0]
+		}
+		switch {
+		case strings.Contains(req.Prompt, "please recap"):
+			_ = (*h).Recap("demo", name, "Cache added")
+			return agent.Result{Text: "Done.", Tools: 2}
+		case strings.Contains(req.Prompt, "please finish"):
+			req.OnEvent(agent.Event{Kind: agent.KindTodo, ID: "1", Text: "Add the route", State: agent.TodoActive})
+			req.OnEvent(agent.Event{Kind: agent.KindTodo, ID: "1", State: agent.TodoDone})
+		case strings.Contains(req.Prompt, "please write"):
+			_, _ = (*h).WriteArtifact("demo", name, "plan", "# Plan\n")
+		case strings.Contains(req.Prompt, "please fail"):
+			return agent.Result{ExitCode: 1, Stderr: "fake: crashed"}
+		case strings.Contains(req.Prompt, "please run"):
+			return agent.Result{Text: "Moved the store.", Tools: 3}
+		}
+		return agent.Result{Text: "Sure."}
+	}
+}
+
+func reportTurns(f *fake) []agent.Request {
+	var out []agent.Request
+	for _, r := range f.requests() {
+		if strings.Contains(r.Prompt, "Message from threads") {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// TestOnlyNewsWakesTheCoordinator: a turn that only talks is no progress; a
+// recap, a done todo item, an artifact or a failure is, and wakes the
+// coordinator with it on the board.
+func TestOnlyNewsWakesTheCoordinator(t *testing.T) {
+	f := &fake{}
+	var h *Hub
+	f.script = newsScript(&h)
+	h = newsHub(t, f, true)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "chat", "just talk as chat", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "chat", model.StateIdle)
+	time.Sleep(10 * reportDelay)
+	if rs := reportTurns(f); len(rs) != 0 {
+		t.Fatalf("a turn that only talked woke the coordinator: %q", rs[0].Prompt)
+	}
+	for _, c := range []struct{ name, brief, want string }{
+		{"rec", "please recap as rec", "- rec: idle. Recap: Cache added.\n  New: recap."},
+		{"todo", "please finish as todo", "- todo: idle. Tasks: 1/1 done.\n  New: done: Add the route."},
+		{"art", "please write as art", "- art: idle.\n  New: wrote plan."},
+		{"bad", "please fail as bad", "- bad: idle. Last turn failed: the agent failed: fake: crashed."},
+	} {
+		n := len(reportTurns(f))
+		if err := h.OpenThread("demo", model.Coordinator, c.name, c.brief, ""); err != nil {
+			t.Fatal(err)
+		}
+		eventually(t, c.name+" to wake the coordinator", func() bool { return len(reportTurns(f)) == n+1 })
+		if p := reportTurns(f)[n].Prompt; !strings.Contains(p, c.want) || !strings.Contains(p, c.name+" has news") {
+			t.Errorf("report = %q, want %q", p, c.want)
+		}
+		stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	}
+}
+
+// TestNewsShowsOnceAndARunWithoutARecapShowsItsReply: each piece of news is
+// on one board; a turn that ran tools and wrote no recap brings the start
+// of its reply, and one with a recap does not.
+func TestNewsShowsOnceAndARunWithoutARecapShowsItsReply(t *testing.T) {
+	f := &fake{}
+	var h *Hub
+	f.script = newsScript(&h)
+	h = newsHub(t, f, false)
+	pinned(t, h, "demo")
+	for _, c := range [][2]string{{"run", "please run as run"}, {"rec", "please recap as rec"}} {
+		if err := h.OpenThread("demo", model.Coordinator, c[0], c[1], ""); err != nil {
+			t.Fatal(err)
+		}
+		stateIs(t, h, "demo", c[0], model.StateIdle)
+	}
+	time.Sleep(5 * reportDelay)
+	if rs := reportTurns(f); len(rs) != 0 {
+		t.Fatal("without Notify news must not wake the coordinator")
+	}
+	board := func(msg string) string {
+		_ = h.Send("demo", model.User, model.Coordinator, msg)
+		stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+		rs := f.requests()
+		return rs[len(rs)-1].Prompt
+	}
+	first := board("status?")
+	if !strings.Contains(first, "- run: idle.\n  New: reply: Moved the store.") || !strings.Contains(first, "- rec: idle. Recap: Cache added.\n  New: recap.\n") {
+		t.Fatalf("first board = %q", first)
+	}
+	if second := board("and now?"); strings.Contains(second, "New:") {
+		t.Fatalf("news came twice: %q", second)
+	}
+}
+
+// TestNewsOutlivesARestart: news the coordinator has not seen is saved with
+// the thread, and wakes the coordinator when the hub starts again.
+func TestNewsOutlivesARestart(t *testing.T) {
+	f := &fake{}
+	var h *Hub
+	f.script = newsScript(&h)
+	h = newsHub(t, f, false)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "rec", "please recap as rec", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "rec", model.StateIdle)
+	h.Close()
+	f2 := &fake{}
+	h2, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f2 }, Notify: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h2.Close()
+	eventually(t, "the news to wake the coordinator", func() bool { return len(reportTurns(f2)) == 1 })
+	if p := reportTurns(f2)[0].Prompt; !strings.Contains(p, "New: recap.") {
+		t.Fatalf("report after restart = %q", p)
+	}
 }
