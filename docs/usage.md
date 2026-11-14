@@ -7,6 +7,7 @@
 :folder [folder]        change the folder; the coordinator moves and keeps its conversation
 :setlocal coordinator=<agent>   this workspace's coordinator runs that agent; threads=<agent> for its threads
 :setlocal reopen_compact=ask    a thread the coordinator reopens past compactwarn: compact first, ask you, or off
+:setlocal auto_compact=90       past this context %, a session compacts before its next turn; 0 never
 :setlocal threads&      back to the config; threads? shows it; no argument shows all
 :workspace [name]       switch; no name opens the picker (also <leader>w)
 :workspaces             the workspaces screen (also <leader>pv)
@@ -135,7 +136,9 @@ workspace.
 - When a session's context passes 80%, its status line shows
   `ctx 82% · /compact` in red: every turn sends the whole context again, so
   `/compact` then saves tokens. `neoharness.o.compactwarn` changes the
-  percentage.
+  percentage. Past 90%, the session compacts by itself before its next
+  turn, and its transcript says so; `auto_compact` in the hub setup or
+  `:setlocal auto_compact=<n>` changes that, and `0` turns it off.
 
 ## Artifacts
 

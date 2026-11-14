@@ -65,6 +65,11 @@ What the TUI takes from `init.lua` for itself is in Settings instead.
   and Dawn (light). `:colorscheme` sets it too.
 - **Text size**, the **sidebar**, **Vim keys**, and the **compact warning**:
   the context % at which the prompt says `/compact`.
+- **Auto compact**: the context % at which a session of the open workspace
+  compacts by itself before its next turn; 0 is off. The hub does the
+  compacting, so this is the workspace's `:setlocal auto_compact`; it is set
+  on Enter or when you leave the field. `auto_compact` in `init.lua` sets
+  it for every workspace.
 - **Leader**: click it and press a key; `<Space>` by default.
 - **Key hints**: after a key that starts others, as `<leader>`, `<C-w>` or
   `g`, what can follow shows at once, as which-key does in Neovim. The keys

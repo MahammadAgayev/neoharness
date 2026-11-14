@@ -253,6 +253,10 @@ test('⌘, opens the settings: a theme, and a key you record runs an ex command'
   await page.locator('.map-row select').selectOption(':')
   await page.locator('.map-row .ex').fill(':colorscheme rose-pine-moon')
   await shot('28-settings')
+  // Auto compact is the hub's, so the field sets the open workspace's :setlocal.
+  await page.getByLabel('auto compact').fill('85')
+  await page.getByLabel('auto compact').press('Enter')
+  await expect.poll(() => hub.calls.find((c) => c.path.endsWith('/local'))?.body).toMatchObject({ option: 'auto_compact', agent: '85' })
   await page.keyboard.press('Escape')
   await expect(page.locator('.settings')).toHaveCount(0)
   await page.keyboard.press('Space')

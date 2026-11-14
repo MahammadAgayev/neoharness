@@ -107,6 +107,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       [':folder [folder]', "change the workspace's folder"],
       [':setlocal coordinator=<agent>', "this workspace's coordinator runs that agent; threads= for its threads"],
       [':setlocal reopen_compact=ask', 'when the coordinator reopens a thread past compactwarn: compact first, ask you, or off'],
+      [':setlocal auto_compact=90', 'past this context %, a session compacts before its next turn; 0 never'],
       [':open <name> [where]', 'open a thread: folder or host:dir'],
       [':resolve  :reopen  :stop', 'close or bring back a thread, stop its turn'],
       [':allow :always :deny', 'answer a permission; always covers what the card names (:deny <reason>)'],

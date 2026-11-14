@@ -105,6 +105,9 @@ type Config struct {
 	// SetLocal. CompactWarn 0 never compacts.
 	ReopenCompact string
 	CompactWarn   int
+	// AutoCompact is the context percent at which a session compacts before
+	// its next turn; 0 never. A workspace can choose another with SetLocal.
+	AutoCompact int
 }
 
 // What a reopened thread with a full context does before the coordinator's
@@ -174,6 +177,9 @@ type thread struct {
 	// said of it, for its recap when the turn ends.
 	seen  turnSeen
 	recap *model.Recap
+	// autoTried stops a summary that fails from being asked for again
+	// before every turn of the same session.
+	autoTried bool
 }
 
 // turnSeen is what a turn did that the recap shows as fact: the commands it
@@ -461,6 +467,18 @@ func (h *Hub) SetLocal(name, option, value string) error {
 		return err
 	}
 	p := ws.p
+	if option == "auto_compact" {
+		if n, err := strconv.Atoi(value); value != "" && (err != nil || n < 0 || n > 100) {
+			return errors.New("auto_compact is a context percent, 0 to 100; 0 never")
+		}
+		p.AutoCompact = value
+		if err := workspace.Save(p); err != nil {
+			return err
+		}
+		ws.p = p
+		h.publishWorkspace(ws)
+		return nil
+	}
 	if option == "reopen_compact" {
 		if value != "" && value != ReopenCompact && value != ReopenAsk && value != ReopenOff {
 			return fmt.Errorf("reopen_compact is %s, %s or %s", ReopenCompact, ReopenAsk, ReopenOff)
@@ -484,7 +502,7 @@ func (h *Hub) SetLocal(name, option, value string) error {
 	case "threads":
 		p.Threads, who = agentName, "Threads run"
 	default:
-		return fmt.Errorf("no option %q; the options are coordinator, threads and reopen_compact", option)
+		return fmt.Errorf("no option %q; the options are coordinator, threads, reopen_compact and auto_compact", option)
 	}
 	if err := workspace.Save(p); err != nil {
 		return err
@@ -1134,6 +1152,27 @@ func (h *Hub) reopenMode(ws *space) string {
 	return ReopenAsk
 }
 
+// autoCompact is the workspace's AutoCompact, else the config's.
+func (h *Hub) autoCompact(ws *space) int {
+	if n, err := strconv.Atoi(ws.p.AutoCompact); err == nil {
+		return n
+	}
+	return h.cfg.AutoCompact
+}
+
+// autoCompactDue says whether a thread's next turn is to be a /compact
+// first, and how full its context is. kick asks it, so it runs only
+// between turns, with no card or question waiting.
+func (h *Hub) autoCompactDue(ws *space, th *thread) (int, bool) {
+	t := th.t
+	limit := h.autoCompact(ws)
+	if limit <= 0 || th.autoTried || !t.Started || t.ContextWindow <= 0 || slices.ContainsFunc(t.Queue, func(m workspace.Message) bool { return m.Compact }) {
+		return 0, false
+	}
+	pct := t.Context * 100 / t.ContextWindow
+	return pct, pct >= limit
+}
+
 // compactReopened readies a thread the coordinator reopened, before its
 // message is queued. Every turn sends the whole context again, so a session
 // past CompactWarn is costly to go on with: it compacts first, or the
@@ -1153,6 +1192,8 @@ func (h *Hub) compactReopened(ws *space, th *thread) {
 		t.Queue = append(t.Queue, workspace.Message{From: model.User, At: time.Now().UTC(), Compact: true, Shown: true})
 		h.event(ws, th, model.Event{Kind: model.EventNote, Text: fmt.Sprintf("Context %d%% full: compacting before the coordinator's message.", pct)})
 	default:
+		// The person chooses here; auto compact does not choose for them.
+		th.autoTried = true
 		t.Paused = true
 		t.Asking = fmt.Sprintf("context %d%% full · /compact first, or send the message as is", pct)
 	}
@@ -1793,7 +1834,11 @@ func (h *Hub) kick(ws *space, th *thread) {
 		h.changed(ws, th)
 		return
 	}
-	if !fromUser && counts {
+	if pct, ok := h.autoCompactDue(ws, th); ok {
+		th.autoTried = true
+		t.Queue = append([]workspace.Message{{From: model.User, At: time.Now().UTC(), Compact: true, Shown: true}}, t.Queue...)
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: fmt.Sprintf("Context %d%% full: compacting first.", pct)})
+	} else if !fromUser && counts {
 		t.AgentTurns++
 	}
 	// A /compact request is a turn of its own.
@@ -1956,6 +2001,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		case compact:
 			t.Summary = strings.TrimSpace(res.Text)
 			t.SessionID, t.Started, t.Context = workspace.NewID(), false, 0
+			th.autoTried = false
 			h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Compacted. The next message starts a new conversation from the summary above."})
 		default:
 			t.Summary = ""
@@ -2379,6 +2425,7 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 		ThreadsAgent:     h.agentOf(ws, &workspace.Thread{Role: model.RoleThread}),
 		AgentNames:       slices.Sorted(maps.Keys(h.cfg.Agents)),
 		ReopenCompact:    h.reopenMode(ws),
+		AutoCompact:      h.autoCompact(ws),
 	}
 	now := time.Now()
 	for _, th := range ws.threads {

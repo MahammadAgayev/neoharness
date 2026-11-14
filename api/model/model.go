@@ -361,6 +361,9 @@ type WorkspaceView struct {
 	// ReopenCompact is what a resolved thread with a full context does when
 	// the coordinator reopens it: compact, ask or off.
 	ReopenCompact string `json:"reopenCompact,omitempty"`
+	// AutoCompact is the context percent at which a session compacts
+	// before its next turn; 0 never.
+	AutoCompact int `json:"autoCompact"`
 	// Recap is nil until there is something to say.
 	Recap *WorkspaceRecap `json:"recap,omitempty"`
 }

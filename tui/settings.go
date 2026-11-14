@@ -29,6 +29,9 @@ type HubSettings struct {
 	// ask or off.
 	ReopenCompact string
 	CompactWarn   int
+	// AutoCompact is the context percent at which a session compacts before
+	// its next turn; 0 never.
+	AutoCompact int
 }
 
 // AgentSettings configure one agent.
@@ -141,6 +144,10 @@ func ReadHubSettings(path string) (HubSettings, error) {
 			s.Threads = text(v)
 		case "neoharness.reopen_compact":
 			s.ReopenCompact = text(v)
+		case "neoharness.auto_compact":
+			if n, ok := v.(lua.LNumber); ok {
+				s.AutoCompact = int(n)
+			}
 		}
 	})
 	noop := L.NewFunction(func(*lua.LState) int { return 0 })
@@ -196,6 +203,9 @@ func (s HubSettings) Check() error {
 	case "", "compact", "ask", "off":
 	default:
 		return fmt.Errorf("reopen_compact is compact, ask or off, not %q", s.ReopenCompact)
+	}
+	if s.AutoCompact < 0 || s.AutoCompact > 100 {
+		return fmt.Errorf("auto_compact is a context percent, 0 to 100, not %d", s.AutoCompact)
 	}
 	return nil
 }

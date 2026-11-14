@@ -209,8 +209,11 @@ async function complete(line: string): Promise<string[]> {
       'coordinator&',
       'threads&',
       'reopen_compact&',
+      'auto_compact&',
       ...agents.flatMap((a) => [`coordinator=${a}`, `threads=${a}`]),
       ...['compact', 'ask', 'off'].map((m) => `reopen_compact=${m}`),
+      'auto_compact=90',
+      'auto_compact=0',
     ]
   }
   return names.filter((n) => n.startsWith(word)).map((n) => head + n)

@@ -61,6 +61,7 @@ require("neoharness").setup({
   notify = "threads",                   -- every thread notifies you; "coordinator": the coordinator decides
   workspace_recap = true,               -- once the threads that ran end, wake the coordinator to write the workspace recap
   reopen_compact = "ask",               -- the coordinator reopens a thread past compactwarn: "compact", "ask" or "off"
+  auto_compact = 90,                    -- past this context %, a session compacts before its next turn; 0 never
   coordinator = "claude",               -- the agent coordinators run
   threads = "quick",                    -- the agent threads run; left out: the coordinator's
 })
@@ -98,6 +99,21 @@ context is past `neoharness.o.compactwarn` does what `reopen_compact` says:
 - `"off"` sends the message.
 
 `:setlocal reopen_compact=<value>` sets it for one workspace.
+
+A session whose context is past `auto_compact` percent (90 by default)
+compacts by itself before its next turn, so a thread or a coordinator that
+runs for a long time goes on without you. It compacts only between turns,
+when a message waits for the session, and never while a permission card or
+a question waits. The transcript says `Context 92% full: compacting first.`,
+then the message starts the new session from the summary. A session with
+nothing to do does not compact. If the summary fails, the session goes on
+as it is and does not try again until a `/compact` works. Keep
+`compactwarn` below `auto_compact` to see the warning first; `0` turns auto
+compact off, and the warning still shows. `:setlocal auto_compact=<n>` sets
+it for one workspace.
+
+Claude Code's own auto-compact stays as it is. It starts only near the
+model's whole window, far past `context_window`, so the hub compacts first.
 
 `require("neoharness.claude").setup({...})` still works: it sets the entry
 `claude`.

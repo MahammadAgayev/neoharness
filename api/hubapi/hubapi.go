@@ -59,7 +59,8 @@ type (
 		Pin string `json:"pin"`
 	}
 	// Local is a :setlocal. Agent is the option's value: an agent's name,
-	// or for reopen_compact compact, ask or off. Empty goes back to the
+	// for reopen_compact compact, ask or off, or for auto_compact a percent.
+	// Empty goes back to the
 	// config's.
 	Local struct {
 		Option string `json:"option"`

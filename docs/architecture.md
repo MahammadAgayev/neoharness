@@ -25,7 +25,9 @@
   person or the coordinator reopens a resolved thread; another thread's is
   refused. When the coordinator reopens one past `compactwarn`,
   `reopen_compact` compacts first, holds the message as a question, or
-  does nothing.
+  does nothing. Past `auto_compact`, the next turn of any session is a
+  `/compact` first; the hub decides it in `kick`, so it runs only between
+  turns.
 
 ## Turns
 

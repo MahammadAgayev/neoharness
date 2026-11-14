@@ -1081,7 +1081,7 @@ func TestSetlocalChoosesTheWorkspacesAgents(t *testing.T) {
 		t.Fatalf("locals = %q, want %q", h.hub.locals, want)
 	}
 	h.press(":setlocal", "<CR>")
-	if h.a.notice != "coordinator=big  threads=small  reopen_compact=ask" {
+	if h.a.notice != "coordinator=big  threads=small  reopen_compact=ask  auto_compact=0" {
 		t.Fatalf("notice = %q", h.a.notice)
 	}
 	h.press(":setlocal threads?", "<CR>")

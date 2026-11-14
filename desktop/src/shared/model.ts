@@ -191,6 +191,9 @@ export interface WorkspaceView {
   // What a resolved thread with a full context does when the coordinator
   // reopens it: compact, ask or off.
   reopenCompact?: string
+  // The context percent at which a session compacts before its next turn;
+  // 0 never.
+  autoCompact?: number
   recap?: WorkspaceRecap
 }
 

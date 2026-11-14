@@ -2067,8 +2067,9 @@ func TestReopenedFullThreadAsksFirst(t *testing.T) {
 		t.Fatalf("turns = %+v", r)
 	}
 
-	// Or send it as it is.
+	// Or send it as it is, and auto compact does not compact instead.
 	h, f = fullThread(t, "")
+	h.cfg.AutoCompact = 80
 	_ = h.Send("demo", model.Coordinator, "docs", "more work")
 	if err := h.SendNow("demo", "docs", ""); err != nil {
 		t.Fatal(err)
@@ -2570,5 +2571,72 @@ func TestImagesAreChecked(t *testing.T) {
 	}
 	if err := h.Send("demo", model.User, model.Coordinator, "", pngImage); err != nil {
 		t.Errorf("an image alone is a message: %v", err)
+	}
+}
+
+func TestAutoCompactBeforeTheNextTurn(t *testing.T) {
+	f := &fake{}
+	summary := "SUMMARY"
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if strings.Contains(req.Prompt, "Reply with only the summary") {
+			return agent.Result{Text: summary, Context: 100, ContextWindow: 1000}
+		}
+		return agent.Result{Text: "ok", Context: 950, ContextWindow: 1000}
+	}
+	h := newHub(t, f)
+	h.cfg.AutoCompact = 90
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "docs", "work", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	if n := len(f.requests()); n != 1 {
+		t.Fatalf("a thread with nothing to do should not compact: %d turns", n)
+	}
+	if err := h.Send("demo", model.Coordinator, "docs", "more work"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	r := f.requests()
+	if len(r) != 3 || !strings.Contains(r[1].Prompt, "Reply with only the summary") {
+		t.Fatalf("want the summary turn before the message: %d turns", len(r))
+	}
+	if !strings.Contains(r[2].Prompt, "SUMMARY") || !strings.HasSuffix(r[2].Prompt, "more work") {
+		t.Fatalf("the message should start the compacted session: %q", r[2].Prompt)
+	}
+	if evs, _ := h.Events("demo", "docs", 0); !slices.ContainsFunc(evs, func(e model.Event) bool {
+		return e.Kind == model.EventNote && strings.Contains(e.Text, "95% full")
+	}) {
+		t.Fatal("a note should say the context was compacted")
+	}
+
+	// A summary that fails is tried once, not before every message.
+	summary = ""
+	for _, text := range []string{"again", "and again"} {
+		if err := h.Send("demo", model.Coordinator, "docs", text); err != nil {
+			t.Fatal(err)
+		}
+		stateIs(t, h, "demo", "docs", model.StateIdle)
+	}
+	if n := len(f.requests()); n != 6 {
+		t.Fatalf("turns = %d, want one failed summary and two messages", n)
+	}
+
+	// :setlocal auto_compact=0 turns it off here.
+	if err := h.SetLocal("demo", "auto_compact", "0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.SetLocal("demo", "auto_compact", "101"); err == nil {
+		t.Error("auto_compact past 100 should fail")
+	}
+	summary = "SUMMARY"
+	_ = h.Send("demo", model.User, "docs", "/compact")
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	_ = h.Send("demo", model.Coordinator, "docs", "one")
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	_ = h.Send("demo", model.Coordinator, "docs", "two")
+	stateIs(t, h, "demo", "docs", model.StateIdle)
+	if n := len(f.requests()); n != 9 {
+		t.Fatalf("turns = %d, want no compact with auto_compact=0", n)
 	}
 }

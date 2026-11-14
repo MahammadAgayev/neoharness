@@ -143,9 +143,42 @@ export function Settings() {
               }}
             />
           </Row>
+          <AutoCompact />
         </div>
       </div>
     </div>
+  )
+}
+
+// AutoCompact is the open workspace's :setlocal auto_compact: the hub
+// compacts, and the app does not read init.lua. It sets the value on Enter
+// or when the field is left, so a half-typed number never reaches the hub.
+function AutoCompact() {
+  const v = useStore((s) => s.workspaces.find((w) => w.name === s.workspace))
+  if (!v) return null
+  const pct = v.autoCompact ?? 0
+  const set = (text: string) => {
+    const n = Number(text)
+    if (text !== '' && n >= 0 && n <= 100 && n !== pct) void store.setLocal([`auto_compact=${n}`])
+  }
+  return (
+    <Row
+      title="Auto compact"
+      detail={`The context use, in percent, at which a session of ${v.name} compacts before its next turn. 0 is off. auto_compact in init.lua sets it for every workspace.`}
+    >
+      <input
+        type="number"
+        className="field small"
+        aria-label="auto compact"
+        min={0}
+        max={100}
+        defaultValue={pct}
+        onBlur={(e) => set(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') set(e.currentTarget.value)
+        }}
+      />
+    </Row>
   )
 }
 

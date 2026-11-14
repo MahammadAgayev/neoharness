@@ -38,6 +38,9 @@ type Workspace struct {
 	// ReopenCompact is the :setlocal reopen_compact here; empty is the
 	// config's.
 	ReopenCompact string `json:"reopenCompact,omitempty"`
+	// AutoCompact is the :setlocal auto_compact here, a percent; empty is
+	// the config's.
+	AutoCompact string `json:"autoCompact,omitempty"`
 	// Recap holds the goal and the coordinator's lines; the hub works out
 	// the rest of the workspace recap when it shows it.
 	Recap *model.WorkspaceRecap `json:"recap,omitempty"`
