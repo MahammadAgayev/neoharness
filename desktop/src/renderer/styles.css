@@ -577,6 +577,14 @@ kbd {
   gap: 8px;
   margin-top: 10px;
 }
+.card-question {
+  margin-top: 6px;
+}
+.card-hint {
+  align-self: center;
+  margin-right: auto;
+  font-size: var(--fs-secondary);
+}
 
 .btn {
   display: inline-flex;

@@ -56,9 +56,16 @@ UUID.
 
 - Messages that arrive while a thread is busy wait in a queue. All of them
   go into the next turn as one prompt.
-- While a question waits, the others' messages wait too, so the thread
-  does not move on from it. The person's answer goes first in the turn,
-  with them; send now with nothing written sends them without one.
+- `ask_user` works as a permission request: the hub holds the call open,
+  the thread waits, and the person's next message is the answer, which
+  goes back as the tool's result in the same turn. A deny skips it. The
+  time it waits, as for a permission, does not count toward the turn
+  limit. The adapter turns off Claude's own question tool, which no one
+  can answer under `-p`.
+- When the turn ends before the answer, the question stays with the
+  thread, and the others' messages wait too, so the thread does not move
+  on from it. The person's answer goes first in the next turn, with them;
+  send now with nothing written sends them without one.
 - The person's message can hold images: png, jpeg, gif or webp, at most 5
   per message and 3.75 MB each (5 MB as base64). The hub reads the type from
   the bytes and keeps each image in the thread's `images/` folder. The text
@@ -130,7 +137,8 @@ usage.md). Which recap the person closed stays in the client.
 ## Permissions
 
 When Claude asks for approval, it calls `permission_prompt`. The hub holds
-the call open, sets the thread to waiting, and the TUI shows a card.
+the call open, sets the thread to waiting, and the TUI shows a card. The
+turn's 4-hour limit stops while a permission or a question waits.
 
 - Your own Claude settings and allow-lists still apply.
 - The hub's own tools are always allowed.

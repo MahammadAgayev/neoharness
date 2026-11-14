@@ -692,6 +692,7 @@ func (a *App) onView(v model.ThreadView) {
 	}
 	a.chat(v.Name).SetPending(v.Pending)
 	a.chat(v.Name).SetWorking(v.State == model.StateRunning)
+	a.chat(v.Name).SetAsking(v.QuestionID != "")
 	// A turn makes the recap old news; its next one waits for the next return.
 	if v.State == model.StateRunning {
 		delete(a.recapOpen, a.recapKey(v.Name))

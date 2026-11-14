@@ -118,7 +118,10 @@ type Buffer struct {
 	pending []model.Event
 	// working is set while the chat's thread has a turn running.
 	working bool
-	lines   []Line
+	// asking hides the last question block: the card above the prompt
+	// shows it until the answer.
+	asking bool
+	lines  []Line
 	linesW  int
 	dirty   bool
 }
@@ -194,7 +197,18 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 		return b.lines
 	}
 	var out []Line
+	ask := -1
+	if b.asking {
+		for i, bl := range b.blocks {
+			if bl.kind == bAsk {
+				ask = i
+			}
+		}
+	}
 	for i, bl := range b.blocks {
+		if i == ask {
+			continue
+		}
 		if i > 0 && bl.kind != bRaw && !b.joins(i) {
 			out = append(out, Line{Block: i})
 		}
@@ -251,6 +265,14 @@ func (b *Buffer) SetPending(evs []model.Event) {
 }
 
 // SetWorking tells a chat whether its thread has a turn running.
+// SetAsking hides the last question block while its card shows.
+func (b *Buffer) SetAsking(on bool) {
+	if b.asking != on {
+		b.asking = on
+		b.dirty = true
+	}
+}
+
 func (b *Buffer) SetWorking(on bool) {
 	if b.working != on {
 		b.working = on

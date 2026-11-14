@@ -75,6 +75,9 @@ export interface ThreadView {
   queued: number
   wakeAt?: string
   waiting?: string
+  // The question the running turn waits on, when waiting is one: writing
+  // answers it, and a deny with this id skips it.
+  questionId?: string
   permission?: Permission
   pending?: Event[]
   // The start of the last turn's reply; absent while a turn runs.

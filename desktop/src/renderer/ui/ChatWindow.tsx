@@ -105,6 +105,7 @@ const BlockView = memo(function BlockView(props: {
   artifacts: Set<string>
   thread: string
   pendingPermission: boolean
+  pendingQuestion?: boolean
   scope?: string
 }) {
   const { b, open } = props
@@ -207,6 +208,22 @@ const BlockView = memo(function BlockView(props: {
         </div>
       )
     case 'ask':
+      // A question that waits is a card, as a permission request is.
+      if (props.pendingQuestion)
+        return (
+          <div className="card question">
+            <div className="card-head">
+              <span className="t-gold">◆</span> <span className="t-subtle">question</span>
+            </div>
+            <Markdown className="card-question" text={b.text} artifacts={props.artifacts} />
+            <div className="card-actions">
+              <span className="t-muted card-hint">Write your answer below</span>
+              <button className="btn" onClick={() => void store.answerThread(props.thread, 'deny')}>
+                Skip <kbd>space x</kbd>
+              </button>
+            </div>
+          </div>
+        )
       return (
         <div className="b-ask">
           <div className="b-label t-gold">question</div>
@@ -310,6 +327,11 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
     }
     return -1
   }, [blocks, v?.permission])
+  const askKey = useMemo(() => {
+    if (!v?.questionId) return -1
+    for (let i = blocks.length - 1; i >= 0; i--) if (blocks[i].kind === 'ask') return blocks[i].key
+    return -1
+  }, [blocks, v?.questionId])
 
   // Follow the end as the chat grows, unless the person scrolled away or
   // selects: new blocks would scroll the selection away.
@@ -598,7 +620,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
                 void blockMenu(b, (a) => handleRef.current(a, 1))
               }}
             >
-              <BlockView b={b} open={!!folds[b.key]} artifacts={artifacts} thread={thread} pendingPermission={b.key === permKey} scope={b.key === permKey ? v?.permission?.scope : undefined} />
+              <BlockView b={b} open={!!folds[b.key]} artifacts={artifacts} thread={thread} pendingPermission={b.key === permKey} pendingQuestion={b.key === askKey} scope={b.key === permKey ? v?.permission?.scope : undefined} />
             </div>
           ))}
           {working && (

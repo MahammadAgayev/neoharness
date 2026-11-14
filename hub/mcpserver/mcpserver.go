@@ -177,12 +177,16 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			return text(fmt.Sprintf("You will be woken in %d minutes.", in.Minutes)), nil, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "ask_user", Description: "Ask the person a question you cannot continue without. The question is the one place the person reads it: put in it what they need to answer, and do not repeat it in your reply. Then end your turn. The answer comes as your next message; messages from others wait until then."},
+	mcp.AddTool(s, &mcp.Tool{Name: "ask_user", Description: "Ask the person a question you cannot continue without, and wait for the answer: it comes back as this tool's result. The question is the one place the person reads it: put in it the context and the choices they need, in a few short lines."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in askIn) (*mcp.CallToolResult, any, error) {
-			if err := h.AskUser(p, me, in.Question); err != nil {
+			answer, skipped, err := h.AskUser(ctx, p, me, in.Question)
+			if err != nil {
 				return nil, nil, err
 			}
-			return text("Question posted. End your turn now; the answer arrives as your next message."), nil, nil
+			if skipped {
+				return text("The person skipped the question. Go on without the answer, or ask again later."), nil, nil
+			}
+			return text("The person answered: " + answer), nil, nil
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "recap", Description: "Say where your work stands, so the person gets back on track when they come back. It shows at the top of your chat when they come back; it replaces your last one. Call it last in a turn in which your work moved. Plain words, short: outcomes, not steps."},

@@ -64,11 +64,17 @@ yourself:
 - Messages sent while a thread is busy wait in a queue and show dim at the
   end of the chat. `<CR>` on one sends it now: the running turn stops, and
   the queue goes in the next turn at once.
-- A question shows once, as a block in the chat, with what you need to
-  answer it; you answer by writing. It holds the messages of the
-  coordinator and the other threads: they wait, dim at the end of the
-  chat, until you answer. Your answer goes first, with them. `<CR>` on one
-  sends them without an answer, and the question closes.
+- A question waits in a card above the prompt, as a permission request
+  does, and the thread waits for you. You answer by writing: your message
+  goes back to the thread as the answer, in the same turn. `<leader>x`
+  skips it, and the thread goes on without the answer. A picture cannot be
+  the answer; send it after. Once answered, the question shows as a block
+  in the chat. The others' messages wait, dim, as for any running turn.
+  The time a question waits does not count toward the 4-hour turn limit.
+- If the turn ends before your answer (a stop, a crash, a restart), the
+  question stays and holds the coordinator's and the other threads'
+  messages. Your next message answers it, first in a new turn, with them;
+  `<CR>` on one sends them without an answer, and the question closes.
 - When you come back after 2 minutes or more away, a chat shows its recap
   in a card at its top: where the session's work stands, in its own words,
   as in Claude Code. Away is the terminal without focus, or no key for that

@@ -3140,20 +3140,40 @@ func TestPopupMarginsAreBlank(t *testing.T) {
 	}
 }
 
-// A question shows once, as a block in the chat; no card repeats it.
-func TestAQuestionShowsOnceInTheChat(t *testing.T) {
+// A question waits in a card above the prompt, as a permission request
+// does, and shows once: its block in the chat comes back after the answer.
+// Writing answers it; <leader>x skips it.
+func TestAQuestionWaitsInACardLikeAPermission(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	q := "The roadmap has two phases. Which phase first?"
-	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &model.Event{Kind: model.EventAsk, Text: q}})
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &model.Event{Kind: model.EventAsk, ID: "q1", Text: q}})
 	v := h.a.threads[model.Coordinator]
-	v.State, v.Waiting = model.StateWaiting, q
-	v.Pending = []model.Event{{Kind: model.EventMessage, From: "docs", Text: "stop, the person wants one thread"}}
+	v.State, v.Waiting, v.QuestionID = model.StateWaiting, q, "q1"
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.toasts = nil
+	h.press("<Esc>")
 	h.a.draw()
 	if n := strings.Count(h.screen(), "Which phase first?"); n != 1 {
 		t.Fatalf("the question shows %d times:\n%s", n, h.screen())
+	}
+	h.see("question")
+	h.see("␣x skip")
+	h.press("i", "phase one", "<CR>", "<Esc>")
+	if last := h.hub.sent[len(h.hub.sent)-1]; last != model.Coordinator+": phase one" {
+		t.Fatalf("sent = %q", h.hub.sent)
+	}
+	h.press("<Space>", "x")
+	if len(h.hub.answers) != 1 || h.hub.answers[0] != model.Coordinator+" q1 deny " {
+		t.Fatalf("answers = %q", h.hub.answers)
+	}
+
+	// Answered: the card goes and the block shows in the chat.
+	v.State, v.Waiting, v.QuestionID = model.StateIdle, "", ""
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	if n := strings.Count(h.screen(), "Which phase first?"); n != 1 || strings.Contains(h.screen(), "␣x skip") {
+		t.Fatalf("after the answer:\n%s", h.screen())
 	}
 }
 

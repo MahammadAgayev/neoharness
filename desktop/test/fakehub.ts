@@ -174,8 +174,8 @@ export class FakeHub {
       }
       if (kind === 'threads' && sub === 'answer') {
         const v = this.threads[ws].find((t) => t.name === name)!
-        this.event(ws, name, { kind: 'answer', text: body.message ? `${body.decision}: ${body.message}` : body.decision })
-        this.setView({ ...v, state: 'running', permission: undefined, waiting: undefined })
+        if (body.id !== v.questionId) this.event(ws, name, { kind: 'answer', text: body.message ? `${body.decision}: ${body.message}` : body.decision })
+        this.setView({ ...v, state: 'running', permission: undefined, waiting: undefined, questionId: undefined })
         return json({})
       }
       if (kind === 'threads' && sub === 'takeback') {

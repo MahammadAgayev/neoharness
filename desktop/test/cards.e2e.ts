@@ -86,12 +86,21 @@ test('a permission with no scope offers no always', async () => {
   await expect.poll(() => hub.calls.filter((c) => c.path.endsWith('/answer')).at(-1)?.body).toMatchObject({ id: 'p2', decision: 'deny' })
 })
 
-test('a question shows in the chat, and you answer by writing', async () => {
-  hub.event('demo', 'api', { kind: 'ask', text: 'Which **port** should it listen on?\n(A) 8080\n(B) 9090' })
-  hub.setView(view('demo', 'api', { state: 'waiting', waiting: 'Which port should it listen on?' }))
-  await expect(page.locator('.b-ask', { hasText: 'Which port' })).toBeVisible()
+test('a question waits in a card like a permission; you answer by writing, or skip it', async () => {
+  hub.event('demo', 'api', { kind: 'ask', id: 'q1', text: 'Which **port** should it listen on?\n(A) 8080\n(B) 9090' })
+  hub.setView(view('demo', 'api', { state: 'waiting', waiting: 'Which port should it listen on?', questionId: 'q1' }))
+  const card = page.locator('.card.question', { hasText: 'Which port' })
+  await expect(card).toBeVisible()
   // Each choice on its own line, as the thread wrote it and as the TUI shows it.
-  await expect(page.locator('.b-ask br')).toHaveCount(2)
+  await expect(card.locator('br')).toHaveCount(2)
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('x')
+  await expect.poll(() => hub.calls.filter((c) => c.path.endsWith('/answer')).at(-1)?.body).toMatchObject({ id: 'q1', decision: 'deny' })
+  // Answered: the card is a plain block again.
+  hub.setView(view('demo', 'api', { state: 'waiting', waiting: 'Which port should it listen on?' }))
+  await expect(page.locator('.card.question')).toHaveCount(0)
+  await expect(page.locator('.b-ask', { hasText: 'Which port' })).toBeVisible()
   await page.keyboard.press('i')
   await page.keyboard.type('8080')
   await page.keyboard.press('Enter')

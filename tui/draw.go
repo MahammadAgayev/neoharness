@@ -670,9 +670,24 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 		body = [][]Span{
 			{{"i", th.Iris}, {" write to continue", th.Muted}},
 		}
+	case v.QuestionID != "":
+		title = "question"
+		rows := renderMarkdown(v.Waiting, bw-4, th, nil)
+		// A long question leaves the window room for the chat.
+		if n := max(min(questionRows, w.rect.H/2-4), 1); len(rows) > n {
+			rows = rows[:n]
+			rows[n-1].Spans = append(clone(rows[n-1].Spans), Span{" …", th.Muted})
+		}
+		for _, l := range rows {
+			body = append(body, append(clone(l.Prefix), l.Spans...))
+		}
+		body = append(body, []Span{{"i", th.Iris}, {" answer   ", th.Muted}, {"␣x", th.Iris}, {" skip", th.Muted}})
 	}
 	return title, body, bw
 }
+
+// questionRows is the most rows of a question the card shows.
+const questionRows = 12
 
 // drawFloats draws the card in the rows the transcript left for it, just
 // above bottom.

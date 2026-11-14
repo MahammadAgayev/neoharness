@@ -397,34 +397,123 @@ func TestPendingPermissionIsDeniedWhenTheTurnEnds(t *testing.T) {
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
 }
 
-func TestAskUserWaitsAndUserReplyClears(t *testing.T) {
+// askAndEnd asks a question and lets the turn end before the answer, as a
+// stop, a crash or a restart does: the question stays, and the person's next
+// message answers it in a new turn.
+func askAndEnd(t *testing.T, h *Hub, name, q string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { _, _, _ = h.AskUser(ctx, "demo", name, q) }()
+	eventually(t, "the question", func() bool { return view(t, h, "demo", name).QuestionID != "" })
+	cancel()
+	eventually(t, "the question to outlive its call", func() bool { return view(t, h, "demo", name).QuestionID == "" })
+}
+
+// TestAQuestionWaitsForTheAnswerInItsTurn: as a permission request, a
+// question holds the turn; the person's message is the answer, and the turn
+// goes on with it. Others' messages wait as for any running turn.
+func TestAQuestionWaitsForTheAnswerInItsTurn(t *testing.T) {
 	f := &fake{}
 	h := newHub(t, f)
+	answered := make(chan string, 1)
 	f.script = func(ctx context.Context, req agent.Request) agent.Result {
-		if !strings.Contains(req.Prompt, "postgres") {
-			_ = h.AskUser("demo", model.Coordinator, "which database?")
+		if !strings.Contains(req.Prompt, "set up storage") {
+			return agent.Result{Text: "ok"}
 		}
+		answer, _, _ := h.AskUser(ctx, "demo", model.Coordinator, "which database?")
+		answered <- answer
+		return agent.Result{Text: "Using " + answer}
+	}
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")
+	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
+	if v := view(t, h, "demo", model.Coordinator); v.Waiting != "which database?" || v.QuestionID == "" {
+		t.Fatalf("waiting = %q, question %q", v.Waiting, v.QuestionID)
+	}
+	hubMessage(h, wakeFrom, "fyi")
+	if err := h.Send("demo", model.User, model.Coordinator, "postgres"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the held message's turn", func() bool { return len(f.requests()) == 2 })
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if p := f.requests()[1].Prompt; !strings.Contains(p, "fyi") || strings.Contains(p, "postgres") {
+		t.Fatalf("second turn = %q: the answer went in the first, the held message after", p)
+	}
+	if a := <-answered; a != "postgres" {
+		t.Fatalf("the turn got %q", a)
+	}
+	evs, _ := h.Events("demo", model.Coordinator, 50)
+	ask := slices.IndexFunc(evs, func(e model.Event) bool { return e.Kind == model.EventAsk })
+	ans := slices.IndexFunc(evs, func(e model.Event) bool { return e.Kind == model.EventMessage && e.Text == "postgres" })
+	if ask < 0 || ans < ask {
+		t.Fatalf("events = %+v, want the question, then the answer", evs)
+	}
+}
+
+// TestASkippedQuestionLetsTheTurnGoOn: skipping answers nothing, and a
+// picture cannot be the answer.
+func TestASkippedQuestionLetsTheTurnGoOn(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	got := make(chan bool, 1)
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		_, skipped, _ := h.AskUser(ctx, "demo", model.Coordinator, "which database?")
+		got <- skipped
 		return agent.Result{Text: "ok"}
 	}
 	pinned(t, h, "demo")
 	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")
 	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
-	if v := view(t, h, "demo", model.Coordinator); v.Waiting != "which database?" {
-		t.Fatalf("waiting = %q", v.Waiting)
+	if err := h.Send("demo", model.User, model.Coordinator, "this one", pngImage); err == nil {
+		t.Fatal("a picture went as the answer")
 	}
-	_ = h.Send("demo", model.User, model.Coordinator, "postgres")
+	id := view(t, h, "demo", model.Coordinator).QuestionID
+	if err := h.Answer("demo", model.Coordinator, id, model.Deny, ""); err != nil {
+		t.Fatal(err)
+	}
+	if !<-got {
+		t.Fatal("the question was not skipped")
+	}
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
 }
 
-// askThenHold has the coordinator ask a question, then another thread write
-// to it while the question waits.
+// TestAQuestionDoesNotCountTowardTheTurnTimeout: a turn that waits for the
+// person is not wedged.
+func TestAQuestionDoesNotCountTowardTheTurnTimeout(t *testing.T) {
+	f := &fake{}
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }, TurnTimeout: 80 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		answer, _, err := h.AskUser(ctx, "demo", model.Coordinator, "which database?")
+		if err != nil {
+			return agent.Result{ExitCode: -1}
+		}
+		return agent.Result{Text: "Using " + answer}
+	}
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")
+	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
+	time.Sleep(300 * time.Millisecond)
+	_ = h.Send("demo", model.User, model.Coordinator, "postgres")
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	evs, _ := h.Events("demo", model.Coordinator, 50)
+	if slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventError }) {
+		t.Fatalf("events = %+v: the wait counted toward the timeout", evs)
+	}
+}
+
+// askThenHold has the coordinator ask a question and its turn end before
+// the answer, then another thread write to it while the question waits.
 func askThenHold(t *testing.T) (*Hub, *fake) {
 	t.Helper()
 	f := &fake{}
 	h := newHub(t, f)
 	f.script = func(ctx context.Context, req agent.Request) agent.Result {
 		if strings.Contains(req.Prompt, "set up storage") {
-			_ = h.AskUser("demo", model.Coordinator, "which database?")
+			askAndEnd(t, h, model.Coordinator, "which database?")
 			return agent.Result{Text: "asked"}
 		}
 		return agent.Result{Text: "ok"}
@@ -470,66 +559,6 @@ func TestSendNowReleasesHeldMessagesAndClosesTheQuestion(t *testing.T) {
 	evs, _ := h.Events("demo", model.Coordinator, 50)
 	if !slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventNote && strings.Contains(e.Text, "not answered") }) {
 		t.Fatal("the transcript must say the question was not answered")
-	}
-}
-
-func TestAnswerStopsATurnThatStillRunsAfterItsQuestion(t *testing.T) {
-	f := &fake{}
-	h := newHub(t, f)
-	f.script = func(ctx context.Context, req agent.Request) agent.Result {
-		if strings.Contains(req.Prompt, "postgres") {
-			return agent.Result{Text: "ok"}
-		}
-		_ = h.AskUser("demo", model.Coordinator, "which database?")
-		req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "asked"})
-		// claude -p waits here for a background task.
-		<-ctx.Done()
-		return agent.Result{ExitCode: -1}
-	}
-	pinned(t, h, "demo")
-	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")
-	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
-	if v := view(t, h, "demo", model.Coordinator); v.Waiting != "which database?" {
-		t.Fatalf("waiting = %q", v.Waiting)
-	}
-	_ = h.Send("demo", model.User, model.Coordinator, "postgres")
-	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
-	if reqs := f.requests(); len(reqs) != 2 || !strings.Contains(reqs[1].Prompt, "postgres") {
-		t.Fatalf("the answer should start the next turn at once; %d turns", len(reqs))
-	}
-}
-
-func TestAnswerAfterTheTurnEndedInterruptsNothing(t *testing.T) {
-	f := &fake{}
-	h := newHub(t, f)
-	gate := make(chan struct{})
-	f.script = func(ctx context.Context, req agent.Request) agent.Result {
-		if strings.Contains(req.Prompt, "postgres") {
-			select {
-			case <-gate:
-			case <-ctx.Done():
-				return agent.Result{ExitCode: -1}
-			}
-			return agent.Result{Text: "ok"}
-		}
-		_ = h.AskUser("demo", model.Coordinator, "which database?")
-		return agent.Result{Text: "asked"}
-	}
-	pinned(t, h, "demo")
-	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")
-	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
-	eventually(t, "the asking turn to end", func() bool {
-		evs, _ := h.Events("demo", model.Coordinator, 50)
-		return slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventTurnEnd })
-	})
-	_ = h.Send("demo", model.User, model.Coordinator, "postgres")
-	close(gate)
-	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
-	evs, _ := h.Events("demo", model.Coordinator, 50)
-	for _, e := range evs {
-		if e.Kind == model.EventNote && e.Text == "Interrupted." {
-			t.Fatal("an answer must not stop the turn it starts")
-		}
 	}
 }
 
@@ -1673,9 +1702,7 @@ func TestRestoreSaysATurnWasStoppedByTheDelete(t *testing.T) {
 func TestTheSummarySaysTheCoordinatorsState(t *testing.T) {
 	h := newHub(t, &fake{})
 	pinned(t, h, "demo")
-	if err := h.AskUser("demo", model.Coordinator, "Which phase first?"); err != nil {
-		t.Fatal(err)
-	}
+	askAndEnd(t, h, model.Coordinator, "Which phase first?")
 	for _, s := range h.Workspaces() {
 		if s.Name == "demo" && (s.Coordinator != model.StateWaiting || s.Counts[model.StateWaiting] != 0) {
 			t.Fatalf("summary = %+v; the coordinator waits, and it is not a thread", s)

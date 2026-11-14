@@ -1037,9 +1037,9 @@ class Store {
   async answer(d: Decision, msg = ''): Promise<void> {
     const cur = this.cur()
     const wins = cur ? [cur, ...this.wins()] : this.wins()
-    const w = wins.find((x) => x.buf.kind === 'chat' && this.state.threads[x.buf.thread]?.permission)
+    const w = wins.find((x) => x.buf.kind === 'chat' && (this.state.threads[x.buf.thread]?.permission || this.state.threads[x.buf.thread]?.questionId))
     if (!w || w.buf.kind !== 'chat') {
-      this.say('no permission request in this window', 'muted')
+      this.say('no permission request or question in this window', 'muted')
       return
     }
     await this.answerThread(w.buf.thread, d, msg)
@@ -1047,6 +1047,13 @@ class Store {
 
   async answerThread(name: string, d: Decision, msg = ''): Promise<void> {
     const v = this.state.threads[name]
+    if (!v?.permission && v?.questionId) {
+      // A question takes a written answer; deny skips it.
+      if (d !== 'deny') return this.say('write the answer, or space x to skip', 'muted')
+      const ok = await this.try(this.call('answer', { ...this.at(name), id: v.questionId, decision: 'deny', message: '' }))
+      if (ok !== undefined) this.say(`skipped · ${name}`, 'pine')
+      return
+    }
     if (!v?.permission) return
     const ok = await this.try(
       this.call('answer', { ...this.at(name), id: v.permission.id, decision: d, message: msg }),

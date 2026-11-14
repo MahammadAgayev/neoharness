@@ -171,6 +171,18 @@ type thread struct {
 	quiet bool
 	// recapped says the current turn wrote a recap.
 	recapped bool
+	// ask is the question the running turn waits on; nil when none.
+	ask *asking
+	// clock stops a turn that runs past Config.TurnTimeout, not counting
+	// the time it waits for the person.
+	clock *turnClock
+}
+
+// asking is a question a turn waits on: its answer comes on done, empty
+// when the person skips it.
+type asking struct {
+	id   string
+	done chan string
 }
 
 type pending struct {
@@ -741,6 +753,16 @@ func (h *Hub) SendNow(workspaceName, to, text string, images ...[]byte) error {
 	defer h.mu.Unlock()
 	var th *thread
 	var err error
+	if ws, t, err := h.lookup(workspaceName, to); err == nil && t.ask != nil {
+		// The answer, or a skip that lets the turn go on: the queue waits
+		// for it, as for any running turn.
+		if strings.TrimSpace(text) == "" && len(images) == 0 {
+			h.answer(ws, t, "")
+			return nil
+		}
+		_, err := h.send(workspaceName, model.User, to, text, images)
+		return err
+	}
 	if strings.TrimSpace(text) == "" && len(images) == 0 {
 		var ws *space
 		ws, th, err = h.lookup(workspaceName, to)
@@ -859,7 +881,7 @@ func (h *Hub) send(workspaceName, from, to, text string, images [][]byte) (*thre
 		return nil, errors.New("a thread cannot message itself")
 	}
 	if to == model.Coordinator && from != model.User {
-		return nil, errors.New("threads do not message the coordinator: its board shows your state and the start of your last reply; ask the person with ask_user")
+		return nil, errors.New("threads do not message the coordinator: its board shows your state and your recap; ask the person with ask_user")
 	}
 	switch {
 	case th.t.Resolved && from == model.User:
@@ -876,6 +898,13 @@ func (h *Hub) send(workspaceName, from, to, text string, images [][]byte) (*thre
 		if done, err := h.command(ws, th, text); done {
 			return th, err
 		}
+	}
+	if from == model.User && th.ask != nil {
+		if len(images) > 0 {
+			return nil, errors.New("answer the question first, then send the picture")
+		}
+		h.answer(ws, th, strings.TrimSpace(text))
+		return th, nil
 	}
 	// The thread asked and ended its reply; what still runs (background
 	// tasks) must not hold the answer back. Checked before enqueue, which may
@@ -1470,23 +1499,55 @@ func (h *Hub) armWake(ws *space, th *thread) {
 	})
 }
 
-// AskUser posts a question to the user. The thread waits until the user
-// writes to it.
-func (h *Hub) AskUser(workspaceName, name, question string) error {
+// AskUser asks the person a question and waits for the answer, as a
+// permission request does: the thread waits for them, and the answer comes
+// back in the same turn. skipped says they went on without answering. A turn
+// that ends first keeps the question, and the person's next message answers
+// it in a new turn.
+func (h *Hub) AskUser(ctx context.Context, workspaceName, name, question string) (answer string, skipped bool, err error) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	ws, th, err := h.lookup(workspaceName, name)
 	if err != nil {
-		return err
+		h.mu.Unlock()
+		return "", false, err
 	}
-	th.t.Asking = strings.TrimSpace(question)
-	h.event(ws, th, model.Event{Kind: model.EventAsk, Text: th.t.Asking})
+	h.nextPerm++
+	a := &asking{id: fmt.Sprintf("q%d", h.nextPerm), done: make(chan string, 1)}
+	th.t.Asking, th.ask = strings.TrimSpace(question), a
+	h.event(ws, th, model.Event{Kind: model.EventAsk, ID: a.id, Text: th.t.Asking})
 	h.changed(ws, th)
-	return nil
+	h.mu.Unlock()
+	select {
+	case answer = <-a.done:
+		return answer, answer == "", nil
+	case <-ctx.Done():
+		h.mu.Lock()
+		if th.ask == a {
+			th.ask = nil
+			h.changed(ws, th)
+		}
+		h.mu.Unlock()
+		return "", false, ctx.Err()
+	}
 }
 
-// Recap keeps where a session's work stands, for the person to read above
-// its prompt when they come back.
+// answer gives a waiting question its answer; empty skips it. Callers hold
+// h.mu.
+func (h *Hub) answer(ws *space, th *thread, text string) {
+	a := th.ask
+	th.ask, th.t.Asking = nil, ""
+	if text == "" {
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Question skipped."})
+	} else {
+		h.event(ws, th, model.Event{Kind: model.EventMessage, From: model.User, Text: text})
+		th.t.AgentTurns = 0
+	}
+	h.changed(ws, th)
+	a.done <- text
+}
+
+// Recap keeps where a session's work stands, for the person to read when
+// they come back, and for the coordinator's board.
 func (h *Hub) Recap(workspaceName, name, text string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -1650,6 +1711,14 @@ func (h *Hub) Answer(workspaceName, name, id string, d model.Decision, msg strin
 	if err != nil {
 		return err
 	}
+	if a := th.ask; a != nil && (id == a.id || id == "" && len(th.perms) == 0) {
+		// Only a skip answers a question here; the answer itself is a message.
+		if d != model.Deny {
+			return errors.New("answer the question by writing to the thread")
+		}
+		h.answer(ws, th, "")
+		return nil
+	}
 	if id == "" && len(th.perms) > 0 {
 		id = th.perms[0].ID
 	}
@@ -1740,7 +1809,9 @@ func (h *Hub) kick(ws *space, th *thread) {
 	now := time.Now().UTC()
 	t.Turns = append(slices.DeleteFunc(t.Turns, func(at time.Time) bool { return now.Sub(at) > 24*time.Hour }), now)
 
-	ctx, cancel := context.WithTimeout(h.ctx, h.cfg.TurnTimeout)
+	ctx, cancelCause := context.WithCancelCause(h.ctx)
+	cancel := func() { cancelCause(context.Canceled) }
+	th.clock = newTurnClock(h.cfg.TurnTimeout, func() { cancelCause(errTurnTimeout) })
 	th.busy = true
 	th.started = false
 	th.interrupted, th.dropped = false, false
@@ -1804,6 +1875,8 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	th.cancel = nil
 	t.InFlight = nil
 	h.denyAll(th, "the turn ended")
+	th.ask = nil
+	th.clock.stop()
 	if th.started {
 		t.Started = true
 	}
@@ -1846,7 +1919,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		if th.dropped && len(t.Queue) > 0 {
 			t.Paused = true
 		}
-	case ctx.Err() == context.DeadlineExceeded:
+	case context.Cause(ctx) == errTurnTimeout:
 		failure = fmt.Sprintf("the turn ran past %s and was stopped", h.cfg.TurnTimeout)
 		h.event(ws, th, model.Event{Kind: model.EventError, Text: failure})
 	case err != nil:
@@ -2207,6 +2280,7 @@ func (h *Hub) changed(ws *space, th *thread) {
 		th.state = s
 		th.t.Since = time.Now().UTC()
 	}
+	th.clock.hold(len(th.perms) > 0 || th.ask != nil)
 	_ = workspace.SaveThread(ws.p.Name, th.t)
 	v := h.view(ws, th)
 	h.publish(model.Update{Kind: model.UpdateThread, Workspace: ws.p.Name, Thread: th.t.Name, View: &v})
@@ -2313,6 +2387,9 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		v.Waiting = "permission"
 	case t.Asking != "":
 		v.Waiting = t.Asking
+		if th.ask != nil {
+			v.QuestionID = th.ask.id
+		}
 	case t.Paused:
 		v.Waiting = "paused"
 	}

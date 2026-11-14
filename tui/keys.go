@@ -1229,16 +1229,29 @@ func (a *App) send() {
 func (a *App) answer(d model.Decision, msg string) {
 	name := ""
 	for _, w := range append([]*Window{a.cur}, a.root.windows()...) {
-		if w.Buf.Kind == KindChat && a.threads[w.Buf.Thread].Permission != nil {
+		if v := a.threads[w.Buf.Thread]; w.Buf.Kind == KindChat && (v.Permission != nil || v.QuestionID != "") {
 			name = w.Buf.Thread
 			break
 		}
 	}
 	if name == "" {
-		a.notify("no permission request in this window", a.th.Muted)
+		a.notify("no permission request or question in this window", a.th.Muted)
 		return
 	}
 	v := a.threads[name]
+	if v.Permission == nil {
+		// A question takes a written answer; deny skips it.
+		if d != model.Deny {
+			a.notify("write the answer, or ␣x to skip", a.th.Muted)
+			return
+		}
+		if err := a.c.Answer(a.workspace, name, v.QuestionID, model.Deny, ""); err != nil {
+			a.notify(err.Error(), a.th.Love)
+			return
+		}
+		a.notify("skipped · "+name, a.th.Pine)
+		return
+	}
 	if err := a.c.Answer(a.workspace, name, v.Permission.ID, d, msg); err != nil {
 		a.notify(err.Error(), a.th.Love)
 		return

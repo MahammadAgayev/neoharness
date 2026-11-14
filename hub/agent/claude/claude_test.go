@@ -302,6 +302,8 @@ func TestHubTurnsKeepPermissionChecks(t *testing.T) {
 		"--session-id 11111111-1111-4111-8111-111111111111",
 		"--permission-prompt-tool mcp__neoharness__permission_prompt",
 		"--permission-mode auto",
+		// No one can answer Claude's own question tool under -p; ask_user asks.
+		"--disallowedTools AskUserQuestion",
 		`--mcp-config {"mcpServers":{"neoharness":{"headers":{"Authorization":"Bearer tok"},"type":"http","url":"http://127.0.0.1:4242/mcp"}}}`,
 	} {
 		if !strings.Contains(got, want) {

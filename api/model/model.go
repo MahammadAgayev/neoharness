@@ -198,8 +198,11 @@ type ThreadView struct {
 	State     State    `json:"state"`
 	Queued    int      `json:"queued"`
 	// WakeAt is when the thread asked to be woken; zero is never.
-	WakeAt     time.Time   `json:"wakeAt,omitzero"`
-	Waiting    string      `json:"waiting,omitempty"`
+	WakeAt  time.Time `json:"wakeAt,omitzero"`
+	Waiting string    `json:"waiting,omitempty"`
+	// QuestionID is the question the running turn waits on, when Waiting is
+	// one: the person answers it by writing, or skips it with this ID.
+	QuestionID string      `json:"questionId,omitempty"`
 	Permission *Permission `json:"permission,omitempty"`
 	Pending    []Event     `json:"pending,omitempty"` // queued, not yet in the transcript
 	// Reply is the start of the last turn's reply; empty while a turn runs,
