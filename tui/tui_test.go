@@ -3766,12 +3766,21 @@ func TestTheBoxDoesNotShowWithoutNewsOrWhileThePersonTypes(t *testing.T) {
 		t.Fatal("the box showed with no news")
 	}
 	h.news()
-	h.press("i")
+	h.press("i", "a draft")
 	away()
 	if h.a.recapBox != "" {
 		t.Fatal("the box showed while the person types")
 	}
-	h.press("<Esc>")
+	// Insert with an empty prompt is not typing: the prompt often stays in
+	// Insert after a message, while the person is away.
+	h.press("<C-w>")
+	h.press("<Esc>", "dd")
+	h.press("i")
+	away()
+	if h.a.recapBox != model.Coordinator {
+		t.Fatalf("box = %q in Insert with an empty prompt", h.a.recapBox)
+	}
+	h.press("<Esc>", "<Esc>")
 	// Over a card that waits for the person, it does not show either.
 	h.press(":b migr", "<CR>")
 	away()

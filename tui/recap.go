@@ -325,7 +325,7 @@ func boxStyle(v model.ThreadView, th *Theme) tcell.Style {
 // them, and not when neoharness.o.recap is false. The hub says what is news;
 // this says only when.
 func (a *App) cameBack() {
-	if a.workspace == "" || a.opt("recap") == lua.LFalse || a.mode != modeNormal || a.picker != nil {
+	if a.workspace == "" || a.opt("recap") == lua.LFalse || a.typing() || a.picker != nil {
 		return
 	}
 	if title, _, _ := a.card(a.cur); title != "" {
@@ -336,6 +336,20 @@ func (a *App) cameBack() {
 	} else if a.workspaceView().RecapUnseen {
 		a.recapBox = model.Coordinator
 	}
+}
+
+// typing says the person writes now: a command line, a selection, or a
+// draft in Insert. Insert alone is not: the prompt often stays in Insert
+// after a message, while the person is away.
+func (a *App) typing() bool {
+	switch a.mode {
+	case modeNormal:
+		return false
+	case modeInsert:
+		b := a.cur.Buf
+		return b.Edit != nil || b.Prompt != nil && len(b.Prompt.Text) > 0
+	}
+	return true
 }
 
 // boxSubject is whose recap the box shows from the window with focus: the

@@ -88,8 +88,14 @@ func (a *App) key(ev *tcell.EventKey) {
 	if k == "" {
 		return
 	}
+	// The key that wakes a terminal with no focus events must leave Normal
+	// as it was: a key that starts Insert is the person about to type.
 	if a.keyAfterAway() {
-		defer a.cameBack()
+		defer func() {
+			if a.mode == modeNormal {
+				a.cameBack()
+			}
+		}()
 	}
 	if run := a.confirm; run != nil {
 		a.confirm = nil
