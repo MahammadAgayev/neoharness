@@ -6,6 +6,7 @@ import { wakeLabel } from '../lib/wake'
 import { elapsed, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { Markdown } from './Markdown'
+import { SummaryCard } from './Recap'
 import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
@@ -304,6 +305,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   const { workspace, thread: name } = store.at(thread)
   const peek = workspace !== open
   const v = useStore((s) => s.threads[thread])
+  const cardHere = useStore((s) => !!s.summaryOf && store.cardWindow() === win.id)
   const all = useStore((s) => s.chats[thread])
   const recapLine = useStore((s) => s.settings.recap)
   const blocks = useMemo(() => (recapLine ? (all ?? []) : (all ?? []).filter((b) => b.kind !== 'recap')), [all, recapLine])
@@ -624,10 +626,11 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           ))}
         </div>
       </div>
-      {/* The question card sits on the prompt, where the person looks. */}
-      {question && v && (
+      {/* The question card and the summary card sit on the prompt, where
+          the person looks. The question outranks the summary, as in the TUI. */}
+      {((question && v) || cardHere) && (
         <div className="box-anchor">
-          <QuestionCard v={v} onReply={() => toPrompt(true)} onSendNow={() => void store.sendQueuedNow(thread)} />
+          {question && v ? <QuestionCard v={v} onReply={() => toPrompt(true)} onSendNow={() => void store.sendQueuedNow(thread)} /> : <SummaryCard />}
         </div>
       )}
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>

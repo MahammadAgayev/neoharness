@@ -13,7 +13,7 @@ neoharness.o.leader = " "
 neoharness.o.equalalways = true -- after a split or a close, windows get the same size
 neoharness.o.compactwarn = 80   -- past this context %, the status line says /compact; 0 never
 neoharness.o.recap = true       -- one muted line under each reply says what the turn did
-neoharness.o.summary = true     -- coming back to news toasts it; :summary opens the summary
+neoharness.o.summary = true     -- coming back to news shows the summary card; :summary opens it
 
 -- The hub. Its settings take effect when it starts.
 require("neoharness").setup({
@@ -65,7 +65,7 @@ map("n", "<leader>x", ":deny<CR>")
 -- Notifications.
 map("n", "<leader>nc", "<Plug>(neoharness-dismiss)")
 map("n", "<leader>nh", ":messages<CR>")
-map("n", "<leader>ns", ":summary<CR>")                -- the summary; again goes back
+map("n", "<leader>ns", ":summary<CR>")                -- the summary card; again closes it
 
 -- The system clipboard (OSC 52): the line, or the selection.
 map({ "n", "x" }, "<leader>y", "<Plug>(neoharness-yank)")

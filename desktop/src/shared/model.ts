@@ -80,7 +80,9 @@ export interface Recap {
   artifacts?: string[]
   error?: string
   at: string
-  // How the thread's tasks stand, in its own words: its summary.
+  // What the thread is for and how its tasks stand, in its own words: its
+  // summary.
+  goal?: string
   done?: RecapItem[]
   doing?: RecapItem[]
   needs?: RecapItem[]
@@ -103,16 +105,14 @@ export interface RecapCommand {
 export const RecapAway = 2 * 60_000
 
 // WorkspaceRecap is how a workspace stands: the coordinator's goal and
-// summary, and what the hub joins from the threads' recaps.
+// lines, and what the hub joins from the threads' recaps.
 export interface WorkspaceRecap {
   goal?: string
-  done?: RecapItem[]
-  doing?: RecapItem[]
-  needs?: RecapItem[]
+  lines?: string[]
   at?: string
   overlaps?: Overlap[]
   failed?: number
-  // The open threads whose recap is newer than the summary.
+  // The open threads whose recap is newer than the lines.
   newer?: number
 }
 

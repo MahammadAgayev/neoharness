@@ -72,10 +72,6 @@ func counted(n int, what string) string {
 	return fmt.Sprintf("%d %ss", n, what)
 }
 
-// boxThreads is how many threads the workspace's box lists before it counts
-// the rest.
-const boxThreads = 8
-
 // boxRank orders the threads in the workspace's box: what needs the person,
 // what failed, what came out that they have not seen, what still runs, and
 // the rest.
@@ -91,37 +87,6 @@ func boxRank(v model.ThreadView) int {
 		return 3
 	}
 	return 4
-}
-
-// boxRow is one thread in the workspace's box: its state and its headline.
-func boxRow(v model.ThreadView, th *Theme, nameW int) Line {
-	news := th.Muted
-	if v.RecapUnseen {
-		news = th.Text
-	}
-	glyph, detail := stateGlyph(v.State), []Span(nil)
-	switch r := v.Recap; {
-	case v.State == model.StateWaiting:
-		switch {
-		case v.Permission != nil:
-			detail = []Span{{"permission · " + v.Permission.Tool + " ", th.Gold}, {flatten(v.Permission.Detail), th.Text}}
-		case v.Waiting == "paused":
-			detail = []Span{{"paused", th.Gold}}
-		default:
-			detail = []Span{{"asks: ", th.Gold}, {flatten(v.Waiting), th.Text}}
-		}
-	case r != nil && r.Error != "":
-		glyph, detail = "✗", []Span{{r.Error, news}}
-	case v.State == model.StateRunning:
-		// The last recap is old news while a new turn runs.
-	case r != nil:
-		glyph, detail = "✓", []Span{{cmp.Or(r.Headline, r.Outcome), news}}
-	}
-	name := th.Subtle
-	if v.RecapUnseen || v.State == model.StateWaiting {
-		name = th.Text
-	}
-	return Line{Spans: append([]Span{{glyph + " ", boxStyle(v, th)}, {pad(truncate(v.Name, nameW), nameW+2), name}}, detail...)}
 }
 
 // boxStyle is the color of a thread's state in the box: Gold waits for the

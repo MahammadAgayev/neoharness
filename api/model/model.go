@@ -210,8 +210,9 @@ type Recap struct {
 	// Error is why the turn failed; empty when it ended well.
 	Error string    `json:"error,omitempty"`
 	At    time.Time `json:"at"`
-	// Done, Doing and Needs are how the thread's tasks stand, in its own
-	// words, as of its last recap that named them.
+	// Goal is what the thread is for, and Done, Doing and Needs how its
+	// tasks stand, in its own words, as of its last recap that named them.
+	Goal  string      `json:"goal,omitempty"`
 	Done  []RecapItem `json:"done,omitempty"`
 	Doing []RecapItem `json:"doing,omitempty"`
 	Needs []RecapItem `json:"needs,omitempty"`
@@ -241,13 +242,11 @@ const RecapAway = 2 * time.Minute
 // any transcript: what it is for and what its threads' work means together.
 // The thread recaps hold each thread's own part.
 type WorkspaceRecap struct {
-	// Goal, Done, Doing and Needs are the coordinator's words. Until it
-	// writes a goal, Goal is the first line of the person's first message to
-	// it.
-	Goal  string      `json:"goal,omitempty"`
-	Done  []RecapItem `json:"done,omitempty"`
-	Doing []RecapItem `json:"doing,omitempty"`
-	Needs []RecapItem `json:"needs,omitempty"`
+	// Goal and Lines are the coordinator's words: what the workspace is for,
+	// and how it stands as a whole. Until it writes a goal, Goal is the first
+	// line of the person's first message to it.
+	Goal  string   `json:"goal,omitempty"`
+	Lines []string `json:"lines,omitempty"`
 	// At is when the coordinator wrote them.
 	At time.Time `json:"at,omitempty"`
 	// Overlaps are files that the last recaps of two or more open threads

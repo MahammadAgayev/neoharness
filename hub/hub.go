@@ -615,12 +615,35 @@ func (h *Hub) Threads(workspaceName string) ([]model.ThreadView, error) {
 // Events returns the last n transcript events of a thread.
 func (h *Hub) Events(workspaceName, threadName string, n int) ([]model.Event, error) {
 	h.mu.Lock()
-	_, _, err := h.lookup(workspaceName, threadName)
+	_, th, err := h.lookup(workspaceName, threadName)
+	var r *model.Recap
+	if err == nil {
+		r = th.t.Recap
+	}
 	h.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	return workspace.Events(workspaceName, threadName, n)
+	evs, err := workspace.Events(workspaceName, threadName, n)
+	recapLine(evs, r)
+	return evs, err
+}
+
+// recapLine gives the last turn end its recap line when the hub that ended
+// the turn wrote none, from the recap the thread saved in that turn: a recap
+// older than the turn end is another turn's.
+func recapLine(evs []model.Event, r *model.Recap) {
+	if r == nil || r.FromReply || r.Outcome == "" {
+		return
+	}
+	for i := len(evs) - 1; i >= 0; i-- {
+		if e := &evs[i]; e.Kind == model.EventTurnEnd {
+			if e.Text == "" && !r.At.Before(e.At) {
+				e.Text, e.Detail = r.Outcome, r.Open
+			}
+			return
+		}
+	}
 }
 
 // Completions lists what the prompt of a thread can complete. The commands
@@ -1491,7 +1514,7 @@ const recapCommands = 4
 
 // Recap keeps what a thread says its turn produced and how its tasks stand.
 // The hub joins it with what it saw the turn do when the turn ends.
-func (h *Hub) Recap(workspaceName, name, asked, outcome, open string, done, doing, needs []model.RecapItem) error {
+func (h *Hub) Recap(workspaceName, name, goal, asked, outcome, open string, done, doing, needs []model.RecapItem) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	ws, th, err := h.lookup(workspaceName, name)
@@ -1501,7 +1524,7 @@ func (h *Hub) Recap(workspaceName, name, asked, outcome, open string, done, doin
 	if th.t.Role == model.RoleCoordinator {
 		return errors.New("the coordinator writes no recap")
 	}
-	r := &model.Recap{Asked: oneLine(asked, recapLimit), Outcome: oneLine(outcome, recapLimit), Open: oneLine(open, recapLimit)}
+	r := &model.Recap{Goal: oneLine(goal, recapItemLimit), Asked: oneLine(asked, recapLimit), Outcome: oneLine(outcome, recapLimit), Open: oneLine(open, recapLimit)}
 	if r.Done, r.Doing, r.Needs, err = recapItems(ws, done, doing, needs); err != nil {
 		return err
 	}
@@ -1540,11 +1563,6 @@ func recapItems(ws *space, lists ...[]model.RecapItem) (done, doing, needs []mod
 	return out[0], out[1], out[2], nil
 }
 
-// hasItems says the coordinator wrote how the workspace stands.
-func hasItems(r *model.WorkspaceRecap) bool {
-	return len(r.Done)+len(r.Doing)+len(r.Needs) > 0
-}
-
 // AskRecap asks a thread for a fresh recap, or the coordinator for a fresh
 // workspace recap. It runs a turn, so only the person asks, and an ask that
 // still waits is not queued twice.
@@ -1569,10 +1587,16 @@ func (h *Hub) AskRecap(workspaceName, name string) error {
 	return nil
 }
 
+// workspaceLines and workspaceLineLimit keep the coordinator's part of the
+// workspace summary to a few short rows above the threads' parts.
+const (
+	workspaceLines     = 3
+	workspaceLineLimit = 200
+)
+
 // WorkspaceRecap keeps the coordinator's words on how the workspace stands:
-// its goal, and what is done, in progress and needs the person. An empty
-// goal keeps the last one.
-func (h *Hub) WorkspaceRecap(workspaceName, name, goal string, done, doing, needs []model.RecapItem) error {
+// its goal, and a few lines on the whole. An empty goal keeps the last one.
+func (h *Hub) WorkspaceRecap(workspaceName, name, goal string, lines []string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	ws, th, err := h.lookup(workspaceName, name)
@@ -1582,15 +1606,17 @@ func (h *Hub) WorkspaceRecap(workspaceName, name, goal string, done, doing, need
 	if th.t.Role != model.RoleCoordinator {
 		return errors.New("only the coordinator writes the workspace recap")
 	}
-	done, doing, needs, err = recapItems(ws, done, doing, needs)
-	if err != nil {
-		return err
+	var kept []string
+	for _, l := range lines {
+		if l = oneLine(l, workspaceLineLimit); l != "" && len(kept) < workspaceLines {
+			kept = append(kept, l)
+		}
 	}
 	return h.saveRecap(ws, func(r *model.WorkspaceRecap) {
 		if goal = oneLine(goal, recapLimit); goal != "" {
 			r.Goal = goal
 		}
-		r.Done, r.Doing, r.Needs, r.At = done, doing, needs, time.Now().UTC()
+		r.Lines, r.At = kept, time.Now().UTC()
 	})
 }
 
@@ -1646,9 +1672,12 @@ func recapOf(old, written *model.Recap, seen turnSeen, asked, reply, failure str
 	r.Ran = len(seen.commands)
 	r.Commands, r.Failed = evidence(seen.commands, seen.lastEdit)
 	r.Edited, r.Artifacts, r.Error = seen.edited, seen.artifacts, failure
-	// The tasks stand as the last recap that named them said.
-	if len(r.Done)+len(r.Doing)+len(r.Needs) == 0 && old != nil {
-		r.Done, r.Doing, r.Needs = old.Done, old.Doing, old.Needs
+	// The goal and the tasks stand as the last recap that named them said.
+	if old != nil {
+		if len(r.Done)+len(r.Doing)+len(r.Needs) == 0 {
+			r.Done, r.Doing, r.Needs = old.Done, old.Doing, old.Needs
+		}
+		r.Goal = cmp.Or(r.Goal, old.Goal)
 	}
 	r.At = time.Now().UTC()
 	return &r
@@ -2456,7 +2485,7 @@ func boardRecap(r *model.Recap) *prompts.Recap {
 	if r == nil {
 		return nil
 	}
-	b := &prompts.Recap{Asked: r.Asked, Outcome: r.Outcome, Open: r.Open, Error: r.Error, FromReply: r.FromReply,
+	b := &prompts.Recap{Goal: r.Goal, Asked: r.Asked, Outcome: r.Outcome, Open: r.Open, Error: r.Error, FromReply: r.FromReply,
 		Ran: r.Ran, Edited: r.Edited, Artifacts: r.Artifacts,
 		Done: boardItems(r.Done), Doing: boardItems(r.Doing), Needs: boardItems(r.Needs)}
 	for _, c := range r.Commands {
@@ -2665,7 +2694,7 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 		}
 	}
 	v.Recap = h.workspaceRecap(ws)
-	if r := ws.p.Recap; r != nil && hasItems(r) && r.At.After(ws.p.RecapSeen) {
+	if r := ws.p.Recap; r != nil && len(r.Lines) > 0 && r.At.After(ws.p.RecapSeen) {
 		v.RecapUnseen = true
 	}
 	return v
@@ -2758,7 +2787,7 @@ func (h *Hub) workspaceRecap(ws *space) *model.WorkspaceRecap {
 			r.Overlaps = append(r.Overlaps, model.Overlap{Path: f.path, Threads: f.threads})
 		}
 	}
-	if r.Goal == "" && !hasItems(&r) && len(r.Overlaps) == 0 && r.Failed == 0 {
+	if r.Goal == "" && len(r.Lines) == 0 && len(r.Overlaps) == 0 && r.Failed == 0 {
 		return nil
 	}
 	return &r

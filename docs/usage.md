@@ -48,8 +48,9 @@ thread yourself:
   `▸ N resolved`.
 - Each turn ends with a recap line under the reply, in muted text, as in
   Claude Code: `※ recap  Added 12 tests · open: keep the slow test?`. The
-  thread writes it with its `recap` call. `neoharness.o.recap = false` in
-  `init.lua` hides it.
+  thread writes it with its `recap` call. A turn that ended before
+  neoharness wrote these lines shows one too when the thread saved a recap
+  in it. `neoharness.o.recap = false` in `init.lua` hides it.
 - Each thread keeps a recap of its work, so you learn what it produced
   without its transcript. The thread writes what it was asked, what came
   out and what is open; neoharness adds what it saw the turn do: the
@@ -63,35 +64,38 @@ thread yourself:
   that found nothing, answered no and does not count as failed. When the
   thread wrote no outcome, the first line of its reply stands in, and `no
   commands` says that nothing was checked.
-- The summary answers "what was I doing here?". `:summary` or `<leader>ns`
-  opens it in the window, as an artifact opens; again goes back, and so
-  does `<C-o>`. In a thread's window it is the thread's: what is done, in
-  progress and needs you, in the thread's own words, each item with the
-  thread or artifact that holds it (`→ api-tests`, `◇ test-plan`), then the
-  facts of the last turn. Until the thread writes its tasks, its last
-  outcome and what is open stand in. Elsewhere it is the workspace's: the
-  goal, the counts of what needs a look (`◆ 1 waits for you · ✗ 1
-  failed`), and the coordinator's summary at the level of the goal: what
-  needs you, what is done, what is in progress. Until the coordinator
-  writes one, one row per open thread stands in. Under it are the files
-  that two threads both edited, and `as of 23:04 · 2 threads ended since`
-  when threads ended after the coordinator wrote it. The coordinator writes
-  it ahead of time: once the threads that ran have ended, the hub wakes it
-  for that (`workspace_recap = false` in the hub setup turns this off).
-- The summary is a window like any other: the motions move its cursor line
-  by line, `y` yanks, and `<CR>` on an item opens its thread or artifact.
-  It draws again as news comes. Opening it marks the news seen in the hub,
-  so the app does not tell you the same news again. The workspaces screen
-  shows `✗ N` for the threads that failed.
-- When you come back to news you have not seen, a toast says so: `news in
-  demo · <leader>ns`. Coming back is the terminal getting focus after two
-  minutes or more away, opening a workspace you have not looked at for two
-  minutes, or the first key in Normal after two minutes with no key (you
-  may leave the terminal in focus, and some terminals send no focus
-  events, as tmux without `focus-events on`). Two minutes, because after a
-  shorter break you still know what you left, and the toasts said what
-  came. It never comes while you type. `neoharness.o.summary = false`
-  turns it off; `:summary` still opens the summary.
+- The summary card answers "what was I doing here?". It sits on the
+  prompt, where you look, on a background of its own, with a border in the
+  color of what matters most: gold when something waits for you, red when
+  a thread failed, foam while threads run, pine when all is done. In the
+  coordinator's window it shows the goal, the counts of what needs a look
+  (`◆ 1 waits for you · ✗ 1 failed`), a few lines from the coordinator on
+  the whole, then each thread in plain words: what it is for, and what
+  needs you, failed, is done and is in progress, what needs you first. Each
+  thread writes its own part from its own context; until it does, what it
+  was asked, its outcome and what is open stand in. Under them are the
+  files that two threads both edited, and `as of 23:04 · 2 threads ended
+  since` when threads ended after the coordinator wrote its lines. The
+  coordinator writes them ahead of time: once the threads that ran have
+  ended, the hub wakes it for that (`workspace_recap = false` in the hub
+  setup turns this off). In a thread's window the card shows that thread's
+  part, one row per item, each with the thread or artifact that holds it
+  (`→ api-tests`, `◇ test-plan`).
+- `:summary` or `<leader>ns` opens or closes the card. While it shows,
+  `j` `k` `gg` `G` move its cursor row, `<CR>` opens the thread or artifact
+  of the row and closes the card, `y` yanks the row, and `q`, `Esc` or a
+  click on its `×` close it. Other keys still work. Opening it marks the
+  news seen in the hub, so the app does not show the same news again. The
+  workspaces screen shows `✗ N` for the threads that failed.
+- The card shows by itself only when you come back to news you have not
+  seen: the terminal gets focus after two minutes or more away, or you open
+  a workspace you have not looked at for two minutes, or you press the
+  first key in Normal after two minutes with no key (you may leave the
+  terminal in focus, and some terminals send no focus events, as tmux
+  without `focus-events on`). Two minutes, because after a shorter break
+  you still know what you left, and the toasts said what came. It never
+  shows while you type, nor over a permission or question card.
+  `neoharness.o.summary = false` stops it showing by itself.
 - `:summary!` asks for a fresh summary, and opens it: of the thread in the
   window or under the cursor, of a thread you name (`:summary! api`), or in
   the coordinator's window, of the workspace. It sends the ask as your
@@ -211,7 +215,7 @@ reports. They belong to the workspace, and every session can read them.
 | `v V y yy` `<leader>y` | select and yank; every yank also goes to the system clipboard |
 | `<C-h/j/k/l>` `<Tab>` | move between windows |
 | `<leader>nc` / `<leader>nh` | dismiss notifications / their history |
-| `<leader>ns` | the summary, as `:summary`; again goes back |
+| `<leader>ns` | open or close the summary card, as `:summary` |
 | in pickers: `<CR>` `<C-v>` `<C-x>` `<C-d>` | open, split right, split above, delete (after `y`) |
 
 The mouse works too: a click focuses a window and puts the cursor there, a

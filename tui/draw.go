@@ -59,6 +59,7 @@ func (a *App) draw() {
 	for _, w := range a.bindDiff() {
 		a.drawWindow(w, false)
 	}
+	a.drawCard()
 	a.drawToasts(W, H)
 	if a.picker != nil {
 		a.drawPicker(W, H)
@@ -129,6 +130,10 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	title, body, _ := a.card(w)
 	if title != "" && textBottom-len(body)-2 > top {
 		textBottom -= len(body) + 2
+	}
+	w.boxEnd = textBottom
+	if title == "" && b.Prompt != nil {
+		w.boxEnd++
 	}
 	h := max(textBottom-top, 1)
 	w.textH = h

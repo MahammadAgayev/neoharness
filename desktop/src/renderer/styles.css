@@ -949,8 +949,8 @@ kbd {
   justify-content: flex-end;
   padding: 0 24px;
 }
-/* the question card: it sits on the prompt and stands out on purpose,
-   with a gold border */
+/* the question card and the summary card: they sit on the prompt and
+   stand out on purpose, with a border in the color of what matters most */
 .box-anchor {
   position: relative;
   flex: none;
@@ -983,6 +983,22 @@ kbd {
   }
 }
 .recap-box.b-gold { --box: var(--gold); }
+.recap-box.b-love { --box: var(--love); }
+.recap-box.b-foam { --box: var(--foam); }
+.recap-box.b-pine { --box: var(--pine); }
+.recap-box.b-muted { --box: var(--muted); }
+.box-close {
+  border: 0;
+  background: none;
+  color: var(--subtle);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.box-close:hover {
+  color: var(--text);
+}
 .question-held {
   margin-top: 4px;
   overflow: hidden;
@@ -1010,18 +1026,22 @@ kbd {
   color: var(--muted);
 }
 
-/* the summary: a list window, one row per line, with a cursor line */
-.summary-list {
-  padding: 14px 24px;
+/* the summary card: one row per line, with a cursor row */
+.summary-rows {
+  display: flex;
+  flex-direction: column;
 }
 .summary-row {
   display: flex;
   gap: 8px;
   align-items: baseline;
-  max-width: var(--measure);
-  padding: 2px 8px;
+  padding: 1px 8px;
+  margin: 0 -8px;
   border-radius: 6px;
   min-height: 1.5em;
+}
+.summary-row.gap {
+  min-height: 0.6em;
 }
 .summary-row.linked {
   cursor: pointer;
@@ -1029,13 +1049,14 @@ kbd {
 .summary-row.cursor {
   background: var(--hl-med);
 }
-.summary-head {
-  margin-top: 2px;
+.summary-label {
+  flex: none;
+  width: 6.5em;
+  padding-left: 1.4em;
 }
-.summary-link {
-  margin-left: auto;
-  padding-left: 12px;
-  white-space: nowrap;
+.summary-text {
+  min-width: 0;
+  white-space: pre-wrap;
 }
 
 /* a turn's recap: one muted line under the reply */

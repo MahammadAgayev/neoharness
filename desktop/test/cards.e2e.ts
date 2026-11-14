@@ -786,7 +786,7 @@ test('<leader>$ shows what the workspace cost, the sidebar each workspace\'s cos
   await expect(demo.locator('.sb-cost')).toHaveText('$24.75')
 })
 
-test("a thread's recap shows under its row, and its summary in a window you move in", async () => {
+test("a thread's recap shows under its row, and its summary in a card you move in", async () => {
   const row = page.locator('.list-row', { hasText: 'api' })
   hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
   await expect(row.locator('.list-recap.t-love')).toHaveText('✗ the agent failed: boom')
@@ -804,63 +804,72 @@ test("a thread's recap shows under its row, and its summary in a window you move
     at: new Date().toISOString(),
   }
   hub.setView(view('demo', 'api', { recap }))
-  // The row shows the hub's headline.
+  // The row shows the hub's headline and facts.
   await expect(row.locator('.list-recap').nth(0)).toHaveText('Added /healthz and a test. …')
   await expect(row.locator('.list-recap').nth(1)).toHaveText('3 commands, 1 failed · 1 file edited · ◇ health-plan')
   await expect(row.locator('.list-recap', { hasText: 'open: keep the old /ping?' })).toBeVisible()
   await row.click()
-  await expect(page.locator('.recap-box')).toHaveCount(0)
 
-  // :summary opens it in the window; until the thread writes its tasks,
-  // its last turn stands in.
+  // :summary opens the card on the prompt; until the thread writes its
+  // summary, its asked, outcome and open stand in, in plain words.
   await normal()
   await page.keyboard.type(':')
   await page.keyboard.type('summary')
   await page.keyboard.press('Enter')
-  const sum = page.locator('.pane.focused .window.summary')
-  await expect(sum).toBeVisible()
-  await expect(sum.locator('.summary-title')).toHaveText('api · idle')
-  await expect(sum).toContainText('Needs you')
-  await expect(sum).toContainText('keep the old /ping?')
-  await expect(sum).toContainText('Added /healthz and a test. It answers 200 when the store is up.')
-  await expect(sum).toContainText('last turn  3 commands, 1 failed · 1 file edited · ◇ health-plan')
+  const card = page.locator('.pane.focused .summary-card')
+  await expect(card).toBeVisible()
+  await expect(card.locator('.box-title')).toHaveText('api · idle')
+  await expect(card).toContainText('add a health check')
+  await expect(card).toContainText('needs youkeep the old /ping?')
+  await expect(card).toContainText('doneAdded /healthz and a test. It answers 200 when the store is up.')
+  await expect(card).not.toContainText('golangci-lint')
+  const b = (await card.boundingBox())!
+  const p = (await page.locator('.pane.focused .window.chat .prompt').boundingBox())!
+  expect(p.y - (b.y + b.height)).toBeGreaterThanOrEqual(0)
+  expect(p.y - (b.y + b.height)).toBeLessThan(20)
   const seen = () => hub.calls.filter((c) => c.path.endsWith('/recap/seen')).map((c) => c.path)
   await expect.poll(seen).toContain('/workspaces/demo/threads/api/recap/seen')
 
-  // The thread's tasks, with what holds each; it draws again live.
+  // The thread's own summary: one row per item; it draws again live.
   hub.setView(view('demo', 'docs', {}))
   hub.setView(
     view('demo', 'api', {
-      recap: { ...recap, done: [{ text: 'Wrote the plan', artifact: 'health-plan' }], doing: [{ text: 'docs for /healthz', thread: 'docs' }] },
+      recap: { ...recap, goal: 'a health check for the load balancer', done: [{ text: 'the plan', artifact: 'health-plan' }, { text: '/healthz answers 200' }], doing: [{ text: 'docs for it', thread: 'docs' }] },
     }),
   )
-  await expect(sum).toContainText('Wrote the plan◇ health-plan')
-  await expect(sum).toContainText('In progress')
-  await expect(sum).not.toContainText('keep the old /ping?')
-  await shot('27-summary')
-  // j k move the cursor line by line; <CR> opens what an item links.
-  const cur = sum.locator('.summary-row.cursor')
-  await page.keyboard.press('g')
-  await page.keyboard.press('g')
-  for (let i = 0; i < 20 && !(await cur.textContent())?.includes('docs for /healthz'); i++) await page.keyboard.press('j')
-  await expect(cur).toContainText('docs for /healthz')
+  await expect(card).toContainText('a health check for the load balancer')
+  await expect(card).toContainText('donethe plan  ◇ health-plan')
+  await expect(card).toContainText('in progressdocs for it  → docs')
+  await expect(card).not.toContainText('keep the old /ping?')
+  await shot('27-summary-thread')
+  // j k move the cursor row; <CR> opens what the row holds and closes it.
+  const cur = card.locator('.summary-row.cursor')
+  await page.keyboard.press('Shift+G')
+  await expect(cur).toContainText('docs for it')
   await page.keyboard.press('k')
-  await expect(cur).not.toContainText('docs for /healthz')
+  await expect(cur).toContainText('/healthz answers 200')
   await page.keyboard.press('j')
   await page.keyboard.press('Enter')
   await expect(page.locator('.pane.focused .statusline .sl-name', { hasText: 'docs' })).toBeVisible()
-  await page.keyboard.press('Control+o')
-  await expect(sum).toBeVisible()
-  // <leader>ns goes back from it, and opens it again.
+  await expect(page.locator('.summary-card')).toHaveCount(0)
+
+  // <leader>ns opens and closes it; q closes it too.
+  await page.keyboard.type(':')
+  await page.keyboard.type('b api')
+  await page.keyboard.press('Enter')
   await page.keyboard.press('Space')
   await page.keyboard.press('n')
   await page.keyboard.press('s')
-  await expect(sum).toHaveCount(0)
-  await expect(page.locator('.pane.focused .statusline .sl-name', { hasText: 'api' })).toBeVisible()
+  await expect(card).toBeVisible()
   await page.keyboard.press('Space')
   await page.keyboard.press('n')
   await page.keyboard.press('s')
-  await expect(sum).toBeVisible()
+  await expect(card).toHaveCount(0)
+  await page.keyboard.type(':')
+  await page.keyboard.type('summary')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('q')
+  await expect(card).toHaveCount(0)
 
   // :summary! asks; it runs a turn, so only the command does.
   const asks = () => hub.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/recap')).map((c) => c.path)
@@ -869,10 +878,13 @@ test("a thread's recap shows under its row, and its summary in a window you move
   await page.keyboard.type('summary!')
   await page.keyboard.press('Enter')
   await expect.poll(asks).toEqual(['/workspaces/demo/threads/api/recap'])
+  await expect(card).toBeVisible()
 
   hub.setView(view('demo', 'api', { recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
-  await expect(sum.locator('.t-love')).toHaveText('✗ the agent failed: boom')
-  await page.keyboard.press('Control+o')
+  await expect(card).toContainText('failedthe agent failed: boom')
+  await expect(card).toHaveClass(/b-love/)
+  await page.keyboard.press('Escape')
+  await expect(card).toHaveCount(0)
 })
 
 test('a turn ends with one muted recap line, and :set norecap hides it', async () => {
@@ -894,7 +906,7 @@ test('a turn ends with one muted recap line, and :set norecap hides it', async (
   await expect(line).toHaveCount(1)
 })
 
-test('coming back to news toasts it, and the workspace summary says how it stands', async () => {
+test('the summary card pops up when the person comes back to news, each thread in plain words', async () => {
   // The renderer's clock moves on without waiting minutes.
   await page.evaluate(() => {
     const real = Date.now.bind(Date)
@@ -912,15 +924,19 @@ test('coming back to news toasts it, and the workspace summary says how it stand
   }
   const at = new Date(Date.now() - 3600_000)
   hub.event('demo', 'db', { kind: 'permission', tool: 'Bash', detail: 'psql -c "drop table x"', id: 'p9' })
-  hub.setView(view('demo', 'db', { state: 'waiting', permission: { id: 'p9', tool: 'Bash', detail: 'psql -c "drop table x"' } }))
+  hub.setView(view('demo', 'db', { state: 'waiting', permission: { id: 'p9', tool: 'Bash', detail: 'psql -c "drop table x"' }, recap: { asked: 'a table for the checks', at: new Date().toISOString() } }))
   hub.setView(view('demo', 'api', { recapUnseen: true, recap: { asked: 'add a health check', error: 'the agent failed: boom', at: new Date().toISOString() } }))
   hub.setView(view('demo', 'web', { state: 'running' }))
-  hub.setView(view('demo', 'docs', { recapUnseen: true, recap: { outcome: 'Wrote the plan. Three pages.', headline: 'Wrote the plan.', at: new Date().toISOString() } }))
+  hub.setView(
+    view('demo', 'docs', {
+      recapUnseen: true,
+      recap: { goal: 'docs for the health check', outcome: 'Wrote the plan. Three pages.', headline: 'Wrote the plan.', done: [{ text: 'three pages' }, { text: 'the plan', artifact: 'health-plan' }], at: new Date().toISOString() },
+    }),
+  )
   const demo = hub.workspaces.find((w) => w.name === 'demo')!
   const recap = {
     goal: 'Add a health check and keep /ping',
-    needs: [{ text: 'answer the drop table question', thread: 'db' }],
-    done: [{ text: 'the plan is written' }],
+    lines: ['The check works; the table waits on you.'],
     at: at.toISOString(),
     overlaps: [{ path: 'server.go', threads: ['api', 'db'] }],
     failed: 1,
@@ -931,69 +947,111 @@ test('coming back to news toasts it, and the workspace summary says how it stand
   await page.keyboard.press('Space')
   await page.keyboard.press('c')
   await expect(page.locator('.statusline .sl-name', { hasText: 'coordinator' })).toBeVisible()
-  const toast = page.locator('.toast', { hasText: 'news in demo · <leader>ns' })
-  // The person is here: news alone does not toast.
+  const card = page.locator('.summary-card')
+  // The person is here: news alone does not pop it up.
   await page.waitForTimeout(300)
-  await expect(toast).toHaveCount(0)
+  await expect(card).toHaveCount(0)
   await away()
-  await expect(toast).toBeVisible()
-
-  await page.keyboard.press('Space')
-  await page.keyboard.press('n')
-  await page.keyboard.press('s')
-  const sum = page.locator('.pane.focused .window.summary')
-  await expect(sum.locator('.summary-title')).toHaveText('demo · Add a health check and keep /ping')
-  await expect(sum).toContainText('◆ 1 waits for you · ✗ 1 failed')
-  await expect(sum).toContainText('answer the drop table question→ db')
-  await expect(sum).toContainText('the plan is written')
-  await expect(sum).toContainText('api and db both edited server.go')
+  await expect(card).toBeVisible()
+  await expect(card.locator('.box-title')).toHaveText('demo · Add a health check and keep /ping')
+  await expect(card).toHaveClass(/b-gold/)
+  await expect(card).toContainText('◆ 1 waits for you · ✗ 1 failed')
+  await expect(card).toContainText('The check works; the table waits on you.')
+  // Each thread in plain words, what needs the person first.
+  const heads = card.locator('.summary-row:has(.glyph)')
+  await expect(heads.nth(0)).toContainText('◆db  a table for the checks')
+  await expect(heads.nth(1)).toContainText('✗api  add a health check')
+  await expect(heads.nth(2)).toContainText('✓docs  docs for the health check')
+  await expect(heads.nth(3)).toContainText('●web')
+  await expect(card).toContainText('needs youpermission · Bash psql -c "drop table x"')
+  await expect(card).toContainText('failedthe agent failed: boom')
+  await expect(card).toContainText('donethree pages · the plan ◇ health-plan')
+  await expect(card).toContainText('api and db both edited server.go')
   const hhmm = at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-  await expect(sum).toContainText(`as of ${hhmm} · 1 thread ended since`)
+  await expect(card).toContainText(`as of ${hhmm} · 1 thread ended since`)
+  await expect(page.locator('.sb-item', { hasText: 'demo' }).locator('.sb-count.t-love')).toHaveText('✗ 1')
   const seen = () => hub.calls.filter((c) => c.path.endsWith('/recap/seen')).map((c) => c.path)
   await expect.poll(() => seen().pop()).toBe('/workspaces/demo/threads/coordinator/recap/seen')
-  await shot('47-summary-workspace')
-
-  // Until the coordinator writes one, the open threads stand in: what needs
-  // the person first, then what failed, came out, still runs.
-  hub.setWorkspace({ ...demo, counts: { idle: 2, waiting: 1, running: 1 }, recap: { ...recap, needs: [], done: [] } })
-  const rows = sum.locator('.summary-row.linked')
-  await expect(rows.nth(0)).toContainText('◆db')
-  await expect(rows.nth(1)).toContainText('✗apithe agent failed: boom')
-  await expect(rows.nth(2)).toContainText('✓docsWrote the plan.')
-  await expect(rows.nth(3)).toContainText('●web')
-  await page.keyboard.press('Control+o')
+  await shot('47-summary-card')
+  // <CR> on a thread's rows opens the thread.
+  const cur = card.locator('.summary-row.cursor')
+  for (let i = 0; i < 20 && !(await cur.textContent())?.includes('three pages'); i++) await page.keyboard.press('j')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.pane.focused .statusline .sl-name', { hasText: 'docs' })).toBeVisible()
+  await expect(card).toHaveCount(0)
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
 
   // Not while the person types a message.
   hub.setWorkspace({ ...demo, counts: { idle: 2, waiting: 1, running: 1 }, recapUnseen: true, recap })
-  await normal()
-  await page.keyboard.press('Space')
-  await page.keyboard.press('n')
-  await page.keyboard.press('c')
-  await expect(toast).toHaveCount(0)
   await page.locator('.pane.focused .prompt').click()
   await page.keyboard.type('a draft')
   await away()
   await page.waitForTimeout(300)
-  await expect(toast).toHaveCount(0)
+  await expect(card).toHaveCount(0)
   await page.keyboard.press('Meta+a')
   await page.keyboard.press('Backspace')
+  // An empty prompt in Insert is not typing, and one Esc closes the card.
+  await away()
+  await expect(card).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(card).toHaveCount(0)
   await normal()
+  await away()
+  await expect(card).toBeVisible()
+  await card.locator('.box-close').click()
+  await expect(card).toHaveCount(0)
 
-  // Settings' switch stops the toast; :summary still opens the summary.
+  // Settings' switch stops the pop-up; :summary still opens it.
   await page.keyboard.type(':')
   await page.keyboard.type('set nosummary')
   await page.keyboard.press('Enter')
   await away()
   await page.waitForTimeout(300)
-  await expect(toast).toHaveCount(0)
+  await expect(card).toHaveCount(0)
   await page.keyboard.type(':')
   await page.keyboard.type('summary')
   await page.keyboard.press('Enter')
-  await expect(sum).toBeVisible()
+  await expect(card).toBeVisible()
+  await page.keyboard.type(':')
+  await page.keyboard.type('summary')
+  await page.keyboard.press('Enter')
+  await expect(card).toHaveCount(0)
   await page.keyboard.type(':')
   await page.keyboard.type('set summary')
   await page.keyboard.press('Enter')
-  await page.keyboard.press('Control+o')
+
+  // Over a card that waits for the person, it does not show.
+  await page.keyboard.type(':')
+  await page.keyboard.type('b db')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.card.permission')).toBeVisible()
+  await away()
+  await page.waitForTimeout(300)
+  await expect(card).toHaveCount(0)
+})
+
+test('a resolved thread with news stays in the card while it shows', async () => {
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  hub.setView(view('demo', 'readme', { state: 'resolved', recapUnseen: true, recap: { goal: 'a README for the package', done: [{ text: 'README.md is written' }], at: new Date().toISOString() } }))
+  await page.keyboard.type(':')
+  await page.keyboard.type('summary')
+  await page.keyboard.press('Enter')
+  const card = page.locator('.summary-card')
+  await expect(card).toContainText('readme  a README for the package')
+  hub.setView(view('demo', 'readme', { state: 'resolved', recap: { goal: 'a README for the package', done: [{ text: 'README.md is written' }], at: new Date().toISOString() } }))
+  await page.waitForTimeout(300)
+  await expect(card).toContainText('README.md is written')
+  // Opened again, the news is old.
+  await page.keyboard.press('q')
+  await page.keyboard.type(':')
+  await page.keyboard.type('summary')
+  await page.keyboard.press('Enter')
+  await expect(card).toBeVisible()
+  await expect(card).not.toContainText('readme')
+  await page.keyboard.press('q')
 })
 
 test('a hub that stops says so and offers to start it', async () => {

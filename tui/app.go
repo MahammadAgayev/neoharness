@@ -169,9 +169,17 @@ type App struct {
 	mouseDown              bool
 	lastClick              time.Time
 	lastClickX, lastClickY int
-	// summaryOf is whose summary the summary buffer shows: a thread, or the
-	// coordinator for the workspace's.
+	// summaryOf is whose summary the card shows: a thread, the coordinator
+	// for the workspace's, or "" when it is closed. cardCur is its cursor
+	// row, cardTop its first row shown, cardG a g waiting for a second, and
+	// cardRect where it was drawn, for clicks. cardNews holds the resolved
+	// threads that had news when it opened: showing it marks them seen.
 	summaryOf string
+	cardNews  map[string]bool
+	cardCur   int
+	cardTop   int
+	cardG     bool
+	cardRect  Rect
 	// now is the clock, for tests. lastKey is the last key, blurAt when the
 	// terminal lost focus, and leftAt when each workspace was left: how long
 	// the person was away.
@@ -495,7 +503,6 @@ func (a *App) apply(u model.Update) {
 			a.workspaces[i] = *u.Summary
 		}
 		a.renderWorkspaces()
-		a.renderSummary()
 		a.restartWhenIdle()
 	case model.UpdateThread:
 		switch {
@@ -1234,7 +1241,6 @@ const resolvedRow = "\x00resolved"
 const queuedRow = "\x00queued"
 
 func (a *App) renderThreads() {
-	a.renderSummary()
 	if a.threadsBuf == nil {
 		return
 	}

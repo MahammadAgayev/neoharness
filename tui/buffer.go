@@ -28,8 +28,6 @@ const (
 	KindDiff
 	// KindCost is what a workspace, or every workspace, cost.
 	KindCost
-	// KindSummary is how a thread's work, or the workspace's, stands.
-	KindSummary
 )
 
 type blockKind int
@@ -77,10 +75,8 @@ type block struct {
 	live     bool
 	open     bool
 	raw      []Line
-	// fn makes a raw block's lines for a width, in place of raw.
-	fn     func(w int) []Line
-	cacheW int
-	cache  []Line
+	cacheW   int
+	cache    []Line
 }
 
 // Prompt is the editable region at the end of a chat buffer.
@@ -189,13 +185,6 @@ func headingLevel(s string) int {
 // SetLines replaces the buffer's content with fixed lines.
 func (b *Buffer) SetLines(lines []Line) {
 	b.blocks = []*block{{kind: bRaw, raw: lines}}
-	b.dirty = true
-}
-
-// SetRender fills the buffer with lines made for the window's width, so
-// they wrap.
-func (b *Buffer) SetRender(fn func(w int) []Line) {
-	b.blocks = []*block{{kind: bRaw, fn: fn}}
 	b.dirty = true
 }
 
@@ -446,9 +435,6 @@ func (b *Buffer) AddEvent(e model.Event) {
 
 func (bl *block) render(w int, th *Theme, spin int) []Line {
 	if bl.kind == bRaw {
-		if bl.fn != nil {
-			return bl.fn(w)
-		}
 		return bl.raw
 	}
 	if !bl.live && bl.cache != nil && bl.cacheW == w {

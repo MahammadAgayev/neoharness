@@ -55,7 +55,7 @@ func Reports(names []string) string {
 
 // RecapDue wakes the coordinator to write the workspace recap.
 func RecapDue() string {
-	return "The threads that ran have ended their turns. Write your workspace summary with workspace_recap."
+	return "The threads that ran have ended their turns. Write the top of the workspace summary with workspace_recap."
 }
 
 // RecapAsked is the person asking a thread for a fresh recap.
@@ -147,7 +147,7 @@ const (
 // Recap is a thread's recap as the board shows it: its own words, then what
 // the hub saw its last turn do.
 type Recap struct {
-	Asked, Outcome, Open, Error string
+	Goal, Asked, Outcome, Open, Error string
 	// FromReply says Outcome is the first line of its reply.
 	FromReply bool
 	Ran       int
@@ -195,6 +195,7 @@ func BoardLine(name, state string, w Wait, r *Recap, ended bool) string {
 		part("Last turn failed", r.Error)
 		return s
 	}
+	part("For", r.Goal)
 	part("Asked", r.Asked)
 	if r.FromReply {
 		part("Reply", r.Outcome)

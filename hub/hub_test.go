@@ -2329,7 +2329,7 @@ func TestTheRecapJoinsTheThreadsWordsAndWhatTheHubSaw(t *testing.T) {
 		if _, err := h.WriteArtifact("demo", "lint", "plan", "# Plan\n\nsteps"); err != nil {
 			t.Error(err)
 		}
-		if err := h.Recap("demo", "lint", " Fix the lint issues ", "Fixed two; tests pass", "Choose: change the API or ignore one issue", nil, nil, nil); err != nil {
+		if err := h.Recap("demo", "lint", "", " Fix the lint issues ", "Fixed two; tests pass", "Choose: change the API or ignore one issue", nil, nil, nil); err != nil {
 			t.Error(err)
 		}
 		return agent.Result{Text: "Done.", Tools: 7}
@@ -2368,16 +2368,16 @@ func TestASummaryKeepsItsTasksAndTheTurnEndsWithItsRecap(t *testing.T) {
 	done := []model.RecapItem{{Text: " Added the LRU cache, committed ", Artifact: "cache-plan"}, {Text: ""}}
 	doing := []model.RecapItem{{Text: "benchmarks", Thread: "cache"}}
 	gate <- func() agent.Result {
-		if err := h.Recap("demo", "cache", "add a cache", "Added it", "", done, doing, []model.RecapItem{{Text: "x", Thread: "nobody"}}); err == nil {
+		if err := h.Recap("demo", "cache", "", "add a cache", "Added it", "", done, doing, []model.RecapItem{{Text: "x", Thread: "nobody"}}); err == nil {
 			t.Error("a link to no thread was kept")
 		}
-		if err := h.Recap("demo", "cache", "add a cache", "Added it", "", done, doing, nil); err == nil {
+		if err := h.Recap("demo", "cache", "", "add a cache", "Added it", "", done, doing, nil); err == nil {
 			t.Error("a link to no artifact was kept")
 		}
 		if _, err := h.WriteArtifact("demo", "cache", "cache-plan", "# Plan"); err != nil {
 			t.Error(err)
 		}
-		if err := h.Recap("demo", "cache", "add a cache", "Added it", "pick the size", done, doing, nil); err != nil {
+		if err := h.Recap("demo", "cache", " a faster store\nfor reads ", "add a cache", "Added it", "pick the size", done, doing, nil); err != nil {
 			t.Error(err)
 		}
 		return agent.Result{Text: "Done."}
@@ -2398,12 +2398,58 @@ func TestASummaryKeepsItsTasksAndTheTurnEndsWithItsRecap(t *testing.T) {
 	// A recap that names no tasks keeps the last ones.
 	_ = h.Send("demo", model.User, "cache", "how big?")
 	gate <- func() agent.Result {
-		_ = h.Recap("demo", "cache", "size", "64 MB", "", nil, nil, nil)
+		_ = h.Recap("demo", "cache", "", "size", "64 MB", "", nil, nil, nil)
 		return agent.Result{Text: "64 MB."}
 	}
 	stateIs(t, h, "demo", "cache", model.StateIdle)
-	if r := view(t, h, "demo", "cache").Recap; r.Outcome != "64 MB" || len(r.Done) != 1 || len(r.Doing) != 1 {
-		t.Fatalf("a recap with no tasks dropped them: %+v", r)
+	if r := view(t, h, "demo", "cache").Recap; r.Outcome != "64 MB" || len(r.Done) != 1 || len(r.Doing) != 1 || r.Goal != "a faster store for reads" {
+		t.Fatalf("a recap with no tasks or goal dropped them: %+v", r)
+	}
+}
+
+// A turn that ended before the hub wrote recap lines into turn ends still
+// shows its line, from the recap the thread saved in that turn; a later turn
+// without one does not take an older turn's words.
+func TestTheLastTurnShowsItsSavedRecapLine(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if !req.HarnessOnly {
+			_ = h.Recap("demo", "cache", "", "add a cache", "Added it", "pick the size", nil, nil, nil)
+		}
+		return agent.Result{Text: "Done."}
+	}
+	if err := h.OpenThread("demo", model.Coordinator, "cache", "Add a cache", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "cache", model.StateIdle)
+	r := view(t, h, "demo", "cache").Recap
+	lastEnd := func() model.Event {
+		evs, err := h.Events("demo", "cache", 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := len(evs) - 1; i >= 0; i-- {
+			if evs[i].Kind == model.EventTurnEnd {
+				return evs[i]
+			}
+		}
+		t.Fatal("no turn end")
+		return model.Event{}
+	}
+	// As an older hub wrote it: a turn end with no words.
+	if err := workspace.AppendEvent("demo", "cache", model.Event{Kind: model.EventTurnEnd, At: r.At.Add(-time.Millisecond)}); err != nil {
+		t.Fatal(err)
+	}
+	if e := lastEnd(); e.Text != "Added it" || e.Detail != "pick the size" {
+		t.Fatalf("last turn end = %+v, want its saved recap", e)
+	}
+	if err := workspace.AppendEvent("demo", "cache", model.Event{Kind: model.EventTurnEnd, At: r.At.Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if e := lastEnd(); e.Text != "" {
+		t.Fatalf("a later turn took an older recap: %+v", e)
 	}
 }
 
@@ -2508,7 +2554,7 @@ func TestTheRecapShowsWhatCheckedTheWorkAsItEnded(t *testing.T) {
 		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActEdit, Detail: dir + "/cache/lru.go", ID: "e"})
 		run("6", "cd "+dir+" && go test ./... 2>&1 | tail -5")
 		run("7", "cd "+dir+" && git commit -am 'add cache'")
-		if err := h.Recap("demo", "cache", "Add a cache", "Added an LRU cache. It holds 100 entries.", "", nil, nil, nil); err != nil {
+		if err := h.Recap("demo", "cache", "", "Add a cache", "Added an LRU cache. It holds 100 entries.", "", nil, nil, nil); err != nil {
 			t.Error(err)
 		}
 		return agent.Result{Text: "Done."}
@@ -2579,7 +2625,7 @@ func TestAnEmptyOutcomeFallsBackToTheReply(t *testing.T) {
 	pinned(t, h, "demo")
 	f.script = func(ctx context.Context, req agent.Request) agent.Result {
 		if !req.HarnessOnly {
-			_ = h.Recap("demo", "x", "Look", "", "", nil, nil, nil)
+			_ = h.Recap("demo", "x", "", "Look", "", "", nil, nil, nil)
 		}
 		return agent.Result{Text: "Found two callers."}
 	}
@@ -2614,7 +2660,7 @@ func TestATurnThatChangedNothingKeepsTheThreadsRecap(t *testing.T) {
 	gate <- func(req agent.Request) agent.Result {
 		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActEdit, Detail: dir + "/calc.go", ID: "e"})
 		req.OnEvent(agent.Event{Kind: agent.KindToolStart, Act: agent.ActRun, Detail: "go test ./...", ID: "1"})
-		_ = h.Recap("demo", "add", "Fix Add", "Fixed Add; tests pass.", "", nil, nil, nil)
+		_ = h.Recap("demo", "add", "", "Fix Add", "Fixed Add; tests pass.", "", nil, nil, nil)
 		return agent.Result{Text: "Done."}
 	}
 	eventually(t, "a recap", func() bool { r := view(t, h, "demo", "add").Recap; return r != nil && r.Outcome == "Fixed Add; tests pass." })
@@ -2750,7 +2796,7 @@ func TestTheWorkspaceRecapNamesFilesTwoThreadsEditedAndCountsFailures(t *testing
 	}
 	// Lines written before the threads' recaps are old by all of them.
 	h.mu.Lock()
-	_ = h.saveRecap(h.workspaces["demo"], func(r *model.WorkspaceRecap) { r.Done, r.At = []model.RecapItem{{Text: "x"}}, time.Now().Add(-time.Hour) })
+	_ = h.saveRecap(h.workspaces["demo"], func(r *model.WorkspaceRecap) { r.Lines, r.At = []string{"x"}, time.Now().Add(-time.Hour) })
 	h.mu.Unlock()
 	if r := workspaceView(t, h, "demo").Recap; r.Newer != 3 {
 		t.Errorf("newer = %d, want 3", r.Newer)
@@ -2776,34 +2822,29 @@ func TestThePersonsFirstMessageIsTheGoalUntilTheCoordinatorWritesOne(t *testing.
 	}
 }
 
-func TestTheCoordinatorWritesTheGoalAndTheWorkspaceSummary(t *testing.T) {
+func TestTheCoordinatorWritesTheGoalAndTheWorkspaceView(t *testing.T) {
 	h := newHub(t, &fake{})
 	pinned(t, h, "demo")
 	_ = h.Send("demo", model.User, model.Coordinator, "Move auth")
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
-	if err := h.OpenThread("demo", model.Coordinator, "api", "work", ""); err != nil {
-		t.Fatal(err)
-	}
-	var many []model.RecapItem
-	for range 8 {
-		many = append(many, model.RecapItem{Text: "a"})
-	}
-	needs := []model.RecapItem{{Text: " answer\nthe API choice ", Thread: "api"}}
-	if err := h.WorkspaceRecap("demo", model.Coordinator, " Move auth into sessions ", many, nil, needs); err != nil {
+	if err := h.WorkspaceRecap("demo", model.Coordinator, " Move auth into sessions ", []string{"answer lint first", "", " cache ran\nno command ", "a", "b"}); err != nil {
 		t.Fatal(err)
 	}
 	r := workspaceView(t, h, "demo").Recap
-	if r == nil || r.Goal != "Move auth into sessions" || len(r.Done) != recapListLimit || !slices.Equal(r.Needs, []model.RecapItem{{Text: "answer the API choice", Thread: "api"}}) || r.At.IsZero() {
+	if r == nil || r.Goal != "Move auth into sessions" || !slices.Equal(r.Lines, []string{"answer lint first", "cache ran no command", "a"}) || r.At.IsZero() {
 		t.Fatalf("recap = %+v", r)
 	}
-	// No goal keeps the last one; the lists are replaced.
-	if err := h.WorkspaceRecap("demo", model.Coordinator, "", nil, nil, nil); err != nil {
+	// No goal keeps the last one; the lines are replaced.
+	if err := h.WorkspaceRecap("demo", model.Coordinator, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if r := workspaceView(t, h, "demo").Recap; r.Goal != "Move auth into sessions" || len(r.Done)+len(r.Needs) != 0 {
+	if r := workspaceView(t, h, "demo").Recap; r.Goal != "Move auth into sessions" || len(r.Lines) != 0 {
 		t.Fatalf("recap = %+v", r)
 	}
-	if err := h.WorkspaceRecap("demo", "api", "mine", nil, nil, nil); err == nil {
+	if err := h.OpenThread("demo", model.Coordinator, "api", "work", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.WorkspaceRecap("demo", "api", "mine", nil); err == nil {
 		t.Fatal("a thread wrote the workspace recap")
 	}
 	// It is kept across a restart.
@@ -3058,7 +3099,7 @@ func TestARecapIsUnseenUntilThePersonClosesItsBox(t *testing.T) {
 		t.Fatal("seen on the workspace")
 	}
 	// New lines from the coordinator are news again.
-	if err := h.WorkspaceRecap("demo", model.Coordinator, "", []model.RecapItem{{Text: "answer lint first"}}, nil, nil); err != nil {
+	if err := h.WorkspaceRecap("demo", model.Coordinator, "", []string{"answer lint first"}); err != nil {
 		t.Fatal(err)
 	}
 	if !workspaceView(t, h, "demo").RecapUnseen || view(t, h, "demo", "cache").RecapUnseen {
@@ -3068,7 +3109,7 @@ func TestARecapIsUnseenUntilThePersonClosesItsBox(t *testing.T) {
 	// So is a thread's next turn, and the mark is kept across a restart.
 	_ = h.Send("demo", model.User, "cache", "more")
 	stateIs(t, h, "demo", "cache", model.StateRunning)
-	_ = h.Recap("demo", "cache", "more", "More done.", "", nil, nil, nil)
+	_ = h.Recap("demo", "cache", "", "more", "More done.", "", nil, nil, nil)
 	gate <- agent.Result{Text: "More done."}
 	stateIs(t, h, "demo", "cache", model.StateIdle)
 	h2, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return &fake{} }, MCPPort: 4243})

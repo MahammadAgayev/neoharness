@@ -19,6 +19,7 @@ import {
 } from '../shared/model'
 import { parseEx } from './lib/ex'
 import { hunks, lines, take } from './lib/linediff'
+import { cardRows, rowText, type CardRow } from './lib/summary'
 import { schemeNames } from './lib/themes'
 import { endHidesError, errorToast, keep, noticeToast, viewToast, type Toast, type ToastSpec, type Tone } from './lib/toasts'
 import { addEvent, fromEvents, lastText, lastUserMessage, settle, type Block } from './lib/transcript'
@@ -37,8 +38,6 @@ export type BufRef =
   | { kind: 'threads' }
   | { kind: 'artifact'; name: string }
   | { kind: 'messages' }
-  // A summary's subject is a thread, or the coordinator for the workspace's.
-  | { kind: 'summary'; subject: string }
 
 export interface Win {
   id: number
@@ -156,6 +155,13 @@ export interface State {
   // workspaceCursor is the row of the workspaces screen.
   workspaceCursor: number
   pending: string
+  // summaryOf is whose summary the card shows: a thread, the coordinator
+  // for the workspace's, or null when it is closed; cardCursor is its row.
+  summaryOf: string | null
+  cardCursor: number
+  // cardNews are the resolved threads that had news when the card opened:
+  // showing it marks them seen, and they stay while it shows.
+  cardNews: string[]
 }
 
 let ids = 1
@@ -210,6 +216,9 @@ class Store {
     folds: {},
     workspaceCursor: 0,
     pending: '',
+    summaryOf: null,
+    cardCursor: 0,
+    cardNews: [],
   }
   private listeners = new Set<() => void>()
   // writeDoc is a new doc whose editor opens ready to write.
@@ -573,7 +582,7 @@ class Store {
     }
     if (!this.layouts[name]) layout.focus = layout.cols[0].wins[0].id
     localStorage.setItem('workspace', name)
-    this.set({ workspace: name, screen: 'workspace', layout, threads: {}, order: [], chats: {}, artifacts: [], docs: {} })
+    this.set({ workspace: name, screen: 'workspace', layout, threads: {}, order: [], chats: {}, artifacts: [], docs: {}, summaryOf: null })
     await this.resync()
     // Windows of threads that are gone show the coordinator.
     const known = this.state.threads
@@ -595,45 +604,127 @@ class Store {
     this.blurAt = 0
   }
 
-  // cameBack tells the person, in a toast, that news came while they were
-  // away, and where: <leader>ns opens its summary. Nothing takes the
-  // window from them. Not with the toast off in Settings. The hub says
-  // what is news; this says only when.
+  // cameBack shows the summary card when the person comes back to news
+  // they have not seen. Not while they type, nor over a card that waits for
+  // them, and not with it off in Settings. The hub says what is news; this
+  // says only when.
   cameBack(): void {
     const s = this.state
-    if (!s.settings.summary || s.screen !== 'workspace' || this.typing()) return
-    const subject = this.summarySubject()
-    const news = subject === Coordinator ? s.workspaces.find((x) => x.name === s.workspace)?.recapUnseen : s.threads[subject]?.recapUnseen
-    if (!news) return
-    const name = subject === Coordinator ? s.workspace : subject
-    const now = Date.now()
-    const t: Toast = { id: nextId(), workspace: s.workspace, thread: subject, glyph: '✓', tone: 'muted', body: `news in ${name} · <leader>ns`, at: now, until: now + 8000, summary: true }
-    const toasts = s.toasts.filter((o) => !o.summary)
-    this.set({ toasts: [...toasts, t], log: [...s.log, t].slice(-500) })
+    if (!s.settings.summary || s.screen !== 'workspace' || s.summaryOf || this.typing()) return
+    if (s.cmdline !== null || s.picker || s.confirm || s.settingsOpen || s.helpOpen || s.cost || s.choice || s.newWorkspace || s.newDoc) return
+    const w = this.cur()
+    const v = w?.buf.kind === 'chat' ? s.threads[w.buf.thread] : undefined
+    if (v?.state === 'waiting') return
+    if (v && v.name !== Coordinator && v.recapUnseen) void this.openSummary(v.name)
+    else if (s.workspaces.find((x) => x.name === s.workspace)?.recapUnseen) void this.openSummary(Coordinator)
   }
 
   // summarySubject is whose summary opens from the window with focus: the
   // thread's in its window when it has one, else the workspace's.
   summarySubject(): string {
     const w = this.cur()
-    if (w?.buf.kind === 'summary') return w.buf.subject
     const t = w?.buf.kind === 'chat' ? w.buf.thread : ''
     return t && !t.includes('/') && this.state.threads[t]?.recap ? t : Coordinator
   }
 
-  // openSummary shows a summary in the window with focus, and tells the hub
-  // the person saw it, so the same news does not toast again.
+  // cardWindow is the window the card shows in: the chat of its subject,
+  // the one with focus first, or else the window with focus.
+  cardWindow(): number | undefined {
+    const subject = this.state.summaryOf
+    const cur = this.cur()
+    const shows = (w?: Win) => w?.buf.kind === 'chat' && w.buf.thread === subject
+    return (shows(cur) ? cur : (this.wins().find(shows) ?? cur))?.id
+  }
+
+  // openSummary shows the card and tells the hub the person saw it, so the
+  // same news does not show again.
   async openSummary(subject = this.summarySubject()): Promise<void> {
-    const w = this.cur()
-    if (!this.needWorkspace() || !w) return
-    this.show(w.id, { kind: 'summary', subject })
+    if (!this.needWorkspace()) return
+    const news = Object.values(this.state.threads).filter((v) => v.state === 'resolved' && v.recapUnseen).map((v) => v.name)
+    this.set({ summaryOf: subject, cardCursor: 0, cardNews: news })
     await this.try(this.call('seenRecap', { workspace: this.state.workspace, thread: subject }))
   }
 
-  // toggleSummary is <leader>ns: it opens the summary, or goes back from it.
+  closeSummary(): void {
+    this.set({ summaryOf: null })
+  }
+
+  // toggleSummary is :summary and <leader>ns: it opens the card, or closes it.
   toggleSummary(): void {
-    if (this.cur()?.buf.kind === 'summary') this.goBack()
+    if (this.state.summaryOf) this.closeSummary()
     else void this.openSummary()
+  }
+
+  cardRows(): CardRow[] {
+    const s = this.state
+    if (!s.summaryOf) return []
+    return cardRows(s.summaryOf, s.workspaces.find((x) => x.name === s.workspace), s.threads, s.order, s.cardNews)
+  }
+
+  // openCardRow opens what the card row under the cursor holds and closes
+  // the card.
+  openCardRow(i = this.state.cardCursor): void {
+    this.set({ cardCursor: i })
+    const open = this.cardRows()[i]?.open
+    if (!open) return
+    this.closeSummary()
+    const w = this.cur()
+    if (open.thread) void this.goThread(this.state.workspace, open.thread)
+    else if (open.artifact && w) void this.openArtifact(open.artifact, w.id)
+  }
+
+  // cardKey moves in the card while it shows, as in a window: j k G gg
+  // ^D ^U, <CR> opens what the row holds, y yanks it, q and Esc close.
+  // Other keys go on, so : and <leader>ns still work.
+  private cardG = false
+  cardKey(key: string): boolean {
+    const n = this.cardRows().length
+    const move = (i: number) => this.set({ cardCursor: Math.max(0, Math.min(i, n - 1)) })
+    const cur = this.state.cardCursor
+    const g = this.cardG
+    this.cardG = false
+    switch (key) {
+      case 'j':
+      case '<Down>':
+      case '<C-n>':
+        move(cur + 1)
+        return true
+      case 'k':
+      case '<Up>':
+      case '<C-p>':
+        move(cur - 1)
+        return true
+      case 'G':
+        move(n - 1)
+        return true
+      case 'g':
+        if (g) move(0)
+        else this.cardG = true
+        return true
+      case '<C-d>':
+        move(cur + 5)
+        return true
+      case '<C-u>':
+        move(cur - 5)
+        return true
+      case '<CR>':
+        this.openCardRow()
+        return true
+      case 'y': {
+        const r = this.cardRows()[cur]
+        if (r) {
+          const text = rowText(r).trim()
+          nh().copy(text)
+          this.say('yanked 1 line', 'muted')
+        }
+        return true
+      }
+      case 'q':
+      case '<Esc>':
+        this.closeSummary()
+        return true
+    }
+    return false
   }
 
   async createWorkspace(name: string, pin?: string): Promise<boolean> {
@@ -972,7 +1063,6 @@ class Store {
     if (!w) return ''
     if (w.buf.kind === 'chat') return w.buf.thread
     if (w.buf.kind === 'threads') return this.threadRows()[w.cursor]?.name ?? ''
-    if (w.buf.kind === 'summary') return w.buf.subject
     return ''
   }
 
@@ -1446,8 +1536,8 @@ class Store {
       case 'cost':
         return this.openCost(a[0] === 'all' ? 'all' : 'workspace')
       case 'summary':
-        if (e.bang) return this.askRecap(a[0] || this.summarySubject())
-        return this.openSummary()
+        if (e.bang) return this.askRecap(a[0] || this.state.summaryOf || this.summarySubject())
+        return this.toggleSummary()
       case 'w':
       case 'write':
         if (!art) return this.say('nothing to write here; :w saves an artifact', 'muted')
@@ -1564,7 +1654,6 @@ export function sameBuf(a: BufRef, b: BufRef): boolean {
   if (a.kind !== b.kind) return false
   if (a.kind === 'chat' && b.kind === 'chat') return a.thread === b.thread
   if (a.kind === 'artifact' && b.kind === 'artifact') return a.name === b.name
-  if (a.kind === 'summary' && b.kind === 'summary') return a.subject === b.subject
   return true
 }
 

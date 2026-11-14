@@ -80,19 +80,20 @@ type notifyIn struct {
 }
 
 type recapIn struct {
-	Asked   string            `json:"asked" jsonschema:"your task, in a few words"`
-	Outcome string            `json:"outcome" jsonschema:"what came out, in one short sentence: what changed or was decided. A row shows only the first sentence"`
-	Open    string            `json:"open,omitempty" jsonschema:"what is still to do or needs the person, in one short sentence. Leave it out when nothing is open"`
-	Done    []itemIn `json:"done,omitempty" jsonschema:"your tasks that are done, as of now, most important first: what changed and where it is (committed, pushed, an artifact)"`
-	Doing   []itemIn `json:"doing,omitempty" jsonschema:"your tasks still in progress or still to do"`
+	Goal    string   `json:"goal,omitempty" jsonschema:"what you are here for, in a few plain words; empty keeps the last"`
+	Asked   string   `json:"asked" jsonschema:"what this turn was asked, in a few words"`
+	Outcome string   `json:"outcome" jsonschema:"what came out for the person, in one short sentence. A row shows only the first sentence"`
+	Open    string   `json:"open,omitempty" jsonschema:"what is still to do or needs the person, in one short sentence. Leave it out when nothing is open"`
+	Done    []itemIn `json:"done,omitempty" jsonschema:"results that are done, the ones that matter most first"`
+	Doing   []itemIn `json:"doing,omitempty" jsonschema:"work in progress or still to do"`
 	Needs   []itemIn `json:"needs,omitempty" jsonschema:"what waits for the person: a decision, a review, a step only they can take"`
 }
 
 // itemIn is one task of a summary.
 type itemIn struct {
-	Text     string `json:"text" jsonschema:"the task and where it stands, in one short line"`
-	Thread   string `json:"thread,omitempty" jsonschema:"a thread of this workspace that holds the task; the person opens it from the item"`
-	Artifact string `json:"artifact,omitempty" jsonschema:"an artifact that holds the result; the person opens it from the item"`
+	Text     string `json:"text" jsonschema:"one short line in plain words"`
+	Thread   string `json:"thread,omitempty" jsonschema:"a thread of this workspace that holds it"`
+	Artifact string `json:"artifact,omitempty" jsonschema:"an artifact that holds it"`
 }
 
 func items(in []itemIn) []model.RecapItem {
@@ -104,10 +105,8 @@ func items(in []itemIn) []model.RecapItem {
 }
 
 type workspaceRecapIn struct {
-	Goal  string            `json:"goal,omitempty" jsonschema:"what this workspace is for, in a few words; empty keeps the last goal"`
-	Done  []itemIn `json:"done" jsonschema:"the workspace's results so far, at the level of the goal, most important first"`
-	Doing []itemIn `json:"doing,omitempty" jsonschema:"the work in progress, at the level of the goal"`
-	Needs []itemIn `json:"needs,omitempty" jsonschema:"what waits for the person, across the threads"`
+	Goal  string   `json:"goal,omitempty" jsonschema:"what this workspace is for, in a few plain words; empty keeps the last goal"`
+	Lines []string `json:"lines" jsonschema:"at most 3 short lines on how the workspace stands as a whole; empty when the threads' own summaries say it all"`
 }
 
 type openIn struct {
@@ -236,9 +235,9 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 				return text(Transcript(evs)), nil, nil
 			})
 
-		mcp.AddTool(s, &mcp.Tool{Name: "recap", Description: "Say what your work produced, so the person learns it at a glance without reading your transcript. Call it last in a turn in which your work moved. asked, outcome and open are this turn: one line under your reply. done, doing and needs are your summary: how all your tasks stand, the ones that matter most first, with the thread or artifact that holds each. Send the whole lists each time, or leave all three out to keep the last. neoharness adds what it saw you run and edit."},
+		mcp.AddTool(s, &mcp.Tool{Name: "recap", Description: "Tell the person what your work produced and how it stands, so they get back on track without your transcript. Call it last in a turn in which your work moved. asked, outcome and open are this turn; they show in one line under your reply. goal, done, doing and needs are your summary: the person reads it with the other threads' when they come back, to get back on track, not to check your work: neoharness already shows the commands, files and commits. Say what changed for them, in plain words, short, and leave out what did not change. Name a commit, file or identifier only when they must act on it. Send whole lists, or leave all three out to keep the last. neoharness adds what it saw you run and edit."},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in recapIn) (*mcp.CallToolResult, any, error) {
-				if err := h.Recap(p, me, in.Asked, in.Outcome, in.Open, items(in.Done), items(in.Doing), items(in.Needs)); err != nil {
+				if err := h.Recap(p, me, in.Goal, in.Asked, in.Outcome, in.Open, items(in.Done), items(in.Doing), items(in.Needs)); err != nil {
 					return nil, nil, err
 				}
 				return text("Recap kept."), nil, nil
@@ -262,9 +261,9 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			return text("Resolved " + in.Name + "."), nil, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "workspace_recap", Description: "Write the workspace summary: how the whole workspace stands, so the person learns it at a glance without reading any thread. Stay at the level of the goal: join the threads' summaries into the results that matter, what is in progress, and what waits for the person, and link each item to its thread or artifact. It replaces your last workspace summary. neoharness shows beside it what waits, failed or runs, and the files two threads both edited."},
+	mcp.AddTool(s, &mcp.Tool{Name: "workspace_recap", Description: "Write the top of the workspace summary: what the workspace is for and, in at most three short lines, how it stands as a whole. Below it the person sees each thread's own summary, and what waits, failed or runs; say only what those do not. Write for the person: plain words, outcomes and not steps, short. It replaces your last one."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in workspaceRecapIn) (*mcp.CallToolResult, any, error) {
-			if err := h.WorkspaceRecap(p, me, in.Goal, items(in.Done), items(in.Doing), items(in.Needs)); err != nil {
+			if err := h.WorkspaceRecap(p, me, in.Goal, in.Lines); err != nil {
 				return nil, nil, err
 			}
 			return text("Workspace recap kept."), nil, nil

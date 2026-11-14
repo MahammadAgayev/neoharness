@@ -53,26 +53,26 @@ Each turn ends with a muted recap line under the reply, and each thread's
 recap shows under its row. Settings' "Recap line" switch, or `:set
 norecap`, hides the line.
 
-`:summary` or `<leader>ns` opens the summary in the window, as in the TUI:
-in a thread's window, what the thread has done, has in progress and needs
-from you, each item with its thread or artifact, then the facts of its last
-turn; elsewhere, the workspace's goal, counts and the coordinator's summary,
-or one row per open thread until it writes one. It is a window like any
-other: `j` `k` move its cursor line, `y` yanks, `<CR>` or a click opens the
-item's thread or artifact, and `<C-o>` or `<leader>ns` goes back. Opening it
-marks the news seen in the hub, so the TUI does not tell it again.
-`:summary!` asks for a fresh one, which runs a turn.
+`:summary` or `<leader>ns` opens or closes the summary card on the prompt,
+as in the TUI: the coordinator's short view on top, then each thread in
+plain words, what it is for and what needs you, failed, is done and in
+progress; in a thread's window, that thread's part, one row per item.
+`j` `k` move its cursor row, `<CR>` or a click opens the thread or artifact
+of the row, and `q`, `Esc` or `×` close it. Opening it marks the news seen
+in the hub, so the TUI does not show it again. `:summary!` asks for a fresh
+one, which runs a turn.
 
-When you come back to news you have not seen (the window gets focus after
-two minutes away, or you open a workspace you have not looked at for two
-minutes), a toast says `news in demo · <leader>ns`; a click opens the
-summary. It never comes while you write a message. Settings' "Summary
-toast" switch, or `:set nosummary`, turns it off. The sidebar and the
-workspaces screen show `✗ N` beside a workspace whose threads failed.
+The card pops up by itself when you come back to news you have not seen:
+the window gets focus after two minutes away, or you open a workspace you
+have not looked at for two minutes. It never shows while you write a
+message, nor over a permission or question card. Settings' "Summary
+pop-up" switch, or `:set nosummary`, stops it showing by itself. The
+sidebar and the workspaces screen show `✗ N` beside a workspace whose
+threads failed.
 
 A question sits on the prompt in the same place, in a gold card: the
 question in one line, the messages it holds until you answer, Reply and
-Send now.
+Send now. It takes the place of the summary card while it waits.
 
 The app does not read `init.lua`; the hub settings in it apply to both.
 What the TUI takes from `init.lua` for itself is in Settings instead.

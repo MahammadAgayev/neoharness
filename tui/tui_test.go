@@ -3580,7 +3580,7 @@ func TestFailedTurnToastStaysAnError(t *testing.T) {
 	}
 }
 
-func TestARecapShowsUnderItsRowAndTheSummaryInItsWindow(t *testing.T) {
+func TestARecapShowsUnderItsRowAndTheThreadsCardInItsWindow(t *testing.T) {
 	h := start(t)
 	h.s.SetSize(170, 40)
 	h.openDemo()
@@ -3602,66 +3602,69 @@ func TestARecapShowsUnderItsRowAndTheSummaryInItsWindow(t *testing.T) {
 		t.Errorf("a running row shows no recap:\n%s", s)
 	}
 
-	// Until the thread writes its tasks, its last turn stands in.
+	// Until the thread writes its summary, its asked, outcome and open stand
+	// in; the card sits on the prompt of its window.
 	h.press("<Esc>", ":b api-tests", "<CR>", ":summary", "<CR>")
-	if h.a.cur.Buf.Kind != KindSummary || !slices.Equal(h.hub.seen, []string{"api-tests"}) {
-		t.Fatalf("buffer %v, seen %v", h.a.cur.Buf.Kind, h.hub.seen)
+	if h.a.summaryOf != "api-tests" || !slices.Equal(h.hub.seen, []string{"api-tests"}) {
+		t.Fatalf("card of %q, seen %v", h.a.summaryOf, h.hub.seen)
 	}
-	h.see("api-tests · idle")
-	h.see("Needs you")
-	h.see("◆ keep slow test?")
-	h.see("Done")
-	h.see("✓ Added 12 tests")
-	h.see("last turn  3 commands, 1 failed · 1 file edited · ◇ test-plan")
+	h.see("╭─ api-tests · idle")
+	h.see("write the api tests")
+	h.see("done       Added 12 tests")
+	h.see("needs you  keep slow test?")
+	rows := strings.Split(h.screen(), "\n")
+	prompt := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "›") })
+	if prompt < 1 || !strings.Contains(rows[prompt-1], "╰") {
+		t.Errorf("the card does not sit just above the prompt:\n%s", h.screen())
+	}
+	// Plain words only: the commands and files stay in the threads list.
+	if s := h.card(); strings.Contains(s, "golangci-lint") || strings.Contains(s, "api_test.go") {
+		t.Errorf("the card names commands or files:\n%s", s)
+	}
 
-	// The thread's tasks, each with what holds it; it draws again live.
-	v.Recap.Done = []model.RecapItem{{Text: "Wrote the plan", Artifact: "test-plan"}}
-	v.Recap.Doing = []model.RecapItem{{Text: "the auth paths wait on the refactor", Thread: "auth-refactor"}}
+	// The thread's own summary: one row per item, each opening what holds it.
+	v.Recap.Goal = "tests for the public API"
+	v.Recap.Done = []model.RecapItem{{Text: "the plan for the tests", Artifact: "test-plan"}, {Text: "12 tests pass"}}
+	v.Recap.Doing = []model.RecapItem{{Text: "auth paths, once the refactor lands", Thread: "auth-refactor"}}
 	v.Recap.Needs = nil
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
-	h.see("✓ Wrote the plan  ◇ test-plan")
-	h.see("In progress")
-	h.see("● the auth paths wait on the refactor  → auth-refactor")
-	s := h.window()
-	if strings.Contains(s, "keep slow test?") {
-		t.Errorf("the last turn stands in beside the tasks:\n%s", s)
-	}
-	if strings.Index(s, "Done") > strings.Index(s, "In progress") {
-		t.Errorf("order:\n%s", s)
+	h.see("tests for the public API")
+	h.see("done       the plan for the tests  ◇ test-plan")
+	h.see("           12 tests pass")
+	h.see("in progress  auth paths, once the refactor lands  → auth-refactor")
+	if strings.Contains(h.card(), "keep slow test?") {
+		t.Errorf("the last turn stands in beside the summary:\n%s", h.card())
 	}
 
-	// The cursor moves line by line, and <CR> opens what the item links.
-	h.press("gg")
-	for !strings.Contains(h.a.line(h.a.cur).Text(), "auth paths") {
-		before := h.a.cur.Cur
-		h.press("j")
-		if h.a.cur.Cur == before {
-			t.Fatalf("j did not reach the item:\n%s", h.screen())
-		}
+	// j and k move its cursor line by line; <CR> opens what the row holds
+	// and closes the card.
+	h.press("G")
+	if !strings.Contains(h.cardRow(), "auth paths") {
+		t.Fatalf("G: cursor on %q", h.cardRow())
 	}
-	h.press("<CR>")
-	if b := h.a.cur.Buf; b.Kind != KindChat || b.Thread != "auth-refactor" {
-		t.Fatalf("<CR> opened %v %q", b.Kind, b.Thread)
+	h.press("k")
+	if !strings.Contains(h.cardRow(), "12 tests pass") {
+		t.Fatalf("k: cursor on %q", h.cardRow())
 	}
-	h.press("<C-o>")
-	if h.a.cur.Buf.Kind != KindSummary {
-		t.Fatal("<C-o> does not come back to the summary")
-	}
-	// <leader>ns again goes back; once more opens it.
-	h.press("<Space>", "n", "s")
-	if b := h.a.cur.Buf; b.Kind != KindChat || b.Thread != "api-tests" {
-		t.Fatalf("<leader>ns from the summary went to %v %q", b.Kind, b.Thread)
-	}
-	h.press("<Space>", "n", "s")
-	if h.a.cur.Buf.Kind != KindSummary {
-		t.Fatal("<leader>ns does not open the summary")
+	h.press("j", "<CR>")
+	if b := h.a.cur.Buf; b.Kind != KindChat || b.Thread != "auth-refactor" || h.a.summaryOf != "" {
+		t.Fatalf("<CR> opened %v %q, card %q", b.Kind, b.Thread, h.a.summaryOf)
 	}
 
 	v.Recap = &model.Recap{Asked: "write the api tests", Error: "the agent failed: boom"}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
-	h.a.draw()
-	h.see("✗ the agent failed: boom")
+	h.press(":b api-tests", "<CR>", "<Space>", "n", "s")
+	h.see("failed     the agent failed: boom")
+	// <leader>ns again closes it, as q and Esc do.
+	h.press("<Space>", "n", "s")
+	if h.a.summaryOf != "" {
+		t.Fatal("<leader>ns again leaves the card open")
+	}
+	h.press("<Space>", "n", "s", "q")
+	if h.a.summaryOf != "" {
+		t.Fatal("q leaves the card open")
+	}
 }
 
 // The turn ends with one muted line that says it in short, under the reply;
@@ -3682,7 +3685,7 @@ func TestATurnEndsWithItsRecapLine(t *testing.T) {
 	h.see("All done.")
 }
 
-// A row shows the hub's headline of an outcome; the summary holds all of it.
+// A row shows the hub's headline of an outcome; the card holds all of it.
 func TestARecapRowShowsTheFirstSentence(t *testing.T) {
 	h := start(t)
 	h.openDemo()
@@ -3695,7 +3698,7 @@ func TestARecapRowShowsTheFirstSentence(t *testing.T) {
 		t.Errorf("the row shows more than the first sentence:\n%s", h.screen())
 	}
 	h.press("<Esc>", ":b api-tests", "<CR>", ":summary", "<CR>")
-	h.see("✓ Added 12 tests. They cover")
+	h.see("done       Added 12 tests. They cover")
 	h.see("v1.2 errors.")
 }
 
@@ -3704,28 +3707,27 @@ func TestARecapRowShowsTheFirstSentence(t *testing.T) {
 func TestSummaryBangAsksForAFreshSummary(t *testing.T) {
 	h := start(t)
 	h.openDemo()
-	h.press(":summary!", "<CR>")
+	h.press(":summary!", "<CR>", "q")
 	h.press(":b api-tests", "<CR>")
-	h.press(":summary!", "<CR>")
+	h.press(":summary!", "<CR>", "q")
 	h.press(":summary! auth-refactor", "<CR>")
 	want := []string{model.Coordinator, "api-tests", "auth-refactor"}
 	if !slices.Equal(h.hub.recaps, want) {
 		t.Fatalf("asked %v, want %v", h.hub.recaps, want)
 	}
-	if h.a.cur.Buf.Kind != KindSummary || h.a.summaryOf != "auth-refactor" {
-		t.Errorf("summary of %q: asking opens it", h.a.summaryOf)
+	if h.a.summaryOf != "auth-refactor" {
+		t.Errorf("card of %q: asking opens it", h.a.summaryOf)
 	}
 }
 
-// news gives the demo workspace a summary the person has not seen.
+// news gives the demo workspace news the person has not seen.
 func (h *neoharness) news() model.WorkspaceView {
 	ws := h.a.workspaces[0]
 	ws.Counts = map[model.State]int{model.StateWaiting: 1, model.StateRunning: 1, model.StateIdle: 2}
 	ws.RecapUnseen = true
 	ws.Recap = &model.WorkspaceRecap{
 		Goal:     "Move auth into sessions, keep the public API",
-		Needs:    []model.RecapItem{{Text: "answer migr's API choice", Thread: "migr"}},
-		Done:     []model.RecapItem{{Text: "sessions store merged"}},
+		Lines:    []string{"Sessions work end to end; the migration waits on you."},
 		At:       time.Now().Add(-time.Hour),
 		Overlaps: []model.Overlap{{Path: "user/lookup.go", Threads: []string{"auth-refactor", "api-tests"}}},
 		Failed:   1,
@@ -3733,15 +3735,17 @@ func (h *neoharness) news() model.WorkspaceView {
 	}
 	h.a.apply(model.Update{Kind: model.UpdateWorkspace, Workspace: "demo", Summary: &ws})
 	v := h.a.threads["api-tests"]
-	v.Recap = &model.Recap{Outcome: "Added 12 tests. More.", Headline: "Added 12 tests."}
+	v.Recap = &model.Recap{Goal: "tests for the public API", Outcome: "Added 12 tests. More.", Headline: "Added 12 tests.",
+		Done: []model.RecapItem{{Text: "12 tests pass"}, {Text: "the plan", Artifact: "test-plan"}}, Needs: []model.RecapItem{{Text: "keep the slow test?"}}}
 	v.RecapUnseen = true
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	for _, n := range []string{"migr", "flaky"} {
 		v := model.ThreadView{Workspace: "demo", Name: n, Role: model.RoleThread, State: model.StateIdle}
 		if n == "migr" {
 			v.State, v.Permission = model.StateWaiting, &model.Permission{Tool: "Bash", Detail: "psql -c drop"}
+			v.Recap = &model.Recap{Asked: "migrate the user table"}
 		} else {
-			v.Recap, v.RecapUnseen = &model.Recap{Error: "crashed on purpose"}, true
+			v.Recap, v.RecapUnseen = &model.Recap{Asked: "find the flaky test", Error: "crashed on purpose"}, true
 		}
 		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: n, View: &v})
 	}
@@ -3749,16 +3753,18 @@ func (h *neoharness) news() model.WorkspaceView {
 	return ws
 }
 
-// window is the text of the window with focus.
-func (h *neoharness) window() string {
-	return strings.Join(texts(h.a.cur.Buf.Lines(h.a.textWidth(h.a.cur), h.a.th, 0)), "\n")
+// card is the text of the summary card's rows, and cardRow the row its
+// cursor is on.
+func (h *neoharness) card() string {
+	return strings.Join(texts(h.a.cardLines(80)), "\n")
 }
 
-// newsToast says a toast told of news, and clears the toasts.
-func (h *neoharness) newsToast() bool {
-	found := slices.ContainsFunc(h.a.toasts, func(t *toast) bool { return strings.HasPrefix(t.body, "news in ") })
-	h.a.toasts = nil
-	return found
+func (h *neoharness) cardRow() string {
+	lines := h.a.cardLines(80)
+	if h.a.cardCur >= len(lines) {
+		return ""
+	}
+	return lines[h.a.cardCur].Text()
 }
 
 // clock makes the TUI's time a value the test moves.
@@ -3768,64 +3774,90 @@ func (h *neoharness) clock() *time.Time {
 	return &now
 }
 
-// Away for minutes, the person comes back to a toast that says there is
-// news; <leader>ns opens the workspace summary and marks it seen.
-func TestComingBackToNewsToastsItAndTheSummarySaysHowTheWorkspaceStands(t *testing.T) {
+// Away for minutes, the person comes back to the card on the coordinator's
+// prompt: the coordinator's short view on top, then each thread in plain
+// words, what needs the person first. Closing it marks it seen in the hub.
+func TestTheWorkspaceCardShowsWhenThePersonComesBackToNews(t *testing.T) {
 	h := start(t)
-	h.s.SetSize(170, 40)
+	h.s.SetSize(170, 44)
 	now := h.clock()
 	h.openDemo()
 	h.news()
-	if h.newsToast() {
-		t.Fatal("news toasted while the person was here")
+	if h.a.summaryOf != "" {
+		t.Fatal("the card showed while the person was here")
 	}
 	// A short break is not coming back: the toasts said what came.
 	h.a.handle(tcell.NewEventFocus(false))
 	*now = now.Add(time.Minute)
 	h.a.handle(tcell.NewEventFocus(true))
-	if h.newsToast() {
-		t.Fatal("news toasted after a minute away")
+	if h.a.summaryOf != "" {
+		t.Fatal("the card showed after a minute away")
 	}
 	h.a.handle(tcell.NewEventFocus(false))
 	*now = now.Add(model.RecapAway)
 	h.a.handle(tcell.NewEventFocus(true))
 	h.a.draw()
-	h.see("news in demo · <leader>ns")
-	h.a.toasts = nil
-
-	h.press("<Space>", "n", "s")
-	if !slices.Equal(h.hub.seen, []string{model.Coordinator}) {
-		t.Fatalf("seen %v", h.hub.seen)
-	}
 	h.see("demo · Move auth into sessions, keep the public API")
-	h.see("◆ 1 wait for you · ✗ 1 failed")
-	h.see("◆ answer migr's API choice  → migr")
-	h.see("✓ sessions store merged")
+	h.see("◆ 1 waits for you · ✗ 1 failed")
+	h.see("Sessions work end to end; the migration waits on you.")
+	h.see("◆ migr  migrate the user table")
+	h.see("needs you  permission · Bash psql -c drop")
+	h.see("✗ flaky  find the flaky test")
+	h.see("failed     crashed on purpose")
+	h.see("✓ api-tests  tests for the public API")
+	h.see("done       12 tests pass · the plan ◇ test-plan")
+	h.see("needs you  keep the slow test?")
+	h.see("● auth-refactor")
 	h.see("auth-refactor and api-tests both edited user/lookup.go")
 	h.see("1 thread ended since")
-	s := h.window()
-	if strings.Index(s, "Needs you") > strings.Index(s, "Done") {
-		t.Errorf("what needs the person comes first:\n%s", s)
-	}
-
-	// Until the coordinator writes one, the open threads stand in: what
-	// needs the person first, then what failed, came out, still runs.
-	ws := h.a.workspaces[0]
-	ws.Recap.Needs, ws.Recap.Done = nil, nil
-	h.a.apply(model.Update{Kind: model.UpdateWorkspace, Workspace: "demo", Summary: &ws})
-	h.a.draw()
-	h.see("permission · Bash psql -c drop")
-	h.see("crashed on purpose")
-	s = h.window()
-	if !(strings.Index(s, "◆ migr") < strings.Index(s, "✗ flaky") && strings.Index(s, "✗ flaky") < strings.Index(s, "✓ api-tests") && strings.Index(s, "✓ api-tests") < strings.Index(s, "● auth-refactor")) {
+	s := h.card()
+	if !(strings.Index(s, "migr  ") < strings.Index(s, "flaky  ") && strings.Index(s, "flaky  ") < strings.Index(s, "api-tests  ") && strings.Index(s, "api-tests  ") < strings.Index(s, "\nauth-refactor\n")) {
 		t.Errorf("order:\n%s", s)
+	}
+	// <CR> on a thread's rows opens the thread.
+	for !strings.Contains(h.cardRow(), "api-tests") {
+		before := h.a.cardCur
+		h.press("j")
+		if h.a.cardCur == before {
+			t.Fatalf("j did not reach api-tests:\n%s", s)
+		}
+	}
+	h.press("j", "<CR>")
+	if b := h.a.cur.Buf; b.Kind != KindChat || b.Thread != "api-tests" || h.a.summaryOf != "" {
+		t.Fatalf("<CR> opened %v %q, card %q", b.Kind, b.Thread, h.a.summaryOf)
+	}
+	if !slices.Equal(h.hub.seen, []string{model.Coordinator}) {
+		t.Fatalf("seen %v", h.hub.seen)
 	}
 	// The workspaces screen counts the failed threads too.
 	h.press(":workspaces", "<CR>")
 	h.see("✗ 1")
 }
 
-func TestNoNewsToastWithoutNewsOrWhileThePersonTypes(t *testing.T) {
+// A thread resolved with news the person has not seen shows in the card,
+// and stays while the card shows, though opening it marks the news seen.
+func TestAResolvedThreadWithNewsStaysInTheCard(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := model.ThreadView{Workspace: "demo", Name: "readme", Role: model.RoleThread, State: model.StateResolved, RecapUnseen: true,
+		Recap: &model.Recap{Goal: "a README for the package", Done: []model.RecapItem{{Text: "README.md is written"}}}}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	old := model.ThreadView{Workspace: "demo", Name: "old", Role: model.RoleThread, State: model.StateResolved, Recap: &model.Recap{Goal: "seen long ago"}}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: old.Name, View: &old})
+	h.press(":summary", "<CR>")
+	v.RecapUnseen = false
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	if s := h.card(); !strings.Contains(s, "readme  a README for the package") || !strings.Contains(s, "README.md is written") || strings.Contains(s, "seen long ago") {
+		t.Fatalf("card:\n%s", s)
+	}
+	// Opened again, the news is old.
+	h.press("q", ":summary", "<CR>")
+	if strings.Contains(h.card(), "readme") {
+		t.Fatalf("seen news stays:\n%s", h.card())
+	}
+}
+
+func TestTheCardDoesNotShowWithoutNewsOrWhileThePersonTypes(t *testing.T) {
 	h := start(t)
 	now := h.clock()
 	h.openDemo()
@@ -3835,14 +3867,14 @@ func TestNoNewsToastWithoutNewsOrWhileThePersonTypes(t *testing.T) {
 		h.a.handle(tcell.NewEventFocus(true))
 	}
 	away()
-	if h.newsToast() {
-		t.Fatal("a toast with no news")
+	if h.a.summaryOf != "" {
+		t.Fatal("the card showed with no news")
 	}
 	h.news()
 	h.press("i", "a draft")
 	away()
-	if h.newsToast() {
-		t.Fatal("a toast while the person types")
+	if h.a.summaryOf != "" {
+		t.Fatal("the card showed while the person types")
 	}
 	// Insert with an empty prompt is not typing: the prompt often stays in
 	// Insert after a message, while the person is away.
@@ -3850,71 +3882,82 @@ func TestNoNewsToastWithoutNewsOrWhileThePersonTypes(t *testing.T) {
 	h.press("<Esc>", "dd")
 	h.press("i")
 	away()
-	if !h.newsToast() {
-		t.Fatal("no toast in Insert with an empty prompt")
+	if h.a.summaryOf != model.Coordinator {
+		t.Fatalf("card = %q in Insert with an empty prompt", h.a.summaryOf)
 	}
-	// The setting turns the toast off; :summary still opens the summary.
+	// One Esc closes it there too, and leaves Insert as always.
 	h.press("<Esc>")
+	if h.a.summaryOf != "" || h.a.mode != modeNormal {
+		t.Fatalf("Esc in Insert: card %q, mode %v", h.a.summaryOf, h.a.mode)
+	}
+	// Over a card that waits for the person, it does not show either.
+	h.press(":b migr", "<CR>")
+	away()
+	if h.a.summaryOf != "" {
+		t.Fatal("the card showed over a permission card")
+	}
+	// The setting turns the pop-up off; :summary still opens it.
+	h.press("<C-^>")
 	h.a.runConfig("neoharness.o.summary = false", "init.lua", false)
 	away()
-	if h.newsToast() {
-		t.Fatal("a toast with summary off")
+	if h.a.summaryOf != "" {
+		t.Fatal("the card showed with summary off")
 	}
 	h.press(":summary", "<CR>")
-	if h.a.cur.Buf.Kind != KindSummary || h.a.summaryOf != model.Coordinator {
-		t.Fatalf("summary of %q after :summary", h.a.summaryOf)
+	if h.a.summaryOf != model.Coordinator {
+		t.Fatalf("card = %q after :summary", h.a.summaryOf)
 	}
 	h.press(":summary", "<CR>")
-	if h.a.cur.Buf.Kind == KindSummary {
-		t.Fatal(":summary again goes back")
+	if h.a.summaryOf != "" {
+		t.Fatal(":summary again closes it")
 	}
 }
 
 // The first key after minutes with none is the person coming back, even
 // on a terminal that once said it reports focus: tmux reports it at start
 // and, with no client attached, never again.
-func TestTheFirstKeyAfterAwayToastsTheNews(t *testing.T) {
+func TestTheFirstKeyAfterAwayBringsTheCard(t *testing.T) {
 	h := start(t)
 	now := h.clock()
 	h.a.handle(tcell.NewEventFocus(true))
 	h.openDemo()
 	h.news()
 	h.press("k")
-	if h.newsToast() {
-		t.Fatal("a toast at once")
+	if h.a.summaryOf != "" {
+		t.Fatal("the card showed at once")
 	}
 	*now = now.Add(model.RecapAway)
 	h.press("i")
-	if h.newsToast() {
-		t.Fatal("a toast when the key started typing")
+	if h.a.summaryOf != "" {
+		t.Fatal("the card showed when the key started typing")
 	}
 	h.press("<Esc>")
 	*now = now.Add(model.RecapAway)
 	h.press("j")
-	if !h.newsToast() {
-		t.Fatal("no toast")
+	if h.a.summaryOf != model.Coordinator {
+		t.Fatalf("card = %q", h.a.summaryOf)
 	}
 }
 
 // Opening a workspace not looked at for minutes is coming back to it.
-func TestOpeningAWorkspaceAfterAwayToastsItsNews(t *testing.T) {
+func TestOpeningAWorkspaceAfterAwayShowsItsNews(t *testing.T) {
 	h := start(t)
 	now := h.clock()
 	h.hub.workspaces[0].RecapUnseen = true
 	h.hub.workspaces = append(h.hub.workspaces, model.WorkspaceView{Name: "ops", Counts: map[model.State]int{}})
 	h.a.loadWorkspaces()
 	h.openDemo()
-	if !h.newsToast() {
-		t.Fatal("the first open of a workspace with news toasts nothing")
+	if h.a.summaryOf != model.Coordinator {
+		t.Fatal("the first open of a workspace with news shows no card")
 	}
-	h.press(":p ops", "<CR>", ":p demo", "<CR>")
-	if h.newsToast() {
-		t.Fatal("back in a moment: no toast")
+	h.press("<Esc>", ":p ops", "<CR>", ":p demo", "<CR>")
+	if h.a.summaryOf != "" {
+		t.Fatal("back in a moment: no card")
 	}
 	h.press(":p ops", "<CR>")
 	*now = now.Add(model.RecapAway)
 	h.press(":p demo", "<CR>")
-	if !h.newsToast() {
-		t.Fatal("back after minutes: a toast")
+	if h.a.summaryOf != model.Coordinator {
+		t.Fatal("back after minutes: the card shows")
 	}
 }
