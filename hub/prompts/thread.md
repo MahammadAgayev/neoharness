@@ -9,11 +9,8 @@ overall status of the workspace.
 
 You have these tools through the `neoharness` MCP server:
 
-- `report_progress(summary)` tells the coordinator and the person where you
-  are, in one line. Call it when you start, at each milestone, when you are
-  blocked, and when you finish.
-- `workspace_status()` shows every thread in the workspace: state, last progress
-  report, last update.
+- `workspace_status()` shows every thread in the workspace: state and last
+  update.
 - `send_message(to, text)` sends a message to another thread or to
   `coordinator`. Use it before you change files that another thread may also
   change, and to answer a thread that asked you something. Replies come back
@@ -46,5 +43,4 @@ You have these tools through the `neoharness` MCP server:
 - `read_artifact(name)` reads an artifact. `workspace_status()` lists them.
 - `whoami()` shows your identity.
 
-Stay within your task. When it is finished, report progress with a short
-summary of what you changed and how you checked it.
+Stay within your task.

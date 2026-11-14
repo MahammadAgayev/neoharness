@@ -85,7 +85,7 @@ so no thread can act for another thread or another workspace.
 
 | Who | Tools |
 |---|---|
-| all sessions | `whoami`, `workspace_status`, `send_message`, `report_progress`, `ask_user`, `wake_me`, `write_artifact`, `read_artifact` |
+| all sessions | `whoami`, `workspace_status`, `send_message`, `ask_user`, `wake_me`, `write_artifact`, `read_artifact` |
 | threads only | `recap`, `read_thread` |
 | coordinator only | `open_thread`, `resolve_thread`, `notify`, `workspace_recap` |
 | internal | `permission_prompt` |

@@ -37,21 +37,18 @@ func TestTheBoardShowsAThreadsRecapWhenItEndedATurn(t *testing.T) {
 	}
 	want := "- lint: idle, ended a turn. Asked: Fix the lint issues. Outcome: Fixed two. Open: Choose: change the API or ignore one. " +
 		"Seen by neoharness: 3 commands, 1 failed: golangci-lint run; edited a.go, b.go, c.go, d.go, e.go and 1 more; wrote the artifact plan."
-	if got := BoardLine("lint", "idle", "half way", r, true); got != want {
+	if got := BoardLine("lint", "idle", r, true); got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
-	if got := BoardLine("lint", "idle", "half way", r, false); got != "- lint: idle." {
-		t.Errorf("a recap comes once, and a report from before it is old news: %q", got)
-	}
-	if got := BoardLine("lint", "running", "half way", r, false); got != "- lint: running. Report: half way." {
-		t.Errorf("running: %q", got)
+	if got := BoardLine("lint", "idle", r, false); got != "- lint: idle." {
+		t.Errorf("a recap comes once: %q", got)
 	}
 	reply := &Recap{Asked: "Add a cache", Outcome: "All tests pass.", FromReply: true}
-	if got, want := BoardLine("cache", "idle", "", reply, true), "- cache: idle, ended a turn. Asked: Add a cache. Reply: All tests pass. Seen by neoharness: no commands."; got != want {
+	if got, want := BoardLine("cache", "idle", reply, true), "- cache: idle, ended a turn. Asked: Add a cache. Reply: All tests pass. Seen by neoharness: no commands."; got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
 	failed := &Recap{Asked: "try", Error: "the agent failed: crashed"}
-	if got, want := BoardLine("flaky", "idle", "", failed, true), "- flaky: idle, ended a turn. Asked: try. Failed: the agent failed: crashed. Seen by neoharness: no commands."; got != want {
+	if got, want := BoardLine("flaky", "idle", failed, true), "- flaky: idle, ended a turn. Asked: try. Failed: the agent failed: crashed. Seen by neoharness: no commands."; got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
 }

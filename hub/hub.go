@@ -1231,7 +1231,6 @@ func (h *Hub) compactReopened(ws *space, th *thread) {
 	}
 }
 
-// ReportProgress sets a thread's progress line.
 // artifactLimit is the largest artifact, in bytes. It travels in one MCP call,
 // over the ssh tunnel for a remote thread.
 const artifactLimit = 1 << 20
@@ -1437,21 +1436,6 @@ func title(text, fallback string) string {
 		}
 	}
 	return fallback
-}
-
-func (h *Hub) ReportProgress(workspaceName, name, summary string) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	ws, th, err := h.lookup(workspaceName, name)
-	if err != nil {
-		return err
-	}
-	summary = strings.TrimSpace(summary)
-	th.t.Progress = summary
-	th.t.ProgressAt = time.Now().UTC()
-	h.event(ws, th, model.Event{Kind: model.EventProgress, Text: summary})
-	h.changed(ws, th)
-	return nil
 }
 
 // recapLimit keeps each part of a recap to a few lines on screen.
@@ -2358,7 +2342,7 @@ func (h *Hub) board(ws *space, batch []workspace.Message) string {
 		}
 		ended := slices.Contains(ws.ended, n) &&
 			!slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From == n })
-		lines = append(lines, prompts.BoardLine(n, string(th.state), th.t.Progress, boardRecap(th.t.Recap), ended))
+		lines = append(lines, prompts.BoardLine(n, string(th.state), boardRecap(th.t.Recap), ended))
 	}
 	ws.ended = nil
 	if len(lines) == 0 {
@@ -2491,7 +2475,6 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		Pending:       unshown(t.Queue),
 		Recap:         t.Recap,
 		RecapUnseen:   recapUnseen(ws, th),
-		Progress:      t.Progress,
 		WakeAt:        t.WakeAt,
 		Model:         t.Model,
 		Context:       t.Context,
@@ -2502,11 +2485,6 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		Since:         t.Since,
 		UpdatedAt:     t.UpdatedAt,
 		CreatedAt:     t.CreatedAt,
-	}
-	// A report from before the turn that runs now is old news: "blocked,
-	// asking the user" reads wrong once the answer came.
-	if th.state == model.StateRunning && t.ProgressAt.Before(t.Since) {
-		v.Progress = ""
 	}
 	switch {
 	case len(th.perms) > 0:

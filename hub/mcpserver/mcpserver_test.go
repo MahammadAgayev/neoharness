@@ -144,9 +144,8 @@ func TestCoordinatorOpensThreadsAndThreadsCannot(t *testing.T) {
 	if !strings.Contains(out, "api-tests (thread) in workspace demo") {
 		t.Errorf("whoami = %q", out)
 	}
-	call(t, th, "report_progress", map[string]any{"summary": "halfway"})
 	out, _ = call(t, coord, "workspace_status", nil)
-	if !strings.Contains(out, "api-tests") || !strings.Contains(out, "progress: halfway") || !strings.Contains(out, "coordinator (you)") {
+	if !strings.Contains(out, "api-tests") || !strings.Contains(out, "coordinator (you)") {
 		t.Errorf("workspace_status = %q", out)
 	}
 	if out, isErr := call(t, th, "send_message", map[string]any{"to": "coordinator", "text": "done?"}); isErr {
@@ -220,6 +219,20 @@ func TestOnlyThreadsReadThreads(t *testing.T) {
 	}
 	if !slices.Contains(toolNames(t, connect(t, srv, token(t, "api"))), "read_thread") {
 		t.Fatal("a thread has no read_thread")
+	}
+}
+
+// TestNoSessionReportsProgress: the recap says what a turn did, and the hub
+// sees what a running turn does, so no one writes progress lines.
+func TestNoSessionReportsProgress(t *testing.T) {
+	h, srv := setup(t)
+	if err := h.OpenThread("demo", model.User, "api", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{model.Coordinator, "api"} {
+		if slices.Contains(toolNames(t, connect(t, srv, token(t, n))), "report_progress") {
+			t.Errorf("%s has report_progress", n)
+		}
 	}
 }
 

@@ -152,17 +152,13 @@ type Recap struct {
 
 // BoardLine is one thread on the board: its state, and, when it ended a turn
 // since the coordinator's last turn, its recap: its own words, then what the
-// hub saw it do. A report from during that turn is old news then, so it goes
-// in only while the thread runs or has no recap.
-func BoardLine(name, state, progress string, r *Recap, ended bool) string {
+// hub saw it do.
+func BoardLine(name, state string, r *Recap, ended bool) string {
 	s := "- " + name + ": " + state
 	if ended {
 		s += ", ended a turn"
 	}
 	s += "."
-	if progress = clip(progress, reportLimit); progress != "" && (r == nil || state != "idle") {
-		s += " Report: " + sentence(progress)
-	}
 	if r == nil || !ended {
 		return s
 	}

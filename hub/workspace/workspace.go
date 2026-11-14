@@ -93,8 +93,6 @@ type Thread struct {
 	Asking   string `json:"asking,omitempty"`
 	Paused   bool   `json:"paused,omitempty"`
 
-	Progress   string    `json:"progress,omitempty"`
-	ProgressAt time.Time `json:"progressAt,omitzero"`
 	// WakeAt is when the thread asked to be woken, with WakeNote as the
 	// reason; zero is never.
 	WakeAt   time.Time `json:"wakeAt,omitzero"`

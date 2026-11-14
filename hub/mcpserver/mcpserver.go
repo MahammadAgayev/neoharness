@@ -65,10 +65,6 @@ type sendIn struct {
 	Text string `json:"text" jsonschema:"the message"`
 }
 
-type progressIn struct {
-	Summary string `json:"summary" jsonschema:"one line: where you are"`
-}
-
 type askIn struct {
 	Question string `json:"question" jsonschema:"the question for the person"`
 }
@@ -175,14 +171,6 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 				return nil, nil, err
 			}
 			return text("Sent to " + in.To + "."), nil, nil
-		})
-
-	mcp.AddTool(s, &mcp.Tool{Name: "report_progress", Description: "Tell the coordinator and the person where you are, in one line."},
-		func(ctx context.Context, _ *mcp.CallToolRequest, in progressIn) (*mcp.CallToolResult, any, error) {
-			if err := h.ReportProgress(p, me, in.Summary); err != nil {
-				return nil, nil, err
-			}
-			return text("Reported."), nil, nil
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "wake_me", Description: "Be woken after some minutes with a message that holds your note. Nothing else wakes you once your turn ends. Use it when you start work that outlives your turn, such as a long benchmark, then end your turn. A new call replaces the old wake-up."},
@@ -310,9 +298,6 @@ func Status(vs []model.ThreadView, me string, now time.Time) string {
 		}
 		if v.Waiting != "" {
 			fmt.Fprintf(&b, ", waiting on: %s", v.Waiting)
-		}
-		if v.Progress != "" {
-			fmt.Fprintf(&b, " | progress: %s", v.Progress)
 		}
 		fmt.Fprintf(&b, " | updated %s ago\n", now.Sub(v.UpdatedAt).Round(time.Second))
 	}

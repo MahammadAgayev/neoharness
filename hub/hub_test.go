@@ -260,7 +260,6 @@ func TestCoordinatorTurnsStartWithTheBoard(t *testing.T) {
 		}
 		stateIs(t, h, "demo", n, model.StateIdle)
 	}
-	_ = h.ReportProgress("demo", "docs", "Done: usage written")
 	_ = h.Send("demo", "lint", model.Coordinator, "lint done")
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
 	_ = h.Send("demo", model.User, model.Coordinator, "status?")
@@ -1654,37 +1653,6 @@ func TestCompletionsSearchAFolderWithManyFiles(t *testing.T) {
 	}
 	if strings.Join(queries, ",") != ",mouse" {
 		t.Errorf("queries = %q; the list is asked once, then each search", queries)
-	}
-}
-
-func TestAnOldReportDoesNotShowWhileANewTurnRuns(t *testing.T) {
-	f := &fake{}
-	gate := make(chan struct{})
-	f.script = func(ctx context.Context, req agent.Request) agent.Result {
-		<-gate
-		return agent.Result{Text: "ok"}
-	}
-	h := newHub(t, f)
-	t.Cleanup(func() { close(gate) }) // a failed check must not leave the turn hanging
-	pinned(t, h, "demo")
-	progress := func() string { return view(t, h, "demo", model.Coordinator).Progress }
-
-	_ = h.Send("demo", model.User, model.Coordinator, "find the tracker")
-	stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
-	_ = h.ReportProgress("demo", model.Coordinator, "Blocked: asking which file")
-	if p := progress(); p != "Blocked: asking which file" {
-		t.Fatalf("a report of the running turn shows; got %q", p)
-	}
-	gate <- struct{}{}
-	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
-	if p := progress(); p != "Blocked: asking which file" {
-		t.Fatalf("an idle thread shows its last report; got %q", p)
-	}
-
-	_ = h.Send("demo", model.User, model.Coordinator, "the second one")
-	stateIs(t, h, "demo", model.Coordinator, model.StateRunning)
-	if p := progress(); p != "" {
-		t.Fatalf("a new turn runs; the old report shows %q", p)
 	}
 }
 
