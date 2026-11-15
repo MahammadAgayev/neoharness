@@ -229,8 +229,6 @@ export function CommandLine() {
   const message = useStore((s) => s.message)
   const confirm = useStore((s) => s.confirm)
   const pending = useStore((s) => s.pending)
-  const insert = useStore((s) => s.insert)
-  const vimOn = useStore((s) => s.settings.vim)
   const input = useRef<HTMLInputElement>(null)
   const hist = useRef<string[]>(JSON.parse(localStorage.getItem('exhistory') || '[]'))
   const hi = useRef(-1)
@@ -304,10 +302,8 @@ export function CommandLine() {
     <div className="cmdline">
       {confirm ? (
         <span className="t-gold">{confirm.text}</span>
-      ) : message?.text ? (
-        <span className={`t-${message.tone} ellipsis`}>{message.text}</span>
       ) : (
-        <span className="t-muted">{vimOn && insert ? '-- insert --' : ''}</span>
+        message?.text && <span className={`t-${message.tone} ellipsis`}>{message.text}</span>
       )}
       <span className="sl-fill" />
       {pending && <span className="t-muted mono">{pending}</span>}

@@ -108,6 +108,8 @@ test('a question waits in a card like a permission; you answer by writing, or sk
   await page.keyboard.press('Enter')
   await expect.poll(() => hub.calls.find((c) => c.path.endsWith('/messages'))?.body).toMatchObject({ text: '8080' })
   await expect(page.locator('.b-user', { hasText: '8080' })).toBeVisible()
+  // The line cursor says Insert; the command line has no mode label.
+  await expect(page.locator('.cmdline')).not.toContainText('insert')
   await shot('22-question')
 })
 
