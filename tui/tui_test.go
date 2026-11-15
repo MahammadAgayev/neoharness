@@ -3182,6 +3182,9 @@ func TestAQuestionWaitsInACardLikeAPermission(t *testing.T) {
 	if n := strings.Count(h.screen(), "Which phase first?"); n != 1 || strings.Contains(h.screen(), "␣x skip") {
 		t.Fatalf("after the answer:\n%s", h.screen())
 	}
+	if h.fgAt("▎ question") != fgOf(h.a.th.Fg3) || h.fgAt("question") != fgOf(h.a.th.Fg3) {
+		t.Fatal("an answered question no longer waits, so its bar and label leave wait for fg-3")
+	}
 }
 
 func TestCtrlWHFromAChatWithManyLines(t *testing.T) {

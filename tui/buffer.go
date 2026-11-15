@@ -661,8 +661,10 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 		}
 		return wrap([]Span{{bl.text, st}}, w, []Span{{"    ↳ ", th.Fg3}}, []Span{{"      ", th.Fg}})
 	case bAsk:
-		bar := []Span{{"▎ ", th.Wait}}
-		label := Line{Prefix: bar, Spans: []Span{{"question", th.Wait.Italic(true)}}}
+		// The open question shows as the card; a question in the chat is
+		// answered and no longer waits, so it leaves the wait ink.
+		bar := []Span{{"▎ ", th.Fg3}}
+		label := Line{Prefix: bar, Spans: []Span{{"question", th.Fg3.Italic(true)}}}
 		return append([]Line{label}, renderMarkdown(bl.text, w, th, bar)...)
 	case bProgress:
 		return wrap([]Span{{bl.text, th.Fg2}}, w, []Span{{"  ↳ ", th.Run}}, []Span{{"    ", th.Fg}})
