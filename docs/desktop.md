@@ -115,7 +115,8 @@ in Insert, as a text editor is.
 In Insert, markdown at the start of a line makes the block: `# ` a
 heading, `- ` or `1. ` a list, `> ` a quote, ` ``` ` code, `[ ] ` a task.
 `**bold**`, `*italic*`, `` `code` `` and `~~struck~~` turn rich as you
-close them. `<Tab>` and `<S-Tab>` indent a list item; in a table `<Tab>`
+close them. `<Tab>` and `<S-Tab>` indent a list item, and `<CR>` on an empty
+one takes it out a level; in a table `<Tab>`
 goes to the next cell and adds a row at the end, and `<CR>` goes to the
 cell below; on an empty last row it leaves the table. A click on a task box
 checks it and strikes its text through. A link pasted over selected words links them. `:w` or `⌘S`

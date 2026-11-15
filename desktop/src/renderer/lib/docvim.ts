@@ -103,6 +103,7 @@ export class DocVim {
     if (m === 'normal' && this.mode !== 'insert') this.collapse(this.head())
     // Leaving Insert, the cursor goes back onto the last letter, as in Vim.
     if (m === 'normal' && this.mode === 'insert') {
+      this.flush()
       const b = this.block()
       const h = this.state.selection.head
       if (b && h > b.from && this.state.selection.empty) this.collapse(h - 1, false)
@@ -131,6 +132,12 @@ export class DocVim {
     this.anchor = back ? sel.anchor - 1 : sel.anchor
     if (this.mode === 'normal') this.setMode('visual')
     this.moveTo(back ? sel.head : sel.head - 1, false)
+  }
+
+  // flush reads the selection a click made in the page: keys never reach
+  // ProseMirror in Normal mode, and <Esc> may come before it reads it.
+  private flush(): void {
+    ;(this.view as unknown as { domObserver: { flush(): void } }).domObserver.flush()
   }
 
   private get state() {
@@ -443,9 +450,7 @@ export class DocVim {
 
   // key takes a key in Normal or Visual mode; false means it is not Vim's.
   key(key: string): boolean {
-    // The keys never reach ProseMirror in Normal mode, so it has not yet
-    // read a selection a click or j k made in the page.
-    ;(this.view as unknown as { domObserver: { flush(): void } }).domObserver.flush()
+    this.flush()
     if (!/^(j|k|<Down>|<Up>|<CR>|[0-9])$/.test(key)) this.goal = null
     if (this.mode !== 'insert' || key === '<Esc>') this.step++
     if (this.mode === 'insert') {

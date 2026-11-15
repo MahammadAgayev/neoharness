@@ -110,6 +110,24 @@ const tableEnter: Command = (state, dispatch, view) => {
   return true
 }
 
+// Enter in a list, as Docs and Notion: on an empty item it takes the item
+// out, one level or out of the list, even with items after it; at the end
+// of an item with sub-items the new item is the first of them, so they
+// stay where they are.
+const listEnter: Command = (state, dispatch) => {
+  const { $from, empty } = state.selection
+  if (!empty || $from.depth < 2 || $from.node(-1).type !== n.list_item || $from.index(-1) !== 0) return false
+  const item = $from.node(-1)
+  if ($from.parent.content.size === 0) return liftListItem(n.list_item)(state, dispatch)
+  const sub = item.childCount > 1 ? item.child(1) : null
+  if ($from.parentOffset !== $from.parent.content.size || !sub || (sub.type !== n.bullet_list && sub.type !== n.ordered_list)) return false
+  const at = $from.after() + 1
+  const checked = sub.firstChild?.attrs.checked == null ? null : false
+  const tr = state.tr.insert(at, n.list_item.create({ checked }, n.paragraph.create()))
+  dispatch?.(tr.setSelection(TextSelection.create(tr.doc, at + 2)).scrollIntoView())
+  return true
+}
+
 export function editorPlugins(leave: () => void): Plugin[] {
   return [
     // DocVim.group starts each undo step, by command or by time.
@@ -122,7 +140,7 @@ export function editorPlugins(leave: () => void): Plugin[] {
       },
       'Mod-z': undo,
       'Shift-Mod-z': redo,
-      Enter: chainCommands(tableEnter, splitListItem(n.list_item)),
+      Enter: chainCommands(tableEnter, listEnter, splitListItem(n.list_item)),
       // A GFM table cell is one line, so it takes no line break.
       'Shift-Enter': chainCommands(exitCode, isInTable, (state, dispatch) => {
         dispatch?.(state.tr.replaceSelectionWith(n.hard_break.create()).scrollIntoView())

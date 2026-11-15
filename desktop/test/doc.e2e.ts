@@ -231,6 +231,42 @@ test('Enter in a table goes to the cell below, adds a row at the end, and leaves
   await page.keyboard.press('Control+o')
 })
 
+test('Enter in a list keeps the sub-items where they are, and on an empty item leaves the list', async () => {
+  hub.artifact('demo', 'lists', 'Lists', '# Lists\n\n- one\n- two\n  - nested\n- three\n')
+  hub.event('demo', 'api', { kind: 'artifact', detail: 'lists', text: 'Lists', version: 1 })
+  await page.locator('.b-artifact', { hasText: 'Lists' }).click()
+  const win = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'lists' }) })
+  const doc = win.locator('.doc-page')
+  const saved = async (text: string) => {
+    await page.keyboard.press('Meta+s')
+    await expect
+      .poll(() => hub.calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/artifacts/lists')).pop()?.body)
+      .toMatchObject({ text })
+  }
+  // At the end of an item with sub-items, the new item is the first of them.
+  await doc.locator('li p', { hasText: /^two$/ }).click()
+  await normal()
+  await page.keyboard.press('A')
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('new')
+  await saved('# Lists\n\n- one\n- two\n  - new\n  - nested\n- three\n')
+  // Enter on an empty nested item takes it out one level.
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('back')
+  await saved('# Lists\n\n- one\n- two\n  - new\n- back\n  - nested\n- three\n')
+  // Enter on an empty item at the top leaves the list.
+  await doc.locator('li p', { hasText: /^three$/ }).click()
+  await normal()
+  await page.keyboard.press('A')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('para')
+  await saved('# Lists\n\n- one\n- two\n  - new\n- back\n  - nested\n- three\n\npara\n')
+  await normal()
+  await page.keyboard.press('Control+o')
+})
+
 test('a mouse drag selects in Visual mode, so d takes the words away, as with Vim and a mouse', async () => {
   hub.artifact('demo', 'drag', 'Drag', '# Drag\n\nfirst second third\n')
   hub.event('demo', 'api', { kind: 'artifact', detail: 'drag', text: 'Drag', version: 1 })
