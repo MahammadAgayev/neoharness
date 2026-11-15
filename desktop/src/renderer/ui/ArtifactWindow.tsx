@@ -179,6 +179,11 @@ function DocEditor(props: {
             void window.nh.openExternal(href)
             return true
           }
+          // The cursor goes where you click at once, not when the browser
+          // tells of its selection a few ms later: a key typed at once acts
+          // there, and nothing redrawn in between puts the old cursor back.
+          const at = e.button === 0 && !e.shiftKey && e.detail === 1 ? _v.posAtCoords({ left: e.clientX, top: e.clientY }) : null
+          if (at) _v.dispatch(_v.state.tr.setSelection(Selection.near(_v.state.doc.resolve(at.pos))).setMeta('pointer', true))
           return false
         },
       },
