@@ -71,6 +71,15 @@ export function age(at: string, now = Date.now()): string {
   return new Date(at).toLocaleDateString([], { day: 'numeric', month: 'short' })
 }
 
+// boardTime is a thread's time on the board and in its status line: "now"
+// for the first minute, then whole minutes and up, so it changes at most
+// once a minute.
+export function boardTime(at: string, now = Date.now()): string {
+  const ms = now - Date.parse(at)
+  if (!(ms > 0)) return ''
+  return ms < 60000 ? 'now' : age(at, now)
+}
+
 export function threadDetail(v: ThreadView): string {
   let d = v.state
   if (v.permission) d += ` · permission · ${v.permission.tool}`

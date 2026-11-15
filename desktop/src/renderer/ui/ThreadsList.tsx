@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { Coordinator, type ThreadView } from '../../shared/model'
 import { plain } from '../lib/toasts'
-import { age, stateGlyph, stateTone } from '../search'
+import { boardTime, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
 import { Glyph } from './Icon'
@@ -176,13 +176,6 @@ function Need(props: { v: ThreadView }) {
   )
 }
 
-// boardTime is a row's time: "now" for the first minute, then whole minutes
-// and up, so it changes at most once a minute.
-function boardTime(at: string, now: number): string {
-  const ms = now - Date.parse(at)
-  if (!(ms > 0)) return ''
-  return ms < 60000 ? 'now' : age(at, now)
-}
 
 // useFlip slides each row that moved to another group from where it was,
 // so the eye can follow it. It runs only when the person is off the board.

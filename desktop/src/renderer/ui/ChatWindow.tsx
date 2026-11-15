@@ -3,7 +3,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'rea
 import { Coordinator, User, type Event, type ThreadView, type Todo } from '../../shared/model'
 import { blockText, shortTool, shortTools, type Block } from '../lib/transcript'
 import { wakeLabel } from '../lib/wake'
-import { elapsed, stateGlyph, stateTone } from '../search'
+import { boardTime, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { escapeHTML, blocks as mdBlocks, openFence, render, renderOnce } from '../lib/markdown'
 import { copied, Markdown, mdClick } from './Markdown'
@@ -65,7 +65,7 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
   const { v, focused } = props
   const [, tick] = useState(0)
   useEffect(() => {
-    const ms = v?.state === 'running' || v?.state === 'waiting' ? 1000 : v?.wakeAt ? 60000 : 0
+    const ms = v?.state === 'running' || v?.state === 'waiting' || v?.wakeAt ? 60000 : 0
     if (!ms) return
     const t = setInterval(() => tick((n) => n + 1), ms)
     return () => clearInterval(t)
@@ -80,7 +80,7 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
           <Glyph g={stateGlyph(v.state)} size={12} /> {v.state}
         </span>
       )}
-      {v && v.state !== 'idle' && v.since && <span className="sl-dim">{elapsed(v.since)}</span>}
+      {v && v.state !== 'idle' && v.since && <span className="sl-dim">{boardTime(v.since)}</span>}
       {wake && <span className="sl-dim">{wake}</span>}
       <CloseWindow id={props.id} />
     </div>

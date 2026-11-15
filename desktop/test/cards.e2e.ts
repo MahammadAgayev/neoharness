@@ -829,6 +829,8 @@ test('a row that changes group waits while you are on the board, then settles; a
   await expect(page.locator('.board .list-need')).toHaveText('permission · Bash go test ./...')
   // The open workspace shows on the rail what it holds, as the others do.
   await expect(page.locator('.sidebar .sb-item.active .sb-state')).toHaveClass(/t-gold/)
+  // Its pane says how long it waits as the board does: now, then minutes.
+  await expect(page.locator('.statusline.focused .sl-dim')).toHaveText('now')
   await shot('47-board-settle')
 
   // A thread resolved while you are on the board does not stay under waiting.
