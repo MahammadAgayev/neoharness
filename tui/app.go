@@ -538,6 +538,12 @@ func (a *App) apply(u model.Update) {
 		a.restartWhenIdle()
 	case model.UpdateWaits:
 		a.setWaits(u.Waits)
+	case model.UpdateDelta:
+		// The text lands in the buffer now and shows on the next frame, so a
+		// fast stream costs at most the frame budget.
+		if u.Workspace == a.workspace && u.Thread != "" {
+			a.chat(u.Thread).SetStream(u.Text)
+		}
 	case model.UpdateThread:
 		switch {
 		case u.View == nil:

@@ -128,7 +128,10 @@ type Buffer struct {
 	todos    []model.Todo
 	todoOpen bool
 	// recap is the recap the dock shows above the todo line; "" when closed.
-	recap  string
+	recap string
+	// stream is the reply the thread writes now, from the hub's deltas; the
+	// finished text event replaces it.
+	stream string
 	lines  []Line
 	linesW int
 	dirty  bool
@@ -226,6 +229,13 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 			out = append(out, l)
 		}
 	}
+	if b.stream != "" {
+		out = append(out, Line{Block: len(b.blocks)})
+		for _, l := range (&block{kind: bText, text: b.stream}).renderFresh(w, th, spin) {
+			l.Block = len(b.blocks)
+			out = append(out, l)
+		}
+	}
 	if b.waiting() {
 		out = append(out, Line{Block: len(b.blocks)}, Line{Block: len(b.blocks),
 			Prefix: []Span{{"  " + spinner[spin%len(spinner)] + " ", th.Run}},
@@ -320,6 +330,14 @@ func (b *Buffer) recapLines(w int, th *Theme) []Line {
 	return rows
 }
 
+// SetStream shows the reply the thread writes now; "" drops it.
+func (b *Buffer) SetStream(text string) {
+	if b.stream != text {
+		b.stream = text
+		b.dirty = true
+	}
+}
+
 // SetRecap shows a recap at the top of the prompt dock; "" hides it.
 func (b *Buffer) SetRecap(text string) {
 	if b.recap != text {
@@ -389,7 +407,7 @@ func (b *Buffer) SetWorking(on bool) {
 // waiting reports whether a turn runs and nothing in it spins yet: claude
 // takes seconds to start and to think, and the chat must show that it heard.
 func (b *Buffer) waiting() bool {
-	if !b.working {
+	if !b.working || b.stream != "" {
 		return false
 	}
 	for _, bl := range b.blocks {
@@ -446,6 +464,9 @@ func (b *Buffer) last() *block {
 // settle stops every activity line except, if the thread is running, the
 // last one. Used after loading history, which may end mid-turn.
 func (b *Buffer) settle(running bool) {
+	if !running {
+		b.SetStream("")
+	}
 	lastTools := -1
 	for i, bl := range b.blocks {
 		if bl.kind == bTools {
@@ -477,6 +498,7 @@ func (b *Buffer) AddEvent(e model.Event) {
 		b.push(&block{kind: bMessage, from: e.From, text: e.Text})
 	case model.EventText:
 		b.endLive()
+		b.stream = ""
 		b.push(&block{kind: bText, text: e.Text})
 	case model.EventTool:
 		if e.Exit != 0 {

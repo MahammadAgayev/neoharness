@@ -27,7 +27,8 @@
   under it.
 - The screen holds still. A running thread's `●` turns to `◉` and back
   every 0.8 s, the live tool row spins 4 times a second, and times change
-  once a minute (`now`, `4m`, `1h05m`). Nothing else moves on its own. The
+  once a minute (`now`, `4m`, `1h05m`). A reply streams in as the agent
+  writes it, drawn at most 8 times a second. Nothing else moves on its own. The
   cursor is a block in Normal and Visual mode and a line in Insert, as in
   Vim, and it does not blink.
 - The folder picker lists "not pinned", the folder you started in, and every
