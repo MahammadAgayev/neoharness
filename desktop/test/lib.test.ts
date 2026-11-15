@@ -16,7 +16,6 @@ import { age } from '../src/renderer/search'
 import { imageToken, nextImage, used, withImages } from '../src/renderer/lib/images'
 import { wakeLabel } from '../src/renderer/lib/wake'
 import { Away } from '../src/renderer/lib/away'
-import { hunks, lines, take } from '../src/renderer/lib/linediff'
 import { colors, contrast, ratios, resolveScheme, schemes } from '../src/renderer/lib/themes'
 import { endHidesError, keep, viewToast, type Toast } from '../src/renderer/lib/toasts'
 import { addEvent, fromEvents, lastText, lastUserMessage, shortTool, type Block } from '../src/renderer/lib/transcript'
@@ -228,18 +227,6 @@ describe('themes', () => {
   })
 })
 
-describe('linediff', () => {
-  it('keeps common lines and marks the change', () => {
-    const ops = lines(['a', 'b', 'c', 'd'], ['a', 'x', 'c', 'd', 'e'])
-    expect(ops.map((o) => o.kind + o.text)).toEqual([' a', '-b', '+x', ' c', ' d', '+e'])
-  })
-
-  it('handles empty texts', () => {
-    expect(lines([], ['a']).map((o) => o.kind)).toEqual(['+'])
-    expect(lines(['a'], []).map((o) => o.kind)).toEqual(['-'])
-  })
-})
-
 describe('folders', () => {
   it('completes folders in the form typed, hides dot folders, and skips relative words', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'nhfold-'))
@@ -253,20 +240,6 @@ describe('folders', () => {
     expect(folders('~', home)).toEqual(['~/'])
     expect(folders('Doc', home)).toEqual([])
     fs.rmSync(home, { recursive: true })
-  })
-})
-
-describe('hunks', () => {
-  it('finds each change and takes one from theirs', () => {
-    const mine = ['a', 'B', 'c', 'd', 'E']
-    const theirs = ['a', 'b', 'c', 'd', 'e', 'f']
-    const hs = hunks(lines(mine, theirs))
-    expect(hs.map(({ mFrom, mTo, tFrom, tTo }) => [mFrom, mTo, tFrom, tTo])).toEqual([
-      [1, 2, 1, 2],
-      [4, 5, 4, 6],
-    ])
-    expect(take(mine, theirs, hs[1])).toEqual(['a', 'B', 'c', 'd', 'e', 'f'])
-    expect(take(take(mine, theirs, hs[1]), theirs, hs[0])).toEqual(theirs)
   })
 })
 

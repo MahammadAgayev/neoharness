@@ -162,9 +162,9 @@ different paragraphs, lists, tables or code blocks, or different lines of
 one block. The page takes the merge in place, a tint fades on what came
 in, and your words and the cursor stay. While you edit, a bar in the
 gutter marks each block you changed (Iris) and each block the agent
-changed since you began (Gold); `:w` saves both. When both changed the
-same lines, a line says so, `:w` is refused, and you take the changes one
-by one, as below.
+changed since you began (Gold); `:w` saves both. Where both changed the
+same lines of a block, the page keeps yours and shows theirs under it, as
+below.
 
 ### Docs
 
@@ -175,10 +175,12 @@ reads it in full, works from it, and keeps its status true as the threads
 report, with your words kept. Your later edits reach it as a diff, and a
 write over an edit it has not seen is refused, so neither side loses work.
 
-When a save is refused because the agent changed the same lines, the window
-shows your edit against the newer version change by change, as the TUI's
-diff mode: `]c` `[c` move, `do` (or `dp`, or the Take button) takes one
-change, `:w` saves the result, `:e!` takes all of the newer version.
+Where you and the agent changed the same lines of a block, a quiet line over
+the page says how many blocks are left to decide, and each newer block shows
+rendered under yours, with Take on it; never as diff lines. The keys are the
+TUI's diff mode: `]c` `[c` move between these blocks, `do` (or `dp`, or Take)
+takes theirs, `:w` keeps yours for the rest, `:e!` takes all of the newer
+version. Writing in the block yourself decides it too.
 
 ## What the window adds
 
@@ -283,7 +285,7 @@ e2e` writes the screenshots named here to `test-results/`.
 | No modal for the work | Permissions and questions are cards in the chat | cards: permission card (21), question (22) |
 | Settings in one place, applied at once | `<leader>s`, `⌘,` | cards: settings (28) |
 | Light and dark | System, Moon, Night, Dawn | app: Dawn (05); cards: settings |
-| Care with your edits | A refused save resolves change by change | cards: artifact conflict (25) |
+| Care with your edits | A newer version merges into your edit; a clash shows block by block in the page | cards: artifact merge (25); doc: merge and conflict (45, 46) |
 | Clear failure | A stopped hub says so and offers to start it | cards: hub stopped (26) |
 | Completion where you type | `/` and `@` in the prompt, `<Tab>` for commands and folders | cards: completion (23), folder `<Tab>` |
 

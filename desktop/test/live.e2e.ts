@@ -150,32 +150,25 @@ test('an agent rewrites an artifact while you edit it, and :w keeps both', async
     // The agent rewrites the artifact meanwhile.
     await ex('vsplit api')
     await send('Call read_artifact on "guide", then call write_artifact "guide" with the same text, except the first line is "# Rollout guide". Change nothing else.')
-    await expect(page.locator('.cmdline', { hasText: 'while you edit' })).toBeVisible({ timeout: 180_000 })
+    await expect(page.locator('.cmdline', { hasText: /merged into your edit|changed the same blocks/ })).toBeVisible({ timeout: 180_000 })
     await expect(api.first()).toHaveText(/idle/, { timeout: 180_000 })
     await shot('52-live-agent-wrote')
 
-    // :w merges: both changes are kept.
+    // The hub merged it into the page at once; where both changed a block,
+    // you take theirs there. :w then saves both.
     await page.keyboard.press('Escape')
     await page.keyboard.press('Escape')
     await page.keyboard.press('Control+w')
     await page.keyboard.press('h')
+    const theirs = page.locator('.doc-theirs')
+    if (await theirs.count()) {
+      await shot('53-live-conflict')
+      for (let k = 0; k < 20 && (await theirs.count()) > 0; k++) await theirs.first().locator('button', { hasText: 'Take' }).click()
+    }
+    await expect(doc.locator('h1')).toHaveText('Rollout guide')
     await page.keyboard.type(':')
     await page.keyboard.type('w')
     await page.keyboard.press('Enter')
-    const conflict = page.locator('.conflict')
-    await page.waitForTimeout(1000)
-    if (await conflict.count()) {
-      // The agent changed more than one line: you take its changes one by one.
-      await shot('53-live-conflict')
-      for (let k = 0; k < 20 && (await page.locator('.hunk').count()) > 0; k++) {
-        const del = await page.locator('.hunk').first().locator('.d-del').allTextContents()
-        if (del.some((l) => l.includes('person added'))) break
-        await page.locator('.hunk .hunk-take').first().click()
-      }
-      await page.keyboard.type(':')
-      await page.keyboard.type('w')
-      await page.keyboard.press('Enter')
-    }
     await expect(page.locator('.statusline .sl-name', { hasText: /^guide$/ })).toBeVisible({ timeout: 10_000 })
     await expect(doc.locator('h1')).toHaveText('Rollout guide')
     await expect(doc.locator('p', { hasText: 'A line the person added' }).locator('strong')).toHaveText('bold')

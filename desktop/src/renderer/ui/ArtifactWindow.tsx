@@ -1,32 +1,45 @@
-import type { Node } from 'prosemirror-model'
 import { Selection, EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { artifactsKey, editorPlugins, fatCursorKey, freshKey, linkAt, marksKey, TaskItem } from '../lib/docedit'
+import {
+  artifactsKey,
+  conflictGroups,
+  editorPlugins,
+  fatCursorKey,
+  freshKey,
+  linkAt,
+  marksKey,
+  takeKey,
+  takeTr,
+  TaskItem,
+  type MarksMeta,
+} from '../lib/docedit'
 import { DocVim } from '../lib/docvim'
-import { hunks, lines, type Hunk } from '../lib/linediff'
 import { MarkdownDoc } from '../lib/mdoc'
-import { store, useStore, type Doc, type Win } from '../store'
+import { store, useStore, type Win } from '../store'
 import { docs, handlers, yank, type DocKeys, type WinAction } from './registry'
 import { CloseWindow } from './CloseWindow'
 import 'prosemirror-view/style/prosemirror.css'
 
-function conflictHunks(name: string): Hunk[] | null {
-  const d = store.state.docs[name]
-  if (!d?.conflict || !d.edit) return null
-  return hunks(lines(d.edit.text.split('\n'), d.text.split('\n')))
+const noConflicts: MarksMeta['conflicts'] = []
+
+// conflictMove is ]c and [c: the cursor goes to the next or the previous
+// block both sides changed.
+function conflictMove(v: EditorView, dir: 1 | -1): void {
+  const gs = conflictGroups(v.state)
+  const h = v.state.selection.head
+  const g = dir > 0 ? gs.find((x) => x.from > h) : [...gs].reverse().find((x) => x.to < h)
+  if (!g) return store.say(dir > 0 ? 'no change below' : 'no change above', 'muted')
+  v.dispatch(v.state.tr.setSelection(Selection.near(v.state.doc.resolve(Math.min(g.from + 1, v.state.doc.content.size)))).scrollIntoView())
 }
 
-// blockStarts is the markdown line where each top-level block starts, so
-// ]c and do find the change in the block you are on.
-function blockStarts(md: MarkdownDoc, doc: Node): number[] {
-  const out: number[] = []
-  doc.forEach((_n, off, i) => {
-    const before = i === 0 ? '' : md.markdown(doc.copy(doc.content.cut(0, off))).replace(/\n+$/, '')
-    out.push(before ? before.split('\n').length + 1 : 0)
-  })
-  return out
+// conflictTake is do: theirs replaces the block under the cursor.
+function conflictTake(v: EditorView): void {
+  const h = v.state.selection.head
+  const g = conflictGroups(v.state).find((x) => h >= x.from && h <= x.to)
+  if (!g) return store.say('no change here', 'muted')
+  v.dispatch(takeTr(v.state, g.i))
 }
 
 // DocEditor is the artifact as a document you read and write in place:
@@ -39,8 +52,7 @@ function DocEditor(props: {
   win: number
   focused: boolean
   artifacts: Set<string>
-  marks: { base: string; start: string; theirs: string } | null
-  onHunk: (i: number) => void
+  marks: MarksMeta | null
   onView: (v: EditorView | null) => void
 }) {
   const host = useRef<HTMLDivElement>(null)
@@ -52,8 +64,6 @@ function DocEditor(props: {
   // last is the markdown the editor holds, so its own edit coming back as
   // props is no new text.
   const last = useRef(props.text)
-  const onHunk = useRef(props.onHunk)
-  onHunk.current = props.onHunk
   const arts = useRef(props.artifacts)
   arts.current = props.artifacts
   const [find, setFind] = useState<string | null>(null)
@@ -77,6 +87,12 @@ function DocEditor(props: {
         v.updateState(v.state.apply(tr))
         if (tr.selectionSet && !tr.docChanged) vimMode?.mouse(!!tr.getMeta('pointer'))
         if (tr.docChanged && !tr.getMeta('remote')) {
+          // Taking theirs, or writing in the block yourself, decides a conflict.
+          const open = store.state.docs[props.name]?.conflicts
+          if (open?.length) {
+            const left = conflictGroups(v.state).map((g) => g.i).filter((i) => i !== tr.getMeta(takeKey))
+            if (left.length < open.length) store.keepConflicts(props.name, left)
+          }
           const text = md.current!.markdown(v.state.doc)
           last.current = text
           store.editText(props.name, text)
@@ -145,22 +161,6 @@ function DocEditor(props: {
     else view.dom.classList.add('vim-normal')
     view.dispatch(view.state.tr.setMeta(artifactsKey, props.artifacts).setMeta('remote', true))
 
-    // block is the markdown lines of the block under the cursor.
-    const block = () => {
-      const starts = blockStarts(md.current!, view.state.doc)
-      const i = view.state.selection.$head.index(0)
-      return { starts, from: starts[i], to: starts[i + 1] ?? Infinity }
-    }
-    const toLine = (n: number) => {
-      const { starts } = block()
-      let i = 0
-      while (i + 1 < starts.length && starts[i + 1] <= n) i++
-      let at = 0
-      view.state.doc.forEach((_n, off, k) => {
-        if (k === i) at = off
-      })
-      view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(at + 1))).scrollIntoView())
-    }
     // In a conflict ]c [c move between changes and do dp take one, as in
     // Neovim's diff mode; d goes back to Vim when o or p does not follow.
     let held = ''
@@ -171,30 +171,22 @@ function DocEditor(props: {
       leaveInsert: () => vim.setMode('normal'),
       deleteWord: () => vim.deleteWordBack(),
       key: (key) => {
-        const hs = conflictHunks(props.name)
+        const diff = conflictGroups(view.state).length > 0
         if (held) {
           const first = held
           held = ''
-          if (hs && (first === ']' || first === '[') && key === 'c') {
-            const b = block()
-            const h = first === ']' ? hs.find((x) => x.mFrom >= b.to) : [...hs].reverse().find((x) => x.mFrom < b.from)
-            if (h) {
-              toLine(h.mFrom)
-              onHunk.current(hs.indexOf(h))
-            }
+          if (diff && (first === ']' || first === '[') && key === 'c') {
+            conflictMove(view, first === ']' ? 1 : -1)
             return true
           }
-          if (hs && first === 'd' && (key === 'o' || key === 'p')) {
-            const b = block()
-            const i = hs.findIndex((h) => h.mFrom <= b.to && Math.max(h.mTo, h.mFrom + 1) > b.from)
-            if (i < 0) store.say('no change here', 'muted')
-            else store.takeHunk(props.name, i)
+          if (diff && first === 'd' && (key === 'o' || key === 'p')) {
+            conflictTake(view)
             return true
           }
           vim.key(first)
           return vim.key(key)
         }
-        if (hs && !vim.busy() && (key === ']' || key === '[' || key === 'd')) {
+        if (diff && !vim.busy() && (key === ']' || key === '[' || key === 'd')) {
           held = key
           return true
         }
@@ -268,7 +260,7 @@ function DocEditor(props: {
   const m = props.marks
   useEffect(() => {
     viewRef.current?.dispatch(viewRef.current.state.tr.setMeta(marksKey, m && { ...m }).setMeta('remote', true))
-  }, [m?.base, m?.start, m?.theirs, m === null])
+  }, [m?.base, m?.start, m?.theirs, m?.conflicts, m?.label, m === null])
 
   useEffect(() => {
     viewRef.current?.dispatch(viewRef.current.state.tr.setMeta(artifactsKey, props.artifacts).setMeta('remote', true))
@@ -321,83 +313,6 @@ function DocEditor(props: {
   )
 }
 
-// Conflict is what a refused :w shows: your edit against the newer version,
-// change by change. do or a click takes one change; :w saves the rest as
-// yours.
-function Conflict(props: { name: string; doc: Doc; cursor: number; setCursor: (i: number) => void }) {
-  const [open, setOpen] = useState(true)
-  const { doc, cursor } = props
-  const v = doc.artifact.version
-  const ops = useMemo(() => lines((doc.edit?.text ?? '').split('\n'), doc.text.split('\n')), [doc.text, doc.edit?.text])
-  const hs = useMemo(() => hunks(ops), [ops])
-  const starts = new Map(hs.map((h, i) => [h.at, i]))
-  const box = useRef<HTMLPreElement>(null)
-  useEffect(() => {
-    box.current?.querySelector('.hunk.active')?.scrollIntoView({ block: 'nearest' })
-  }, [cursor, open])
-  const rows: React.ReactNode[] = []
-  for (let k = 0; k < ops.length; ) {
-    const i = starts.get(k)
-    if (i === undefined) {
-      rows.push(<DiffLine key={k} kind={ops[k].kind} text={ops[k].text} />)
-      k++
-      continue
-    }
-    const from = k
-    while (k < ops.length && ops[k].kind !== ' ') k++
-    rows.push(
-      <div key={from} className={`hunk ${i === cursor ? 'active' : ''}`} onMouseDown={() => props.setCursor(i)}>
-        <button className="btn small hunk-take" onClick={() => store.takeHunk(props.name, i)}>
-          Take v{v} <kbd>do</kbd>
-        </button>
-        {ops.slice(from, k).map((o, n) => (
-          <DiffLine key={n} kind={o.kind} text={o.text} />
-        ))}
-      </div>,
-    )
-  }
-  return (
-    <div className="conflict">
-      <div className="conflict-head">
-        <span className="t-love">●</span>
-        <span>
-          {doc.artifact.thread} changed the same lines in v{v}
-        </span>
-        <span className="t-muted">
-          {hs.length === 1 ? '1 change' : `${hs.length} changes`} · <kbd>]c</kbd> <kbd>[c</kbd> move
-        </span>
-        <span className="sl-fill" />
-        <button className="btn small ghost" onClick={() => setOpen(!open)}>
-          {open ? 'Hide diff' : 'Show diff'}
-        </button>
-        <button className="btn small" onClick={() => void store.revert(props.name)}>
-          Take all of v{v} <kbd>:e!</kbd>
-        </button>
-        <button className="btn small primary" onClick={() => void store.save(props.name)}>
-          Save <kbd>:w</kbd>
-        </button>
-      </div>
-      {open && (
-        <pre className="diff" ref={box}>
-          <div className="diff-legend t-muted">
-            <span className="t-love">− yours</span> <span className="t-pine">+ v{v}</span>
-          </div>
-          {rows}
-        </pre>
-      )}
-    </div>
-  )
-}
-
-function DiffLine(props: { kind: ' ' | '-' | '+'; text: string }) {
-  return (
-    <div className={`diff-line d-${props.kind === '-' ? 'del' : props.kind === '+' ? 'add' : 'same'}`}>
-      <span className="diff-mark">{props.kind}</span>
-      {props.text || ' '}
-    </div>
-  )
-}
-
 export function ArtifactWindow(props: { win: Win; focused: boolean }) {
   const { win, focused } = props
   const name = win.buf.kind === 'artifact' ? win.buf.name : ''
@@ -405,21 +320,19 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
   const workspace = useStore((s) => s.workspace)
   const artifactList = useStore((s) => s.artifacts)
   const artifacts = useMemo(() => new Set(artifactList.map((a) => a.name)), [artifactList])
-  const [hunk, setHunk] = useState(0)
   const view = useRef<EditorView | null>(null)
   const dirty = store.dirty(name)
 
   const handle = (a: WinAction, count: number): boolean => {
     if (a === 'nextHunk' || a === 'prevHunk' || a === 'takeHunk') {
-      if (!doc?.conflict || !doc.edit) {
+      const v = view.current
+      if (!v || !conflictGroups(v.state).length) {
         store.say('not in a diff', 'muted')
         return true
       }
-      const n = hunks(lines(doc.edit.text.split('\n'), doc.text.split('\n'))).length
-      if (a === 'takeHunk') {
-        store.takeHunk(name, hunk)
-        setHunk(Math.max(0, Math.min(hunk, n - 2)))
-      } else setHunk(Math.max(0, Math.min(n - 1, hunk + (a === 'nextHunk' ? count : -count))))
+      v.focus()
+      if (a === 'takeHunk') conflictTake(v)
+      else for (let k = 0; k < count; k++) conflictMove(v, a === 'nextHunk' ? 1 : -1)
       return true
     }
     // Keys that reach the window when its document has no focus give it back.
@@ -455,7 +368,20 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
         )}
         <CloseWindow id={win.id} />
       </div>
-      {doc?.conflict && doc.edit && <Conflict name={name} doc={doc} cursor={hunk} setCursor={setHunk} />}
+      {a && !!doc?.conflicts?.length && (
+        <div className="doc-conflict-bar">
+          <span>
+            {a.thread} changed the same blocks in v{a.version} · {doc.conflicts.length === 1 ? '1 block' : `${doc.conflicts.length} blocks`} to decide
+          </span>
+          <span className="sl-fill" />
+          <button className="btn small ghost" title=":e!" onClick={() => void store.revert(name)}>
+            Take all of v{a.version}
+          </button>
+          <button className="btn small" title=":w" onClick={() => void store.save(name)}>
+            Keep mine
+          </button>
+        </div>
+      )}
       {!doc ? (
         <div className="empty">loading…</div>
       ) : (
@@ -465,8 +391,15 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
           win={win.id}
           focused={focused}
           artifacts={artifacts}
-          marks={doc.edit && { base: doc.edit.baseText, start: doc.edit.start, theirs: doc.text }}
-          onHunk={setHunk}
+          marks={
+            doc.edit && {
+              base: doc.edit.baseText,
+              start: doc.edit.start,
+              theirs: doc.text,
+              conflicts: doc.conflicts ?? noConflicts,
+              label: `v${doc.artifact.version} · ${doc.artifact.thread}`,
+            }
+          }
           onView={(v) => (view.current = v)}
         />
       )}

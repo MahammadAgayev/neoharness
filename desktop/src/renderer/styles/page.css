@@ -246,3 +246,53 @@
     opacity: 0;
   }
 }
+
+/* Where both sides changed a block: one quiet line over the page, and the
+   newer version's block under yours, with Take on it. */
+.doc-conflict-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-4) var(--s-1) var(--s-3);
+  border-left: 3px solid var(--wait);
+  border-bottom: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--wait) 10%, var(--bg-raised));
+  color: var(--fg-2);
+  font-size: var(--fs-secondary);
+}
+.doc-conflict-bar .btn {
+  white-space: nowrap;
+}
+.doc-theirs {
+  position: relative;
+  margin: 0.4em 0 1em;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-2);
+  background: color-mix(in srgb, var(--wait) 10%, var(--bg-raised));
+  user-select: text;
+}
+.doc-theirs::before {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 0.2em;
+  bottom: 0.2em;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--wait);
+}
+.doc-theirs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  color: var(--fg-3);
+  font-size: var(--fs-small);
+}
+.doc-theirs-body > :first-child {
+  margin-top: var(--s-1);
+}
+.doc-theirs-body > :last-child {
+  margin-bottom: 0;
+}

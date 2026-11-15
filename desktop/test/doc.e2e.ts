@@ -340,6 +340,53 @@ test("an agent's newer version merges into your edit in place, with its blocks a
   await page.keyboard.press('Control+o')
 })
 
+test('where both changed a block, the page shows theirs under yours to take, block by block, never as diff lines', async () => {
+  hub.artifact('demo', 'clash', 'Clash', '# Clash\n\nalpha\n\nbeta\n\nother\n\ngamma\n')
+  hub.event('demo', 'api', { kind: 'artifact', detail: 'clash', text: 'Clash', version: 1 })
+  await page.locator('.b-artifact', { hasText: 'Clash' }).click()
+  const win = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'clash' }) })
+  const doc = win.locator('.doc-page')
+  for (const w of ['alpha', 'beta', 'gamma']) {
+    await doc.locator('p', { hasText: new RegExp(`^${w}`) }).click()
+    await normal()
+    await page.keyboard.press('A')
+    await page.keyboard.type(' mine')
+    await page.keyboard.press('Escape')
+  }
+  hub.artifact('demo', 'clash', 'Clash', '# Clash\n\nalpha theirs\n\nbeta theirs\n\nother theirs\n\ngamma theirs\n', 2)
+  await expect(page.locator('.cmdline', { hasText: 'changed the same blocks in v2' })).toBeVisible()
+  // What merged shows at once; where both changed, theirs waits under yours.
+  await expect(doc.locator('p', { hasText: 'other theirs' })).toBeVisible()
+  const theirs = doc.locator('.doc-theirs')
+  await expect(theirs).toHaveCount(3)
+  await expect(doc.locator('p.doc-mark-conflict', { hasText: 'alpha mine' })).toBeVisible()
+  await expect(theirs.first()).toContainText('alpha theirs')
+  await expect(win.locator('.doc-conflict-bar')).toContainText('3 blocks')
+  await expect(win.locator('.diff')).toHaveCount(0)
+  await shot('46-artifact-conflict')
+  // ]c goes to the first, do takes theirs.
+  await page.keyboard.press('g')
+  await page.keyboard.press('g')
+  await page.keyboard.press(']')
+  await page.keyboard.press('c')
+  await page.keyboard.press('d')
+  await page.keyboard.press('o')
+  await expect(doc.locator('p', { hasText: /^alpha theirs$/ })).toHaveCount(1)
+  await expect(theirs).toHaveCount(2)
+  // Take on the block does the same.
+  await theirs.filter({ hasText: 'beta theirs' }).locator('button', { hasText: 'Take' }).click()
+  await expect(theirs).toHaveCount(1)
+  await expect(win.locator('.doc-conflict-bar')).toContainText('1 block')
+  // :w keeps yours where you took nothing.
+  await page.keyboard.press('Meta+s')
+  await expect
+    .poll(() => hub.calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/artifacts/clash')).pop()?.body)
+    .toMatchObject({ base: 2, text: '# Clash\n\nalpha theirs\n\nbeta theirs\n\nother theirs\n\ngamma mine\n' })
+  await expect(theirs).toHaveCount(0)
+  await expect(win.locator('.doc-conflict-bar')).toHaveCount(0)
+  await page.keyboard.press('Control+o')
+})
+
 test('a mouse drag selects in Visual mode, so d takes the words away, as with Vim and a mouse', async () => {
   hub.artifact('demo', 'drag', 'Drag', '# Drag\n\nfirst second third\n')
   hub.event('demo', 'api', { kind: 'artifact', detail: 'drag', text: 'Drag', version: 1 })

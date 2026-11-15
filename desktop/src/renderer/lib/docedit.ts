@@ -7,8 +7,8 @@ import { baseKeymap, chainCommands, exitCode, setBlockType, lift } from 'prosemi
 import { history, redo, undo } from 'prosemirror-history'
 import { InputRule, inputRules, textblockTypeInputRule, undoInputRule, wrappingInputRule } from 'prosemirror-inputrules'
 import { keymap } from 'prosemirror-keymap'
-import type { MarkType, Node } from 'prosemirror-model'
-import { type Command, Plugin, PluginKey, TextSelection } from 'prosemirror-state'
+import { DOMSerializer, Fragment, type MarkType, type Node } from 'prosemirror-model'
+import { type Command, type EditorState, Plugin, PluginKey, Selection, TextSelection, type Transaction } from 'prosemirror-state'
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list'
 import { addRowAfter, goToNextCell, isInTable, selectedRect, tableEditing } from 'prosemirror-tables'
 import { Decoration, DecorationSet, type EditorView, type NodeView } from 'prosemirror-view'
@@ -290,9 +290,20 @@ function blockKeys(text: string): Set<string> {
 }
 
 // marksKey takes the texts an edit compares with: base, the version it saves
-// over; start, the text it began on; theirs, the newest version. null ends
-// the edit and its marks.
+// over; start, the text it began on; theirs, the newest version; and the
+// blocks both changed, with label naming who wrote theirs. null ends the
+// edit and its marks.
 export const marksKey = new PluginKey('marks')
+// takeKey on a transaction says which conflict it took.
+export const takeKey = new PluginKey('take')
+
+export interface MarksMeta {
+  base: string
+  start: string
+  theirs: string
+  conflicts: { mine: string; theirs: string; prev: string }[]
+  label: string
+}
 // freshKey takes a range that just came in from outside, an agent's newer
 // version or a change you took; null clears its tint.
 export const freshKey = new PluginKey('fresh')
@@ -301,35 +312,139 @@ interface Marks {
   base: Set<string>
   start: Set<string>
   theirs: Set<string>
+  conflicts: { mine: string[]; prev: string; theirs: string }[]
+  label: string
+}
+
+// A group is where a conflict is in the page: the blocks that hold mine,
+// or the place after prev when mine is gone.
+export interface Group {
+  i: number
+  from: number
+  to: number
+}
+
+function groups(doc: Node, m: Marks): Group[] {
+  const nodes: { key: string; from: number; to: number }[] = []
+  doc.forEach((n, pos) => nodes.push({ key: blockKey(n), from: pos, to: pos + n.nodeSize }))
+  const used = new Set<number>()
+  const out: Group[] = []
+  m.conflicts.forEach((c, i) => {
+    if (!c.mine.length) {
+      const j = c.prev ? nodes.findIndex((x) => x.key === c.prev) : -1
+      if (c.prev && j < 0) return
+      const at = j < 0 ? 0 : nodes[j].to
+      out.push({ i, from: at, to: at })
+      return
+    }
+    for (let j = 0; j + c.mine.length <= nodes.length; j++) {
+      if (used.has(j) || !c.mine.every((k, d) => nodes[j + d].key === k)) continue
+      c.mine.forEach((_k, d) => used.add(j + d))
+      out.push({ i, from: nodes[j].from, to: nodes[j + c.mine.length - 1].to })
+      return
+    }
+  })
+  return out.sort((a, b) => a.from - b.from)
+}
+
+const serializer = DOMSerializer.fromSchema(schema)
+
+// theirsDOM shows a newer version's block under yours, rendered as the page
+// is, with Take on it.
+function theirsDOM(view: EditorView, text: string, i: number, label: string): HTMLElement {
+  const box = document.createElement('div')
+  box.className = 'doc-theirs'
+  box.contentEditable = 'false'
+  const head = document.createElement('div')
+  head.className = 'doc-theirs-head'
+  const who = document.createElement('span')
+  who.textContent = text.trim() ? label : `${label} took this block out`
+  const take = document.createElement('button')
+  take.className = 'btn small'
+  take.textContent = 'Take'
+  take.title = 'do'
+  take.addEventListener('mousedown', (e) => e.preventDefault())
+  take.addEventListener('click', () => view.dispatch(takeTr(view.state, i)))
+  head.append(who, take)
+  const body = document.createElement('div')
+  body.className = 'doc-theirs-body'
+  body.append(serializer.serializeFragment(new MarkdownDoc(text).doc.content))
+  box.append(head, body)
+  return box
+}
+
+export function conflictGroups(s: EditorState): Group[] {
+  return marks.getState(s)?.groups ?? []
+}
+
+// takeTr takes theirs for a conflict: its blocks replace mine, as an edit
+// you can undo, and the tint shows what came in.
+export function takeTr(s: EditorState, i: number): Transaction {
+  const st = marks.getState(s)
+  const g = st?.groups.find((x) => x.i === i)
+  const c = st?.m?.conflicts[i]
+  if (!g || !c) return s.tr
+  const content = c.theirs.trim() ? new MarkdownDoc(c.theirs).doc.content : Fragment.empty
+  const tr = s.tr.replaceWith(g.from, g.to, content)
+  if (tr.doc.childCount === 0) tr.insert(0, schema.nodes.paragraph.create())
+  tr.setSelection(Selection.near(tr.doc.resolve(Math.min(g.from + 1, tr.doc.content.size))))
+  return tr.setMeta(takeKey, i).setMeta(freshKey, { from: g.from, to: g.from + content.size })
 }
 
 // marks puts a bar in the gutter of each block you changed (yours) and each
 // block an agent changed since you began (theirs), and a tint that fades on
 // what just came in, so a merge shows where it landed without moving text.
-const marks = new Plugin<{ m: Marks | null; fresh: { from: number; to: number } | null; deco: DecorationSet }>({
+const marks = new Plugin<{ m: Marks | null; fresh: { from: number; to: number } | null; deco: DecorationSet; groups: Group[] }>({
   state: {
-    init: () => ({ m: null, fresh: null, deco: DecorationSet.empty }),
+    init: () => ({ m: null, fresh: null, deco: DecorationSet.empty, groups: [] }),
     apply: (tr, v, _old, s) => {
-      const meta = tr.getMeta(marksKey) as { base: string; start: string; theirs: string } | null | undefined
+      const meta = tr.getMeta(marksKey) as MarksMeta | null | undefined
       const fm = tr.getMeta(freshKey) as { from: number; to: number } | null | undefined
       if (meta === undefined && fm === undefined && !tr.docChanged) return v
       let m = v.m
       if (meta === null) m = null
-      else if (meta) m = { base: blockKeys(meta.base), start: meta.start === meta.base ? blockKeys(meta.base) : blockKeys(meta.start), theirs: blockKeys(meta.theirs) }
+      else if (meta) {
+        const keysOf = (t: string) => {
+          const out: string[] = []
+          if (t.trim()) new MarkdownDoc(t).doc.forEach((n) => out.push(blockKey(n)))
+          return out
+        }
+        m = {
+          base: blockKeys(meta.base),
+          start: meta.start === meta.base ? blockKeys(meta.base) : blockKeys(meta.start),
+          theirs: blockKeys(meta.theirs),
+          conflicts: meta.conflicts.map((c) => ({ mine: keysOf(c.mine), prev: keysOf(c.prev).pop() ?? '', theirs: c.theirs })),
+          label: meta.label,
+        }
+      }
       let fresh = fm !== undefined ? fm : v.fresh && { from: tr.mapping.map(v.fresh.from, -1), to: tr.mapping.map(v.fresh.to, 1) }
       if (fresh && fresh.to <= fresh.from) fresh = null
       const out: Decoration[] = []
+      const gs = m?.conflicts.length ? groups(s.doc, m) : []
+      for (const g of gs) {
+        const c = m!.conflicts[g.i]
+        out.push(
+          Decoration.widget(g.to, (view) => theirsDOM(view, c.theirs, g.i, m!.label), {
+            side: 1,
+            key: `theirs\0${g.i}\0${m!.label}\0${c.theirs}`,
+            ignoreSelection: true,
+            stopEvent: () => true,
+          }),
+        )
+      }
       s.doc.forEach((n, pos) => {
         const k = m ? blockKey(n) : ''
+        const conflict = gs.some((g) => pos >= g.from && pos < g.to)
         const cls = [
-          m && !m.base.has(k) ? 'doc-mark doc-mark-mine' : m && m.theirs.has(k) && !m.start.has(k) ? 'doc-mark doc-mark-agent' : '',
+          conflict ? 'doc-mark doc-mark-mine doc-mark-conflict' : '',
+          !conflict && m && !m.base.has(k) ? 'doc-mark doc-mark-mine' : !conflict && m && m.theirs.has(k) && !m.start.has(k) ? 'doc-mark doc-mark-agent' : '',
           fresh && pos < fresh.to && pos + n.nodeSize > fresh.from ? 'doc-fresh' : '',
         ]
           .filter(Boolean)
           .join(' ')
         if (cls) out.push(Decoration.node(pos, pos + n.nodeSize, { class: cls }))
       })
-      return { m, fresh, deco: DecorationSet.create(s.doc, out) }
+      return { m, fresh, deco: DecorationSet.create(s.doc, out), groups: gs }
     },
   },
   props: {

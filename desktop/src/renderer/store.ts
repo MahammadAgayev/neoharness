@@ -18,7 +18,6 @@ import {
 } from '../shared/model'
 import { Away } from './lib/away'
 import { parseEx } from './lib/ex'
-import { hunks, lines, take } from './lib/linediff'
 import { schemeNames } from './lib/themes'
 import { endHidesError, errorToast, keep, noticeToast, viewToast, type Toast, type ToastSpec, type Tone } from './lib/toasts'
 import { addEvent, fromEvents, lastText, lastUserMessage, settle, type Block } from './lib/transcript'
@@ -69,9 +68,16 @@ export interface Doc {
   // merges from, baseText that version's text, and start the text the edit
   // began on, so the page marks what an agent changed since.
   edit: { text: string; base: number; baseText: string; start: string } | null
-  // conflict says the last :w was refused: a newer version changed the
-  // same lines.
-  conflict?: boolean
+  // conflicts are the blocks both the edit and a newer version changed: the
+  // edit keeps mine, and the page offers theirs to take. prev is the block
+  // before, where theirs shows when mine is gone.
+  conflicts?: Conflict[]
+}
+
+export interface Conflict {
+  mine: string
+  theirs: string
+  prev: string
 }
 
 export type Tab = 'all' | 'threads' | 'artifacts' | 'text' | 'commands' | 'workspaces' | 'notifications' | 'outline'
@@ -1153,7 +1159,7 @@ class Store {
     const r = await this.try(this.call('artifact', { workspace: this.state.workspace, name }))
     if (!r) return
     const d = this.state.docs[name]
-    this.set({ docs: { ...this.state.docs, [name]: { artifact: r.artifact, text: r.text, edit: d?.edit ?? null } } })
+    this.set({ docs: { ...this.state.docs, [name]: { artifact: r.artifact, text: r.text, edit: d?.edit ?? null, conflicts: d?.conflicts } } })
   }
 
   startEdit(name: string): void {
@@ -1170,7 +1176,7 @@ class Store {
     const d = this.state.docs[name]
     if (!d) return
     const edit = d.edit ?? { text: d.text, base: d.artifact.version, baseText: d.text, start: d.text }
-    const done = text === edit.baseText && !d.conflict
+    const done = text === edit.baseText && !d.conflicts?.length
     this.set({ docs: { ...this.state.docs, [name]: { ...d, edit: done ? null : { ...edit, text } } } })
   }
 
@@ -1179,8 +1185,8 @@ class Store {
     return !!e && e.text !== e.baseText
   }
 
-  // save is :w. The hub merges by lines with a newer version; changes to the
-  // same lines are refused unless force (:w!).
+  // save is :w. The hub merges by blocks with a newer version; changes to
+  // the same lines are refused unless force (:w!).
   async save(name: string, force = false): Promise<boolean> {
     const d = this.state.docs[name]
     if (!d?.edit) return true
@@ -1200,14 +1206,9 @@ class Store {
       })
     } catch (err) {
       this.say(`${errText(err)} · do takes a change, :w saves yours, :e! takes the newer version`, 'love')
-      await this.loadDoc(name)
       // As the TUI: the edit now starts from the newer version, so the next
       // :w saves what you made of both over it.
-      const cur = this.state.docs[name]
-      if (cur?.edit) {
-        const edit = { ...cur.edit, base: cur.artifact.version, baseText: cur.text }
-        this.set({ docs: { ...this.state.docs, [name]: { ...cur, edit, conflict: true } } })
-      }
+      await this.mergeIn(name)
       return false
     }
     const merged = r.text !== d.edit.text
@@ -1240,34 +1241,35 @@ class Store {
         await this.loadDoc(name)
         continue
       }
-      if (!m.clean) {
-        this.say(`${cur.artifact.thread} wrote v${m.version} while you edit · :w merges it, :e! takes it`, 'gold')
-        return
-      }
+      const ours = m.merged.split('\n')
+      const theirs = cur.text.split('\n')
+      const conflicts = (m.conflicts ?? []).map((c) => ({
+        mine: ours.slice(...c.merged).join('\n'),
+        theirs: theirs.slice(...c.theirs).join('\n'),
+        prev: ours.slice(0, c.merged[0]).join('\n').replace(/\n+$/, '').split(/\n\n+/).pop() ?? '',
+      }))
       const edit = m.merged === cur.text ? null : { ...cur.edit, text: m.merged, base: m.version, baseText: cur.text }
-      this.set({ docs: { ...this.state.docs, [name]: { ...cur, edit } } })
-      this.say(`${cur.artifact.thread} wrote v${m.version} · merged into your edit`, 'subtle')
+      this.set({ docs: { ...this.state.docs, [name]: { ...cur, edit, conflicts } } })
+      const n = conflicts.length
+      if (n) this.say(`${cur.artifact.thread} changed the same blocks in v${m.version} · do takes theirs, :w keeps yours`, 'gold')
+      else this.say(`${cur.artifact.thread} wrote v${m.version} · merged into your edit`, 'subtle')
       return
     }
   }
 
-  // takeHunk is do: one change of the newer version comes into the edit.
-  takeHunk(name: string, index: number): void {
+  // keepConflicts keeps only the conflicts still open in the page: taking
+  // theirs, or writing in the block yourself, decides one.
+  keepConflicts(name: string, open: number[]): void {
     const d = this.state.docs[name]
-    if (!d?.edit || !d.conflict) return
-    const mine = d.edit.text.split('\n')
-    const theirs = d.text.split('\n')
-    const h = hunks(lines(mine, theirs))[index]
-    if (!h) return this.say('no change here', 'muted')
-    const text = take(mine, theirs, h).join('\n')
-    this.set({ docs: { ...this.state.docs, [name]: { ...d, edit: { ...d.edit, text }, conflict: text !== d.text } } })
+    if (!d?.conflicts) return
+    this.set({ docs: { ...this.state.docs, [name]: { ...d, conflicts: d.conflicts.filter((_c, i) => open.includes(i)) } } })
   }
 
   // revert is :e! (drop the changes, take the newest) and :q! on an artifact.
   async revert(name: string): Promise<void> {
     const d = this.state.docs[name]
     if (!d) return
-    this.set({ docs: { ...this.state.docs, [name]: { ...d, edit: null } } })
+    this.set({ docs: { ...this.state.docs, [name]: { ...d, edit: null, conflicts: undefined } } })
     await this.loadDoc(name)
   }
 
