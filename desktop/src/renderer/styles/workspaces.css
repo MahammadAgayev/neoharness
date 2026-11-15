@@ -69,17 +69,6 @@
 .ws-spark {
   opacity: 0.8;
 }
-.ws-kbd {
-  opacity: 0;
-  transition: opacity var(--t-1) var(--ease-std);
-}
-.ws-row.cursor .ws-kbd {
-  opacity: 1;
-}
-.ws-foot {
-  margin-top: 16px;
-  font-size: var(--fs-secondary);
-}
 .ws-list:empty {
   display: none;
 }

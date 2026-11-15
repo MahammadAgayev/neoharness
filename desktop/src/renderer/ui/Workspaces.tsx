@@ -107,6 +107,8 @@ export function Workspaces() {
               className={`ws-row ${i === cursor ? 'cursor' : ''} ${w.name === open ? 'open' : ''}`}
               onClick={() => void store.openWorkspace(w.name)}
               onMouseEnter={() => store.setWorkspaceCursor(i)}
+              data-tip="Open · x deletes"
+              data-keys={i < 9 ? `⌘${i + 1}  <CR>` : '<CR>'}
             >
               <div className="ws-main">
                 <div className="ws-name">{w.name}</div>
@@ -116,12 +118,8 @@ export function Workspaces() {
               <span className="t-iris ws-spark">
                 <Spark values={w.activity} />
               </span>
-              {i < 9 && <kbd className="ws-kbd">⌘{i + 1}</kbd>}
             </div>
           ))}
-        </div>
-        <div className="ws-foot t-muted">
-          <kbd>j</kbd> <kbd>k</kbd> move · <kbd>↵</kbd> open · <kbd>x</kbd> delete · <kbd>:restore</kbd> bring one back
         </div>
       </div>
     </div>

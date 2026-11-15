@@ -132,6 +132,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       [':threads  :artifacts  :messages', 'threads list, artifacts, notification history'],
       [':workspaces  :workspace <n>', 'workspace list, switch workspace; ⌘1…⌘9 too'],
       [':restore [name]', 'bring back a deleted workspace; no name lists them'],
+      ['j k  <CR>  x', 'on the workspace list: move, open, delete'],
       [':colorscheme <name>', 'system, rose-pine-moon, rose-pine, rose-pine-dawn'],
       [':set vim  :set novim', 'Vim keys in editors, or keys as in Claude Code'],
       [':set nosidebar  ⌘B', 'fold the sidebar to a rail of letters; the mouse resting on it shows it whole'],
