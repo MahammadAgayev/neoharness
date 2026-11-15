@@ -30,7 +30,7 @@ export const schema = new Schema({
       code: true,
       defining: true,
       parseDOM: [{ tag: 'pre', preserveWhitespace: 'full' }],
-      toDOM: (n) => ['pre', { class: 'code', 'data-lang': n.attrs.params || null }, ['code', 0]],
+      toDOM: (n) => ['pre', { class: 'code', 'data-lang': n.attrs.params || null, spellcheck: 'false' }, ['code', 0]],
     },
     horizontal_rule: { attrs: { markup: { default: '---' } }, group: 'block', parseDOM: [{ tag: 'hr' }], toDOM: () => ['hr'] },
     // raw is markdown the editor has no node for, as a link reference
@@ -96,7 +96,7 @@ export const schema = new Schema({
       parseDOM: [{ tag: 'a[href]', getAttrs: (d) => ({ href: (d as HTMLElement).getAttribute('href'), title: (d as HTMLElement).getAttribute('title') }) }],
       toDOM: (m) => ['a', { href: m.attrs.href, title: m.attrs.title }, 0],
     },
-    code: { parseDOM: [{ tag: 'code' }], toDOM: () => ['code', 0] },
+    code: { parseDOM: [{ tag: 'code' }], toDOM: () => ['code', { spellcheck: 'false' }, 0] },
   },
 })
 

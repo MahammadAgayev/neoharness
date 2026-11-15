@@ -291,6 +291,23 @@ test('Backspace right after a markdown shortcut gives back the text you typed', 
   await page.keyboard.press('Control+o')
 })
 
+test('spellcheck marks words only in Insert, and never in code', async () => {
+  hub.artifact('demo', 'spell', 'Spell', '# Spell\n\nwrods and `idnetifier`\n\n```\ncdoe\n```\n')
+  hub.event('demo', 'api', { kind: 'artifact', detail: 'spell', text: 'Spell', version: 1 })
+  await page.locator('.b-artifact', { hasText: 'Spell' }).click()
+  const win = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'spell' }) })
+  const doc = win.locator('.doc-page')
+  await doc.locator('p', { hasText: 'wrods' }).click()
+  await normal()
+  await expect(doc).toHaveAttribute('spellcheck', 'false')
+  await page.keyboard.press('i')
+  await expect(doc).toHaveAttribute('spellcheck', 'true')
+  await expect(doc.locator('p code')).toHaveAttribute('spellcheck', 'false')
+  await expect(doc.locator('pre')).toHaveAttribute('spellcheck', 'false')
+  await normal()
+  await page.keyboard.press('Control+o')
+})
+
 test('a mouse drag selects in Visual mode, so d takes the words away, as with Vim and a mouse', async () => {
   hub.artifact('demo', 'drag', 'Drag', '# Drag\n\nfirst second third\n')
   hub.event('demo', 'api', { kind: 'artifact', detail: 'drag', text: 'Drag', version: 1 })

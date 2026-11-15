@@ -3,7 +3,7 @@ import { Selection, EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { artifactsKey, editorPlugins, linkAt, TaskItem } from '../lib/docedit'
+import { artifactsKey, editorPlugins, fatCursorKey, linkAt, TaskItem } from '../lib/docedit'
 import { DocVim } from '../lib/docvim'
 import { hunks, lines, type Hunk } from '../lib/linediff'
 import { MarkdownDoc } from '../lib/mdoc'
@@ -67,7 +67,9 @@ function DocEditor(props: {
     const view = new EditorView(host.current!, {
       state: EditorState.create({ doc: md.current.doc, plugins: editorPlugins(leave) }),
       nodeViews: { list_item: (node, v, getPos) => new TaskItem(node, v, getPos) },
-      attributes: { class: 'md doc-page', spellcheck: 'true' },
+      // Spellcheck marks words only while you write, as names and ids in
+      // a page you read are no typos.
+      attributes: (s) => ({ class: 'md doc-page', spellcheck: fatCursorKey.getState(s)?.on ? 'false' : 'true' }),
       dispatchTransaction(tr) {
         const v = viewRef.current!
         vimMode?.group(tr)
