@@ -165,13 +165,14 @@ function Need(props: { v: ThreadView }) {
   const { v } = props
   if (v.state !== 'waiting') return null
   const [label, text] = v.permission
-    ? [`permission · ${v.permission.tool}`, v.permission.detail]
+    ? ['permission', v.permission.detail]
     : v.waiting === 'paused'
       ? ['paused', 'write to continue']
       : ['question', plain(v.waiting ?? '').split('\n')[0]]
   return (
     <div className="list-need">
-      <span className="t-gold">{label}</span> {text}
+      <span className="t-gold">{label}</span>
+      {v.permission && <span className="t-subtle"> · {v.permission.tool}</span>} {text}
     </div>
   )
 }

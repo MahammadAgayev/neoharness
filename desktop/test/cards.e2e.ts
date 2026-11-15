@@ -829,6 +829,9 @@ test('a row that changes group waits while you are on the board, then settles; a
   expect((await names())[0]).toBe('api')
   await expect(api).toHaveClass(/settle/)
   await expect(page.locator('.board .list-need')).toHaveText('permission · Bash go test ./...')
+  // Only the kind is gold; the tool reads in fg-2, as in the waits list.
+  await expect(page.locator('.board .list-need .t-gold')).toHaveText('permission')
+  await expect(page.locator('.board .list-need .t-subtle')).toHaveText('· Bash')
   // The open workspace shows on the rail what it holds, as the others do.
   await expect(page.locator('.sidebar .sb-item.active .sb-state')).toHaveClass(/t-gold/)
   // Its pane says how long it waits as the board does: now, then minutes.
