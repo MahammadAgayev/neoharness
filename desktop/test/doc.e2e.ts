@@ -442,6 +442,17 @@ test('a wide table grows past the text column, up to the pane, and a narrow one 
   expect(wide.x).toBeGreaterThanOrEqual(pane.x)
   expect(wide.x + wide.width).toBeLessThanOrEqual(pane.x + pane.width)
   expect(Math.abs(narrow.x - text.x)).toBeLessThan(2)
+  // Rows, not a grid: a hairline under each row, a stronger rule under the
+  // header, no side lines and no header fill.
+  const th = doc.locator('th').first()
+  const td = doc.locator('td').first()
+  await expect(td).toHaveCSS('border-left-width', '0px')
+  await expect(td).toHaveCSS('border-bottom-style', 'solid')
+  await expect(th).toHaveCSS('border-left-width', '0px')
+  await expect(th).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(th).toHaveCSS('font-weight', '600')
+  await expect(th).toHaveCSS('color', await doc.evaluate((e) => getComputedStyle(e).color))
+  expect(await th.evaluate((e) => getComputedStyle(e).borderBottomColor)).not.toBe(await td.evaluate((e) => getComputedStyle(e).borderBottomColor))
   await shot('47-artifact-wide-table')
   await page.keyboard.press('Control+o')
 })

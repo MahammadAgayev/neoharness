@@ -205,8 +205,18 @@
   word-break: normal;
   overflow-wrap: break-word;
 }
+/* Rows, not a grid: a hairline under each row and a stronger rule under
+   the header, with no side lines and no header fill. */
+.doc-page th,
+.doc-page td {
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+}
 .doc-page th {
   font-weight: 600;
+  color: var(--fg);
+  background: none;
+  border-bottom-color: var(--hairline-strong);
 }
 .doc-page .selectedCell {
   background: var(--bg-select);
