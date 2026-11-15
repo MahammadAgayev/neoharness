@@ -1,0 +1,24 @@
+/* The app's styles, in cascade order: a later file wins over an earlier
+   one at the same specificity. Colors and sizes are tokens (tokens.css). */
+
+@import './tokens.css';
+@import './base.css';
+@import './shell.css';
+@import './windows.css';
+@import './transcript.css';
+@import './card.css';
+@import './prompt.css';
+@import './markdown.css';
+@import './lists.css';
+@import './page.css';
+@import './help.css';
+@import './workspaces.css';
+@import './search.css';
+@import './settings.css';
+@import './dialogs.css';
+@import './tooltips.css';
+@import './keyhints.css';
+@import './toasts.css';
+@import './conflict.css';
+@import './sidebar.css';
+@import './cost.css';

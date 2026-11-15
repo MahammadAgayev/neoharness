@@ -1,0 +1,70 @@
+/* lists */
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 6px;
+  outline: none;
+}
+.group-head {
+  font-size: var(--fs-small);
+  color: var(--fg-3);
+  padding: 10px 10px 4px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+.list-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 6px 10px;
+  border-radius: 7px;
+  cursor: default;
+  transition: background-color 80ms var(--ease-std);
+}
+.list-row .glyph {
+  margin-top: 1px;
+}
+.list-row:hover {
+  background: var(--bg-hover);
+}
+.list-row.cursor {
+  background: var(--bg-select);
+}
+.list-row.fold {
+  align-items: center;
+  font-size: var(--fs-secondary);
+}
+.todo-row {
+  display: flex;
+  gap: 10px;
+  padding: 4px 10px;
+}
+.todo-row.done {
+  color: var(--fg-3);
+}
+.todo-count {
+  padding: 12px 10px 4px;
+}
+.list-main {
+  flex: 1;
+  min-width: 0;
+}
+.list-title {
+  display: flex;
+  gap: 4px;
+  font-size: var(--font-size);
+}
+.list-title .name {
+  color: var(--fg);
+  font-weight: 550;
+}
+.list-title .right {
+  margin-left: auto;
+  font-size: var(--fs-small);
+}
+.list-detail {
+  font-size: var(--fs-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

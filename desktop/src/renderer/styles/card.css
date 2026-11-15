@@ -1,0 +1,78 @@
+/* permission card */
+.card {
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--hairline-strong));
+  background: color-mix(in srgb, var(--gold) 6%, var(--bg-raised));
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.card-head {
+  font-size: var(--fs-secondary);
+}
+.card-detail {
+  margin: 6px 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--fg);
+  max-height: 240px;
+  overflow: auto;
+}
+.card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.card-question {
+  margin-top: 6px;
+}
+.card-hint {
+  align-self: center;
+  margin-right: auto;
+  font-size: var(--fs-secondary);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--hairline-strong);
+  background: var(--bg-raised);
+  color: var(--fg);
+  padding: 4px 10px;
+  border-radius: 7px;
+  font-size: var(--fs-secondary);
+  cursor: default;
+  transition: background-color 100ms var(--ease-std), border-color 100ms var(--ease-std);
+}
+.btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--hl-high);
+}
+.btn.primary {
+  background: color-mix(in srgb, var(--iris) 22%, var(--bg-raised));
+  border-color: color-mix(in srgb, var(--iris) 45%, transparent);
+}
+.btn.primary:hover {
+  background: color-mix(in srgb, var(--iris) 30%, var(--bg-raised));
+}
+.btn.danger:hover {
+  border-color: color-mix(in srgb, var(--love) 60%, transparent);
+  color: var(--love);
+}
+.btn.small {
+  padding: 1px 8px;
+  font-size: var(--fs-small);
+}
+.btn.ghost {
+  background: none;
+  border-color: transparent;
+  color: var(--fg-2);
+}
+.btn.ghost:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+.btn kbd {
+  font-size: 0.75em;
+}

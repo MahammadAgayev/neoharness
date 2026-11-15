@@ -1,0 +1,77 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  tab-size: 4;
+  background: var(--base);
+  color: var(--fg);
+  font-family: var(--font-text);
+  font-size: var(--font-size);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+body.resizing {
+  cursor: col-resize;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+kbd {
+  font-family: var(--font-text);
+  font-size: 0.78em;
+  color: var(--fg-2);
+  background: color-mix(in srgb, var(--overlay) 70%, transparent);
+  border: 1px solid var(--hairline-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 0 5px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+::selection {
+  background: var(--bg-select);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background-color: var(--bg-select);
+}
+
+/* colors by meaning */
+.t-text { color: var(--fg); }
+.t-subtle { color: var(--fg-2); }
+.t-muted { color: var(--fg-3); }
+.t-love { color: var(--love); }
+.t-gold { color: var(--gold); }
+.t-rose { color: var(--rose); }
+.t-pine { color: var(--pine); }
+.t-foam { color: var(--foam); }
+.t-iris { color: var(--iris); }
+.italic { font-style: italic; }
+.mono { font-family: var(--font-mono); font-size: 0.92em; }
+.pre-wrap { white-space: pre-wrap; word-break: break-word; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

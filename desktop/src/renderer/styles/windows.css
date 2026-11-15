@@ -1,0 +1,122 @@
+/* windows */
+.layout {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+.column {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 240px;
+  border-left: 1px solid var(--hairline);
+}
+.column:first-child {
+  border-left: 0;
+}
+.resizer {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.resizer:hover {
+  background: color-mix(in srgb, var(--iris) 30%, transparent);
+}
+.pane {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  border-top: 1px solid var(--hairline);
+}
+.pane:first-child {
+  border-top: 0;
+}
+.window {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.pane:not(.focused) .window {
+  --dim: 1;
+}
+
+.statusline {
+  flex: 0 0 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  font-size: var(--fs-secondary);
+  color: var(--fg-3);
+  border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.statusline .sl-ws {
+  color: var(--fg-3);
+  margin-right: -6px;
+}
+/* A thread of another workspace: where your words go is not the sidebar's. */
+.statusline .sl-ws.peek {
+  color: var(--foam);
+}
+.statusline .sl-name {
+  color: var(--fg-2);
+}
+.statusline.focused .sl-name {
+  color: var(--fg);
+  font-weight: 600;
+}
+.sl-close {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: -6px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--fg-3);
+  opacity: 0;
+  cursor: default;
+  transition: opacity 100ms var(--ease-std);
+}
+.pane:hover .sl-close,
+.sl-close:focus-visible {
+  opacity: 1;
+}
+.sl-close:hover {
+  background: var(--bg-select);
+  color: var(--fg);
+}
+.sl-dim {
+  color: var(--fg-3);
+}
+.sl-state {
+  margin-left: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.statusline:not(.focused) .sl-state {
+  color: var(--fg-3);
+}
+.sl-part + .sl-part::before {
+  content: '·';
+  color: var(--fg-3);
+  margin-right: 8px;
+}
+
+.empty {
+  color: var(--fg-3);
+  padding: 28px 24px;
+  font-size: var(--fs-secondary);
+}

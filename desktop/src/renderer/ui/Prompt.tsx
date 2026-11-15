@@ -75,7 +75,7 @@ function source(thread: string) {
 }
 
 const theme = EditorView.theme({
-  '&': { background: 'transparent', color: 'var(--text)', fontSize: 'inherit' },
+  '&': { background: 'transparent', color: 'var(--fg)', fontSize: 'inherit' },
   '&.cm-focused': { outline: 'none' },
   '.cm-content': { fontFamily: 'var(--font-text)', caretColor: 'var(--iris)', padding: '0', minWidth: '0', width: '100%' },
   '.cm-line': { padding: '0' },
@@ -88,7 +88,7 @@ const theme = EditorView.theme({
   '&:not(.cm-focused) .cm-cursorLayer': { display: 'none' },
   // One line, cut short in a narrow column, so the box keeps its height.
   '.cm-placeholder': {
-    color: 'var(--muted)',
+    color: 'var(--fg-3)',
     display: 'inline-block',
     maxWidth: '100%',
     whiteSpace: 'nowrap',
@@ -96,13 +96,13 @@ const theme = EditorView.theme({
     textOverflow: 'ellipsis',
     verticalAlign: 'top',
   },
-  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': { background: 'var(--hl-med) !important' },
-  '.cm-tooltip': { background: 'var(--surface)', border: '1px solid var(--overlay)', borderRadius: '8px', overflow: 'hidden' },
-  '.cm-tooltip-autocomplete ul li[aria-selected]': { background: 'var(--hl-med)', color: 'var(--text)' },
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': { background: 'var(--bg-select) !important' },
+  '.cm-tooltip': { background: 'var(--bg-raised)', border: '1px solid var(--overlay)', borderRadius: '8px', overflow: 'hidden' },
+  '.cm-tooltip-autocomplete ul li[aria-selected]': { background: 'var(--bg-select)', color: 'var(--fg)' },
   '.cm-tooltip-autocomplete ul': { fontFamily: 'var(--font-text) !important', padding: '4px' },
   '.cm-tooltip-autocomplete ul li': { padding: '3px 10px !important', borderRadius: '6px' },
-  '.cm-completionDetail': { color: 'var(--muted)', fontStyle: 'normal', marginLeft: '1em' },
-  '.cm-image': { color: 'var(--subtle)', background: 'var(--hl-low)', borderRadius: '4px' },
+  '.cm-completionDetail': { color: 'var(--fg-3)', fontStyle: 'normal', marginLeft: '1em' },
+  '.cm-image': { color: 'var(--fg-2)', background: 'var(--bg-hover)', borderRadius: '4px' },
 })
 
 // insertMode says the keys write: always without Vim, in Insert with it.

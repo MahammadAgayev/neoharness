@@ -1,0 +1,37 @@
+/* dialogs */
+.dialog {
+  width: min(520px, 92vw);
+}
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px 6px;
+}
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--fs-secondary);
+}
+.dialog-field .field {
+  flex: 1;
+  font-size: var(--font-size);
+  padding: 6px 10px;
+}
+.dialog-row {
+  display: flex;
+  gap: 8px;
+}
+.dialog-note {
+  font-size: var(--fs-small);
+}
+.dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px 16px;
+}
+.btn:disabled {
+  opacity: 0.5;
+}

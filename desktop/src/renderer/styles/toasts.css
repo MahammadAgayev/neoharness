@@ -1,0 +1,56 @@
+/* toasts */
+.toasts {
+  position: fixed;
+  /* Under the window headers, which name the thread and its state. */
+  top: calc(var(--titlebar) + 44px);
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 40;
+  width: 360px;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline-strong);
+  border-left: 3px solid var(--fg-3);
+  border-radius: 10px;
+  padding: 9px 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  cursor: default;
+  animation: slide 160ms var(--ease-std);
+}
+@keyframes slide {
+  from {
+    transform: translateX(12px);
+    opacity: 0;
+  }
+}
+.toast.b-gold { border-left-color: var(--gold); }
+.toast.b-pine { border-left-color: var(--pine); }
+.toast.b-love { border-left-color: var(--love); }
+.toast.b-iris { border-left-color: var(--iris); }
+.toast.b-foam { border-left-color: var(--foam); }
+.toast-head {
+  display: flex;
+  gap: 6px;
+  font-size: var(--fs-secondary);
+}
+.toast-head .name {
+  font-weight: 600;
+}
+.toast-body {
+  font-size: var(--fs-secondary);
+  color: var(--fg-2);
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.spark {
+  display: block;
+}

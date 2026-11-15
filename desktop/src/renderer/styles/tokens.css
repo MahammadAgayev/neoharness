@@ -1,0 +1,79 @@
+/* The design tokens. Components use these names only, never a raw color or
+   size. The colors come from the color scheme (lib/themes.ts), which sets
+   the semantic colors on :root. The redesign (redesign-ux §3 and §5) moves
+   the components from the current values here to the scales below, one
+   surface at a time. */
+
+:root {
+  --font-text: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  --font-size: var(--font-size);
+  /* Three sizes, all from the text size: body, secondary and small. */
+  --fs-secondary: calc(var(--font-size) - 1px);
+  --fs-small: calc(var(--font-size) - 2px);
+  /* The width of a column of prose: about 90 characters of reading text.
+     With the line height and the paragraph gaps the eye still finds the
+     next line, and a long reply wraps less. It follows the text size. */
+  --measure: calc(var(--font-size) * 60);
+  --radius: 8px;
+  --titlebar: 40px;
+
+  /* Space: a 4px grid, and no other values. */
+  --s-0: 2px;
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+
+  /* Radius: rows, chips, buttons and the cursor; prompt, cards, toasts and
+     inputs; overlays. */
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 10px;
+
+  /* A hairline is one device pixel: half a CSS pixel on a Retina screen. */
+  --hairline-w: 1px;
+  --hairline: color-mix(in srgb, var(--overlay) 45%, transparent);
+  --hairline-strong: color-mix(in srgb, var(--overlay) 80%, transparent);
+
+  /* Motion. A key moves things at once; what the agent or the hub causes
+     arrives softly. Only transform and opacity animate. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-std: cubic-bezier(0.2, 0, 0, 1);
+  --t-0: 0ms;
+  --t-1: 90ms;
+  --t-2: 140ms;
+  --t-3: 180ms;
+  --t-4: 220ms;
+
+  /* Roles: what a color means, over the scheme's hues. */
+  --accent: var(--iris);
+  --wait: var(--gold);
+  --alert: var(--love);
+  --run: var(--foam);
+  --done: var(--pine);
+  --peer: var(--rose);
+
+  /* The old names, until no change in flight uses them. */
+  --text: var(--fg);
+  --subtle: var(--fg-2);
+  --muted: var(--fg-3);
+  --panel: var(--bg);
+  --shell: var(--bg-shell);
+  --surface: var(--bg-raised);
+  --hl-low: var(--bg-hover);
+  --hl-med: var(--bg-select);
+  --line: var(--hairline-strong);
+  --line-soft: var(--hairline);
+  --ease: var(--ease-std);
+}
+
+@media (min-resolution: 2dppx) {
+  :root {
+    --hairline-w: 0.5px;
+  }
+}

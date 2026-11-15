@@ -1,0 +1,31 @@
+/* help */
+.help-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px 32px 60px;
+}
+.help-title {
+  font-size: 1.4em;
+  margin: 0 0 8px;
+}
+.help-inner h2 {
+  font-size: var(--fs-secondary);
+  color: var(--fg-3);
+  font-weight: 500;
+  margin: 22px 0 6px;
+}
+.help-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) 1fr;
+  gap: 16px;
+  padding: 3px 0;
+  font-size: var(--font-size);
+}
+.help-key {
+  font-family: var(--font-mono);
+  font-size: var(--fs-secondary);
+  color: var(--iris);
+}
+.help-what {
+  color: var(--fg-2);
+}

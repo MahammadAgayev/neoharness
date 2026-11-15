@@ -1,0 +1,76 @@
+/* a refused save */
+.conflict {
+  flex: 0 0 auto;
+  max-height: 45%;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--hairline-strong);
+  background: color-mix(in srgb, var(--love) 5%, var(--bg-raised));
+}
+.conflict-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: var(--fs-secondary);
+}
+.conflict-head .btn {
+  white-space: nowrap;
+}
+.diff {
+  margin: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-secondary);
+  line-height: 1.6;
+  padding: 4px 0 10px;
+  user-select: text;
+}
+.hunk {
+  position: relative;
+  border-left: 2px solid transparent;
+}
+.hunk.active {
+  border-left-color: var(--iris);
+}
+.hunk-take {
+  position: absolute;
+  top: 2px;
+  right: 14px;
+  font-family: var(--font-text);
+  opacity: 0;
+  transition: opacity 100ms var(--ease-std);
+}
+.hunk:hover .hunk-take,
+.hunk.active .hunk-take {
+  opacity: 1;
+}
+.diff-legend {
+  padding: 0 14px 4px;
+}
+.diff-line {
+  padding: 0 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.diff-mark {
+  display: inline-block;
+  width: 16px;
+  color: var(--fg-3);
+}
+.d-del {
+  background: color-mix(in srgb, var(--love) 12%, transparent);
+}
+.d-del .diff-mark {
+  color: var(--love);
+}
+.d-add {
+  background: color-mix(in srgb, var(--pine) 14%, transparent);
+}
+.d-add .diff-mark {
+  color: var(--pine);
+}
+.d-same {
+  color: var(--fg-2);
+}

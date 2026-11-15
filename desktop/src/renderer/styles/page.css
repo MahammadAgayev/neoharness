@@ -1,0 +1,209 @@
+/* documents */
+.doc {
+  flex: 1;
+  overflow-y: auto;
+  outline: none;
+}
+.doc-inner {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 28px 32px 80px;
+  line-height: 1.7;
+}
+.doc-title {
+  font-size: 1.7em;
+  font-weight: 700;
+  margin-bottom: 0.6em;
+  letter-spacing: -0.01em;
+}
+/* The artifact as a page: one centered column of reading text, rendered
+   while you write in it. The type follows the chat's (headings in the
+   text's ink, sized by level; paragraphs a line apart), a size up. */
+.doc-editor {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  font-size: calc(var(--font-size) + 2px);
+}
+.doc-page {
+  max-width: 90ch;
+  margin: 0 auto;
+  padding: 48px 56px 40vh;
+  line-height: 1.6;
+  outline: none;
+  caret-color: var(--iris);
+}
+/* In Normal and Visual mode the cursor is a block, as the prompt's. */
+.doc-page.vim-normal {
+  caret-color: transparent;
+}
+.doc-page:focus .doc-fat-cursor {
+  background: var(--iris);
+  color: var(--base);
+}
+.doc-fat-cursor.eol {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.2em;
+  vertical-align: text-bottom;
+}
+.doc-page ::selection {
+  background: var(--bg-select);
+}
+.doc-page > h1:first-child {
+  font-size: 2em;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.5em;
+}
+.doc-page h1,
+.doc-page h2,
+.doc-page h3,
+.doc-page h4,
+.doc-page h5,
+.doc-page h6 {
+  margin: 1.6em 0 0.5em;
+}
+.doc-page h1 { font-size: 1.6em; }
+.doc-page h2 { font-size: 1.35em; }
+.doc-page h3 { font-size: 1.1em; }
+.doc-page h5,
+.doc-page h6 { font-size: 1em; color: var(--fg-2); }
+.doc-page s {
+  color: var(--fg-3);
+}
+.doc-page li > p,
+.doc-page .task-body > p {
+  margin: 0;
+}
+.doc-page li + li {
+  margin-top: 0.3em;
+}
+.doc-page li > ul,
+.doc-page li > ol {
+  margin: 0.3em 0 0;
+}
+.doc-page ul:has(> li.task) {
+  list-style: none;
+  padding-left: 0.2em;
+}
+.doc-page li.task {
+  display: flex;
+  gap: 0.55em;
+  align-items: baseline;
+}
+.doc-page .task-body {
+  flex: 1;
+  min-width: 0;
+}
+.doc-page .task-box {
+  flex: none;
+  width: 0.9em;
+  height: 0.9em;
+  border: 1.5px solid var(--fg-3);
+  border-radius: 4px;
+  transform: translateY(0.12em);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--base);
+}
+.doc-page li.task.done > .task-box {
+  background: var(--pine);
+  border-color: var(--pine);
+}
+.doc-page li.task.done > .task-box::after {
+  content: '✓';
+  font-size: 0.7em;
+  font-weight: 600;
+}
+.doc-page li.task.done > .task-body {
+  color: var(--fg-3);
+  text-decoration: line-through;
+}
+.doc-page pre.code {
+  padding: 14px 16px;
+}
+.doc-page pre.code code {
+  font-size: 0.86em;
+}
+.doc-page pre.code[data-lang]::after {
+  content: attr(data-lang);
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-family: var(--font-text);
+  font-size: var(--fs-small);
+  color: var(--fg-3);
+  pointer-events: none;
+}
+.doc-page pre.raw {
+  margin: 1em 0;
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  white-space: pre-wrap;
+}
+.doc-page pre.raw code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+.doc-page .artifact-link {
+  color: var(--foam);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.doc-page blockquote.alert {
+  border-left-width: 3px;
+}
+/* An alert's [!NOTE] shows as its title; the text stays in the document. */
+.doc-page .alert-mark {
+  font-size: 0;
+}
+.doc-page .alert-mark::before {
+  content: attr(data-label);
+  font-size: calc(var(--font-size) + 2px);
+  font-weight: 600;
+}
+.doc-page .alert-note .alert-mark { color: var(--foam); }
+.doc-page .alert-tip .alert-mark { color: var(--pine); }
+.doc-page .alert-important .alert-mark { color: var(--iris); }
+.doc-page .alert-warning .alert-mark { color: var(--gold); }
+.doc-page .alert-caution .alert-mark { color: var(--love); }
+.doc-page .table-wrap {
+  margin: 1.2em 0;
+  overflow-x: auto;
+}
+.doc-page table {
+  display: table;
+  margin: 0;
+  font-size: 0.92em;
+  line-height: 1.5;
+  border-collapse: collapse;
+}
+/* A word breaks only when it is longer than its column can be. */
+.doc-page th,
+.doc-page td {
+  padding: 6px 12px;
+  vertical-align: top;
+  min-width: 3em;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+.doc-page th {
+  font-weight: 600;
+}
+.doc-page .selectedCell {
+  background: var(--bg-select);
+}
+.doc-page hr {
+  margin: 2em 0;
+}
+.doc-page img {
+  max-width: 100%;
+}
+.doc-page .ProseMirror-selectednode {
+  outline: 2px solid var(--hl-high);
+}

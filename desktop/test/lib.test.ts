@@ -288,25 +288,26 @@ describe('schemes', () => {
   it('every level of text reads at its contrast on the panel and the shell', () => {
     for (const [name, p] of Object.entries(schemes)) {
       const c = colors(p)
+      const ink = { text: '--fg', subtle: '--fg-2', muted: '--fg-3' } as const
       for (const level of ['text', 'subtle', 'muted'] as const) {
-        for (const bg of ['--panel', '--shell', '--surface']) {
-          expect(contrast(c[`--${level}`], c[bg]), `${name} ${level} on ${bg}`).toBeGreaterThanOrEqual(ratios[level])
+        for (const bg of ['--bg', '--bg-shell', '--bg-raised']) {
+          expect(contrast(c[ink[level]], c[bg]), `${name} ${level} on ${bg}`).toBeGreaterThanOrEqual(ratios[level])
         }
       }
       if (!p.dark) {
-        for (const bg of ['--panel', '--shell', '--surface']) {
-          expect(contrast(c['--text'], c[bg]), `${name} text on ${bg}`).toBeGreaterThanOrEqual(ratios.textLight)
+        for (const bg of ['--bg', '--bg-shell', '--bg-raised']) {
+          expect(contrast(c['--fg'], c[bg]), `${name} text on ${bg}`).toBeGreaterThanOrEqual(ratios.textLight)
         }
       }
       for (const accent of ['love', 'gold', 'rose', 'pine', 'foam', 'iris']) {
-        for (const bg of ['--panel', '--shell', '--surface']) {
+        for (const bg of ['--bg', '--bg-shell', '--bg-raised']) {
           expect(contrast(c[`--${accent}`], c[bg]), `${name} ${accent} on ${bg}`).toBeGreaterThanOrEqual(ratios.muted)
         }
       }
     }
   })
   it('keeps the paper of the light scheme', () => {
-    expect(colors(schemes['rose-pine-dawn'])['--panel']).toBe('#fffaf3')
+    expect(colors(schemes['rose-pine-dawn'])['--bg']).toBe('#fffaf3')
   })
 })
 

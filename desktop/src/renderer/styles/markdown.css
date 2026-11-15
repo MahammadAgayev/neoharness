@@ -1,0 +1,196 @@
+/* markdown */
+.md {
+  user-select: text;
+  word-break: break-word;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p,
+.md ul,
+.md ol,
+.md blockquote,
+.md table,
+.md pre {
+  margin: 1em 0;
+}
+.md ul,
+.md ol {
+  padding-left: 1.4em;
+}
+.md li + li {
+  margin-top: 0.15em;
+}
+.md li::marker {
+  color: var(--fg-2);
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  margin: 1.1em 0 0.4em;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--fg);
+}
+/* A heading shows its level by size, in the ink of the text: a hue would
+   make it quieter than the paragraph under it. */
+.md h1 { font-size: 1.4em; }
+.md h2 { font-size: 1.3em; }
+.md h3 { font-size: 1.1em; }
+.md h4 { font-size: 1em; color: var(--fg-2); }
+.md a {
+  color: var(--foam);
+  text-decoration-color: color-mix(in srgb, var(--foam) 40%, transparent);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.md strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+/* Code is in the ink of the text on a plain chip: names you must read are
+   not the dimmest words of a reply. */
+.md code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 9%, transparent);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.md code.artifact-link {
+  color: var(--foam);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.md pre.code {
+  position: relative;
+  background: color-mix(in srgb, var(--bg-raised) 80%, var(--base));
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+.md pre.code code {
+  background: none;
+  padding: 0;
+  color: var(--fg);
+  font-size: var(--fs-secondary);
+  line-height: 1.6;
+}
+/* copy buttons: a whole message, or a code block; quiet until hovered */
+.copyable {
+  position: relative;
+}
+.copy {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--bg-raised);
+  color: var(--fg-2);
+  font: inherit;
+  font-size: var(--fs-small);
+  padding: 1px 8px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.msg-copy {
+  position: static;
+  display: block;
+  margin-top: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--fg-3);
+  opacity: 1;
+}
+.md pre.code:hover > .copy {
+  opacity: 1;
+}
+.copy:hover {
+  color: var(--fg);
+}
+.md pre.code:hover > .code-lang {
+  opacity: 0;
+}
+.code-lang {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-size: var(--fs-small);
+  color: var(--fg-3);
+}
+.md blockquote {
+  border-left: 2px solid var(--fg-3);
+  padding-left: 12px;
+  color: var(--fg-2);
+  margin-left: 0;
+}
+.md blockquote.alert {
+  border-left-width: 3px;
+  color: var(--fg);
+}
+.md .alert-title {
+  font-weight: 600;
+  margin-bottom: 0.2em;
+}
+.md .alert-title + p {
+  margin-top: 0;
+}
+.alert-note { border-left-color: var(--foam) !important; }
+.alert-note .alert-title { color: var(--foam); }
+.alert-tip { border-left-color: var(--pine) !important; }
+.alert-tip .alert-title { color: var(--pine); }
+.alert-important { border-left-color: var(--iris) !important; }
+.alert-important .alert-title { color: var(--iris); }
+.alert-warning { border-left-color: var(--gold) !important; }
+.alert-warning .alert-title { color: var(--gold); }
+.alert-caution { border-left-color: var(--love) !important; }
+.alert-caution .alert-title { color: var(--love); }
+.md table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+.md th,
+.md td {
+  border: 1px solid var(--hairline-strong);
+  padding: 4px 10px;
+  text-align: left;
+}
+.md th {
+  background: var(--bg-hover);
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--hairline-strong);
+  margin: 1.2em 0;
+}
+.md input[type='checkbox'] {
+  accent-color: var(--pine);
+}
+/* A done task reads as done at a glance. */
+.md li:has(> input[type='checkbox']:checked),
+.md li:has(> p > input[type='checkbox']:checked) {
+  color: var(--fg-3);
+  text-decoration: line-through;
+}
+
+/* syntax, from the scheme */
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in { color: var(--pine); }
+.hljs-string, .hljs-attr, .hljs-template-tag { color: var(--gold); }
+.hljs-number, .hljs-literal, .hljs-symbol { color: var(--rose); }
+.hljs-title, .hljs-section, .hljs-function .hljs-title { color: var(--foam); }
+.hljs-type, .hljs-class .hljs-title, .hljs-params { color: var(--iris); }
+.hljs-comment, .hljs-quote { color: var(--fg-3); font-style: italic; }
+.hljs-meta, .hljs-variable, .hljs-property { color: var(--iris); }
+.hljs-deletion { color: var(--love); }
+.hljs-addition { color: var(--pine); }

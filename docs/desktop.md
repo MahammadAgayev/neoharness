@@ -314,3 +314,8 @@ icon.
   shown.
 - `desktop/.npmrc` pins the public npm registry. Check that
   `package-lock.json` names no other registry before you commit it.
+- Styles are one file per part of the window in `src/renderer/styles/`,
+  imported in cascade order by `index.css`. They use the tokens of
+  `tokens.css` (space, radius, hairline, motion, color roles) and the
+  scheme's colors from `lib/themes.ts` (`--bg`, `--fg`, `--fg-2`, `--fg-3`,
+  …), never a raw color.

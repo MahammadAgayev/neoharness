@@ -4,7 +4,7 @@ import type { Bridge } from '../shared/api'
 import { installKeys } from './keyboard'
 import { store } from './store'
 import { App } from './ui/App'
-import './styles.css'
+import './styles/index.css'
 
 declare global {
   interface Window {

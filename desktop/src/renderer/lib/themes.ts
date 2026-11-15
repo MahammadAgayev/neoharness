@@ -141,13 +141,15 @@ export function colors(p: Palette): Record<string, string> {
   const bgs = [shell, panel, p.surface]
   return {
     '--base': p.base,
-    '--surface': p.surface,
     '--overlay': p.overlay,
-    '--shell': shell,
-    '--panel': panel,
-    '--muted': legible(mix(p.muted, p.subtle, 0.55), ink, bgs, ratios.muted),
-    '--subtle': legible(p.subtle, ink, bgs, ratios.subtle),
-    '--text': legible(p.text, ink, bgs, p.dark ? ratios.text : ratios.textLight),
+    '--bg': panel,
+    '--bg-shell': shell,
+    '--bg-raised': p.surface,
+    '--bg-hover': p.hlLow,
+    '--bg-select': p.hlMed,
+    '--fg': legible(p.text, ink, bgs, p.dark ? ratios.text : ratios.textLight),
+    '--fg-2': legible(p.subtle, ink, bgs, ratios.subtle),
+    '--fg-3': legible(mix(p.muted, p.subtle, 0.55), ink, bgs, ratios.muted),
     // The accents color text too: a state, a link, a heading.
     '--love': legible(p.love, ink, bgs, ratios.muted),
     '--gold': legible(p.gold, ink, bgs, ratios.muted),
@@ -155,8 +157,6 @@ export function colors(p: Palette): Record<string, string> {
     '--pine': legible(p.pine, ink, bgs, ratios.muted),
     '--foam': legible(p.foam, ink, bgs, ratios.muted),
     '--iris': legible(p.iris, ink, bgs, ratios.muted),
-    '--hl-low': p.hlLow,
-    '--hl-med': p.hlMed,
     '--hl-high': p.hlHigh,
   }
 }

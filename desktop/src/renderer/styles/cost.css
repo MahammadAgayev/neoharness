@@ -1,0 +1,120 @@
+/* The cost dialog: totals, the last 14 days, bars by thread and model. One
+   hue for every bar; the text stays in the text colors. */
+.cost-dialog {
+  width: min(760px, 92vw);
+}
+.cost-body:focus {
+  outline: none;
+}
+.cost-tabs {
+  display: flex;
+  gap: 2px;
+  margin-right: auto;
+}
+.cost-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 16px 0 4px;
+}
+.cost-stat {
+  padding: 12px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.cost-stat-value {
+  font-size: 1.6em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.cost-stat-label {
+  font-size: var(--fs-secondary);
+  color: var(--fg-2);
+}
+.cost-days {
+  display: flex;
+  gap: 2px;
+  height: 140px;
+}
+.cost-day {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cost-day-plot {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 3px;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+.cost-day-plot:hover {
+  background: var(--bg-hover);
+  border-radius: 4px 4px 0 0;
+}
+.cost-day-bar {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: color-mix(in srgb, var(--iris) 55%, transparent);
+}
+.cost-day.today .cost-day-bar {
+  background: var(--iris);
+}
+.cost-day-label {
+  text-align: center;
+  font-size: var(--fs-small);
+  color: var(--fg-2);
+  margin-top: 4px;
+}
+.cost-section {
+  margin-bottom: 8px;
+}
+.cost-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0 24px;
+}
+.cost-bar-row,
+.cost-turn {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(40px, 1fr) 64px;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  font-size: var(--fs-secondary);
+}
+.cost-turn {
+  grid-template-columns: minmax(0, 1fr) auto auto 64px;
+  gap: 14px;
+}
+.cost-bar-row.clickable:hover,
+.cost-turn.clickable:hover {
+  background: var(--bg-hover);
+}
+.cost-bar-name,
+.cost-turn-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cost-bar-track {
+  height: 6px;
+}
+.cost-bar {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--iris) 70%, transparent);
+}
+.cost-bar-cost {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.cost-note {
+  margin-top: 16px;
+  font-size: var(--fs-small);
+}
