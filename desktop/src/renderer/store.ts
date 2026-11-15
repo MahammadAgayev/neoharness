@@ -145,6 +145,8 @@ export interface State {
   toasts: Toast[]
   log: Toast[]
   message: { text: string; tone: MsgTone } | null
+  // echo is a confirmation in the focused window's status line (Echo).
+  echo: string
   confirm: { text: string; run: () => void } | null
   picker: Picker | null
   cmdline: string | null
@@ -214,6 +216,7 @@ class Store {
     picker: null,
     cmdline: null,
     insert: false,
+    echo: '',
     settings: loadSettings(),
     settingsOpen: false,
   helpOpen: false,
@@ -321,6 +324,19 @@ class Store {
 
   say(text: string, tone: MsgTone = 'text'): void {
     this.set({ message: { text, tone } })
+  }
+
+  // echo is a confirmation nobody asked a key for ("saved", "stopped api"):
+  // it shows for 2 s at the right of the focused window's status line. With
+  // an overlay open, or no window, it goes on the command line.
+  private echoTimer: ReturnType<typeof setTimeout> | undefined
+  echo(text: string): void {
+    const s = this.state
+    if (s.screen !== 'workspace' || s.picker || s.settingsOpen || s.helpOpen || s.cost || s.choice || s.newWorkspace || s.newDoc)
+      return this.say(text, 'muted')
+    clearTimeout(this.echoTimer)
+    this.set({ echo: text })
+    this.echoTimer = setTimeout(() => this.set({ echo: '' }), 2000)
   }
 
   // --- connection ---
@@ -627,7 +643,7 @@ class Store {
         : { ...w, back: w.back.filter((b) => !(b.kind === 'chat' && b.thread === name)) },
     )
     this.set({ threads, chats, order: s.order.filter((n) => n !== name), layout })
-    this.say(`${name} deleted`, 'muted')
+    this.echo(`${name} deleted`)
   }
 
   private dropWorkspace(name: string): void {
@@ -639,7 +655,7 @@ class Store {
       this.set({ workspace: '', threads: {}, order: [], chats: {}, artifacts: [], docs: {}, screen: 'workspaces' })
       localStorage.removeItem('workspace')
     }
-    this.say(`${name} deleted · :restore ${name} brings it back`, 'muted')
+    this.echo(`${name} deleted · :restore ${name} brings it back`)
   }
 
   // --- toasts ---
@@ -842,7 +858,7 @@ class Store {
       dir = d
     }
     if ((await this.try(this.call('setFolder', { workspace: this.state.workspace, pin: dir }))) === undefined) return
-    this.say(`${this.state.workspace} now works in ${this.short(dir)}`, 'pine')
+    this.echo(`${this.state.workspace} now works in ${this.short(dir)}`)
   }
 
   async setLocal(args: string[]): Promise<void> {
@@ -887,7 +903,7 @@ class Store {
     }
     if ((await this.try(this.call('restoreWorkspace', { workspace: name }))) === undefined) return
     await this.loadWorkspaces()
-    this.say(`${name} restored`, 'subtle')
+    this.echo(`${name} restored`)
   }
 
   askDeleteWorkspace(name: string): void {
@@ -1223,7 +1239,7 @@ class Store {
       return
     }
     if ((await this.try(this.call('stop', this.at(name)))) !== undefined)
-      this.say(`stopped ${name}`, 'muted')
+      this.echo(`stopped ${name}`)
   }
 
   // threadRows are the rows of the threads list, as the list draws them.
@@ -1305,14 +1321,14 @@ class Store {
       // A question takes a written answer; deny skips it.
       if (d !== 'deny') return this.say('write the answer, or space x to skip', 'muted')
       const ok = await this.try(this.call('answer', { ...this.at(name), id: v.questionId, decision: 'deny', message: '' }))
-      if (ok !== undefined) this.say(`skipped · ${name}`, 'pine')
+      if (ok !== undefined) this.echo(`skipped · ${name}`)
       return
     }
     if (!v?.permission) return
     const ok = await this.try(
       this.call('answer', { ...this.at(name), id: v.permission.id, decision: d, message: msg }),
     )
-    if (ok !== undefined) this.say(`${d} · ${v.permission.tool} · ${name}`, 'pine')
+    if (ok !== undefined) this.echo(`${d} · ${v.permission.tool} · ${name}`)
   }
 
   completions(thread: string, query: string) {
@@ -1415,10 +1431,7 @@ class Store {
     }
     const merged = r.text !== d.edit.text
     this.set({ docs: { ...this.state.docs, [name]: { artifact: r.artifact, text: r.text, edit: null } } })
-    this.say(
-      `${merged ? 'merged and saved' : 'saved'} ${name} v${r.artifact.version} · ${r.artifact.thread} sees it with your next message`,
-      'subtle',
-    )
+    this.echo(`${merged ? 'merged and saved' : 'saved'} ${name} v${r.artifact.version} · ${r.artifact.thread} sees it with your next message`)
     return true
   }
 
@@ -1454,7 +1467,7 @@ class Store {
       this.set({ docs: { ...this.state.docs, [name]: { ...cur, edit, conflicts } } })
       const n = conflicts.length
       if (n) this.say(`${cur.artifact.thread} changed the same blocks in v${m.version}`, 'gold')
-      else this.say(`${cur.artifact.thread} wrote v${m.version} · merged into your edit`, 'subtle')
+      else this.echo(`${cur.artifact.thread} wrote v${m.version} · merged into your edit`)
       return
     }
   }

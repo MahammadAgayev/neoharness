@@ -150,7 +150,7 @@ export function Prompt(props: {
         stashes.delete(thread)
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: back } })
         drafts.set(thread, back)
-        if (back) store.say('your stashed draft is back', 'muted')
+        if (back) store.echo('your stashed draft is back')
       })
       return true
     }
@@ -159,7 +159,7 @@ export function Prompt(props: {
       if (text.trim()) {
         stashes.set(thread, text)
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
-        store.say('draft stashed · it comes back after you send · Ctrl S again takes it back', 'muted')
+        store.echo('draft stashed · it comes back after you send · Ctrl S again takes it back')
       } else if (stashes.has(thread)) {
         view.dispatch({ changes: { from: 0, to: 0, insert: stashes.get(thread)! } })
         stashes.delete(thread)

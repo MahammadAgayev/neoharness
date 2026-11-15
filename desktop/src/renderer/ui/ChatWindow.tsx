@@ -11,6 +11,7 @@ import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
 import { CloseWindow } from './CloseWindow'
+import { Echo } from './Echo'
 import { Leave } from './Leave'
 import { TodoMark } from './Panels'
 
@@ -82,6 +83,7 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
       )}
       {v && v.state !== 'idle' && v.since && <span className="sl-dim">{boardTime(v.since)}</span>}
       {wake && <span className="sl-dim">{wake}</span>}
+      <Echo focused={focused} />
       <CloseWindow id={props.id} />
     </div>
   )
@@ -587,7 +589,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
         if (!text) return true
         yank.text = text
         window.nh.copy(text)
-        store.say(`yanked ${text.split('\n').length} lines`, 'muted')
+        store.echo(`yanked ${text.split('\n').length} lines`)
         return true
       }
       case 'insert':

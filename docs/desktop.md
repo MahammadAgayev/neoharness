@@ -59,7 +59,11 @@ with the card under the cursor, and in their tooltips.
 The recap, the todo line and the prompt are one box at the foot of the
 chat, the prompt dock. Toasts show what needs you on top. One that does
 not need you waits while you type in Insert or on the command line, and
-shows when you stop.
+shows when you stop. A confirmation nobody asked a key for (`saved`,
+`stopped api`, `yanked 3 lines`) shows for 2 seconds at the right of the
+focused window's status line. Errors and the answer to a key or command
+(`]q`, `K`, `:set`) show on the command line until your next key in
+Normal mode.
 
 The recap card shows as in the TUI, just above the prompt, when you come
 back after 2 minutes or more out of the window, or with no key or click

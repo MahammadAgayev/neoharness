@@ -8,6 +8,7 @@ import { handlers, type WinAction } from './registry'
 import { Glyph, Icon } from './Icon'
 import { age } from '../search'
 import { CloseWindow } from './CloseWindow'
+import { Echo } from './Echo'
 
 function useScrollKeys(win: Win, el: React.RefObject<HTMLDivElement | null>) {
   const handle = (a: WinAction, count: number): boolean => {
@@ -268,6 +269,7 @@ export function WaitsWindow(props: { win: Win; focused: boolean }) {
     <div className="window waits" onMouseDown={() => store.focus(win.id)}>
       <div className={`statusline ${focused ? 'focused' : ''}`}>
         <span className="sl-name">waits</span>
+        <Echo focused={focused} />
         <CloseWindow id={win.id} />
       </div>
       <div className="list board" ref={el} tabIndex={-1}>
@@ -303,6 +305,7 @@ export function MessagesWindow(props: { win: Win; focused: boolean }) {
     <div className="window messages" onMouseDown={() => store.focus(props.win.id)}>
       <div className={`statusline ${props.focused ? 'focused' : ''}`}>
         <span className="sl-name">messages</span>
+        <Echo focused={props.focused} />
         <CloseWindow id={props.win.id} />
       </div>
       <div className="list" ref={el} tabIndex={-1}>
@@ -348,6 +351,7 @@ export function TodoWindow(props: { win: Win; focused: boolean; thread: string }
     <div className="window todo" onMouseDown={() => store.focus(props.win.id)}>
       <div className={`statusline ${props.focused ? 'focused' : ''}`}>
         <span className="sl-name">{props.thread} todo</span>
+        <Echo focused={props.focused} />
         <CloseWindow id={props.win.id} />
       </div>
       <div className="list" ref={el} tabIndex={-1}>

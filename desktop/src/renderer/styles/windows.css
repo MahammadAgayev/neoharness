@@ -107,6 +107,19 @@
 .sl-dim {
   color: var(--fg-3);
 }
+/* A confirmation, for 2 s: at the right, after the state and the time,
+   which it never moves; a long one is cut. */
+.sl-echo {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-3);
+  font-weight: 400;
+}
+.sl-echo ~ .sl-close {
+  margin-left: 0;
+}
 .sl-state {
   margin-left: 4px;
   display: inline-flex;

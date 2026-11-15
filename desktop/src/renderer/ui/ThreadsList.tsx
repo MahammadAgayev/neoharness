@@ -7,6 +7,7 @@ import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
 import { Glyph } from './Icon'
 import { CloseWindow } from './CloseWindow'
+import { Echo } from './Echo'
 
 export function ThreadsList(props: { win: Win; focused: boolean }) {
   const { win, focused } = props
@@ -105,6 +106,7 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
     <div className="window threads" onMouseDown={() => store.focus(win.id)}>
       <div className={`statusline ${focused ? 'focused' : ''}`}>
         <span className="sl-name">threads</span>
+        <Echo focused={focused} />
         <CloseWindow id={win.id} />
       </div>
       <div className="list board" ref={el} onMouseEnter={() => setOver(true)} onMouseLeave={() => setOver(false)}>

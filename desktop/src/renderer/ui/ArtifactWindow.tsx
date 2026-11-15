@@ -28,6 +28,7 @@ import { store, useStore, type Win } from '../store'
 import { docs, handlers, yank, type DocKeys, type WinAction } from './registry'
 import { Caret, type CaretAt } from './Caret'
 import { CloseWindow } from './CloseWindow'
+import { Echo } from './Echo'
 import { Icon } from './Icon'
 import 'prosemirror-view/style/prosemirror.css'
 
@@ -460,6 +461,7 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
             v{a.version} · {a.userEdit ? 'edited by you' : a.thread}
           </span>
         )}
+        <Echo focused={focused} />
         <span className="sl-fill" />
         {dirty && (
           <button className="btn small ghost" title=":w  ⌘S" onClick={() => void store.save(name)}>

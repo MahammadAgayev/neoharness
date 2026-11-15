@@ -398,6 +398,8 @@ export function onKey(e: KeyboardEvent): void {
   if (s.picker || s.cmdline !== null || s.settingsOpen || s.helpOpen || s.cost || s.choice || s.newWorkspace || s.newDoc) return
   // So is a find bar: what you type there is the word you look for.
   if (e.target instanceof HTMLInputElement) return
+  // A message stays until the next key, as in Vim; in Insert it holds still.
+  if (s.message?.text && !s.insert) store.say('')
 
   const km = keymaps()
   if (key.startsWith('<D-')) {
@@ -500,7 +502,6 @@ export function onKey(e: KeyboardEvent): void {
     return
   }
 
-  if (s.message && key === '<Esc>') store.say('')
   if (key === ':') {
     e.preventDefault()
     store.openCmdline()

@@ -200,7 +200,7 @@ test('an artifact opens, edits, saves, and a newer version is merged or forced',
   await expect(doc.locator('h1')).toHaveText('xPlan')
   const v2 = '# Plan\n\n- add /healthz\n- test it\n- ship it **now**\n'
   hub.artifact('demo', 'plan', 'Health check plan', v2 + '\n## Deploy\n', 3)
-  await expect(page.locator('.cmdline', { hasText: 'wrote v3 · merged into your edit' })).toBeVisible()
+  await expect(page.locator('.statusline.focused .sl-echo')).toHaveText(/wrote v3 · merged into your edit/)
   await expect(doc.locator('h2', { hasText: 'Deploy' })).toBeVisible()
   await expect(doc.locator('h1')).toHaveText('xPlan')
   await shot('25-artifact-merged')
@@ -1192,6 +1192,36 @@ test('a reply streams in a block at a time, open code shows plain, and the text 
   await expect(stream).toBeVisible()
   hub.delta('demo', 'coordinator', '')
   await expect(stream).toHaveCount(0)
+})
+
+test('a confirmation shows for 2 s in the focused status line; a message stays on the command line until the next key', async () => {
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  const line = page.locator('.cmdline')
+  const echo = page.locator('.statusline.focused .sl-echo')
+  hub.setView(view('demo', 'coordinator', { state: 'running' }))
+  await expect(page.locator('.statusline.focused .sl-state')).toContainText('running')
+  const state = await page.locator('.statusline.focused .sl-state').boundingBox()
+  await page.keyboard.type(':stop')
+  await page.keyboard.press('Enter')
+  await expect(echo).toHaveText('stopped coordinator')
+  await shot('52-echo')
+  await expect(line).not.toContainText('stopped coordinator')
+  // It sits after the state, which does not move.
+  expect((await page.locator('.statusline.focused .sl-state').boundingBox())!.x).toBe(state!.x)
+  await expect(echo).toHaveCount(0, { timeout: 3000 })
+  hub.setView(view('demo', 'coordinator', { state: 'idle' }))
+
+  // An answer to a key stays until the next key.
+  hub.setWaits([])
+  await page.keyboard.press(']')
+  await page.keyboard.press('q')
+  await expect(line).toContainText('nothing waits for you')
+  await page.waitForTimeout(2500)
+  await expect(line).toContainText('nothing waits for you')
+  await page.keyboard.press('j')
+  await expect(line).not.toContainText('nothing waits for you')
 })
 
 test("the prompt's cursor is the page's: a still block in Normal, a still 2px accent line in Insert", async () => {
