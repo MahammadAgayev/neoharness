@@ -9,7 +9,7 @@
   max-height: 50%;
   margin: var(--s-1) auto 0;
   border: var(--hairline-w) solid var(--hairline-strong);
-  border-radius: var(--r-2);
+  border-radius: var(--r-dock);
   background: var(--bg-raised);
   overflow: hidden;
 }

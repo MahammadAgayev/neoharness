@@ -41,6 +41,9 @@
   --r-1: 4px;
   --r-2: 6px;
   --r-3: 10px;
+  /* The prompt dock stays as round as the prompt was before, as the person
+     likes it. */
+  --r-dock: 10px;
 
   /* Elevation: flat, or --e1 for overlays and toasts, and --scrim to dim
      what is behind an overlay, with no blur. Both come from the scheme
