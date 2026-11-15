@@ -36,7 +36,10 @@ type fakeClient struct {
 	many       func(query string) []string
 	queries    []string
 	// merged is what an edit from an old version merges to; empty refuses.
-	merged string
+	merged    string
+	waits     []model.Wait
+	seen      []string
+	dismissed []string
 
 	// images are what each Send carried, by the index of its sent line.
 	images map[int][][]byte
@@ -155,6 +158,16 @@ func (f *fakeClient) Answer(p, t, id string, d model.Decision, msg string) error
 }
 func (f *fakeClient) Updates(ctx context.Context) (<-chan model.Update, error) {
 	return make(chan model.Update), nil
+}
+
+func (f *fakeClient) Waits() ([]model.Wait, error) { return slices.Clone(f.waits), nil }
+func (f *fakeClient) Seen(p, t string, at time.Time) error {
+	f.seen = append(f.seen, p+"/"+t)
+	return nil
+}
+func (f *fakeClient) Dismiss(p, t, id string) error {
+	f.dismissed = append(f.dismissed, p+"/"+t+"/"+id)
+	return nil
 }
 
 func newFake() *fakeClient {
@@ -522,7 +535,7 @@ func TestPermissionCardAndAnswer(t *testing.T) {
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
 	h.see("needs permission · Bash")
-	h.see("◆ 1")
+	h.see("permission · Bash  rm -rf ./tmp/cache")
 
 	// The card shows in its window; <leader>a allows it.
 	h.press(":b auth-refactor", "<CR>")

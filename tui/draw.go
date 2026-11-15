@@ -79,6 +79,7 @@ func (a *App) draw() {
 	s.Show()
 	a.frames++
 	a.lastFrame, a.dirty = now, false
+	a.see(now)
 	a.scheduleNext(now, live)
 }
 
@@ -570,8 +571,9 @@ func (a *App) drawStatusLine(W, H int) {
 		n[v.State]++
 	}
 	var right []Span
-	if n[model.StateWaiting] > 0 {
-		right = append(right, Span{fmt.Sprintf("◆ %d waiting", n[model.StateWaiting]), th.Wait})
+	// What needs the person, in every workspace: the one place to look.
+	if len(a.waits) > 0 {
+		right = append(right, Span{fmt.Sprintf("◆ %d waiting", len(a.waits)), th.Wait})
 	}
 	if n[model.StateRunning] > 0 {
 		right = append(right, Span{fmt.Sprintf("● %d running", n[model.StateRunning]), th.Run})
@@ -683,6 +685,8 @@ func bufTitle(b *Buffer) string {
 		return b.Artifact
 	case KindTodo:
 		return b.Thread + " todo"
+	case KindWaits:
+		return "waits"
 	}
 	return b.Name
 }

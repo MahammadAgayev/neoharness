@@ -22,7 +22,8 @@
   pane with focus has its name in bold and a row of `▔` in the accent color
   under it. One status line at the foot of the screen, as Vim's
   `laststatus=3`, names the workspace, shows the focused chat's model and
-  context, and counts the threads that wait and run. The command line is
+  context, then `◆ N waiting`, the count of the waits list, and how many
+  threads run. The command line is
   under it.
 - The screen holds still. A running thread's `●` turns to `◉` and back
   every 0.8 s, the live tool row spins 4 times a second, and times change
@@ -146,6 +147,16 @@ which they never cover; with the pane closed, the newest shows in the status
 line. Each names the thread, and the workspace when it is not the open one.
 A toast that does not need you waits while you are in Insert or on the
 command line, and shows when you leave it. What needs you shows at once.
+What needs you, in every workspace, is also in one list, oldest first, as
+Vim's quickfix list: permission requests, questions, failed turns and
+notices that need you. The status line counts it as `◆ N waiting`. `]q` and
+`[q`, or `:cn` and `:cp`, go to the next or previous one and open its
+thread at its card, in any workspace. `:waits` or `:copen` shows the list:
+`<CR>` goes to a wait, `x` dismisses a notice or a failure. An item leaves
+the list only when it is done: answered, skipped, stopped, or the thread
+runs again. A thread on screen for 2 seconds tells the hub you saw it; that
+quiets what it said since, but never what needs you.
+
 `<leader>nc` dismisses them and `<leader>nh` shows their history.
 `<leader>pm` picks one, newest first, and opens its thread, in any
 workspace.

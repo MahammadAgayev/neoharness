@@ -238,6 +238,8 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"]m":         func(n int) { a.nextMsg(w(), max(n, 1)) },
 		"[m":         func(n int) { a.nextMsg(w(), -max(n, 1)) },
 		"]b":         func(n int) { a.cycleThread(max(n, 1)) },
+		"]q":         func(n int) { a.nextWait(max(n, 1)) },
+		"[q":         func(n int) { a.nextWait(-max(n, 1)) },
 		"[b":         func(n int) { a.cycleThread(-max(n, 1)) },
 		"<C-^>":      func(int) { a.alternate() },
 		"<C-o>":      func(int) { a.jumpBack() },
@@ -1043,6 +1045,10 @@ func (a *App) enter() {
 	case KindWorkspaces:
 		if l.Item != "" {
 			a.openWorkspace(l.Item)
+		}
+	case KindWaits:
+		if i := a.waitIndex(l.Item); i >= 0 {
+			a.jumpWait(i)
 		}
 	case KindCost:
 		if strings.HasPrefix(l.Item, costRow) {

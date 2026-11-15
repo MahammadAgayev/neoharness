@@ -93,6 +93,11 @@ func (a *App) scheduleNext(now time.Time, live bool) {
 			consider(v.Since.Add((d/time.Minute + 1) * time.Minute))
 		}
 	}
+	for k, t := range a.seenFrom {
+		if l := a.threads[k].Level; !a.seenSent[k] && (l == model.LevelAmbient || l == model.LevelNotice) {
+			consider(t.Add(model.SeenDwell))
+		}
+	}
 	for _, t := range a.settleUntil {
 		if t.After(now) {
 			consider(t)

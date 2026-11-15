@@ -30,9 +30,9 @@ type cmdline struct {
 }
 
 var commands = []string{
-	"allow", "always", "artifacts", "b", "buffer", "deny", "diffoff", "edit", "folder", "help", "hub", "image", "ls", "messages", "new",
+	"allow", "always", "artifacts", "b", "buffer", "cn", "copen", "cp", "deny", "diffoff", "edit", "folder", "help", "hub", "image", "ls", "messages", "new",
 	"only", "open", "q", "qa", "quit", "recap", "reopen", "resolve", "restore", "cost", "setlocal", "split", "threads",
-	"vsplit", "workspace", "workspaces", "wq",
+	"vsplit", "waits", "workspace", "workspaces", "wq",
 }
 
 func (a *App) startCmd(prefix rune) {
@@ -455,6 +455,14 @@ func (a *App) exec(line string) {
 		}
 	case "ls", "buffers":
 		a.pickBuffers()
+	case "cn", "cnext":
+		a.nextWait(1)
+	case "cp", "cprevious", "cN", "cNext":
+		a.nextWait(-1)
+	case "waits", "copen", "cope", "cw", "cwindow":
+		a.renderWaits()
+		a.cur.show(a.waitsBuf)
+		a.cur.Follow = false
 	case "messages", "mes":
 		a.cur.show(a.messagesBuf)
 		a.cur.Follow = true
@@ -690,6 +698,8 @@ func (a *App) helpBuf() *Buffer {
 		row("<C-w>v  <C-w>s", "split vertically / horizontally"),
 		row("<C-w>c  <C-w>o  <C-w>=", "close, only, equal sizes"),
 		row("]b [b  <C-^>", "next / previous thread, alternate"),
+		row("]q [q  :cn :cp", "next / previous wait, oldest first, in any workspace"),
+		row(":waits  :copen", "the waits list; <CR> goes to one, x dismisses a notice or a failure"),
 		row("<C-o>", "back to the buffer the window showed before"),
 		row("<CR>", "open the workspace, or switch to the thread"),
 		row("K", "the last reply of the thread on the row (threads list)"),

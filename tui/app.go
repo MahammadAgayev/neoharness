@@ -54,6 +54,9 @@ type Client interface {
 	Delete(workspace, thread string) error
 	Reopen(workspace, thread string) error
 	Answer(workspace, thread, id string, d model.Decision, msg string) error
+	Waits() ([]model.Wait, error)
+	Seen(workspace, thread string, at time.Time) error
+	Dismiss(workspace, thread, id string) error
 	Updates(ctx context.Context) (<-chan model.Update, error)
 }
 
@@ -183,6 +186,15 @@ type App struct {
 	// row moves under them. settleUntil is when a moved row's tint goes.
 	boardAt     map[string]model.State
 	settleUntil map[string]time.Time
+	// waits is the hub's waits list, every workspace, oldest first (waits.go).
+	// waitAt is the key of the wait ]q went to last. seenFrom is when each
+	// chat on screen began to show, for the seen dwell; seenSent the chats
+	// said seen since.
+	waits    []model.Wait
+	waitAt   string
+	waitsBuf *Buffer
+	seenFrom map[string]time.Time
+	seenSent map[string]bool
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key
@@ -307,6 +319,8 @@ func newApp(s tcell.Screen, c Client) *App {
 		recapOpen:   map[string]bool{},
 		recapSeen:   map[string]time.Time{},
 		boardAt:     map[string]model.State{},
+		seenFrom:    map[string]time.Time{},
+		seenSent:    map[string]bool{},
 		settleUntil: map[string]time.Time{},
 	}
 	a.after = func(d time.Duration, ev tcell.Event) {
@@ -317,10 +331,13 @@ func newApp(s tcell.Screen, c Client) *App {
 	a.messagesBuf.SetLines([]Line{{Prefix: []Span{{" ", a.th.Fg}}, Spans: []Span{{"no messages yet", a.th.Fg3}}}})
 	a.bufs[a.workspacesBuf.Name] = a.workspacesBuf
 	a.bufs[a.messagesBuf.Name] = a.messagesBuf
+	a.waitsBuf = newBuffer("neoharness://waits", KindWaits)
+	a.bufs[a.waitsBuf.Name] = a.waitsBuf
 	a.cmd = &cmdline{}
 	a.builtin = a.normalBindings()
 	a.runConfig(defaultsLua, "defaults.lua", true)
 	a.loadWorkspaces()
+	a.loadWaits()
 	a.showWorkspaces()
 	return a
 }
@@ -463,6 +480,7 @@ func (a *App) createWorkspace(name, pin string) {
 // buffers they showed.
 func (a *App) resync() {
 	a.loadWorkspaces()
+	a.loadWaits()
 	if a.workspace == "" {
 		return
 	}
@@ -518,6 +536,8 @@ func (a *App) apply(u model.Update) {
 		}
 		a.renderWorkspaces()
 		a.restartWhenIdle()
+	case model.UpdateWaits:
+		a.setWaits(u.Waits)
 	case model.UpdateThread:
 		switch {
 		case u.View == nil:
