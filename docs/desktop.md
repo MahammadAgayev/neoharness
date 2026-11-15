@@ -151,9 +151,10 @@ layer (Milkdown, Tiptap) add a framework over ProseMirror and change
 the text on save; here the untouched blocks must stay byte for byte.
 
 If an agent writes a new version while you edit, a line says so, and
-nothing in your edit changes. `:w` merges: the hub takes both sides when
-they changed different lines. When they changed the same lines, the save
-is refused and you take the changes one by one, as below.
+nothing in your edit changes. `:w` merges by blocks: the hub takes both
+sides when they changed different paragraphs, lists, tables or code
+blocks, or different lines of one block. When they changed the same
+lines, the save is refused and you take the changes one by one, as below.
 
 ### Docs
 
