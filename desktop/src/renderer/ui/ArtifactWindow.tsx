@@ -70,7 +70,9 @@ function DocEditor(props: {
       attributes: { class: 'md doc-page', spellcheck: 'true' },
       dispatchTransaction(tr) {
         const v = viewRef.current!
+        vimMode?.group(tr)
         v.updateState(v.state.apply(tr))
+        if (tr.selectionSet && !tr.docChanged) vimMode?.mouse(!!tr.getMeta('pointer'))
         if (tr.docChanged && !tr.getMeta('remote')) {
           const text = md.current!.markdown(v.state.doc)
           last.current = text
@@ -129,6 +131,7 @@ function DocEditor(props: {
         else if (l?.url) void window.nh.openExternal(l.url)
         return !!l
       },
+      vim: () => store.state.settings.vim,
     })
     vimMode = vim
     vimRef.current = vim

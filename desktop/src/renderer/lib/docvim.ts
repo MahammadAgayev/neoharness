@@ -3,9 +3,9 @@
 // Insert and <Esc> comes back. A block (a paragraph, a heading, a list item)
 // is Vim's line.
 
-import { redo, undo } from 'prosemirror-history'
+import { closeHistory, redo, undo } from 'prosemirror-history'
 import type { Node, ResolvedPos, Slice } from 'prosemirror-model'
-import { Selection, TextSelection } from 'prosemirror-state'
+import { Selection, TextSelection, type Transaction } from 'prosemirror-state'
 import { deleteRow, isInTable } from 'prosemirror-tables'
 import type { EditorView } from 'prosemirror-view'
 
@@ -64,12 +64,35 @@ export class DocVim {
   // goal is the column j and k keep, as Vim's curswant.
   private goal: number | null = null
   private register: { slice: Slice; lines: boolean; text: string } | null = null
+  // step counts Normal commands, so an undo takes back one command or one
+  // Insert, as in Vim; grouped is the step the last change belonged to.
+  private step = 0
+  private grouped = -1
+  private last = 0
 
   constructor(
     private view: EditorView,
     private scroller: () => HTMLElement | null,
-    private on: { mode: (m: Mode) => void; find: () => void; yank: (text: string) => void; say: (s: string) => void; open: (pos: number) => boolean },
+    private on: {
+      mode: (m: Mode) => void
+      find: () => void
+      yank: (text: string) => void
+      say: (s: string) => void
+      open: (pos: number) => boolean
+      vim: () => boolean
+    },
   ) {}
+
+  // group starts a new undo step for a change from a new Normal command or
+  // Insert; without Vim, after half a second of no typing, as a text editor.
+  group(tr: Transaction): void {
+    if (!tr.docChanged) return
+    const now = Date.now()
+    const split = this.on.vim() ? this.mode !== 'insert' || this.step !== this.grouped : now - this.last > 500
+    this.grouped = this.step
+    this.last = now
+    if (split) closeHistory(tr)
+  }
 
   busy(): boolean {
     return this.pending !== '' || this.count !== '' || this.mode === 'visual' || this.mode === 'vline'
@@ -78,12 +101,36 @@ export class DocVim {
   setMode(m: Mode): void {
     if (m === this.mode) return
     if (m === 'normal' && this.mode !== 'insert') this.collapse(this.head())
+    // Leaving Insert, the cursor goes back onto the last letter, as in Vim.
+    if (m === 'normal' && this.mode === 'insert') {
+      const b = this.block()
+      const h = this.state.selection.head
+      if (b && h > b.from && this.state.selection.empty) this.collapse(h - 1, false)
+    }
     this.mode = m
     this.pending = ''
     this.count = ''
     this.view.dom.classList.toggle('vim-normal', m !== 'insert')
     this.view.dispatch(this.view.state.tr.setMeta(fatCursorKey, m !== 'insert').setMeta(cursorAtKey, null))
     this.on.mode(m)
+  }
+
+  // mouse takes a selection made outside Vim: a drag or ⌘A in Normal mode
+  // enters Visual, as with Vim and a mouse, so d y c act on it. Vim itself
+  // never leaves a selection in Normal mode.
+  mouse(pointer: boolean): void {
+    const sel = this.state.selection
+    if ((this.mode === 'visual' || this.mode === 'vline') && pointer && sel.empty) {
+      this.cur = sel.head
+      this.setMode('normal')
+      return
+    }
+    if (!(this.mode === 'normal' || (this.mode === 'visual' && pointer)) || sel.empty || !(sel instanceof TextSelection)) return
+    // The browser's selection ends after the last letter; Vim's cursor is on it.
+    const back = sel.head < sel.anchor
+    this.anchor = back ? sel.anchor - 1 : sel.anchor
+    if (this.mode === 'normal') this.setMode('visual')
+    this.moveTo(back ? sel.head : sel.head - 1, false)
   }
 
   private get state() {
@@ -400,6 +447,7 @@ export class DocVim {
     // read a selection a click or j k made in the page.
     ;(this.view as unknown as { domObserver: { flush(): void } }).domObserver.flush()
     if (!/^(j|k|<Down>|<Up>|<CR>|[0-9])$/.test(key)) this.goal = null
+    if (this.mode !== 'insert' || key === '<Esc>') this.step++
     if (this.mode === 'insert') {
       if (key === '<Esc>') {
         this.setMode('normal')

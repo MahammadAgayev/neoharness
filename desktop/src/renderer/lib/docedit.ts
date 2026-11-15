@@ -84,7 +84,8 @@ const backspace: Command = (state, dispatch) => {
 
 export function editorPlugins(leave: () => void): Plugin[] {
   return [
-    history(),
+    // DocVim.group starts each undo step, by command or by time.
+    history({ newGroupDelay: Infinity }),
     rules,
     keymap({
       Escape: () => {
