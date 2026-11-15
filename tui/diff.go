@@ -42,8 +42,8 @@ func (e *Editor) renderDiff(avail int, th *Theme, margin []Span) []Line {
 	ops := linediff.Lines(mine, d.theirs)
 	d.hunks, d.starts = nil, nil
 	fill := Span{strings.Repeat("╱", avail), th.Separator}
-	out := []Line{{}, {Prefix: margin, Spans: []Span{{e.meta(), th.Muted}}}, {}}
-	theirs := []Line{{}, {Prefix: margin, Spans: []Span{{fmt.Sprintf("◇ v%d · by %s · read-only", d.version, d.thread), th.Muted}}}, {}}
+	out := []Line{{}, {Prefix: margin, Spans: []Span{{e.meta(), th.Fg3}}}, {}}
+	theirs := []Line{{}, {Prefix: margin, Spans: []Span{{fmt.Sprintf("◇ v%d · by %s · read-only", d.version, d.thread), th.Fg3}}}, {}}
 	rows := func(s string, src, at int, st Span) []Line {
 		var ls []Line
 		r := []rune(strings.ReplaceAll(s, "\t", " "))
@@ -63,9 +63,9 @@ func (e *Editor) renderDiff(avail int, th *Theme, margin []Span) []Line {
 	}
 	last := -1
 	pair := func(mi, ti int, changed bool) {
-		mst, tst := Span{Style: th.Text}, Span{Style: th.Subtle}
+		mst, tst := Span{Style: th.Fg}, Span{Style: th.Fg2}
 		if changed {
-			mst, tst = Span{Style: th.Gold}, Span{Style: th.Foam}
+			mst, tst = Span{Style: th.Wait}, Span{Style: th.Run}
 		}
 		var m, t []Line
 		if mi >= 0 {
@@ -125,7 +125,7 @@ func (a *App) openDiff(w *Window, refused error) {
 	b, e := w.Buf, w.Buf.Edit
 	art, text, err := a.c.Artifact(b.Workspace, b.Artifact)
 	if err != nil {
-		a.notify(refused.Error(), a.th.Love)
+		a.notify(refused.Error(), a.th.Alert)
 		return
 	}
 	tb := newBuffer(fmt.Sprintf("neoharness://%s/%s@v%d", b.Workspace, b.Artifact, art.Version), KindDiff)
@@ -139,7 +139,7 @@ func (a *App) openDiff(w *Window, refused error) {
 	a.equalAlways(true)
 	a.cur = w
 	a.toWindow(w)
-	a.notify(fmt.Sprintf("v%d changed the lines you edited · do takes its change, ]c [c move, :w saves yours", art.Version), a.th.Gold)
+	a.notify(fmt.Sprintf("v%d changed the lines you edited · do takes its change, ]c [c move, :w saves yours", art.Version), a.th.Wait)
 }
 
 // closeDiff ends diff mode: the newer version's window closes.
@@ -181,7 +181,7 @@ func (a *App) diffJump(d int) {
 	w := a.cur
 	e := diffOf(w)
 	if e == nil {
-		a.notify("not in a diff", a.th.Muted)
+		a.notify("not in a diff", a.th.Fg3)
 		return
 	}
 	a.lineCount(w)
@@ -208,7 +208,7 @@ func (a *App) diffTake() {
 	w := a.cur
 	e := diffOf(w)
 	if e == nil {
-		a.notify("not in a diff", a.th.Muted)
+		a.notify("not in a diff", a.th.Fg3)
 		return
 	}
 	l := a.line(w)
@@ -221,7 +221,7 @@ func (a *App) diffTake() {
 		}
 	}
 	if at < 0 {
-		a.notify("no change here", a.th.Muted)
+		a.notify("no change here", a.th.Fg3)
 		return
 	}
 	h := e.diff.hunks[at]

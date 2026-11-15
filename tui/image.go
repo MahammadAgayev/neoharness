@@ -163,7 +163,7 @@ func (a *App) attachImage(path string) {
 	w := a.cur
 	p := w.Buf.Prompt
 	if p == nil {
-		a.notify(":image puts a picture in the prompt of a thread or the coordinator", a.th.Muted)
+		a.notify(":image puts a picture in the prompt of a thread or the coordinator", a.th.Fg3)
 		return
 	}
 	data, err := readImage(path)
@@ -174,14 +174,14 @@ func (a *App) attachImage(path string) {
 		_, err = model.ImageType(data)
 	}
 	if err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return
 	}
 	if p.Images == nil {
 		p.Images = map[int][]byte{}
 	}
 	if len(usedImages(string(p.Text), p.Images)) >= model.MaxImages {
-		a.notify(fmt.Sprintf("a message takes at most %d images", model.MaxImages), a.th.Love)
+		a.notify(fmt.Sprintf("a message takes at most %d images", model.MaxImages), a.th.Alert)
 		return
 	}
 	// A token deleted and typed again never names another image.

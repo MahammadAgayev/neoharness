@@ -252,7 +252,7 @@ func (a *App) artifactItems() []pickItem {
 	for _, art := range a.artifacts {
 		art := art
 		items = append(items, pickItem{
-			glyph:  Span{"◇", a.th.Foam},
+			glyph:  Span{"◇", a.th.Run},
 			label:  art.Name,
 			detail: fmt.Sprintf("%s · %s · v%d", art.Title, art.Thread, art.Version),
 			run:    func() { a.openArtifact(art.Name) },
@@ -267,11 +267,11 @@ func (a *App) artifactItems() []pickItem {
 
 func (a *App) pickArtifacts() {
 	if a.workspace == "" {
-		a.notify("open a workspace first", a.th.Muted)
+		a.notify("open a workspace first", a.th.Fg3)
 		return
 	}
 	if len(a.artifacts) == 0 {
-		a.notify("no artifacts yet", a.th.Muted)
+		a.notify("no artifacts yet", a.th.Fg3)
 		return
 	}
 	items := a.artifactItems()
@@ -285,7 +285,7 @@ func (a *App) pickThreads() {
 
 func (a *App) pickLocalThreads() {
 	if a.workspace == "" {
-		a.notify("open a workspace first", a.th.Muted)
+		a.notify("open a workspace first", a.th.Fg3)
 		return
 	}
 	items := a.threadItems()
@@ -305,7 +305,7 @@ func (a *App) pickMessages() {
 		})
 	}
 	if len(items) == 0 {
-		a.notify("no messages yet", a.th.Muted)
+		a.notify("no messages yet", a.th.Fg3)
 		return
 	}
 	a.openPicker("messages", func(q string) []pickItem { return fuzzy(items, q) })
@@ -316,7 +316,7 @@ func (a *App) pickWorkspaces() {
 	for _, p := range a.workspaces {
 		name := p.Name
 		detail := displayPin(p.Pin)
-		glyph := Span{"▪", a.th.Iris}
+		glyph := Span{"▪", a.th.Accent}
 		for _, s := range []model.State{model.StateRunning, model.StateWaiting} {
 			n := p.Counts[s]
 			if p.Coordinator == s {
@@ -350,7 +350,7 @@ var skipFolders = map[string]bool{"Library": true, "node_modules": true}
 // pickFolder chooses the folder to pin a new workspace to.
 func (a *App) pickFolder(name string) {
 	items := []pickItem{{
-		glyph: Span{"○", a.th.Muted},
+		glyph: Span{"○", a.th.Fg3},
 		label: "not pinned",
 		run:   func() { a.createWorkspace(name, "") },
 	}}
@@ -368,7 +368,7 @@ func folderItems(th *Theme, run func(dir string)) []pickItem {
 	var items []pickItem
 	for _, dir := range candidateFolders() {
 		items = append(items, pickItem{
-			glyph: Span{"▪", th.Iris},
+			glyph: Span{"▪", th.Accent},
 			label: shortHome(dir),
 			run:   func() { run(dir) },
 		})
@@ -408,14 +408,14 @@ func (a *App) pickBuffers() {
 		items = append(a.threadItems(), a.artifactItems()...)
 		if a.threadsBuf != nil {
 			b := a.threadsBuf
-			items = append(items, pickItem{glyph: Span{"≡", a.th.Muted}, label: "threads", detail: b.Name, run: func() { a.showBuf(a.cur, b) },
+			items = append(items, pickItem{glyph: Span{"≡", a.th.Fg3}, label: "threads", detail: b.Name, run: func() { a.showBuf(a.cur, b) },
 				split: func(vert bool) { a.splitCur(vert, b) }})
 		}
 	}
 	for _, b := range []*Buffer{a.workspacesBuf, a.messagesBuf, a.helpBuf()} {
 		b := b
 		label := strings.TrimPrefix(b.Name, "neoharness://")
-		items = append(items, pickItem{glyph: Span{"≡", a.th.Muted}, label: label, detail: b.Name, run: func() { a.showBuf(a.cur, b) },
+		items = append(items, pickItem{glyph: Span{"≡", a.th.Fg3}, label: label, detail: b.Name, run: func() { a.showBuf(a.cur, b) },
 			split: func(vert bool) { a.splitCur(vert, b) }})
 	}
 	a.openPicker("buffers", func(q string) []pickItem { return fuzzy(items, q) })
@@ -424,7 +424,7 @@ func (a *App) pickBuffers() {
 // pickGrep searches every transcript in the workspace as the query is typed.
 func (a *App) pickGrep() {
 	if a.workspace == "" {
-		a.notify("open a workspace first", a.th.Muted)
+		a.notify("open a workspace first", a.th.Fg3)
 		return
 	}
 	a.openPicker("search transcripts", func(q string) []pickItem {

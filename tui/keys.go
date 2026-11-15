@@ -612,7 +612,7 @@ func (a *App) mark(m string, r rune) {
 			b.marks[r] = [2]int{e.Line, e.Off}
 		case m == "m":
 		case r != '`' && r != '\'' && !ok:
-			a.notify("mark not set", a.th.Muted)
+			a.notify("mark not set", a.th.Fg3)
 		default:
 			if r == '`' || r == '\'' {
 				p, ok = b.marks['\'']
@@ -642,7 +642,7 @@ func (a *App) mark(m string, r rune) {
 	}
 	p, ok := b.marks[r]
 	if !ok {
-		a.notify("mark not set", a.th.Muted)
+		a.notify("mark not set", a.th.Fg3)
 		return
 	}
 	b.marks['\''] = [2]int{w.Cur, w.Col}
@@ -798,7 +798,7 @@ func findRune(l []rune, i int, kind byte, r rune, n int, again bool) (int, bool)
 // The pane stays as it is.
 func (a *App) goCoordinator() {
 	if a.workspace == "" {
-		a.notify("open a workspace first · <leader>w", a.th.Muted)
+		a.notify("open a workspace first · <leader>w", a.th.Fg3)
 		return
 	}
 	if w := a.windowOf(model.Coordinator); w != nil {
@@ -859,13 +859,13 @@ func (a *App) outline() {
 			}
 		}
 		items = append(items, pickItem{
-			glyph: Span{"─", a.th.Muted},
+			glyph: Span{"─", a.th.Fg3},
 			label: label,
 			run:   func() { a.moveTo(w, i); w.Follow = false; center(w) },
 		})
 	}
 	if len(items) == 0 {
-		a.notify("no headings here", a.th.Muted)
+		a.notify("no headings here", a.th.Fg3)
 		return
 	}
 	a.openPicker("outline", func(q string) []pickItem { return fuzzy(items, q) })
@@ -878,14 +878,14 @@ func (a *App) openArtifactAt() {
 		a.openArtifact(name)
 		return
 	}
-	a.notify("no artifact name under the cursor", a.th.Muted)
+	a.notify("no artifact name under the cursor", a.th.Fg3)
 }
 
 // toggleTodo opens or closes the todo list above the prompt of the chat in
 // the window.
 func (a *App) toggleTodo() {
 	if !a.cur.Buf.ToggleTodo() {
-		a.notify("no open todo list here · :todo shows the whole list", a.th.Muted)
+		a.notify("no open todo list here · :todo shows the whole list", a.th.Fg3)
 	}
 }
 
@@ -895,7 +895,7 @@ func (a *App) toggleFold(w *Window) {
 		return
 	}
 	if !w.Buf.Toggle(a.line(w).Block) {
-		a.notify("no fold here", a.th.Muted)
+		a.notify("no fold here", a.th.Fg3)
 	}
 }
 
@@ -948,7 +948,7 @@ func (a *App) closeCur(force bool) {
 		// Edits no window shows are forgotten, and the agents' new versions
 		// then warn about them out of the blue.
 		if e.Dirty && !force && !a.shownElsewhere(a.cur) {
-			a.notify("no write since the last change · :w saves, :q! drops it", a.th.Gold)
+			a.notify("no write since the last change · :w saves, :q! drops it", a.th.Wait)
 			return
 		}
 		a.closeDiff(e)
@@ -967,7 +967,7 @@ func (a *App) closeCur(force bool) {
 func (a *App) quitAll(force bool) {
 	for _, b := range a.bufs {
 		if e := b.Edit; e != nil && e.Dirty && !force {
-			a.notify("unsaved changes in "+b.Artifact+" · :w saves, :qa! drops them", a.th.Gold)
+			a.notify("unsaved changes in "+b.Artifact+" · :w saves, :qa! drops them", a.th.Wait)
 			return
 		}
 	}
@@ -1063,7 +1063,7 @@ func (a *App) enter() {
 		}
 		if strings.HasPrefix(l.Item, queuedRow) {
 			if err := a.c.SendNow(a.cur.Buf.Workspace, a.cur.Buf.Thread, ""); err != nil {
-				a.notify(err.Error(), a.th.Love)
+				a.notify(err.Error(), a.th.Alert)
 			}
 			return
 		}
@@ -1103,11 +1103,11 @@ func (a *App) insert(k rune) {
 		return
 	}
 	if a.cur.Buf.Prompt == nil {
-		a.notify("this buffer is read-only; i writes in a thread or the coordinator", a.th.Muted)
+		a.notify("this buffer is read-only; i writes in a thread or the coordinator", a.th.Fg3)
 		return
 	}
 	if v := a.threads[a.cur.Buf.Thread]; v.State == model.StateResolved {
-		a.notify(v.Name+" is resolved · :reopen to write to it", a.th.Muted)
+		a.notify(v.Name+" is resolved · :reopen to write to it", a.th.Fg3)
 		return
 	}
 	if a.cur.inPrompt {
@@ -1222,7 +1222,7 @@ func (a *App) send() {
 		return
 	}
 	if err := a.c.Send(b.Workspace, b.Thread, text, images...); err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return
 	}
 	if len(images) > 0 {
@@ -1252,28 +1252,28 @@ func (a *App) answer(d model.Decision, msg string) {
 		}
 	}
 	if name == "" {
-		a.notify("no permission request or question in this window", a.th.Muted)
+		a.notify("no permission request or question in this window", a.th.Fg3)
 		return
 	}
 	v := a.threads[name]
 	if v.Permission == nil {
 		// A question takes a written answer; deny skips it.
 		if d != model.Deny {
-			a.notify("write the answer, or ␣x to skip", a.th.Muted)
+			a.notify("write the answer, or ␣x to skip", a.th.Fg3)
 			return
 		}
 		if err := a.c.Answer(a.workspace, name, v.QuestionID, model.Deny, ""); err != nil {
-			a.notify(err.Error(), a.th.Love)
+			a.notify(err.Error(), a.th.Alert)
 			return
 		}
-		a.notify("skipped · "+name, a.th.Pine)
+		a.notify("skipped · "+name, a.th.Done)
 		return
 	}
 	if err := a.c.Answer(a.workspace, name, v.Permission.ID, d, msg); err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return
 	}
-	a.notify(string(d)+" · "+v.Permission.Tool+" · "+name, a.th.Pine)
+	a.notify(string(d)+" · "+v.Permission.Tool+" · "+name, a.th.Done)
 }
 
 // --- visual and yank ---
@@ -1374,9 +1374,9 @@ func (a *App) putPrompt() {
 func (a *App) clip(s string, n int) {
 	a.s.SetClipboard([]byte(s))
 	if n == 1 {
-		a.notify("yanked 1 line", a.th.Subtle)
+		a.notify("yanked 1 line", a.th.Fg2)
 	} else {
-		a.notify(fmt.Sprintf("yanked %d lines", n), a.th.Subtle)
+		a.notify(fmt.Sprintf("yanked %d lines", n), a.th.Fg2)
 	}
 }
 

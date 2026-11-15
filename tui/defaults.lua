@@ -80,20 +80,22 @@ map("n", "<C-j>", "<C-w>j")
 map("n", "<C-k>", "<C-w>k")
 map("n", "<C-l>", "<C-w>l")
 
--- Colors: Rose Pine Moon (https://rosepinetheme.com/palette). The
--- background stays the terminal's, except the cursor line and selection.
-hl("Text", { fg = "#e0def4" })
-hl("Subtle", { fg = "#908caa" })
-hl("Muted", { fg = "#6e6a86" })
-hl("Love", { fg = "#eb6f92" })                         -- errors only
-hl("Gold", { fg = "#f6c177" })
-hl("Rose", { fg = "#ea9a97" })
-hl("Pine", { fg = "#3e8fb0" })
-hl("Foam", { fg = "#9ccfd8" })
-hl("Iris", { fg = "#c4a7e7" })                         -- where you type
-hl("Code", { fg = "#ea9a97" })
-hl("Separator", { fg = "#393552" })
-hl("CursorLine", { bg = "#2a283e" })
-hl("Selection", { bg = "#44415a" })
-hl("Search", { bg = "#4d4143" })                       -- matches while you type / or ?
-hl("CurSearch", { fg = "#232136", bg = "#f6c177" })    -- the one the cursor goes to
+-- Colors: Rose Pine Moon (https://rosepinetheme.com/palette), by role, with
+-- the brighter Text, Subtle, Muted and Pine the app uses, so each reads at its
+-- contrast. ctermfg and ctermbg are for 256-color terminals. The background
+-- stays the terminal's, except the cursor line, selection and search.
+hl("Fg", { fg = "#ebe9f8", ctermfg = 255 })                -- what you read
+hl("Fg2", { fg = "#afacc2", ctermfg = 145 })               -- what you scan
+hl("Fg3", { fg = "#9491a9", ctermfg = 246 })               -- meta
+hl("Accent", { fg = "#c4a7e7", ctermfg = 183 })            -- where you type
+hl("Wait", { fg = "#f6c177", ctermfg = 179 })              -- waits for you
+hl("Alert", { fg = "#eb6f92", ctermfg = 204 })             -- errors only
+hl("Run", { fg = "#9ccfd8", ctermfg = 116 })
+hl("Done", { fg = "#559cb9", ctermfg = 74 })
+hl("Peer", { fg = "#ea9a97", ctermfg = 181 })              -- another session's words
+hl("Code", { fg = "#ea9a97", ctermfg = 181 })
+hl("Separator", { fg = "#393552", ctermfg = 237 })
+hl("CursorLine", { bg = "#2a283e", ctermbg = 236 })
+hl("Selection", { bg = "#44415a", ctermbg = 238 })
+hl("Search", { bg = "#4d4143", ctermbg = 94 })             -- matches while you type / or ?
+hl("CurSearch", { fg = "#232136", bg = "#f6c177", ctermfg = 235, ctermbg = 179 }) -- the one the cursor goes to

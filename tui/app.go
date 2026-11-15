@@ -282,7 +282,7 @@ func newApp(s tcell.Screen, c Client) *App {
 	a := &App{
 		s:         newCanvas(s),
 		c:         c,
-		th:        newTheme(),
+		th:        newTheme(s.Colors()),
 		openURL:   func(open, url string) error { return exec.Command(open, url).Start() },
 		bufs:      map[string]*Buffer{},
 		threads:   map[string]model.ThreadView{},
@@ -295,7 +295,7 @@ func newApp(s tcell.Screen, c Client) *App {
 	}
 	a.workspacesBuf = newBuffer("neoharness://workspaces", KindWorkspaces)
 	a.messagesBuf = newBuffer("neoharness://messages", KindMessages)
-	a.messagesBuf.SetLines([]Line{{Prefix: []Span{{" ", a.th.Text}}, Spans: []Span{{"no messages yet", a.th.Muted}}}})
+	a.messagesBuf.SetLines([]Line{{Prefix: []Span{{" ", a.th.Fg}}, Spans: []Span{{"no messages yet", a.th.Fg3}}}})
 	a.bufs[a.workspacesBuf.Name] = a.workspacesBuf
 	a.bufs[a.messagesBuf.Name] = a.messagesBuf
 	a.cmd = &cmdline{}
@@ -340,7 +340,7 @@ func (a *App) handle(ev tcell.Event) {
 		a.apply(ev.u)
 	case evResync:
 		if a.offline {
-			a.notify("reconnected to the hub", a.th.Foam)
+			a.notify("reconnected to the hub", a.th.Run)
 		}
 		a.offline = false
 		a.resync()
@@ -349,14 +349,14 @@ func (a *App) handle(ev tcell.Event) {
 		if !a.offline {
 			a.offline = true
 			if ev.stopped {
-				a.notify("the hub stopped; neoharness hub start brings it back", a.th.Love)
+				a.notify("the hub stopped; neoharness hub start brings it back", a.th.Alert)
 			} else {
-				a.notify("lost the hub; reconnecting…", a.th.Love)
+				a.notify("lost the hub; reconnecting…", a.th.Alert)
 			}
 		}
 	case evRedraw:
 	case evError:
-		a.notify(ev.text, a.th.Love)
+		a.notify(ev.text, a.th.Alert)
 	case evTick:
 		a.ticking = false
 		a.spin++
@@ -412,7 +412,7 @@ func (a *App) listen(ctx context.Context) {
 func (a *App) loadWorkspaces() {
 	ps, err := a.c.Workspaces()
 	if err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return
 	}
 	a.workspaces = ps
@@ -428,7 +428,7 @@ func (a *App) createWorkspace(name, pin string) {
 		}
 	}
 	if err := a.c.CreateWorkspace(name, pin); err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return
 	}
 	a.loadWorkspaces()
@@ -445,7 +445,7 @@ func (a *App) resync() {
 	}
 	vs, err := a.c.Threads(a.workspace)
 	if err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return
 	}
 	a.threads = map[string]model.ThreadView{}
@@ -457,7 +457,7 @@ func (a *App) resync() {
 	}
 	a.renderThreads()
 	if a.artifacts, err = a.c.Artifacts(a.workspace); err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 	}
 	for _, b := range a.bufs {
 		if b.Kind == KindArtifact && b.Workspace == a.workspace {
@@ -470,7 +470,7 @@ func (a *App) loadHistory(v model.ThreadView) {
 	b := a.chat(v.Name)
 	evs, err := a.c.Events(a.workspace, v.Name, historyTail)
 	if err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return
 	}
 	b.blocks = nil
@@ -508,7 +508,7 @@ func (a *App) apply(u model.Update) {
 			a.showNotice(u.Workspace, *u.Event)
 		}
 		if u.Event != nil && u.Event.Kind == model.EventError {
-			a.toastIn(u.Workspace, u.Thread, Span{"✗", a.th.Love}, u.Event.Text, a.th.Love, 8*time.Second)
+			a.toastIn(u.Workspace, u.Thread, Span{"✗", a.th.Alert}, u.Event.Text, a.th.Alert, 8*time.Second)
 		}
 		if u.Workspace == a.workspace && u.Event != nil {
 			a.chat(u.Thread).AddEvent(*u.Event)
@@ -524,7 +524,7 @@ func (a *App) apply(u model.Update) {
 		if b, ok := a.bufs[artifactName(a.workspace, u.Artifact.Name)]; ok {
 			a.loadArtifact(b)
 			if e := b.Edit; e != nil && e.Dirty && u.Artifact.Version != e.Base {
-				a.notify(fmt.Sprintf("%s wrote v%d while you edit · :w merges it, :e! takes it", u.Artifact.Thread, u.Artifact.Version), a.th.Gold)
+				a.notify(fmt.Sprintf("%s wrote v%d while you edit · :w merges it, :e! takes it", u.Artifact.Thread, u.Artifact.Version), a.th.Wait)
 			}
 		}
 	case model.UpdateDeleted:
@@ -555,7 +555,7 @@ func (a *App) dropThread(name string) {
 		w.forget(b)
 	}
 	a.renderThreads()
-	a.notify(name+" deleted", a.th.Muted)
+	a.notify(name+" deleted", a.th.Fg3)
 }
 
 // setFolder changes the open workspace's folder. A relative path is made
@@ -567,10 +567,10 @@ func (a *App) setFolder(dir string) {
 		}
 	}
 	if err := a.c.SetFolder(a.workspace, dir); err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return
 	}
-	a.notify(a.workspace+" now works in "+shortHome(dir), a.th.Pine)
+	a.notify(a.workspace+" now works in "+shortHome(dir), a.th.Done)
 }
 
 // localOptions are the options :setlocal sets in a workspace: the agents its
@@ -602,23 +602,23 @@ func (a *App) setLocal(args []string) {
 			name = strings.TrimSuffix(name, "?")
 			val, ok := values[name]
 			if !ok {
-				a.notify("no option "+name+"; the options are "+strings.Join(localOptions, ", "), a.th.Love)
+				a.notify("no option "+name+"; the options are "+strings.Join(localOptions, ", "), a.th.Alert)
 				return
 			}
 			shown = append(shown, name+"="+val)
 			continue
 		}
 		if err := a.c.SetLocal(a.workspace, name, agentName); err != nil {
-			a.notify(err.Error(), a.th.Love)
+			a.notify(err.Error(), a.th.Alert)
 			return
 		}
 		set = append(set, w)
 	}
 	switch {
 	case len(shown) > 0:
-		a.notify(strings.Join(shown, "  "), a.th.Text)
+		a.notify(strings.Join(shown, "  "), a.th.Fg)
 	case len(set) > 0:
-		a.notify(a.workspace+": "+strings.Join(set, " "), a.th.Pine)
+		a.notify(a.workspace+": "+strings.Join(set, " "), a.th.Done)
 	}
 }
 
@@ -635,7 +635,7 @@ func (a *App) dropWorkspace(name string) {
 		a.threadsBuf = nil
 		a.showWorkspaces()
 	}
-	a.notify(name+" deleted · :restore "+name+" brings it back", a.th.Muted)
+	a.notify(name+" deleted · :restore "+name+" brings it back", a.th.Fg3)
 }
 
 // restoreWorkspace is :restore. Without a name it lists what can come back.
@@ -644,28 +644,28 @@ func (a *App) restoreWorkspace(name string) {
 		names, err := a.c.DeletedWorkspaces()
 		switch {
 		case err != nil:
-			a.notify(err.Error(), a.th.Love)
+			a.notify(err.Error(), a.th.Alert)
 		case len(names) == 0:
-			a.notify("no deleted workspaces", a.th.Muted)
+			a.notify("no deleted workspaces", a.th.Fg3)
 		default:
-			a.notify("deleted: "+strings.Join(names, ", ")+" · :restore <name>", a.th.Muted)
+			a.notify("deleted: "+strings.Join(names, ", ")+" · :restore <name>", a.th.Fg3)
 		}
 		return
 	}
 	if err := a.c.RestoreWorkspace(name); err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return
 	}
 	a.loadWorkspaces()
-	a.notify(name+" restored", a.th.Subtle)
+	a.notify(name+" restored", a.th.Fg2)
 }
 
 // askDeleteWorkspace asks before hiding a workspace and stopping its turns.
 func (a *App) askDeleteWorkspace(name string) {
-	a.notice, a.noticeSt = "delete the workspace "+name+" and stop its threads? y/n", a.th.Gold
+	a.notice, a.noticeSt = "delete the workspace "+name+" and stop its threads? y/n", a.th.Wait
 	a.confirm = func() {
 		if err := a.c.DeleteWorkspace(name); err != nil {
-			a.notify(err.Error(), a.th.Love)
+			a.notify(err.Error(), a.th.Alert)
 		}
 	}
 }
@@ -673,13 +673,13 @@ func (a *App) askDeleteWorkspace(name string) {
 // askDelete asks before deleting a thread: it cannot be undone.
 func (a *App) askDelete(name string) {
 	if name == model.Coordinator {
-		a.notify("the coordinator cannot be deleted", a.th.Muted)
+		a.notify("the coordinator cannot be deleted", a.th.Fg3)
 		return
 	}
-	a.notice, a.noticeSt = "delete "+name+" and its transcript? y/n", a.th.Gold
+	a.notice, a.noticeSt = "delete "+name+" and its transcript? y/n", a.th.Wait
 	a.confirm = func() {
 		if err := a.c.Delete(a.workspace, name); err != nil {
-			a.notify(err.Error(), a.th.Love)
+			a.notify(err.Error(), a.th.Alert)
 		}
 	}
 }
@@ -772,7 +772,7 @@ func (a *App) showWorkspaces() {
 
 func (a *App) openWorkspace(name string) {
 	if !slices.ContainsFunc(a.workspaces, func(p model.WorkspaceView) bool { return p.Name == name }) {
-		a.notify("no workspace "+name, a.th.Love)
+		a.notify("no workspace "+name, a.th.Alert)
 		return
 	}
 	a.saveLayout()
@@ -827,7 +827,7 @@ func (a *App) knownThread(name string) bool {
 		return false
 	}
 	if _, ok := a.threads[name]; !ok {
-		a.notify("no thread "+name, a.th.Love)
+		a.notify("no thread "+name, a.th.Alert)
 		return false
 	}
 	return true
@@ -983,7 +983,7 @@ func (a *App) linkify(spans []Span) []Span {
 			if m.start < at {
 				continue
 			}
-			out = append(out, Span{sp.Text[at:m.start], sp.Style}, Span{sp.Text[m.start:m.end], a.th.Foam.Underline(true)})
+			out = append(out, Span{sp.Text[at:m.start], sp.Style}, Span{sp.Text[m.start:m.end], a.th.Run.Underline(true)})
 			at = m.end
 		}
 		out = append(out, Span{sp.Text[at:], sp.Style})
@@ -1113,7 +1113,7 @@ func (a *App) linkAt(w *Window) string {
 func (a *App) openLink() {
 	url := a.linkAt(a.cur)
 	if url == "" {
-		a.notify("no link under the cursor", a.th.Muted)
+		a.notify("no link under the cursor", a.th.Fg3)
 		return
 	}
 	open := "xdg-open"
@@ -1124,17 +1124,17 @@ func (a *App) openLink() {
 		open = "explorer"
 	}
 	if err := a.openURL(open, url); err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return
 	}
-	a.notify("opened "+url, a.th.Subtle)
+	a.notify("opened "+url, a.th.Fg2)
 }
 
 // loadArtifact reads an artifact's text into its buffer.
 func (a *App) loadArtifact(b *Buffer) (model.Artifact, bool) {
 	art, text, err := a.c.Artifact(b.Workspace, b.Artifact)
 	if err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return art, false
 	}
 	b.SetDoc(art, text)
@@ -1147,9 +1147,9 @@ func (a *App) renderWorkspaces() {
 	th := a.th
 	lines := []Line{
 		{},
-		{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{"neoharness", th.Iris.Bold(true)}}},
+		{Prefix: []Span{{"  ", th.Fg}}, Spans: []Span{{"neoharness", th.Accent.Bold(true)}}},
 		{},
-		{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{"workspaces", th.Muted}}},
+		{Prefix: []Span{{"  ", th.Fg}}, Spans: []Span{{"workspaces", th.Fg3}}},
 	}
 	nameW, pinW := 8, 10
 	for _, p := range a.workspaces {
@@ -1159,14 +1159,14 @@ func (a *App) renderWorkspaces() {
 	pinW = min(pinW, 40)
 	for _, p := range a.workspaces {
 		spans := []Span{
-			{pad(p.Name, nameW+3), th.Text},
-			{pad(truncate(displayPin(p.Pin), pinW), pinW+3), th.Muted},
+			{pad(p.Name, nameW+3), th.Fg},
+			{pad(truncate(displayPin(p.Pin), pinW), pinW+3), th.Fg3},
 		}
 		spans = append(spans, countSpans(p.Counts, th)...)
-		lines = append(lines, Line{Prefix: []Span{{"  ", th.Text}}, Spans: spans, Item: p.Name})
+		lines = append(lines, Line{Prefix: []Span{{"  ", th.Fg}}, Spans: spans, Item: p.Name})
 	}
 	if len(a.workspaces) == 0 {
-		lines = append(lines, Line{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{":new <name> [folder]", th.Muted}}})
+		lines = append(lines, Line{Prefix: []Span{{"  ", th.Fg}}, Spans: []Span{{":new <name> [folder]", th.Fg3}}})
 	}
 	a.workspacesBuf.SetLines(lines)
 }
@@ -1200,7 +1200,7 @@ func countSpans(c map[model.State]int, th *Theme) []Span {
 		if idle > 0 {
 			label = "all idle"
 		}
-		out = append(out, Span{"○ " + label, th.Muted})
+		out = append(out, Span{"○ " + label, th.Fg3})
 	}
 	return out
 }
@@ -1237,15 +1237,15 @@ func (a *App) renderThreads() {
 	}
 	row := func(n string) Line {
 		v := a.threads[n]
-		nameSt, info, infoSt := th.Subtle, v.Reply, th.Muted
+		nameSt, info, infoSt := th.Fg2, v.Reply, th.Fg3
 		if shown[n] {
-			nameSt = th.Text.Bold(true)
+			nameSt = th.Fg.Bold(true)
 		}
 		switch v.State {
 		case model.StateResolved:
-			nameSt = th.Muted
+			nameSt = th.Fg3
 		case model.StateWaiting:
-			infoSt = th.Gold
+			infoSt = th.Wait
 			switch {
 			case v.Permission != nil:
 				info = "permission · " + v.Permission.Tool
@@ -1265,7 +1265,7 @@ func (a *App) renderThreads() {
 			info = fmt.Sprintf("+%d queued  %s", v.Queued, info)
 		}
 		return Line{
-			Prefix: []Span{{" ", th.Text}},
+			Prefix: []Span{{" ", th.Fg}},
 			Spans: []Span{
 				{stateGlyph(v.State) + " ", th.state(v.State)},
 				{pad(n, nameW+2), nameSt},
@@ -1287,7 +1287,7 @@ func (a *App) renderThreads() {
 		if len(lines) > 0 {
 			lines = append(lines, Line{})
 		}
-		lines = append(lines, Line{Prefix: []Span{{" ", th.Text}}, Spans: []Span{{fmt.Sprintf("%s · %d", stateLabel(s), len(groups[s])), th.Muted}}})
+		lines = append(lines, Line{Prefix: []Span{{" ", th.Fg}}, Spans: []Span{{fmt.Sprintf("%s · %d", stateLabel(s), len(groups[s])), th.Fg3}}})
 		for _, n := range groups[s] {
 			lines = append(lines, row(n))
 		}
@@ -1301,8 +1301,8 @@ func (a *App) renderThreads() {
 			lines = append(lines, Line{})
 		}
 		lines = append(lines, Line{
-			Prefix: []Span{{" ", th.Text}},
-			Spans:  []Span{{fmt.Sprintf("%s %d resolved", fold, len(done)), th.Muted}},
+			Prefix: []Span{{" ", th.Fg}},
+			Spans:  []Span{{fmt.Sprintf("%s %d resolved", fold, len(done)), th.Fg3}},
 			Item:   resolvedRow,
 		})
 		if a.showResolved {
@@ -1312,7 +1312,7 @@ func (a *App) renderThreads() {
 		}
 	}
 	if len(lines) == 0 {
-		lines = []Line{{Prefix: []Span{{" ", th.Text}}, Spans: []Span{{"no threads yet", th.Muted}}}}
+		lines = []Line{{Prefix: []Span{{" ", th.Fg}}, Spans: []Span{{"no threads yet", th.Fg3}}}}
 	}
 	a.threadsBuf.SetLines(lines)
 }
@@ -1344,7 +1344,7 @@ func (a *App) notify(text string, st tcell.Style) {
 // logMessage adds a line to :messages without showing it on the bottom line.
 func (a *App) logMessage(text string, st tcell.Style) {
 	a.messages = append(a.messages, Line{
-		Prefix: []Span{{" " + time.Now().Format("15:04:05") + "  ", a.th.Muted}},
+		Prefix: []Span{{" " + time.Now().Format("15:04:05") + "  ", a.th.Fg3}},
 		Spans:  []Span{{text, st}},
 	})
 	a.messagesBuf.SetLines(a.messages)
@@ -1401,9 +1401,9 @@ func (a *App) openRecap() {
 	v, ok := a.threads[b.Thread]
 	switch {
 	case b.Kind != KindChat || !ok || v.Recap == "":
-		a.notify("no recap yet", a.th.Muted)
+		a.notify("no recap yet", a.th.Fg3)
 	case v.State == model.StateRunning:
-		a.notify("no recap while a turn runs", a.th.Muted)
+		a.notify("no recap while a turn runs", a.th.Fg3)
 	default:
 		a.recapOpen[a.recapKey(b.Thread)] = true
 	}

@@ -18,7 +18,7 @@ func renderJSON(text string, w int, th *Theme, prefix []Span) ([]Line, bool) {
 	dec.UseNumber()
 	var out []Line
 	indent := func(depth int) []Span {
-		return append(clone(prefix), Span{strings.Repeat("  ", depth), th.Text})
+		return append(clone(prefix), Span{strings.Repeat("  ", depth), th.Fg})
 	}
 	var value func(key []Span, depth int)
 	value = func(key []Span, depth int) {
@@ -36,9 +36,9 @@ func renderJSON(text string, w int, th *Theme, prefix []Span) ([]Line, bool) {
 				var k []Span
 				if v == '{' {
 					name, _ := dec.Token()
-					k = []Span{{name.(string) + ":", th.Foam}}
+					k = []Span{{name.(string) + ":", th.Run}}
 				} else {
-					k = []Span{{"-", th.Muted}}
+					k = []Span{{"-", th.Fg3}}
 				}
 				value(k, depth)
 			}
@@ -50,16 +50,16 @@ func renderJSON(text string, w int, th *Theme, prefix []Span) ([]Line, bool) {
 					// wrap drops leading spaces; the line's own indent goes
 					// into the prefix.
 					body := strings.TrimLeft(l, " ")
-					in := append(indent(depth+1), Span{l[:len(l)-len(body)], th.Text})
-					out = append(out, wrap([]Span{{body, th.Text}}, w, in, in)...)
+					in := append(indent(depth+1), Span{l[:len(l)-len(body)], th.Fg})
+					out = append(out, wrap([]Span{{body, th.Fg}}, w, in, in)...)
 				}
 				return
 			}
-			out = append(out, wrap(append(clone(key), Span{" " + v, th.Text}), w, indent(depth), indent(depth+1))...)
+			out = append(out, wrap(append(clone(key), Span{" " + v, th.Fg}), w, indent(depth), indent(depth+1))...)
 		default:
 			var b bytes.Buffer
 			_ = json.NewEncoder(&b).Encode(v)
-			out = append(out, wrap(append(clone(key), Span{" " + strings.TrimSpace(b.String()), th.Iris}), w, indent(depth), indent(depth+1))...)
+			out = append(out, wrap(append(clone(key), Span{" " + strings.TrimSpace(b.String()), th.Accent}), w, indent(depth), indent(depth+1))...)
 		}
 	}
 	value(nil, 0)

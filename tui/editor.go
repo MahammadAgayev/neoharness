@@ -703,7 +703,7 @@ func (e *Editor) find(re *regexp.Regexp, d int) (pos, bool) {
 // rendered, or raw with headings in their colors. Headings are marked for
 // the outline rail. A meta line about the artifact is on top.
 func (e *Editor) render(w int, th *Theme) []Line {
-	margin := []Span{{"  ", th.Text}}
+	margin := []Span{{"  ", th.Fg}}
 	w = min(w, docWidth+width(spansText(margin)))
 	if e.cacheW == w && e.cacheR == e.rev && e.cacheShown == [2]int{e.shown, e.shownTo} {
 		return e.cache
@@ -723,15 +723,15 @@ func (e *Editor) render(w int, th *Theme) []Line {
 		}
 		e.deco, e.decoW, e.decoR = decorate(e.Src, w, th, e.memo), w, e.rev
 	}
-	out := []Line{{}, {Prefix: margin, Spans: []Span{{e.meta(), th.Muted}}}, {}}
+	out := []Line{{}, {Prefix: margin, Spans: []Span{{e.meta(), th.Fg3}}}, {}}
 	fence := false
 	for i, l := range e.Src {
-		st, head := th.Text, 0
+		st, head := th.Fg, 0
 		s := string(l)
 		switch {
 		case strings.HasPrefix(s, "```"):
 			fence = !fence
-			st = th.Muted
+			st = th.Fg3
 		case !fence && headingLevel(s) > 0:
 			head = headingLevel(s)
 			st = headingStyle(th, head)
@@ -1072,7 +1072,7 @@ func (a *App) saveEdit(force bool) bool {
 		return false
 	}
 	if err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return false
 	}
 	a.closeDiff(e)
@@ -1093,14 +1093,14 @@ func (a *App) saveEdit(force bool) bool {
 	e.cacheW = 0
 	a.loadArtifact(b)
 	if !saved {
-		a.notify("no changes", a.th.Muted)
+		a.notify("no changes", a.th.Fg3)
 		return true
 	}
 	what := "saved"
 	if merged {
 		what = "merged and saved"
 	}
-	a.notify(fmt.Sprintf("%s %s v%d · %s sees it with your next message", what, b.Artifact, art.Version, art.Thread), a.th.Subtle)
+	a.notify(fmt.Sprintf("%s %s v%d · %s sees it with your next message", what, b.Artifact, art.Version, art.Thread), a.th.Fg2)
 	return true
 }
 
@@ -1130,7 +1130,7 @@ func (a *App) takeBack(w *Window) bool {
 		return false
 	}
 	if err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return true
 	}
 	b.Prompt.Text, b.Prompt.ed = []rune(text), nil
@@ -1249,12 +1249,12 @@ func (a *App) editOp(e *Editor, k string, n int) (insert, ok bool) {
 	case "u":
 		a.noRepeat = true
 		if !e.step(&e.undo, &e.redo) {
-			a.notify("already at oldest change", a.th.Muted)
+			a.notify("already at oldest change", a.th.Fg3)
 		}
 	case "<C-r>":
 		a.noRepeat = true
 		if !e.step(&e.redo, &e.undo) {
-			a.notify("already at newest change", a.th.Muted)
+			a.notify("already at newest change", a.th.Fg3)
 		}
 	default:
 		op, motion := k[0], k[1:]

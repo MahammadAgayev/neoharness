@@ -21,7 +21,7 @@ func (a *App) checkVersion() {
 	}
 	a.newer = disk
 	if a.running() > 0 {
-		a.notify("this neoharness is newer than the hub; it restarts when the turns end", a.th.Muted)
+		a.notify("this neoharness is newer than the hub; it restarts when the turns end", a.th.Fg3)
 	}
 	a.restartWhenIdle()
 }
@@ -48,7 +48,7 @@ func (a *App) restartWhenIdle() {
 // restartHub restarts the hub in the background; the update stream comes
 // back by itself once the new hub answers.
 func (a *App) restartHub(why string) {
-	a.notify(why, a.th.Muted)
+	a.notify(why, a.th.Fg3)
 	go func() {
 		if err := a.hub.Restart(); err != nil {
 			_ = a.s.PostEvent(evError{"the hub did not restart: " + err.Error()})
@@ -59,7 +59,7 @@ func (a *App) restartHub(why string) {
 // askRestartHub restarts the hub, after a yes when turns run: they stop.
 func (a *App) askRestartHub() {
 	if a.hub.Restart == nil {
-		a.notify("this neoharness cannot restart the hub", a.th.Love)
+		a.notify("this neoharness cannot restart the hub", a.th.Alert)
 		return
 	}
 	n := a.running()
@@ -71,6 +71,6 @@ func (a *App) askRestartHub() {
 	if n == 1 {
 		turns = "the running turn stops"
 	}
-	a.notice, a.noticeSt = turns+" with the hub. restart it? y/n", a.th.Gold
+	a.notice, a.noticeSt = turns+" with the hub. restart it? y/n", a.th.Wait
 	a.confirm = func() { a.restartHub("restarting the hub") }
 }

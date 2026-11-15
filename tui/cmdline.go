@@ -318,7 +318,7 @@ func (a *App) exec(line string) {
 	}
 	needWorkspace := func() bool {
 		if a.workspace == "" {
-			a.notify("open a workspace first · <leader>w", a.th.Muted)
+			a.notify("open a workspace first · <leader>w", a.th.Fg3)
 			return false
 		}
 		return true
@@ -336,9 +336,9 @@ func (a *App) exec(line string) {
 	case "e", "edit":
 		switch {
 		case edit == nil:
-			a.notify("only an artifact can be edited", a.th.Muted)
+			a.notify("only an artifact can be edited", a.th.Fg3)
 		case edit.Dirty:
-			a.notify("no write since the last change · :w saves, :e! drops it", a.th.Gold)
+			a.notify("no write since the last change · :w saves, :e! drops it", a.th.Wait)
 		default:
 			a.dropEdit()
 		}
@@ -352,14 +352,14 @@ func (a *App) exec(line string) {
 		}
 	case "w", "write", "w!", "write!":
 		if edit == nil {
-			a.notify("nothing to write here", a.th.Muted)
+			a.notify("nothing to write here", a.th.Fg3)
 			return
 		}
 		a.saveEdit(strings.HasSuffix(cmd, "!"))
 	case "wq", "x", "xit":
 		switch {
 		case edit == nil:
-			a.notify("nothing to write here", a.th.Muted)
+			a.notify("nothing to write here", a.th.Fg3)
 		case a.saveEdit(false):
 			a.closeCur(false)
 		}
@@ -385,7 +385,7 @@ func (a *App) exec(line string) {
 		a.openWorkspace(arg(0))
 	case "new":
 		if arg(0) == "" {
-			a.notify("usage: :new <name> [folder]", a.th.Muted)
+			a.notify("usage: :new <name> [folder]", a.th.Fg3)
 			return
 		}
 		if arg(1) == "" {
@@ -413,11 +413,11 @@ func (a *App) exec(line string) {
 			return
 		}
 		if arg(0) == "" {
-			a.notify("usage: :open <name> [folder|host:dir]", a.th.Muted)
+			a.notify("usage: :open <name> [folder|host:dir]", a.th.Fg3)
 			return
 		}
 		if err := a.c.OpenThread(a.workspace, arg(0), "", arg(1)); err != nil {
-			a.notify(err.Error(), a.th.Love)
+			a.notify(err.Error(), a.th.Alert)
 			return
 		}
 		// The view arrives over the update stream; make the thread known now
@@ -434,14 +434,14 @@ func (a *App) exec(line string) {
 			return
 		}
 		if err := a.c.Resolve(a.workspace, target()); err != nil {
-			a.notify(err.Error(), a.th.Love)
+			a.notify(err.Error(), a.th.Alert)
 		}
 	case "reopen":
 		if !needWorkspace() {
 			return
 		}
 		if err := a.c.Reopen(a.workspace, target()); err != nil {
-			a.notify(err.Error(), a.th.Love)
+			a.notify(err.Error(), a.th.Alert)
 		}
 	case "b", "buffer", "buf":
 		if arg(0) == "" {
@@ -451,7 +451,7 @@ func (a *App) exec(line string) {
 		if b := a.findBuffer(arg(0)); b != nil {
 			a.showBuf(a.cur, b)
 		} else {
-			a.notify("no buffer "+arg(0), a.th.Love)
+			a.notify("no buffer "+arg(0), a.th.Alert)
 		}
 	case "ls", "buffers":
 		a.pickBuffers()
@@ -470,7 +470,7 @@ func (a *App) exec(line string) {
 		a.attachImage(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), cmd)))
 	case "hub":
 		if arg(0) != "restart" {
-			a.notify("the hub commands here: :hub restart", a.th.Love)
+			a.notify("the hub commands here: :hub restart", a.th.Alert)
 			break
 		}
 		a.askRestartHub()
@@ -478,7 +478,7 @@ func (a *App) exec(line string) {
 		var b *Buffer
 		if arg(0) != "" {
 			if b = a.findBuffer(arg(0)); b == nil {
-				a.notify("no buffer "+arg(0), a.th.Love)
+				a.notify("no buffer "+arg(0), a.th.Alert)
 				return
 			}
 		}
@@ -494,7 +494,7 @@ func (a *App) exec(line string) {
 	case "help", "h":
 		a.showHelp()
 	default:
-		a.notify("not a command: "+cmd, a.th.Love)
+		a.notify("not a command: "+cmd, a.th.Alert)
 	}
 }
 
@@ -550,7 +550,7 @@ func (a *App) seek(q string, d int, report bool) bool {
 		p, ok := e.find(re, d)
 		if !ok {
 			if report {
-				a.notify("pattern not found: "+q, a.th.Love)
+				a.notify("pattern not found: "+q, a.th.Alert)
 			}
 			return false
 		}
@@ -596,7 +596,7 @@ func (a *App) seek(q string, d int, report bool) bool {
 		}
 	}
 	if report {
-		a.notify("pattern not found: "+q, a.th.Love)
+		a.notify("pattern not found: "+q, a.th.Alert)
 	}
 	return false
 }
@@ -623,7 +623,7 @@ func (a *App) searchCount(re *regexp.Regexp, rows []string, row, at int, wrapped
 	if wrapped {
 		w = "W "
 	}
-	a.notify(fmt.Sprintf("%s%s  %s[%d/%d]", dir, a.search, w, n, total), a.th.Subtle)
+	a.notify(fmt.Sprintf("%s%s  %s[%d/%d]", dir, a.search, w, n, total), a.th.Fg2)
 }
 
 // showHelp opens help in a split above, as Neovim's :help does, so :q
@@ -654,7 +654,7 @@ func (a *App) helpBuf() *Buffer {
 	row := func(k, d string) helpLine { return helpLine{key: k, what: d} }
 	lines := []helpLine{
 		{},
-		{l: Line{Prefix: []Span{{"  ", th.Text}}, Spans: []Span{{"neoharness", th.Iris.Bold(true)}, {"  keys", th.Subtle}}}},
+		{l: Line{Prefix: []Span{{"  ", th.Fg}}, Spans: []Span{{"neoharness", th.Accent.Bold(true)}, {"  keys", th.Fg2}}}},
 		{},
 		sec("write"),
 		row("i a o", "write to the thread in this window"),
@@ -742,7 +742,7 @@ func (a *App) helpBuf() *Buffer {
 		row("neoharness.o.compactwarn", "past this context %, the status line says /compact; 0 never"),
 		row("neoharness.keymap.set / del", "n x i maps: keys, an ex command (:threads<CR>), a function"),
 		row("<Plug>(neoharness-…)", "threads grep yank dismiss coordinator: actions with no ex command"),
-		row("neoharness.hl", "a color: Text Subtle Muted Iris Foam Gold Rose Pine Love Code …"),
+		row("neoharness.hl", "a color: Fg Fg2 Fg3 Accent Wait Alert Run Done Peer Code …; ctermfg for 256 colors"),
 		row("neoharness.cmd", "run a command"),
 		row("require(\"neoharness\").setup", "hub settings; coordinator = and threads = name agents of require(\"neoharness.agents\").setup"),
 		row("notify = \"coordinator\"", "in the hub setup: the coordinator decides what reaches you, not every thread"),

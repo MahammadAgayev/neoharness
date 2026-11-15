@@ -53,7 +53,7 @@ func (a *App) updateMenu() {
 	switch sigil := p.Text[i]; {
 	case sigil == '/' && i == 0:
 		for _, s := range c.Commands {
-			items = append(items, pickItem{glyph: Span{"/", a.th.Muted}, label: s})
+			items = append(items, pickItem{glyph: Span{"/", a.th.Fg3}, label: s})
 		}
 	case sigil == '@':
 		// A folder with too many files is searched as the word changes, one
@@ -63,7 +63,7 @@ func (a *App) updateMenu() {
 		}
 		// Threads first: fuzzy keeps this order between equal scores.
 		for _, s := range c.Threads {
-			items = append(items, pickItem{glyph: Span{"#", a.th.Iris}, label: s})
+			items = append(items, pickItem{glyph: Span{"#", a.th.Accent}, label: s})
 		}
 		for _, s := range c.Files {
 			items = append(items, pickItem{label: s})

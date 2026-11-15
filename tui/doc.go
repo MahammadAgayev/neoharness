@@ -20,7 +20,7 @@ import (
 // between calls.
 func decorate(src [][]rune, w int, th *Theme, memo map[string][]Line) [][]Line {
 	r := &mdRenderer{th: th, w: w, doc: true}
-	margin := []Span{{"  ", th.Text}}
+	margin := []Span{{"  ", th.Fg}}
 	lines := make([]string, len(src))
 	fence := false
 	for i, l := range src {
@@ -124,7 +124,7 @@ func (r *mdRenderer) docLine(s string, margin []Span, alert *string, numW int) [
 		return r.body(s, margin, margin, numW)
 	}
 	*alert = r.quoteAlert(s, *alert)
-	st := r.th.Muted
+	st := r.th.Fg3
 	if *alert != "" {
 		st = r.alertStyle(*alert)
 	}
@@ -152,18 +152,18 @@ func (r *mdRenderer) body(s string, first, rest []Span, numW int) []Line {
 				rule = "━"
 			}
 			// Off -1: the rule is not text of the line.
-			out = append(out, Line{Prefix: rest, Off: -1, Spans: []Span{{strings.Repeat(rule, max(r.w-width(spansText(rest)), 1)), r.th.Muted}}})
+			out = append(out, Line{Prefix: rest, Off: -1, Spans: []Span{{strings.Repeat(rule, max(r.w-width(spansText(rest)), 1)), r.th.Fg3}}})
 		}
 		return out
 	}
 	if refURL.MatchString(s) {
-		return r.wrapped([]Span{{s, r.th.Muted}}, first, rest)
+		return r.wrapped([]Span{{s, r.th.Fg3}}, first, rest)
 	}
 	if ruleLine.MatchString(s) {
-		return []Line{{Prefix: first, Spans: []Span{{strings.Repeat("─", max(r.w-width(spansText(first)), 1)), r.th.Muted}}}}
+		return []Line{{Prefix: first, Spans: []Span{{strings.Repeat("─", max(r.w-width(spansText(first)), 1)), r.th.Fg3}}}}
 	}
 	if m := itemLine.FindStringSubmatch(s); m != nil {
-		indent := Span{m[1], r.th.Text}
+		indent := Span{m[1], r.th.Fg}
 		bullet, content := fmt.Sprintf("%*s ", numW, m[2]), m[3]
 		if !strings.ContainsAny(m[2][len(m[2])-1:], ".)") {
 			bullet = []string{"• ", "◦ ", "▪ "}[len(m[1])/2%3]
@@ -171,29 +171,29 @@ func (r *mdRenderer) body(s string, first, rest []Span, numW int) []Line {
 		box := Span{}
 		switch {
 		case strings.HasPrefix(content, "[ ] "):
-			box, content = Span{"☐ ", r.th.Muted}, content[4:]
+			box, content = Span{"☐ ", r.th.Fg3}, content[4:]
 		case strings.HasPrefix(content, "[x] "), strings.HasPrefix(content, "[X] "):
-			box, content = Span{"☑ ", r.th.Pine}, content[4:]
+			box, content = Span{"☑ ", r.th.Done}, content[4:]
 		}
 		// A task's box is its bullet, as on GitHub.
-		lead := Span{bullet, r.th.Subtle}
+		lead := Span{bullet, r.th.Fg2}
 		if box.Text != "" {
 			lead = box
 		}
-		spans := r.inlineOf(content, r.th.Text)
+		spans := r.inlineOf(content, r.th.Fg)
 		if box.Text == "☑ " {
 			strike(spans, r.th)
 		}
 		return r.wrapped(spans,
 			append(clone(first), indent, lead),
-			append(clone(rest), indent, Span{strings.Repeat(" ", width(lead.Text)), r.th.Text}))
+			append(clone(rest), indent, Span{strings.Repeat(" ", width(lead.Text)), r.th.Fg}))
 	}
 	trimmed := strings.TrimLeft(s, " ")
 	if lead := s[:len(s)-len(trimmed)]; lead != "" {
-		first = append(clone(first), Span{lead, r.th.Text})
-		rest = append(clone(rest), Span{lead, r.th.Text})
+		first = append(clone(first), Span{lead, r.th.Fg})
+		rest = append(clone(rest), Span{lead, r.th.Fg})
 	}
-	return r.wrapped(r.inlineOf(trimmed, r.th.Text), first, rest)
+	return r.wrapped(r.inlineOf(trimmed, r.th.Fg), first, rest)
 }
 
 // wrapped wraps spans to the document's width, as one row at least.
@@ -248,7 +248,7 @@ func (r *mdRenderer) fenced(lines []string, i int, marker, lang string, margin [
 	if lang != "" && len(code) > 0 {
 		rows[i], code = code[:1], code[1:]
 	}
-	gutter := append(clone(margin), Span{"│ ", r.th.Muted})
+	gutter := append(clone(margin), Span{"│ ", r.th.Fg3})
 	for k := range body {
 		if k < len(code) {
 			rows[i+1+k] = code[k : k+1]
@@ -291,7 +291,7 @@ func (r *mdRenderer) tableLines(lines []string, i int, margin []Span, rows [][]L
 		if j == i+1 {
 			continue
 		}
-		st := r.th.Text
+		st := r.th.Fg
 		if j == i {
 			st = r.th.Bold
 		}

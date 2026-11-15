@@ -76,9 +76,9 @@ func (a *App) showNotice(workspace string, e model.Event) {
 	if workspace == a.workspace && a.windowOf(model.Coordinator) != nil {
 		return
 	}
-	glyph, border, life := Span{"↗", a.th.Foam}, a.th.Foam, 8*time.Second
+	glyph, border, life := Span{"↗", a.th.Run}, a.th.Run, 8*time.Second
 	if e.NeedsYou {
-		glyph, border, life = Span{"↗", a.th.Gold}, a.th.Gold, 0
+		glyph, border, life = Span{"↗", a.th.Wait}, a.th.Wait, 0
 	}
 	a.addToast(&toast{workspace: workspace, thread: model.Coordinator, glyph: glyph, body: e.Text, border: border, notice: true}, life)
 }
@@ -111,7 +111,7 @@ func (a *App) toastView(workspace string, old, v model.ThreadView, had bool) {
 	switch {
 	case v.Quiet && v.State != model.StateWaiting:
 	case !had && v.Role == model.RoleThread:
-		toast(Span{"+", a.th.Iris}, "opened in "+shortHome(v.Location.String()), a.th.Iris, 4*time.Second)
+		toast(Span{"+", a.th.Accent}, "opened in "+shortHome(v.Location.String()), a.th.Accent, 4*time.Second)
 	case v.State == model.StateWaiting && old.State != model.StateWaiting:
 		body := "asks: " + plain(v.Waiting)
 		switch {
@@ -120,12 +120,12 @@ func (a *App) toastView(workspace string, old, v model.ThreadView, had bool) {
 		case v.Waiting == "paused":
 			body = "paused · write to continue"
 		}
-		toast(Span{"◆", a.th.Gold}, body, a.th.Gold, 0)
+		toast(Span{"◆", a.th.Wait}, body, a.th.Wait, 0)
 	case v.State == model.StateResolved && old.State != model.StateResolved:
-		toast(Span{"✓", a.th.Muted}, "resolved", a.th.Muted, 4*time.Second)
+		toast(Span{"✓", a.th.Fg3}, "resolved", a.th.Fg3, 4*time.Second)
 	case old.State == model.StateResolved && v.State != model.StateResolved:
 		// The coordinator brings a thread back by writing to it.
-		toast(Span{"↺", a.th.Foam}, "reopened", a.th.Foam, 4*time.Second)
+		toast(Span{"↺", a.th.Run}, "reopened", a.th.Run, 4*time.Second)
 	case old.State == model.StateRunning && v.State == model.StateIdle && a.showsError(workspace, v.Name):
 		// The error came just before the end of its turn, and says more.
 	case old.State == model.StateRunning && v.State == model.StateIdle:
@@ -146,7 +146,7 @@ func (a *App) toastView(workspace string, old, v model.ThreadView, had bool) {
 		if body == "" {
 			body = "finished a turn"
 		}
-		toast(Span{"✓", a.th.Pine}, body, a.th.Pine, life)
+		toast(Span{"✓", a.th.Done}, body, a.th.Done, life)
 	}
 }
 
@@ -185,9 +185,9 @@ func (a *App) drawToasts(W, H int) {
 		t := shown[i]
 		a.box(x0, y, tw, 4, "", t.border)
 		x := a.put(x0+2, y+1, x0+tw-2, t.glyph.Text+" ", t.glyph.Style)
-		x = a.put(x, y+1, x0+tw-2, t.workspace+" · ", a.th.Subtle)
-		a.put(x, y+1, x0+tw-2, t.thread, a.th.Text.Bold(true))
-		a.put(x0+4, y+2, x0+tw-2, truncate(flatten(t.body), tw-6), a.th.Subtle)
+		x = a.put(x, y+1, x0+tw-2, t.workspace+" · ", a.th.Fg2)
+		a.put(x, y+1, x0+tw-2, t.thread, a.th.Fg.Bold(true))
+		a.put(x0+4, y+2, x0+tw-2, truncate(flatten(t.body), tw-6), a.th.Fg2)
 		y += 4
 	}
 }

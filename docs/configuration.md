@@ -17,7 +17,7 @@ neoharness.keymap.set("n", "<leader>t", ":threads<CR>")   -- keys or an ex comma
 neoharness.keymap.set("n", "gt", function() neoharness.cmd("threads") end)
 neoharness.keymap.set("n", "Q", "<leader>t", { remap = true })
 neoharness.keymap.del("n", "<C-d>")
-neoharness.hl("Iris", { fg = "#c4a7e7", bold = true })
+neoharness.hl("Accent", { fg = "#c4a7e7", ctermfg = 183, bold = true })
 neoharness.cmd("workspace demo")                          -- runs after start
 ```
 
@@ -28,7 +28,7 @@ neoharness.cmd("workspace demo")                          -- runs after start
 | `neoharness.o.compactwarn` | past this context percent, the status line shows `ctx 82% · /compact` in red: every turn sends the whole context again, so `/compact` then saves tokens |
 | `neoharness.keymap.set(mode, lhs, rhs, opts)` | `n`, `x` or `i`; `rhs` is keys, an ex command or a function; `{ remap = true }` |
 | `neoharness.keymap.del(mode, lhs)` | removes a map |
-| `neoharness.hl(group, opts)` | `Text Subtle Muted Iris Rose Foam Gold Pine Love Code Separator CursorLine Selection Search CurSearch`; `fg`, `bg`, `bold`, `italic`, `underline` |
+| `neoharness.hl(group, opts)` | `Fg Fg2 Fg3 Accent Wait Alert Run Done Peer Code Separator CursorLine Selection Search CurSearch`; `fg`, `bg`, `ctermfg`, `ctermbg`, `bold`, `italic`, `underline`. The older names `Text Subtle Muted Iris Gold Love Foam Pine Rose` still work |
 | `neoharness.cmd(line)` | runs an ex command |
 
 A map can run keys, an ex command, a `<Plug>(neoharness-...)` action, or a
@@ -45,9 +45,14 @@ Lua function. Actions with no ex command:
 | `<Plug>(neoharness-dismiss)` | `<leader>nc` |
 
 The colors are Rose Pine Moon, its text levels drawn brighter as in the
-desktop app, so each reads at its contrast. The background is never
-painted, so transparent terminals stay transparent. `NO_COLOR` is
-supported.
+desktop app, so each reads at its contrast. They go by role, with the app's
+names: `Fg` what you read, `Fg2` what you scan, `Fg3` meta, `Accent` where
+you type, `Wait` what waits for you, `Alert` errors, and `Run`, `Done` and
+`Peer` for glyphs and bars. On a terminal without true color (no
+`COLORTERM=truecolor`), each role takes its `ctermfg` from the 256 colors,
+chosen so waiting, errors and another session's words stay apart. The
+background is never painted, so transparent terminals stay transparent.
+`NO_COLOR` is supported.
 
 ## The hub and the agents
 

@@ -24,7 +24,7 @@ type coster interface {
 func (a *App) showCost(all bool) {
 	c, ok := a.c.(coster)
 	if !ok {
-		a.notify("this hub cannot add up the cost", a.th.Love)
+		a.notify("this hub cannot add up the cost", a.th.Alert)
 		return
 	}
 	ws := a.workspace
@@ -33,7 +33,7 @@ func (a *App) showCost(all bool) {
 	}
 	sp, err := c.Cost(ws)
 	if err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return
 	}
 	b, ok := a.bufs[costBuf]
@@ -56,20 +56,20 @@ func money(n float64) string {
 
 func (a *App) costLines(sp model.CostReport, all bool) []Line {
 	th := a.th
-	in := []Span{{" ", th.Text}}
+	in := []Span{{" ", th.Fg}}
 	line := func(spans ...Span) Line { return Line{Prefix: in, Spans: spans} }
-	head := func(s string) []Line { return []Line{{}, line(Span{s, th.Muted})} }
+	head := func(s string) []Line { return []Line{{}, line(Span{s, th.Fg3})} }
 	if sp.Total == 0 {
-		return []Line{line(Span{"nothing spent yet", th.Muted})}
+		return []Line{line(Span{"nothing spent yet", th.Fg3})}
 	}
 	fortnight := 0.0
 	for _, d := range sp.Days {
 		fortnight += d.Cost
 	}
 	out := []Line{line(
-		Span{money(sp.Total), th.Text.Bold(true)}, Span{" in all    ", th.Subtle},
-		Span{money(sp.Today), th.Text.Bold(true)}, Span{" today    ", th.Subtle},
-		Span{money(fortnight), th.Text.Bold(true)}, Span{" last 14 days", th.Subtle},
+		Span{money(sp.Total), th.Fg.Bold(true)}, Span{" in all    ", th.Fg2},
+		Span{money(sp.Today), th.Fg.Bold(true)}, Span{" today    ", th.Fg2},
+		Span{money(fortnight), th.Fg.Bold(true)}, Span{" last 14 days", th.Fg2},
 	)}
 
 	// The days as one row of bars, eighths of a cell high, today last.
@@ -81,9 +81,9 @@ func (a *App) costLines(sp model.CostReport, all bool) []Line {
 	const levels = " ▁▂▃▄▅▆▇█"
 	var bars, names []Span
 	for i, d := range sp.Days {
-		st := th.Iris
+		st := th.Accent
 		if i < len(sp.Days)-1 {
-			st = th.Subtle
+			st = th.Fg2
 		}
 		n := 0
 		if top > 0 && d.Cost > 0 {
@@ -91,7 +91,7 @@ func (a *App) costLines(sp model.CostReport, all bool) []Line {
 		}
 		bars = append(bars, Span{strings.Repeat(string([]rune(levels)[n]), 2) + " ", st})
 		day, _ := time.ParseInLocation("2006-01-02", d.Name, time.Local)
-		names = append(names, Span{day.Format("Mon")[:2] + " ", th.Muted})
+		names = append(names, Span{day.Format("Mon")[:2] + " ", th.Fg3})
 	}
 	out = append(out, line(bars...), line(names...))
 
@@ -112,7 +112,7 @@ func (a *App) costLines(sp model.CostReport, all bool) []Line {
 			if top > 0 {
 				n = max(1, int(p.Cost/top*24+0.5))
 			}
-			l := line(Span{pad(label(p), nameW+2), th.Text}, Span{pad(strings.Repeat("━", n), 26), th.Iris}, Span{money(p.Cost), th.Subtle})
+			l := line(Span{pad(label(p), nameW+2), th.Fg}, Span{pad(strings.Repeat("━", n), 26), th.Accent}, Span{money(p.Cost), th.Fg2})
 			if p.Workspace != "" {
 				l.Item = costRow + p.Workspace + "\x00" + p.Name
 			}
@@ -159,17 +159,17 @@ func (a *App) costLines(sp model.CostReport, all bool) []Line {
 		}
 		for _, t := range sp.Top {
 			l := line(
-				Span{pad(name(t), nameW+2), th.Text},
-				Span{t.At.Local().Format("Jan 2 15:04") + "  ", th.Muted},
-				Span{pad(shortModel(t.Model), 12), th.Muted},
-				Span{money(t.Cost), th.Subtle},
+				Span{pad(name(t), nameW+2), th.Fg},
+				Span{t.At.Local().Format("Jan 2 15:04") + "  ", th.Fg3},
+				Span{pad(shortModel(t.Model), 12), th.Fg3},
+				Span{money(t.Cost), th.Fg2},
 			)
 			l.Item = costRow + t.Workspace + "\x00" + t.Thread
 			out = append(out, l)
 		}
 	}
 	if !sp.Since.IsZero() {
-		out = append(out, Line{}, line(Span{"days, models and turns since " + sp.Since.Local().Format("Jan 2") + ", when the log began", th.Muted}))
+		out = append(out, Line{}, line(Span{"days, models and turns since " + sp.Since.Local().Format("Jan 2") + ", when the log began", th.Fg3}))
 	}
 	return out
 }

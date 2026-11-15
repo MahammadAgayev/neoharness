@@ -59,15 +59,15 @@ var alerts = map[string]string{"NOTE": "note", "TIP": "tip", "IMPORTANT": "impor
 func (r *mdRenderer) alertStyle(kind string) tcell.Style {
 	switch kind {
 	case "TIP":
-		return r.th.Pine
+		return r.th.Done
 	case "IMPORTANT":
-		return r.th.Iris
+		return r.th.Accent
 	case "WARNING":
-		return r.th.Gold
+		return r.th.Wait
 	case "CAUTION":
-		return r.th.Love
+		return r.th.Alert
 	}
-	return r.th.Foam
+	return r.th.Run
 }
 
 // headingStyle shows a heading's level by its ink and, in a document, its
@@ -77,7 +77,7 @@ func headingStyle(th *Theme, level int) tcell.Style {
 	if level <= 2 {
 		return th.Bold
 	}
-	return th.Subtle.Bold(true)
+	return th.Fg2.Bold(true)
 }
 
 func (r *mdRenderer) blank(prefix []Span) {
@@ -103,7 +103,7 @@ func (r *mdRenderer) blocks(n ast.Node, first, rest []Span) {
 func (r *mdRenderer) block(n ast.Node, first, rest []Span) {
 	switch n := n.(type) {
 	case *ast.Paragraph, *ast.TextBlock:
-		spans := r.inline(n, r.th.Text)
+		spans := r.inline(n, r.th.Fg)
 		if r.strip != "" {
 			spans = trimSpans(spans, r.strip)
 			r.strip = ""
@@ -117,7 +117,7 @@ func (r *mdRenderer) block(n ast.Node, first, rest []Span) {
 	case *ast.CodeBlock:
 		r.code(r.lines(n), "", first, rest)
 	case *ast.Blockquote:
-		bar := []Span{{"▎ ", r.th.Muted}}
+		bar := []Span{{"▎ ", r.th.Fg3}}
 		if kind := r.alert(n); kind != "" {
 			st := r.alertStyle(kind)
 			bar = []Span{{"▎ ", st}}
@@ -150,17 +150,17 @@ func (r *mdRenderer) block(n ast.Node, first, rest []Span) {
 				}
 			}
 			r.blocks(item,
-				append(clone(first), Span{bullet, r.th.Subtle}),
-				append(clone(rest), Span{indent, r.th.Text}))
+				append(clone(first), Span{bullet, r.th.Fg2}),
+				append(clone(rest), Span{indent, r.th.Fg}))
 		}
 	case *ast.ThematicBreak:
 		rule := min(r.w-width(spansText(first)), 40)
-		r.out = append(r.out, Line{Prefix: first, Spans: []Span{{strings.Repeat("─", max(rule, 1)), r.th.Muted}}})
+		r.out = append(r.out, Line{Prefix: first, Spans: []Span{{strings.Repeat("─", max(rule, 1)), r.th.Fg3}}})
 	case *east.Table:
 		r.table(n, first, rest)
 	case *ast.HTMLBlock:
 		for _, l := range r.lines(n) {
-			r.out = append(r.out, Line{Prefix: first, Spans: []Span{{l, r.th.Subtle}}})
+			r.out = append(r.out, Line{Prefix: first, Spans: []Span{{l, r.th.Fg2}}})
 			first = rest
 		}
 	default:
@@ -179,7 +179,7 @@ func (r *mdRenderer) table(n ast.Node, first, rest []Span) {
 		_, head := row.(*east.TableHeader)
 		var cells [][]Span
 		for cell := row.FirstChild(); cell != nil; cell = cell.NextSibling() {
-			st := r.th.Text
+			st := r.th.Fg
 			if head {
 				st = r.th.Bold
 			}
@@ -248,13 +248,13 @@ func (r *mdRenderer) tableRow(cells [][]Span, widths []int, aligns []east.Alignm
 		var spans []Span
 		for i, w := range widths {
 			if i > 0 {
-				spans = append(spans, Span{" │ ", r.th.Muted})
+				spans = append(spans, Span{" │ ", r.th.Fg3})
 			}
 			var c []Span
 			if k < len(cols[i]) {
 				c = cols[i][k].Spans
 			}
-			gap := Span{strings.Repeat(" ", max(w-width(spansText(c)), 0)), r.th.Text}
+			gap := Span{strings.Repeat(" ", max(w-width(spansText(c)), 0)), r.th.Fg}
 			switch {
 			case aligns[i] == east.AlignRight:
 				spans = append(append(spans, gap), c...)
@@ -276,7 +276,7 @@ func tableRule(th *Theme, widths []int, prefix []Span) Line {
 	for i, w := range widths {
 		rule[i] = strings.Repeat("─", w)
 	}
-	return Line{Prefix: prefix, Spans: []Span{{strings.Join(rule, "─┼─"), th.Muted}}}
+	return Line{Prefix: prefix, Spans: []Span{{strings.Join(rule, "─┼─"), th.Fg3}}}
 }
 
 func (r *mdRenderer) lines(n ast.Node) []string {
@@ -303,20 +303,20 @@ func (r *mdRenderer) code(lines []string, lang string, first, rest []Span) {
 	}
 	lexer = chroma.Coalesce(lexer)
 	it, err := lexer.Tokenise(nil, src)
-	indent := Span{"  ", r.th.Text}
+	indent := Span{"  ", r.th.Fg}
 	if r.doc {
 		// No background is painted, so a gutter marks where code starts and
 		// ends.
-		indent = Span{"│ ", r.th.Muted}
+		indent = Span{"│ ", r.th.Fg3}
 		if lang != "" {
-			r.out = append(r.out, Line{Prefix: first, Spans: []Span{{lang, r.th.Muted.Italic(true)}}})
+			r.out = append(r.out, Line{Prefix: first, Spans: []Span{{lang, r.th.Fg3.Italic(true)}}})
 			first = rest
 		}
 	}
 	cur := Line{Prefix: append(clone(first), indent)}
 	if err != nil {
 		for _, l := range lines {
-			r.out = append(r.out, Line{Prefix: append(clone(first), indent), Spans: []Span{{l, r.th.Subtle}}})
+			r.out = append(r.out, Line{Prefix: append(clone(first), indent), Spans: []Span{{l, r.th.Fg2}}})
 			first = rest
 		}
 		return
@@ -345,7 +345,7 @@ func (r *mdRenderer) tokenStyle(t chroma.TokenType) tcell.Style {
 		return r.th.Base
 	}
 	e := codeStyle.Get(t)
-	st := r.th.Text
+	st := r.th.Fg
 	if e.Colour.IsSet() {
 		st = r.th.Base.Foreground(tcell.NewRGBColor(int32(e.Colour.Red()), int32(e.Colour.Green()), int32(e.Colour.Blue())))
 	}
@@ -388,14 +388,14 @@ func (r *mdRenderer) inline(n ast.Node, base tcell.Style) []Span {
 				walk(c, linkStyle(r.th, string(c.Destination)))
 			case *east.TaskCheckBox:
 				if c.IsChecked {
-					out = append(out, Span{"☑ ", r.th.Pine})
+					out = append(out, Span{"☑ ", r.th.Done})
 				} else {
-					out = append(out, Span{"☐ ", r.th.Muted})
+					out = append(out, Span{"☐ ", r.th.Fg3})
 				}
 			case *ast.AutoLink:
 				out = append(out, Span{string(c.URL(r.src)), linkStyle(r.th, string(c.URL(r.src)))})
 			case *ast.Image:
-				out = append(out, Span{"image ", r.th.Muted})
+				out = append(out, Span{"image ", r.th.Fg3})
 				walk(c, linkStyle(r.th, string(c.Destination)))
 			case *ast.RawHTML:
 				segs := c.Segments
@@ -407,7 +407,7 @@ func (r *mdRenderer) inline(n ast.Node, base tcell.Style) []Span {
 						out = append(out, Span{"\n", st})
 						continue
 					}
-					out = append(out, Span{seg, r.th.Subtle})
+					out = append(out, Span{seg, r.th.Fg2})
 				}
 			default:
 				walk(c, st)
@@ -424,7 +424,7 @@ func (r *mdRenderer) inline(n ast.Node, base tcell.Style) []Span {
 // strike shows the text of a done task struck through and muted, so what
 // is done reads as done at a glance.
 func strike(spans []Span, th *Theme) {
-	fg, _, _ := th.Muted.Decompose()
+	fg, _, _ := th.Fg3.Decompose()
 	for i := range spans {
 		spans[i].Style = spans[i].Style.StrikeThrough(true).Foreground(fg)
 	}
@@ -436,7 +436,7 @@ var lineBreak = regexp.MustCompile(`(?i)^<br\s*/?>$`)
 // linkStyle is the style of a link's text. It carries the URL, so the
 // terminal opens it on a click and gx finds it.
 func linkStyle(th *Theme, url string) tcell.Style {
-	return th.Foam.Underline(true).Url(url)
+	return th.Run.Underline(true).Url(url)
 }
 
 // alert returns the kind of a GitHub alert quote, or "".
@@ -448,7 +448,7 @@ func (r *mdRenderer) alert(n *ast.Blockquote) string {
 	if _, ok := p.(*ast.Paragraph); !ok {
 		return ""
 	}
-	t := spansText(r.inline(p, r.th.Text))
+	t := spansText(r.inline(p, r.th.Fg))
 	for kind := range alerts {
 		if strings.HasPrefix(t, "[!"+kind+"]") {
 			return kind

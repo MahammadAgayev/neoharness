@@ -30,7 +30,7 @@ func TestTodoShowsTheThreadsTodoListAndFollowsIt(t *testing.T) {
 	for _, want := range []string{"✓ Split the session store", "● Move the tests", "○ Update the docs", "1 of 3 done"} {
 		h.see(want)
 	}
-	if muted, _, _ := h.a.th.Muted.Decompose(); h.fgAt("Split the session store") != muted {
+	if muted, _, _ := h.a.th.Fg3.Decompose(); h.fgAt("Split the session store") != muted {
 		t.Error("a done item is muted")
 	}
 	if !h.struck("Split the session store") {
@@ -119,7 +119,7 @@ func (h *neoharness) struck(want string) bool {
 }
 
 func TestDoneTasksAreStruckThroughInChatsAndArtifacts(t *testing.T) {
-	th := newTheme()
+	th := newTheme(256)
 	src := "- [x] ship the `fix`\n- [ ] write the docs\n"
 	for name, lines := range map[string][]Line{
 		"chat":     renderMarkdown(src, 80, th, nil),

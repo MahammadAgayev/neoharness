@@ -14,12 +14,12 @@ func (a *App) promptRows(w *Window) []Line { return a.promptRowsAt(w, a.textWidt
 
 func (a *App) promptRowsAt(w *Window, textW int) []Line {
 	p := w.Buf.Prompt
-	caret := a.th.Muted
+	caret := a.th.Fg3
 	if w == a.cur && a.mode == modeInsert {
-		caret = a.th.Iris
+		caret = a.th.Accent
 	}
 	first := []Span{{" › ", caret}}
-	rest := []Span{{"   ", a.th.Text}}
+	rest := []Span{{"   ", a.th.Fg}}
 	tw := max(textW-width(" › "), 8)
 	var rows []Line
 	for li, l := range splitRunes(p.Text) {
@@ -33,7 +33,7 @@ func (a *App) promptRowsAt(w *Window, textW int) []Line {
 			if len(rows) == 0 {
 				pre = first
 			}
-			rows = append(rows, Line{Prefix: pre, Spans: []Span{{string(l[s:end]), a.th.Text}}, Src: li + 1, Off: s})
+			rows = append(rows, Line{Prefix: pre, Spans: []Span{{string(l[s:end]), a.th.Fg}}, Src: li + 1, Off: s})
 		}
 	}
 	return rows

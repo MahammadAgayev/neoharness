@@ -33,7 +33,7 @@ func (a *App) draw() {
 	s.Clear()
 	W, H := s.Size()
 	if W < 20 || H < 6 {
-		a.put(0, 0, W, "neoharness: window too small", a.th.Love)
+		a.put(0, 0, W, "neoharness: window too small", a.th.Alert)
 		s.Show()
 		return
 	}
@@ -137,9 +137,9 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	w.recapX = 0
 	if len(recap) > 0 && textBottom-top > len(recap)+3+minTranscript {
 		y := textBottom - len(recap) - 2
-		a.box(r.X, y, bw, len(recap)+2, "recap", a.th.Pine)
+		a.box(r.X, y, bw, len(recap)+2, "recap", a.th.Done)
 		w.recapX, w.recapY = r.X+bw-3, y
-		a.put(w.recapX-1, y, r.X+bw-1, " × ", a.th.Subtle)
+		a.put(w.recapX-1, y, r.X+bw-1, " × ", a.th.Fg2)
 		for i, l := range recap {
 			a.drawLine(r.X+2, y+1+i, r.X+bw-2, l)
 		}
@@ -240,7 +240,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		}
 		// A row that does not fit says so, as Neovim's listchars extends.
 		if cut {
-			st := a.th.Muted
+			st := a.th.Fg3
 			if hasBG {
 				st = overlay(st, bg)
 			}
@@ -250,7 +250,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 			a.cursorX, a.cursorY = r.X+rail+min(w.Col, r.W-rail-1), y
 			// The caret of the prompt: you type here.
 			if editing {
-				a.put(r.X+rail, y, right, "›", overlay(a.th.Iris, a.th.CursorLine))
+				a.put(r.X+rail, y, right, "›", overlay(a.th.Accent, a.th.CursorLine))
 			}
 		}
 	}
@@ -302,10 +302,10 @@ func (a *App) recapBody(w *Window, width int) []Line {
 	if w.Buf.Kind != KindChat || !ok || !a.recapOpen[a.recapKey(v.Name)] || v.Recap == "" || v.State == model.StateRunning || width < 10 {
 		return nil
 	}
-	l := wrap([]Span{{v.Recap, a.th.Text}}, width, nil, nil)
+	l := wrap([]Span{{v.Recap, a.th.Fg}}, width, nil, nil)
 	if len(l) > 4 {
 		l = l[:4]
-		l[3].Spans = append(clone(l[3].Spans), Span{"…", a.th.Muted})
+		l[3].Spans = append(clone(l[3].Spans), Span{"…", a.th.Fg3})
 	}
 	return l
 }
@@ -340,9 +340,9 @@ func (a *App) drawRail(w *Window, lines []Line, top, h int) {
 	first := max(min(cur-rows/2, len(heads)-rows), 0)
 	y := top + (h-rows)/2
 	for i := first; i < first+rows; i++ {
-		dash, st := "─", a.th.Muted
+		dash, st := "─", a.th.Fg3
 		if i == cur {
-			dash, st = "━", a.th.Subtle
+			dash, st = "━", a.th.Fg2
 		}
 		a.put(w.rect.X+1, y+i-first, w.rect.X+railWidth(w), strings.Repeat(dash, max(4-lines[heads[i]].Head, 1)), st)
 	}
@@ -366,15 +366,15 @@ func (a *App) drawMenu(w *Window, top, bottom int) {
 	}
 	x0, y0 := r.X+2, bottom-rows-2
 	th := a.th
-	a.box(x0, y0, bw, rows+2, "", th.Iris)
+	a.box(x0, y0, bw, rows+2, "", th.Accent)
 	start := max(m.sel-rows+1, 0)
 	for i := 0; i < rows && start+i < len(m.items); i++ {
 		y := y0 + 1 + i
 		it := m.items[start+i]
-		glyphSt, st := it.glyph.Style, th.Subtle
+		glyphSt, st := it.glyph.Style, th.Fg2
 		if start+i == m.sel {
 			a.fill(x0+1, y, x0+bw-1, th.CursorLine)
-			glyphSt, st = overlay(glyphSt, th.CursorLine), overlay(th.Text.Bold(true), th.CursorLine)
+			glyphSt, st = overlay(glyphSt, th.CursorLine), overlay(th.Fg.Bold(true), th.CursorLine)
 		}
 		x := a.put(x0+2, y, x0+bw-2, it.glyph.Text, glyphSt)
 		a.put(x, y, x0+bw-2, truncate(it.label, x0+bw-2-x), st)
@@ -430,7 +430,7 @@ func (a *App) drawLine(x, y, maxX int, l Line) int {
 func (a *App) promptLines(w *Window, focused bool) ([]Line, int, int) {
 	p := w.Buf.Prompt
 	writing := focused && a.mode == modeInsert
-	rest := []Span{{"   ", a.th.Text}}
+	rest := []Span{{"   ", a.th.Fg}}
 	statusY := w.rect.Y + w.rect.H - 1
 	pad := func(lines []Line) []Line {
 		for len(lines) < minPromptLines {
@@ -442,7 +442,7 @@ func (a *App) promptLines(w *Window, focused bool) ([]Line, int, int) {
 	rows := a.promptRows(w)
 	if len(p.Text) == 0 && writing {
 		a.cursorX, a.cursorY = w.rect.X+3, statusY-minPromptLines
-		rows[0].Spans = []Span{{"Message " + w.Buf.Thread + "…", a.th.Muted}}
+		rows[0].Spans = []Span{{"Message " + w.Buf.Thread + "…", a.th.Fg3}}
 		return pad(rows), -1, 0
 	}
 	// The cursor's row: where you type, or the Normal cursor in the prompt.
@@ -501,7 +501,7 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 	right := r.X + r.W
 	b := w.Buf
 	x := r.X + 1
-	dim := a.th.Muted
+	dim := a.th.Fg3
 	// Other modes show themselves: the colored caret in Insert, the
 	// command line, the picker box. Visual needs a word to tell v from V.
 	if focused && a.mode == modeVisual {
@@ -511,19 +511,19 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 		}
 		x = a.put(x, y, right, label, dim) + 2
 	}
-	name, nameSt := bufTitle(b), a.th.Subtle
+	name, nameSt := bufTitle(b), a.th.Fg2
 	if e := b.Edit; e != nil && e.Dirty {
 		name += " [+]"
 	}
 	if focused {
-		nameSt = a.th.Text
+		nameSt = a.th.Fg
 	}
 	ws := b.Workspace
 	if b.Kind == KindThreads {
 		ws = a.workspace
 	}
 	if ws != "" {
-		x = a.put(x, y, right, ws+" · ", a.th.Subtle)
+		x = a.put(x, y, right, ws+" · ", a.th.Fg2)
 	}
 	x = a.put(x, y, right, name, nameSt) + 2
 
@@ -563,14 +563,14 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 			}
 			return dim
 		}
-		add(v.Branch, color(a.th.Foam), 1)
-		add(shortModel(v.Model), color(a.th.Rose), 2)
+		add(v.Branch, color(a.th.Run), 1)
+		add(shortModel(v.Model), color(a.th.Peer), 2)
 		if v.ContextWindow > 0 {
 			pct := v.Context * 100 / v.ContextWindow
-			label, ctxSt := fmt.Sprintf("ctx %d%%", pct), color(a.th.Gold)
+			label, ctxSt := fmt.Sprintf("ctx %d%%", pct), color(a.th.Wait)
 			if limit, _ := a.opt("compactwarn").(lua.LNumber); limit > 0 && pct >= int(limit) {
 				// Every turn sends the whole context again: time to /compact.
-				label, ctxSt = label+" · /compact", a.th.Love
+				label, ctxSt = label+" · /compact", a.th.Alert
 			}
 			add(label, ctxSt, 4)
 		}
@@ -659,18 +659,18 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 	switch {
 	case v.Permission != nil:
 		title = "permission"
-		keys := []Span{{"␣a", th.Iris}, {" allow   ", th.Muted}}
+		keys := []Span{{"␣a", th.Accent}, {" allow   ", th.Fg3}}
 		if sc := v.Permission.Scope; sc != "" {
-			keys = append(keys, Span{"␣A", th.Iris}, Span{" always: " + truncate(sc, bw-36) + "   ", th.Muted})
+			keys = append(keys, Span{"␣A", th.Accent}, Span{" always: " + truncate(sc, bw-36) + "   ", th.Fg3})
 		}
 		body = [][]Span{
-			{{v.Permission.Tool, th.Text.Bold(true)}, {"  " + truncate(v.Permission.Detail, bw-8-width(v.Permission.Tool)), th.Subtle}},
-			append(keys, Span{"␣x", th.Iris}, Span{" deny", th.Muted}),
+			{{v.Permission.Tool, th.Fg.Bold(true)}, {"  " + truncate(v.Permission.Detail, bw-8-width(v.Permission.Tool)), th.Fg2}},
+			append(keys, Span{"␣x", th.Accent}, Span{" deny", th.Fg3}),
 		}
 	case v.Waiting == "paused":
 		title = "paused"
 		body = [][]Span{
-			{{"i", th.Iris}, {" write to continue", th.Muted}},
+			{{"i", th.Accent}, {" write to continue", th.Fg3}},
 		}
 	case v.QuestionID != "":
 		title = "question"
@@ -678,12 +678,12 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 		// A long question leaves the window room for the chat.
 		if n := max(min(questionRows, w.rect.H/2-4), 1); len(rows) > n {
 			rows = rows[:n]
-			rows[n-1].Spans = append(clone(rows[n-1].Spans), Span{" …", th.Muted})
+			rows[n-1].Spans = append(clone(rows[n-1].Spans), Span{" …", th.Fg3})
 		}
 		for _, l := range rows {
 			body = append(body, append(clone(l.Prefix), l.Spans...))
 		}
-		body = append(body, []Span{{"i", th.Iris}, {" answer   ", th.Muted}, {"␣x", th.Iris}, {" skip", th.Muted}})
+		body = append(body, []Span{{"i", th.Accent}, {" answer   ", th.Fg3}, {"␣x", th.Accent}, {" skip", th.Fg3}})
 	}
 	return title, body, bw
 }
@@ -704,7 +704,7 @@ func (a *App) drawFloats(w *Window, top, bottom int) {
 		return
 	}
 	x0 := w.rect.X + 2
-	a.box(x0, y0, bw, bh, title, a.th.Gold)
+	a.box(x0, y0, bw, bh, title, a.th.Wait)
 	for i, spans := range body {
 		x := x0 + 2
 		for _, sp := range spans {
@@ -745,13 +745,13 @@ func (a *App) drawPicker(W, H int) {
 	}
 	x0, y0 := (W-bw)/2, (H-bh)/3
 	th := a.th
-	a.box(x0, y0, bw, bh, p.title, th.Iris)
+	a.box(x0, y0, bw, bh, p.title, th.Accent)
 	inner := x0 + bw - 2
-	qx := a.put(x0+2, y0+1, inner, "› ", th.Iris)
-	end := a.put(qx, y0+1, inner, string(p.query), th.Text)
+	qx := a.put(x0+2, y0+1, inner, "› ", th.Accent)
+	end := a.put(qx, y0+1, inner, string(p.query), th.Fg)
 	a.cursorX, a.cursorY = end, y0+1
 	count := fmt.Sprintf("%d", len(p.items))
-	a.put(inner-width(count), y0+1, inner, count, th.Muted)
+	a.put(inner-width(count), y0+1, inner, count, th.Fg3)
 	for i := x0 + 1; i < x0+bw-1; i++ {
 		a.s.SetContent(i, y0+2, '─', nil, th.Separator)
 	}
@@ -785,15 +785,15 @@ func (a *App) drawPicker(W, H int) {
 			a.fill(x0+1, y, x0+bw-1, th.CursorLine)
 		}
 		x := a.put(x0+2, y, inner, it.glyph.Text+" ", sel(it.glyph.Style))
-		labelSt := th.Subtle
+		labelSt := th.Fg2
 		if selected {
-			labelSt = th.Text.Bold(true)
+			labelSt = th.Fg.Bold(true)
 		}
 		x = a.put(x, y, inner, pad(truncate(it.label, labelW), labelW+2), sel(labelSt))
-		a.put(x, y, inner, truncate(flatten(it.detail), inner-x), sel(th.Muted))
+		a.put(x, y, inner, truncate(flatten(it.detail), inner-x), sel(th.Fg3))
 	}
 	if len(p.items) == 0 {
-		a.put(x0+2, y0+3, inner, "no matches", th.Muted)
+		a.put(x0+2, y0+3, inner, "no matches", th.Fg3)
 	}
 }
 
@@ -801,12 +801,12 @@ func (a *App) drawGlobal(W, H int) {
 	y := H - 1
 	th := a.th
 	if a.mode == modeCommand {
-		x := a.put(0, y, W, string(a.cmd.prefix), th.Iris)
-		a.put(x, y, W, string(a.cmd.text), th.Text)
+		x := a.put(0, y, W, string(a.cmd.prefix), th.Accent)
+		a.put(x, y, W, string(a.cmd.text), th.Fg)
 		a.cursorX, a.cursorY = x+width(string(a.cmd.text[:a.cmd.cur])), y
 		if c := a.cmd; c.comp != nil {
 			hint := strings.Join(c.comp, "  ")
-			a.put(max(W-width(hint)-1, x+len(c.text)+4), y, W, truncate(hint, W/2), th.Muted)
+			a.put(max(W-width(hint)-1, x+len(c.text)+4), y, W, truncate(hint, W/2), th.Fg3)
 		}
 		return
 	}
@@ -814,14 +814,14 @@ func (a *App) drawGlobal(W, H int) {
 	// keys typed so far, as Vim's showcmd.
 	var right []Span
 	if a.recordInto != 0 {
-		right = append(right, Span{"recording @" + string(a.recordInto) + "  ", th.Muted})
+		right = append(right, Span{"recording @" + string(a.recordInto) + "  ", th.Fg3})
 	}
 	if len(a.pending) > 0 || a.count > 0 {
 		show := strings.Join(a.pending, "")
 		if a.count > 0 {
 			show = fmt.Sprintf("%d%s", a.count, show)
 		}
-		right = append(right, Span{show + "  ", th.Muted})
+		right = append(right, Span{show + "  ", th.Fg3})
 	}
 	n := map[model.State]int{}
 	for _, v := range a.threads {
@@ -842,7 +842,7 @@ func (a *App) drawGlobal(W, H int) {
 
 	x := margin + 1
 	if a.offline {
-		x = a.put(x, y, W, "● offline  ", th.Love)
+		x = a.put(x, y, W, "● offline  ", th.Alert)
 	}
 	a.put(x, y, rx-1, truncate(a.notice, rx-x-2), a.noticeSt)
 }

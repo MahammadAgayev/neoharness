@@ -21,7 +21,7 @@ func (a *App) showTodo(thread string) {
 	}
 	v, ok := a.threads[thread]
 	if !ok {
-		a.notify("no thread "+thread, a.th.Love)
+		a.notify("no thread "+thread, a.th.Alert)
 		return
 	}
 	name := todoName(a.workspace, thread)
@@ -45,22 +45,22 @@ func (a *App) refreshTodo(v model.ThreadView) {
 
 func (a *App) todoLines(todos []model.Todo) []Line {
 	th := a.th
-	in := []Span{{" ", th.Text}}
+	in := []Span{{" ", th.Fg}}
 	if len(todos) == 0 {
-		return []Line{{Prefix: in, Spans: []Span{{"no todo list yet", th.Muted}}}}
+		return []Line{{Prefix: in, Spans: []Span{{"no todo list yet", th.Fg3}}}}
 	}
 	done := 0
 	var out []Line
 	for _, t := range todos {
-		mark, ms, ts := "○ ", th.Text, th.Text
+		mark, ms, ts := "○ ", th.Fg, th.Fg
 		switch t.State {
 		case model.TodoDone:
-			mark, ms, ts = "✓ ", th.Muted, th.Muted.StrikeThrough(true)
+			mark, ms, ts = "✓ ", th.Fg3, th.Fg3.StrikeThrough(true)
 			done++
 		case model.TodoActive:
-			mark, ms = "● ", th.Foam
+			mark, ms = "● ", th.Run
 		}
 		out = append(out, Line{Prefix: in, Spans: []Span{{mark, ms}, {t.Text, ts}}})
 	}
-	return append(out, Line{}, Line{Prefix: in, Spans: []Span{{fmt.Sprintf("%d of %d done", done, len(todos)), th.Subtle}}})
+	return append(out, Line{}, Line{Prefix: in, Spans: []Span{{fmt.Sprintf("%d of %d done", done, len(todos)), th.Fg2}}})
 }

@@ -35,7 +35,7 @@ func (a *App) loadConfig(path string) {
 		return
 	}
 	if err != nil {
-		a.notify(err.Error(), a.th.Love)
+		a.notify(err.Error(), a.th.Alert)
 		return
 	}
 	a.runConfig(string(src), path, false)
@@ -50,7 +50,7 @@ func (a *App) runConfig(src, name string, defaults bool) {
 	}
 	a.cfgName, a.cfgDefaults, a.cfgLoading, a.cfgCmds = name, defaults, true, nil
 	if err := a.lua.DoString(src); err != nil {
-		a.notify(fmt.Sprintf("%s: %v", name, err), a.th.Love)
+		a.notify(fmt.Sprintf("%s: %v", name, err), a.th.Alert)
 	}
 	a.cfgLoading = false
 	a.buildMaps()
@@ -84,7 +84,7 @@ func (a *App) luaAPI() {
 			m.ForEach(func(_, v lua.LValue) { check(v.String()) })
 		}
 		if !normal && !insert {
-			a.notify(fmt.Sprintf("%s: only Normal, Visual and Insert maps work, not %q", a.cfgName, l.Get(1).String()), a.th.Gold)
+			a.notify(fmt.Sprintf("%s: only Normal, Visual and Insert maps work, not %q", a.cfgName, l.Get(1).String()), a.th.Wait)
 		}
 		return normal, insert
 	}
@@ -117,7 +117,7 @@ func (a *App) luaAPI() {
 		case *lua.LFunction:
 			op.fn = func(int) {
 				if err := L.CallByParam(lua.P{Fn: rhs, NRet: 0, Protect: true}); err != nil {
-					a.notify(err.Error(), a.th.Love)
+					a.notify(err.Error(), a.th.Alert)
 				}
 			}
 		case lua.LString:
@@ -135,7 +135,7 @@ func (a *App) luaAPI() {
 	}))
 	L.SetField(nh, "hl", L.NewFunction(func(l *lua.LState) int {
 		if err := a.setHighlight(l.CheckString(1), l.CheckTable(2)); err != nil {
-			a.notify(fmt.Sprintf("%s: %v", a.cfgName, err), a.th.Gold)
+			a.notify(fmt.Sprintf("%s: %v", a.cfgName, err), a.th.Wait)
 		}
 		return 0
 	}))
@@ -206,7 +206,7 @@ func (a *App) buildMaps() {
 			keys := parseKeys(op.rhs, ld)
 			if len(keys) == 1 && strings.HasPrefix(keys[0], "<Plug>") {
 				if fn = a.builtin[keys[0]]; fn == nil {
-					a.notify(fmt.Sprintf("no %s", keys[0]), a.th.Gold)
+					a.notify(fmt.Sprintf("no %s", keys[0]), a.th.Wait)
 					return
 				}
 			} else {
@@ -319,11 +319,15 @@ func (a *App) bindings() map[string]func(int) {
 func (a *App) setHighlight(group string, opts *lua.LTable) error {
 	th := a.th
 	groups := map[string]*tcell.Style{
-		"Text": &th.Text, "Subtle": &th.Subtle, "Muted": &th.Muted,
-		"Iris": &th.Iris, "Rose": &th.Rose, "Foam": &th.Foam, "Gold": &th.Gold, "Pine": &th.Pine,
-		"Love": &th.Love, "CursorLine": &th.CursorLine, "Selection": &th.Selection,
+		"Fg": &th.Fg, "Fg2": &th.Fg2, "Fg3": &th.Fg3,
+		"Accent": &th.Accent, "Wait": &th.Wait, "Alert": &th.Alert,
+		"Run": &th.Run, "Done": &th.Done, "Peer": &th.Peer,
+		"CursorLine": &th.CursorLine, "Selection": &th.Selection,
 		"Search": &th.Search, "CurSearch": &th.CurSearch,
 		"Separator": &th.Separator, "Code": &th.Code,
+		// The Rose Pine names from before the roles, so an older init.lua loads.
+		"Text": &th.Fg, "Subtle": &th.Fg2, "Muted": &th.Fg3, "Iris": &th.Accent,
+		"Gold": &th.Wait, "Love": &th.Alert, "Foam": &th.Run, "Pine": &th.Done, "Rose": &th.Peer,
 	}
 	st, ok := groups[group]
 	if !ok {
@@ -335,13 +339,16 @@ func (a *App) setHighlight(group string, opts *lua.LTable) error {
 	}
 	out := tcell.StyleDefault
 	for _, key := range []string{"fg", "bg"} {
-		v, ok := opts.RawGetString(key).(lua.LString)
-		if !ok {
+		color := tcell.ColorDefault
+		if v, ok := opts.RawGetString("cterm" + key).(lua.LNumber); ok && !th.TrueColor {
+			color = tcell.PaletteColor(int(v))
+		} else if v, ok := opts.RawGetString(key).(lua.LString); ok {
+			color = tcell.GetColor(string(v))
+			if color == tcell.ColorDefault && !strings.EqualFold(string(v), "default") {
+				return fmt.Errorf("%s: no color %q", group, v)
+			}
+		} else {
 			continue
-		}
-		color := tcell.GetColor(string(v))
-		if color == tcell.ColorDefault && !strings.EqualFold(string(v), "default") {
-			return fmt.Errorf("%s: no color %q", group, v)
 		}
 		if key == "fg" {
 			out = out.Foreground(color)

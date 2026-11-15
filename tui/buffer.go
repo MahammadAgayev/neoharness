@@ -224,18 +224,18 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 	}
 	if b.waiting() {
 		out = append(out, Line{Block: len(b.blocks)}, Line{Block: len(b.blocks),
-			Prefix: []Span{{"  " + spinner[spin%len(spinner)] + " ", th.Foam}},
-			Spans:  []Span{{"working", th.Subtle}}})
+			Prefix: []Span{{"  " + spinner[spin%len(spinner)] + " ", th.Run}},
+			Spans:  []Span{{"working", th.Fg2}}})
 	}
 	for _, e := range b.pending {
-		bar := []Span{{"▎ ", th.Muted}}
+		bar := []Span{{"▎ ", th.Fg3}}
 		label := "queued"
 		if e.From != model.User {
 			label = "queued from " + e.From
 		}
-		rows := []Line{{}, {Prefix: bar, Spans: []Span{{label, th.Muted.Italic(true)}}}}
+		rows := []Line{{}, {Prefix: bar, Spans: []Span{{label, th.Fg3.Italic(true)}}}}
 		for _, l := range strings.Split(e.Text, "\n") {
-			rows = append(rows, wrap([]Span{{l, th.Muted}}, w, bar, bar)...)
+			rows = append(rows, wrap([]Span{{l, th.Fg3}}, w, bar, bar)...)
 		}
 		for i, l := range rows {
 			l.Block = len(b.blocks)
@@ -266,25 +266,25 @@ func (b *Buffer) todoLines(w int, th *Theme) []Line {
 			cur = t.Text
 		}
 	}
-	in := []Span{{"  ", th.Text}}
-	fold, head := "▸ ", []Span{{fmt.Sprintf("%d of %d", done, len(b.todos)), th.Muted}}
+	in := []Span{{"  ", th.Fg}}
+	fold, head := "▸ ", []Span{{fmt.Sprintf("%d of %d", done, len(b.todos)), th.Fg3}}
 	if b.todoOpen {
 		fold = "▾ "
 	} else {
-		head = append(head, Span{" · ", th.Muted}, Span{cur, th.Text})
+		head = append(head, Span{" · ", th.Fg3}, Span{cur, th.Fg})
 	}
-	rows := append([]Line{{}}, wrap(append([]Span{{fold, th.Muted}}, head...), w, in, append(clone(in), Span{"  ", th.Text}))...)
+	rows := append([]Line{{}}, wrap(append([]Span{{fold, th.Fg3}}, head...), w, in, append(clone(in), Span{"  ", th.Fg}))...)
 	if b.todoOpen {
 		for _, t := range b.todos {
-			mark, ms, ts := "○ ", th.Subtle, th.Subtle
+			mark, ms, ts := "○ ", th.Fg2, th.Fg2
 			switch t.State {
 			case model.TodoDone:
-				mark, ms, ts = "✓ ", th.Muted, th.Muted.StrikeThrough(true)
+				mark, ms, ts = "✓ ", th.Fg3, th.Fg3.StrikeThrough(true)
 			case model.TodoActive:
-				mark, ms, ts = "● ", th.Foam, th.Text
+				mark, ms, ts = "● ", th.Run, th.Fg
 			}
-			pre := append(clone(in), Span{"  ", th.Text})
-			rows = append(rows, wrap([]Span{{mark, ms}, {t.Text, ts}}, w, pre, append(clone(pre), Span{"  ", th.Text}))...)
+			pre := append(clone(in), Span{"  ", th.Fg})
+			rows = append(rows, wrap([]Span{{mark, ms}, {t.Text, ts}}, w, pre, append(clone(pre), Span{"  ", th.Fg}))...)
 		}
 	}
 	for i := range rows {
@@ -535,15 +535,15 @@ func (bl *block) render(w int, th *Theme, spin int) []Line {
 }
 
 func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
-	pad := []Span{{"  ", th.Text}}
+	pad := []Span{{"  ", th.Fg}}
 	switch bl.kind {
 	case bMessage:
 		if bl.from == model.User {
 			// What you typed shows as you typed it: a * is a *.
-			bar := []Span{{"▎ ", th.Iris}}
+			bar := []Span{{"▎ ", th.Accent}}
 			var lines []Line
 			for _, l := range strings.Split(bl.text, "\n") {
-				rows := wrap([]Span{{l, th.Text}}, w, bar, bar)
+				rows := wrap([]Span{{l, th.Fg}}, w, bar, bar)
 				if len(rows) == 0 {
 					rows = []Line{{Prefix: bar}}
 				}
@@ -551,8 +551,8 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 			}
 			return lines
 		}
-		bar := []Span{{"▎ ", th.Rose}}
-		label := Line{Prefix: bar, Spans: []Span{{"from " + bl.from, th.Rose.Italic(true)}}}
+		bar := []Span{{"▎ ", th.Peer}}
+		label := Line{Prefix: bar, Spans: []Span{{"from " + bl.from, th.Peer.Italic(true)}}}
 		return append([]Line{label}, renderMarkdown(bl.text, w, th, bar)...)
 	case bText:
 		if lines, ok := renderJSON(bl.text, w, th, pad); ok {
@@ -562,66 +562,66 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 	case bTools:
 		return bl.renderTools(w, th, spin)
 	case bError:
-		return wrap([]Span{{bl.text, th.Love}}, w, []Span{{"  ✗ ", th.Love}}, []Span{{"    ", th.Love}})
+		return wrap([]Span{{bl.text, th.Alert}}, w, []Span{{"  ✗ ", th.Alert}}, []Span{{"    ", th.Alert}})
 	case bPermission:
 		if bl.text2 == "" {
-			return wrap([]Span{{shortTool(bl.from), th.Subtle}, {"  " + bl.text, th.Muted}}, w,
-				[]Span{{"  ◆ ", th.Gold}}, []Span{{"    ", th.Text}})
+			return wrap([]Span{{shortTool(bl.from), th.Fg2}, {"  " + bl.text, th.Fg3}}, w,
+				[]Span{{"  ◆ ", th.Wait}}, []Span{{"    ", th.Fg}})
 		}
-		st := th.Muted
+		st := th.Fg3
 		if strings.HasPrefix(bl.text2, string(model.Deny)) {
-			st = th.Love
+			st = th.Alert
 		}
 		tool, tail := shortTool(bl.from), "  · "+bl.text2
-		spans := []Span{{tool, th.Muted}}
+		spans := []Span{{tool, th.Fg3}}
 		if bl.text != "" {
-			spans = append(spans, Span{"  " + truncate(bl.text, w-4-width(tool)-2-width(tail)), th.Muted})
+			spans = append(spans, Span{"  " + truncate(bl.text, w-4-width(tool)-2-width(tail)), th.Fg3})
 		}
 		spans = append(spans, Span{tail, st})
-		return []Line{{Prefix: []Span{{"  ◇ ", th.Muted}}, Spans: spans}}
+		return []Line{{Prefix: []Span{{"  ◇ ", th.Fg3}}, Spans: spans}}
 	case bAnswer:
-		st := th.Pine
+		st := th.Done
 		if strings.HasPrefix(bl.text, string(model.Deny)) {
-			st = th.Love
+			st = th.Alert
 		}
-		return wrap([]Span{{bl.text, st}}, w, []Span{{"    ↳ ", th.Muted}}, []Span{{"      ", th.Text}})
+		return wrap([]Span{{bl.text, st}}, w, []Span{{"    ↳ ", th.Fg3}}, []Span{{"      ", th.Fg}})
 	case bAsk:
-		bar := []Span{{"▎ ", th.Gold}}
-		label := Line{Prefix: bar, Spans: []Span{{"question", th.Gold.Italic(true)}}}
+		bar := []Span{{"▎ ", th.Wait}}
+		label := Line{Prefix: bar, Spans: []Span{{"question", th.Wait.Italic(true)}}}
 		return append([]Line{label}, renderMarkdown(bl.text, w, th, bar)...)
 	case bProgress:
-		return wrap([]Span{{bl.text, th.Subtle}}, w, []Span{{"  ↳ ", th.Foam}}, []Span{{"    ", th.Text}})
+		return wrap([]Span{{bl.text, th.Fg2}}, w, []Span{{"  ↳ ", th.Run}}, []Span{{"    ", th.Fg}})
 	case bNote:
-		return wrap([]Span{{bl.text, th.Muted.Italic(true)}}, w, []Span{{"  — ", th.Muted}}, []Span{{"    ", th.Text}})
+		return wrap([]Span{{bl.text, th.Fg3.Italic(true)}}, w, []Span{{"  — ", th.Fg3}}, []Span{{"    ", th.Fg}})
 	case bNotice:
-		glyph := th.Foam
+		glyph := th.Run
 		if bl.needsYou {
-			glyph = th.Gold
+			glyph = th.Wait
 		}
-		return wrap([]Span{{"notified you: ", th.Muted}, {bl.text, th.Subtle}}, w, []Span{{"  ↗ ", glyph}}, []Span{{"    ", th.Text}})
+		return wrap([]Span{{"notified you: ", th.Fg3}, {bl.text, th.Fg2}}, w, []Span{{"  ↗ ", glyph}}, []Span{{"    ", th.Fg}})
 	case bShell:
 		return bl.renderShell(w, th, spin)
 	case bKey:
 		if bl.text == "" {
-			return wrap([]Span{{bl.text2, th.Muted}}, w, pad, pad)
+			return wrap([]Span{{bl.text2, th.Fg3}}, w, pad, pad)
 		}
 		// The keys take a column when the window has room for it; else the
 		// text goes on the next line.
 		if w >= keyCol+30 {
-			return wrap([]Span{{bl.text2, th.Subtle}}, w, []Span{{"  ", th.Text}, {bl.text + strings.Repeat(" ", max(keyCol-2-width(bl.text), 1)), th.Iris}},
-				[]Span{{strings.Repeat(" ", keyCol), th.Text}})
+			return wrap([]Span{{bl.text2, th.Fg2}}, w, []Span{{"  ", th.Fg}, {bl.text + strings.Repeat(" ", max(keyCol-2-width(bl.text), 1)), th.Accent}},
+				[]Span{{strings.Repeat(" ", keyCol), th.Fg}})
 		}
-		in := []Span{{"      ", th.Text}}
-		return append(wrap([]Span{{bl.text, th.Iris}}, w, pad, pad), wrap([]Span{{bl.text2, th.Subtle}}, w, in, in)...)
+		in := []Span{{"      ", th.Fg}}
+		return append(wrap([]Span{{bl.text, th.Accent}}, w, pad, pad), wrap([]Span{{bl.text2, th.Fg2}}, w, in, in)...)
 	case bArtifact:
-		spans := []Span{{bl.art.Title, th.Text}, {"  · artifact", th.Muted}}
+		spans := []Span{{bl.art.Title, th.Fg}, {"  · artifact", th.Fg3}}
 		if bl.art.Version > 1 {
-			spans = append(spans, Span{" v" + strconv.Itoa(bl.art.Version), th.Muted})
+			spans = append(spans, Span{" v" + strconv.Itoa(bl.art.Version), th.Fg3})
 		}
 		if bl.art.UserEdit {
-			spans = append(spans, Span{" · edited by you", th.Muted})
+			spans = append(spans, Span{" · edited by you", th.Fg3})
 		}
-		return wrap(spans, w, []Span{{"  ◇ ", th.Foam}}, []Span{{"    ", th.Text}})
+		return wrap(spans, w, []Span{{"  ◇ ", th.Run}}, []Span{{"    ", th.Fg}})
 	}
 	return nil
 }
@@ -635,11 +635,11 @@ const shellLines = 10
 var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 
 func (bl *block) renderShell(w int, th *Theme, spin int) []Line {
-	mark := Span{"  ! ", th.Rose}
+	mark := Span{"  ! ", th.Peer}
 	if bl.live {
-		mark = Span{"  " + spinner[spin%len(spinner)] + " ", th.Foam}
+		mark = Span{"  " + spinner[spin%len(spinner)] + " ", th.Run}
 	}
-	lines := wrap([]Span{{bl.text, th.Subtle}}, w, []Span{mark}, []Span{{"    ", th.Text}})
+	lines := wrap([]Span{{bl.text, th.Fg2}}, w, []Span{mark}, []Span{{"    ", th.Fg}})
 	out := strings.Split(strings.TrimRight(bl.text2, "\n"), "\n")
 	if bl.text2 == "" {
 		out = nil
@@ -649,20 +649,20 @@ func (bl *block) renderShell(w int, th *Theme, spin int) []Line {
 		hidden = len(out) - shellLines
 		out = out[:shellLines]
 	}
-	pad := []Span{{"    ", th.Text}}
+	pad := []Span{{"    ", th.Fg}}
 	for _, l := range out {
 		l = ansi.ReplaceAllString(l, "")
 		if i := strings.LastIndexByte(l, '\r'); i >= 0 {
 			l = l[i+1:]
 		}
 		l = strings.ReplaceAll(l, "\t", "    ")
-		lines = append(lines, wrap([]Span{{l, th.Muted}}, w, pad, pad)...)
+		lines = append(lines, wrap([]Span{{l, th.Fg3}}, w, pad, pad)...)
 	}
 	if hidden > 0 {
-		lines = append(lines, Line{Prefix: pad, Spans: []Span{{fmt.Sprintf("… %d more lines · za", hidden), th.Muted.Italic(true)}}})
+		lines = append(lines, Line{Prefix: pad, Spans: []Span{{fmt.Sprintf("… %d more lines · za", hidden), th.Fg3.Italic(true)}}})
 	}
 	if bl.exit != 0 && !bl.live {
-		lines = append(lines, Line{Prefix: pad, Spans: []Span{{"exit " + strconv.Itoa(bl.exit), th.Love}}})
+		lines = append(lines, Line{Prefix: pad, Spans: []Span{{"exit " + strconv.Itoa(bl.exit), th.Alert}}})
 	}
 	return lines
 }
@@ -697,33 +697,33 @@ func (bl *block) renderTools(w int, th *Theme, spin int) []Line {
 	}
 	var mark []Span
 	if failed > 0 {
-		mark = []Span{{fmt.Sprintf(" · %d failed", failed), th.Love}}
+		mark = []Span{{fmt.Sprintf(" · %d failed", failed), th.Alert}}
 	}
 	var head Line
 	switch {
 	case bl.live:
 		tool, tail := shortTool(last.tool), "  · "+count
-		head = Line{Prefix: []Span{{"  " + spinner[spin%len(spinner)] + " ", th.Foam}}, Spans: []Span{
-			{tool, th.Subtle},
-			{"  " + truncate(shortTools(last.detail), w-4-width(tool)-2-width(tail)), th.Muted},
-			{tail, th.Muted},
+		head = Line{Prefix: []Span{{"  " + spinner[spin%len(spinner)] + " ", th.Run}}, Spans: []Span{
+			{tool, th.Fg2},
+			{"  " + truncate(shortTools(last.detail), w-4-width(tool)-2-width(tail)), th.Fg3},
+			{tail, th.Fg3},
 		}}
 	case bl.open:
-		head = Line{Prefix: []Span{{"  ▾ ", th.Muted}}, Spans: append([]Span{{count, th.Muted}}, mark...)}
+		head = Line{Prefix: []Span{{"  ▾ ", th.Fg3}}, Spans: append([]Span{{count, th.Fg3}}, mark...)}
 	default:
-		head = Line{Prefix: []Span{{"  ▸ ", th.Muted}}, Spans: append([]Span{{count, th.Muted}}, mark...)}
+		head = Line{Prefix: []Span{{"  ▸ ", th.Fg3}}, Spans: append([]Span{{count, th.Fg3}}, mark...)}
 	}
 	lines := []Line{head}
 	if bl.open {
 		for _, t := range bl.tools {
-			lines = append(lines, Line{Prefix: []Span{{"      ", th.Text}}, Spans: []Span{
-				{shortTool(t.tool), th.Subtle},
-				{"  " + truncate(shortTools(t.detail), max(w-24, 10)), th.Muted},
+			lines = append(lines, Line{Prefix: []Span{{"      ", th.Fg}}, Spans: []Span{
+				{shortTool(t.tool), th.Fg2},
+				{"  " + truncate(shortTools(t.detail), max(w-24, 10)), th.Fg3},
 			}})
 			if t.failed != "" {
 				// The reason wraps, at most three rows: it says why.
 				why := truncate(strings.Join(strings.Fields(t.failed), " "), 3*max(w-12, 10))
-				lines = append(lines, wrap([]Span{{why, th.Love}}, w, []Span{{"        ✗ ", th.Love}}, []Span{{"          ", th.Love}})...)
+				lines = append(lines, wrap([]Span{{why, th.Alert}}, w, []Span{{"        ✗ ", th.Alert}}, []Span{{"          ", th.Alert}})...)
 			}
 		}
 	}

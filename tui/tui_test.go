@@ -745,8 +745,8 @@ func TestQuitWhileThreadsRun(t *testing.T) {
 }
 
 func TestWrap(t *testing.T) {
-	th := newTheme()
-	lines := wrap([]Span{{"the quick brown fox jumps over the lazy dog", th.Text}}, 16, []Span{{"▎ ", th.Iris}}, []Span{{"▎ ", th.Iris}})
+	th := newTheme(256)
+	lines := wrap([]Span{{"the quick brown fox jumps over the lazy dog", th.Fg}}, 16, []Span{{"▎ ", th.Accent}}, []Span{{"▎ ", th.Accent}})
 	for _, l := range lines {
 		if w := l.prefixWidth() + width(l.Text()); w > 16 {
 			t.Errorf("line %q is %d wide", l.Text(), w)
@@ -755,17 +755,17 @@ func TestWrap(t *testing.T) {
 	if len(lines) != 4 || lines[0].Text() != "the quick" {
 		t.Errorf("lines = %q", texts(lines))
 	}
-	long := wrap([]Span{{strings.Repeat("x", 30), th.Text}}, 10, nil, nil)
+	long := wrap([]Span{{strings.Repeat("x", 30), th.Fg}}, 10, nil, nil)
 	if len(long) != 3 {
 		t.Errorf("a long word should split across lines: %q", texts(long))
 	}
-	if got := wrap([]Span{{"a\nb", th.Text}}, 20, nil, nil); len(got) != 2 {
+	if got := wrap([]Span{{"a\nb", th.Fg}}, 20, nil, nil); len(got) != 2 {
 		t.Errorf("newline should break: %q", texts(got))
 	}
 }
 
 func TestMarkdown(t *testing.T) {
-	th := newTheme()
+	th := newTheme(256)
 	src := "# Title\n\nSome **bold** and `code`.\n\n- one\n- two\n\n```go\nfunc main() {}\n```\n"
 	got := texts(renderMarkdown(src, 60, th, nil))
 	want := []string{"Title", "", "Some bold and code.", "", "one", "two", "", "func main() {}"}
@@ -775,8 +775,8 @@ func TestMarkdown(t *testing.T) {
 }
 
 func TestHeadingsTakeTheInkOfTheText(t *testing.T) {
-	th := newTheme()
-	for level, want := range map[int]tcell.Style{1: th.Bold, 2: th.Bold, 3: th.Subtle.Bold(true), 4: th.Subtle.Bold(true)} {
+	th := newTheme(256)
+	for level, want := range map[int]tcell.Style{1: th.Bold, 2: th.Bold, 3: th.Fg2.Bold(true), 4: th.Fg2.Bold(true)} {
 		if got := headingStyle(th, level); got != want {
 			t.Errorf("heading %d style = %v, want %v", level, got, want)
 		}
@@ -801,7 +801,7 @@ func TestChatWrapsAtTheDocumentWidth(t *testing.T) {
 }
 
 func TestMarkdownTableAlignsColumns(t *testing.T) {
-	th := newTheme()
+	th := newTheme(256)
 	src := "| PR | Saved | Result |\n|---|---:|---|\n| store-clients#62 | ~2,050 | Confirmed |\n| D. app-code#59746 | ~250 | Not proven |\n"
 	got := texts(renderMarkdown(src, 80, th, nil))
 	if len(got) != 4 {
@@ -839,7 +839,7 @@ func texts(lines []Line) []string {
 }
 
 func TestWrapKeepsAStyledWordTogether(t *testing.T) {
-	th := newTheme()
+	th := newTheme(256)
 	got := texts(renderMarkdown("Call report_progress with the summary", 24, th, nil))
 	for _, l := range got {
 		if strings.HasSuffix(l, "report_") || strings.HasPrefix(l, "progress") {
@@ -1071,7 +1071,7 @@ func TestStatusColorsAndPromptHeight(t *testing.T) {
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.s.SetSize(160, 36)
 	h.a.draw()
-	for want, color := range map[string]tcell.Color{"trunk": rpFoam, "opus-5 1m": rpRose, "ctx 10%": rpGold} {
+	for want, color := range map[string]tcell.Color{"trunk": rpFoam.in(false), "opus-5 1m": rpRose.in(false), "ctx 10%": rpGold.in(false)} {
 		if got := h.fgAt(want); got != color {
 			t.Errorf("%s: color %v, want %v", want, got, color)
 		}
@@ -1079,7 +1079,7 @@ func TestStatusColorsAndPromptHeight(t *testing.T) {
 	v.Context = 850
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
-	if got := h.fgAt("ctx 85%"); got != rpLove {
+	if got := h.fgAt("ctx 85%"); got != rpLove.in(false) {
 		t.Errorf("a nearly full context should be red, got %v", got)
 	}
 
@@ -1299,7 +1299,7 @@ func TestMessagesPickerOpensTheThread(t *testing.T) {
 	h.a.loadWorkspaces()
 	h.openDemo()
 	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "ops", Thread: "git-init", Event: &model.Event{Kind: model.EventError, Text: "the agent failed"}})
-	h.a.notify("already at oldest change", h.a.th.Muted)
+	h.a.notify("already at oldest change", h.a.th.Fg3)
 	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: "api-tests", Event: &model.Event{Kind: model.EventError, Text: "tests failed"}})
 
 	h.press("<Esc>", "<Space>pm")
@@ -1490,7 +1490,7 @@ func docRows(a model.Artifact, src string, w int, th *Theme) []Line {
 }
 
 func TestDocumentRendering(t *testing.T) {
-	th := newTheme()
+	th := newTheme(256)
 	src := "# Title\n\nSee [the docs](https://x.dev).\n\n## Steps\n\n- [x] done\n- [ ] todo\n  - nested\n\n" +
 		"1. a\n2. b\n3. c\n4. d\n5. e\n6. f\n7. g\n8. h\n9. i\n10. j\n\n> [!WARNING]\n> Careful here.\n\n```go\nfmt.Println(1)\n```\n\n" +
 		"| Option | Cost |\n|---|---|\n| shared cache | one more service to run, and a network hop on every read of the hot path |\n"
@@ -1928,7 +1928,7 @@ func TestReferenceLinksRenderAndOpen(t *testing.T) {
 
 func TestRenderedColumnsMapToTheSource(t *testing.T) {
 	src := "Some **bold** text, a [link](https://example.com). And `code` here, then more words to wrap the line twice over."
-	lines := docRows(model.Artifact{Name: "d"}, src, 40, newTheme())
+	lines := docRows(model.Artifact{Name: "d"}, src, 40, newTheme(256))
 	rs := []rune(src)
 	for _, word := range []string{"Some", "bold", "text", "link", ". And", "code", "here", "wrap", "over"} {
 		want := strings.Index(src, word)
@@ -1950,7 +1950,7 @@ func TestRenderedColumnsMapToTheSource(t *testing.T) {
 			t.Fatalf("%q is not on a row", word)
 		}
 	}
-	table := docRows(model.Artifact{Name: "d"}, "| Option | Cost |\n|---|---|\n| sqlite | none at all |", 60, newTheme())
+	table := docRows(model.Artifact{Name: "d"}, "| Option | Cost |\n|---|---|\n| sqlite | none at all |", 60, newTheme(256))
 	src2 := []rune("| sqlite | none at all |")
 	for row, l := range table {
 		if l.Src != 3 {
@@ -2415,7 +2415,7 @@ func TestGxInAChat(t *testing.T) {
 
 func TestJSONTextReadsAsKeysAndValues(t *testing.T) {
 	src := `{"ok": false, "code": "usage", "reason": "Usage:\n  /setup --wizard\n  /setup --apply", "n": 3, "list": ["a", {"b": 1}]}`
-	lines, ok := renderJSON(src, 60, newTheme(), nil)
+	lines, ok := renderJSON(src, 60, newTheme(256), nil)
 	if !ok {
 		t.Fatal("a JSON object should render as JSON")
 	}
@@ -2427,7 +2427,7 @@ func TestJSONTextReadsAsKeysAndValues(t *testing.T) {
 	if got := strings.Join(got, "\n"); got != want {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
 	}
-	if _, ok := renderJSON("{not json", 60, newTheme(), nil); ok {
+	if _, ok := renderJSON("{not json", 60, newTheme(256), nil); ok {
 		t.Fatal("text that is not JSON should stay markdown")
 	}
 }
@@ -2711,7 +2711,7 @@ func TestDefaultsLuaIsTheDefault(t *testing.T) {
 			t.Errorf("defaults.lua should map %s", k)
 		}
 	}
-	if fg, _, _ := h.a.th.Iris.Decompose(); fg != rpIris {
+	if fg, _, _ := h.a.th.Accent.Decompose(); fg != rpIris.in(false) {
 		t.Fatal("defaults.lua's colors should be the theme's")
 	}
 	h.openDemo()
@@ -2779,7 +2779,7 @@ neoharness.keymap.set("c", "jk", "<Esc>")
 	if _, ok := h.a.binds["<C-d>"]; ok {
 		t.Fatal("neoharness.keymap.del should remove a default map")
 	}
-	if fg, _, attrs := h.a.th.Iris.Decompose(); fg != tcell.GetColor("#ff0000") || attrs&tcell.AttrBold == 0 {
+	if fg, _, attrs := h.a.th.Accent.Decompose(); fg != tcell.GetColor("#ff0000") || attrs&tcell.AttrBold == 0 {
 		t.Fatal("neoharness.hl should set the theme color")
 	}
 	if !strings.Contains(h.a.notice, "only Normal, Visual and Insert maps") {
@@ -2878,7 +2878,7 @@ func TestARunningToolKeepsItsCountWholeInANarrowPane(t *testing.T) {
 	b.AddEvent(model.Event{Kind: model.EventPermission, Tool: "mcp__neoharness__report_progress", Detail: strings.Repeat("a long summary ", 8)})
 	b.AddEvent(model.Event{Kind: model.EventAnswer, Text: "deny"})
 	const w = 50
-	lines := b.Lines(w, newTheme(), 0)
+	lines := b.Lines(w, newTheme(256), 0)
 	for _, want := range []string{"· 12 tool calls", "· deny"} {
 		found := false
 		for _, l := range lines {
@@ -2929,7 +2929,7 @@ func TestFailedToolCallsShowOnTheFold(t *testing.T) {
 	}
 	h.a.draw()
 	h.see("2 tool calls · 1 failed")
-	if got := h.fgAt("· 1 failed"); got != rpLove {
+	if got := h.fgAt("· 1 failed"); got != rpLove.in(false) {
 		t.Fatalf("the failed mark should be red, got %v", got)
 	}
 	h.press("<Esc>", "/2 tool calls", "<CR>", "za")
@@ -3027,12 +3027,12 @@ func TestQueuedMessagesShowAfterTheTranscript(t *testing.T) {
 	b := newChat("demo", "api")
 	b.AddEvent(model.Event{Kind: model.EventMessage, From: model.User, Text: "first"})
 	b.SetPending([]model.Event{{Kind: model.EventMessage, From: model.User, Text: "second"}})
-	all := strings.Join(texts(b.Lines(80, newTheme(), 0)), "\n")
+	all := strings.Join(texts(b.Lines(80, newTheme(256), 0)), "\n")
 	if !strings.HasSuffix(all, "queued\nsecond") {
 		t.Fatalf("a queued message should end the chat, marked queued:\n%s", all)
 	}
 	b.SetPending(nil)
-	if all := strings.Join(texts(b.Lines(80, newTheme(), 0)), "\n"); strings.Contains(all, "queued") {
+	if all := strings.Join(texts(b.Lines(80, newTheme(256), 0)), "\n"); strings.Contains(all, "queued") {
 		t.Fatalf("a delivered message is no longer queued:\n%s", all)
 	}
 }
@@ -3040,7 +3040,7 @@ func TestQueuedMessagesShowAfterTheTranscript(t *testing.T) {
 func TestYourMessagesShowAsTyped(t *testing.T) {
 	b := newChat("demo", "api")
 	b.AddEvent(model.Event{Kind: model.EventMessage, From: model.User, Text: "run sum(i*i for i in range(3*10))\n\n# not a heading"})
-	all := strings.Join(texts(b.Lines(80, newTheme(), 0)), "\n")
+	all := strings.Join(texts(b.Lines(80, newTheme(256), 0)), "\n")
 	if !strings.Contains(all, "sum(i*i for i in range(3*10))") || !strings.Contains(all, "# not a heading") {
 		t.Fatalf("your message should show as typed:\n%s", all)
 	}
@@ -3049,14 +3049,14 @@ func TestYourMessagesShowAsTyped(t *testing.T) {
 func TestChatKeepsLineBreaks(t *testing.T) {
 	b := newChat("demo", "api")
 	b.AddEvent(model.Event{Kind: model.EventText, Text: "line 1\nline 2\n\npara"})
-	all := strings.Join(texts(b.Lines(80, newTheme(), 0)), "\n")
+	all := strings.Join(texts(b.Lines(80, newTheme(256), 0)), "\n")
 	if !strings.Contains(all, "line 1\n") || strings.Contains(all, "line 1 line 2") {
 		t.Fatalf("a chat should keep the agent's line breaks:\n%s", all)
 	}
 }
 
 func TestLineBreaksAndImages(t *testing.T) {
-	th := newTheme()
+	th := newTheme(256)
 	src := "one<br>two<BR/>three\n\n| a | b |\n|---|---|\n| x<br>y | z |\n\n![diagram](https://x.dev/a.png)\n"
 	lines := docRows(model.Artifact{Name: "d"}, src, 80, th)
 	all := strings.Join(texts(lines), "\n")
@@ -3115,7 +3115,7 @@ func TestPlainWordArtifactsLinkOnlyInCode(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	h.a.artifacts = []model.Artifact{{Name: "plan"}, {Name: "doc-notes"}}
-	link := h.a.th.Foam.Underline(true)
+	link := h.a.th.Run.Underline(true)
 	linked := func(spans []Span) []string {
 		var out []string
 		for _, sp := range h.a.linkify(spans) {
@@ -3125,11 +3125,11 @@ func TestPlainWordArtifactsLinkOnlyInCode(t *testing.T) {
 		}
 		return out
 	}
-	prose := []Span{{"the plan is in doc-notes", h.a.th.Text}}
+	prose := []Span{{"the plan is in doc-notes", h.a.th.Fg}}
 	if got := linked(prose); strings.Join(got, ",") != "doc-notes" {
 		t.Fatalf("prose links = %q, want only doc-notes", got)
 	}
-	code := []Span{{"see ", h.a.th.Text}, {"plan", h.a.th.Code}}
+	code := []Span{{"see ", h.a.th.Fg}, {"plan", h.a.th.Code}}
 	if got := linked(code); strings.Join(got, ",") != "plan" {
 		t.Fatalf("code links = %q, want plan", got)
 	}
@@ -3637,7 +3637,7 @@ func TestCompactWarning(t *testing.T) {
 func TestColonClearsTheLastMessage(t *testing.T) {
 	h := start(t)
 	h.openDemo()
-	h.a.notify("allow · Bash · api", h.a.th.Pine)
+	h.a.notify("allow · Bash · api", h.a.th.Done)
 	h.press(":threads", "<CR>")
 	if h.a.notice != "" {
 		t.Fatalf("after :threads the bottom line still says %q", h.a.notice)
