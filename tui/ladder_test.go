@@ -366,3 +366,21 @@ func TestATurnEndToastsAtTheHubsLevel(t *testing.T) {
 		t.Fatalf("a notice-level turn end toasts: %+v", h.a.toasts)
 	}
 }
+
+func TestAnAnsweredPermissionHasNoGlyphSinceArtifactsUseTheDiamond(t *testing.T) {
+	b := newChat("demo", "api")
+	b.AddEvent(model.Event{Kind: model.EventPermission, Tool: "Bash", Detail: "go test ./..."})
+	b.AddEvent(model.Event{Kind: model.EventAnswer, Text: "allow"})
+	for _, l := range b.Lines(80, newTheme(256), 0) {
+		if !strings.Contains(l.Text(), "go test") {
+			continue
+		}
+		for _, s := range l.Prefix {
+			if strings.Contains(s.Text, "◇") {
+				t.Fatalf("the answered permission %q has ◇, the artifact glyph", l.Text())
+			}
+		}
+		return
+	}
+	t.Fatal("the answered permission is not in the chat")
+}

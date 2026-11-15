@@ -653,7 +653,7 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 			spans = append(spans, Span{"  " + truncate(bl.text, w-4-width(tool)-2-width(tail)), th.Fg3})
 		}
 		spans = append(spans, Span{tail, st})
-		return []Line{{Prefix: []Span{{"  ◇ ", th.Fg3}}, Spans: spans}}
+		return []Line{{Prefix: []Span{{"    ", th.Fg3}}, Spans: spans}}
 	case bAnswer:
 		st := th.Done
 		if strings.HasPrefix(bl.text, string(model.Deny)) {
