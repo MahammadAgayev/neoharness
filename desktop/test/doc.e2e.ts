@@ -780,3 +780,35 @@ test('the block menu opens above the line where there is no room below, and neve
   await normal()
   await page.keyboard.press('Control+o')
 })
+
+test('j and k from the first letter go into and out of quotes, lists, code and tables, whose text sits right of the margin', async () => {
+  hub.artifact(
+    'demo',
+    'margins',
+    'Margins',
+    '# Margins\n\n> quote one\n>\n> quote two\n\n> quote three\n\n## Status\n\n- item one\n- item two\n\n```\ncode one\n```\n\n| a | b |\n| - | - |\n| c | d |\n\nlast line\n',
+  )
+  hub.event('demo', 'api', { kind: 'artifact', detail: 'margins', text: 'Margins', version: 1 })
+  await page.locator('.b-artifact', { hasText: 'Margins' }).click()
+  const win = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'margins' }) })
+  const doc = win.locator('.doc-page')
+  await doc.locator('h1', { hasText: 'Margins' }).click()
+  await normal()
+  await page.keyboard.press('g')
+  await page.keyboard.press('g')
+  const line = () =>
+    page.evaluate(() => {
+      const n = window.getSelection()?.focusNode
+      return (n?.nodeType === 3 ? n.parentElement : (n as Element | null))?.closest('h1,h2,p,li,pre,th,td')?.textContent ?? ''
+    })
+  const down = ['quote one', 'quote two', 'quote three', 'Status', 'item one', 'item two', 'code one', 'a', 'c', 'last line']
+  for (const want of down) {
+    await page.keyboard.press('j')
+    await expect.poll(line).toBe(want)
+  }
+  for (const want of [...down].reverse().slice(1).concat('Margins')) {
+    await page.keyboard.press('k')
+    await expect.poll(line).toBe(want)
+  }
+  await page.keyboard.press('Control+o')
+})

@@ -279,13 +279,35 @@ export class DocVim {
     }
     if (this.goal === null) this.goal = c.left
     for (let dy = lh / 2; dy < 400; dy += 3) {
-      const at = v.posAtCoords({ left: this.goal, top: dir > 0 ? c.bottom + dy : c.top - dy })
-      // Between blocks is no place for a cursor.
-      if (!at || !v.state.doc.resolve(at.pos).parent.isTextblock) continue
-      const r = v.coordsAtPos(at.pos)
-      if (dir > 0 ? r.top >= c.bottom - 2 : r.bottom <= c.top + 2) return at.pos
+      const top = dir > 0 ? c.bottom + dy : c.top - dy
+      const at = this.textAt(this.goal, top)
+      if (at === null) continue
+      const r = v.coordsAtPos(at)
+      if (dir > 0 ? r.top >= c.bottom - 2 : r.bottom <= c.top + 2) return at
     }
     return pos
+  }
+
+  // textAt is the text position at left, top, or null between blocks. A
+  // quote, list or table keeps its text right of its margin, so a column
+  // left of that text goes to the text block on the same line.
+  private textAt(left: number, top: number): number | null {
+    const v = this.view
+    const at = v.posAtCoords({ left, top })
+    if (!at) return null
+    const $p = v.state.doc.resolve(at.pos)
+    if ($p.parent.isTextblock) return at.pos
+    for (const d of [1, -1] as const) {
+      const sel = Selection.findFrom($p, d, true)
+      if (!sel) continue
+      const dom = v.nodeDOM(sel.$from.before())
+      if (!(dom instanceof HTMLElement)) continue
+      const box = dom.getBoundingClientRect()
+      if (top < box.top || top > box.bottom || left >= box.left) continue
+      const inside = v.posAtCoords({ left: box.left + 1, top })
+      if (inside && v.state.doc.resolve(inside.pos).parent.isTextblock) return inside.pos
+    }
+    return null
   }
 
   private lineMove(dir: 1 | -1, n: number): void {
