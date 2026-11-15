@@ -2,7 +2,7 @@ import { acceptCompletion, autocompletion, completionKeymap, completionStatus, t
 import { defaultKeymap, deleteGroupBackward, deleteToLineStart, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
-import { Decoration, EditorView, keymap, MatchDecorator, placeholder, tooltips, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
+import { Decoration, drawSelection, EditorView, keymap, MatchDecorator, placeholder, tooltips, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import { getCM, vim, Vim } from '@replit/codemirror-vim'
 import { useEffect, useRef, useState } from 'react'
 
@@ -77,13 +77,15 @@ function source(thread: string) {
 const theme = EditorView.theme({
   '&': { background: 'transparent', color: 'var(--fg)', fontSize: 'inherit' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-content': { fontFamily: 'var(--font-text)', caretColor: 'var(--iris)', padding: '0', minWidth: '0', width: '100%' },
+  '.cm-content': { fontFamily: 'var(--font-text)', caretColor: 'var(--accent)', padding: '0', minWidth: '0', width: '100%' },
   '.cm-line': { padding: '0' },
   // Lines wrap, so nothing needs a sideways scroll; without this, the cut
   // placeholder still widens the content and a scroll bar shows.
   '.cm-scroller': { overflowX: 'hidden' },
-  '.cm-cursor': { borderLeftColor: 'var(--iris)', borderLeftWidth: '2px' },
-  '.cm-fat-cursor': { background: 'var(--iris) !important', color: 'var(--base) !important' },
+  // The cursor is the page's: a still accent line in Insert, and in Normal a
+  // block that lets its letter show through.
+  '.cm-cursor': { borderLeft: 'var(--caret-w) solid var(--accent)' },
+  '.cm-fat-cursor': { background: 'var(--caret-block) !important', color: 'var(--fg) !important' },
   // Only the editor with focus shows a cursor: one place to type.
   '&:not(.cm-focused) .cm-cursorLayer': { display: 'none' },
   // One line, cut short in a narrow column, so the box keeps its height.
@@ -209,6 +211,7 @@ export function Prompt(props: {
         doc: drafts.get(thread) ?? '',
         extensions: [
           vimComp.current.of(store.state.settings.vim ? vim({ status: false }) : []),
+          drawSelection({ cursorBlinkRate: 0 }),
           Prec.highest(
             keymap.of([
               // With the list open, Enter and Tab take the chosen item, as in

@@ -1194,6 +1194,32 @@ test('a reply streams in a block at a time, open code shows plain, and the text 
   await expect(stream).toHaveCount(0)
 })
 
+test("the prompt's cursor is the page's: a still block in Normal, a still 2px accent line in Insert", async () => {
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  const prompt = page.locator('.pane.focused .prompt')
+  await page.keyboard.press('i')
+  await page.keyboard.type('ab')
+  await page.keyboard.press('Escape')
+  const block = await page.evaluate(() => {
+    const probe = document.createElement('div')
+    probe.style.background = 'var(--caret-block)'
+    document.body.append(probe)
+    const c = getComputedStyle(probe).backgroundColor
+    probe.remove()
+    return c
+  })
+  await expect(prompt.locator('.cm-fat-cursor')).toHaveCSS('background-color', block)
+  await page.keyboard.press('i')
+  await expect(prompt.locator('.cm-fat-cursor')).toHaveCount(0)
+  await expect(prompt.locator('.cm-cursor.cm-cursor-primary')).toHaveCSS('border-left-width', '2px')
+  const blinks = await prompt.locator('.cm-cursorLayer').evaluateAll((ls) => ls.map((l) => getComputedStyle(l).animationDuration))
+  expect(blinks.every((d) => d === '0s')).toBe(true)
+  await page.keyboard.press('Control+u')
+  await page.keyboard.press('Escape')
+})
+
 test('a name in a reply becomes a link once an artifact has it, even an artifact made later', async () => {
   await normal()
   await page.keyboard.press('Space')
