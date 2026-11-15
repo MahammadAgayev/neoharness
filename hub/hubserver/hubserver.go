@@ -78,6 +78,14 @@ func Handler(h *hub.Hub, info hubapi.Info, stop func()) http.Handler {
 		a, text, err := h.EditArtifact(r.PathValue("p"), r.PathValue("a"), in.Text, in.BaseText, in.Base, in.Force)
 		reply(w, hubapi.ArtifactText{Artifact: a, Text: text}, err)
 	})
+	mux.HandleFunc("POST /workspaces/{p}/artifacts/{a}/merge", func(w http.ResponseWriter, r *http.Request) {
+		var in hubapi.ArtifactEdit
+		if !decode(w, r, &in) {
+			return
+		}
+		m, err := h.MergeArtifact(r.PathValue("p"), r.PathValue("a"), in.Text, in.BaseText, in.Base)
+		reply(w, m, err)
+	})
 	mux.HandleFunc("GET /workspaces/{p}/threads", func(w http.ResponseWriter, r *http.Request) {
 		vs, err := h.Threads(r.PathValue("p"))
 		reply(w, vs, err)

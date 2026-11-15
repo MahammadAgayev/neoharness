@@ -228,6 +228,27 @@ type Artifact struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// Merge is what an edit of an artifact becomes when it is merged into the
+// newest version, Version. Merged has every change that merged; where both
+// sides changed the same lines it keeps the edit's side, and Conflicts says
+// where. Clean says there are none.
+type Merge struct {
+	Merged    string     `json:"merged"`
+	Clean     bool       `json:"clean"`
+	Version   int        `json:"version"`
+	Conflicts []Conflict `json:"conflicts,omitempty"`
+}
+
+// Conflict is where both sides changed the same block, as lines: [first,
+// end) from 0, in the base, the edit (Ours), the newest version (Theirs) and
+// the merged text. A range always holds whole blocks.
+type Conflict struct {
+	Base   [2]int `json:"base"`
+	Ours   [2]int `json:"ours"`
+	Theirs [2]int `json:"theirs"`
+	Merged [2]int `json:"merged"`
+}
+
 // Permission is a request waiting for the user.
 type Permission struct {
 	ID     string `json:"id"`

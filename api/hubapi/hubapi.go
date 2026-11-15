@@ -186,6 +186,14 @@ func (c *Client) EditArtifact(workspace, name, text, baseText string, base int, 
 	return out.Artifact, out.Text, err
 }
 
+// MergeArtifact is the merge an edit from version base would get on save,
+// without saving it.
+func (c *Client) MergeArtifact(workspace, name, text, baseText string, base int) (model.Merge, error) {
+	var m model.Merge
+	err := c.do("POST", "/workspaces/"+esc(workspace)+"/artifacts/"+esc(name)+"/merge", ArtifactEdit{Text: text, Base: base, BaseText: baseText}, &m)
+	return m, err
+}
+
 func (c *Client) Threads(workspace string) ([]model.ThreadView, error) {
 	var out []model.ThreadView
 	return out, c.do("GET", "/workspaces/"+esc(workspace)+"/threads", nil, &out)

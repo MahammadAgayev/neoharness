@@ -224,5 +224,16 @@ reaches that session as a diff before its next message. A save from version
 0 to a new name starts a document the person writes: the coordinator holds
 it and reads it in full on its next turn.
 
+A save from an older version merges by blocks. A block is a run of lines
+between blank lines, with fenced code and lists kept whole. Changes to
+different blocks both stay, and a block neither side touched comes out byte
+for byte. Where both changed one block, its lines merge as a merge tool
+does; changes to the same lines are refused. `POST
+/workspaces/{w}/artifacts/{a}/merge {text, base, baseText}` gives the merge
+a save would get, and writes nothing: `merged` keeps the edit's side where
+it conflicts, and each conflict gives its line ranges, `[first, end)` from
+0, in the base, the edit (`ours`), the newest version (`theirs`) and
+`merged`. A client maps the ranges to its own blocks.
+
 A thread's state is not stored. The hub calculates it from the stored
 fields each time, so it cannot drift.

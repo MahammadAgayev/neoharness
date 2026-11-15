@@ -1323,11 +1323,11 @@ func (h *Hub) EditArtifact(workspaceName, name, text, baseText string, base int,
 		return a, "", fmt.Errorf("the artifact is %d KB; the limit is %d KB", len(text)>>10, artifactLimit>>10)
 	}
 	if a.Version != base && !force {
-		merged, ok := merge3(baseText, text, old)
-		if !ok {
+		m := mergeBlocks(baseText, text, old)
+		if !m.Clean {
 			return a, "", fmt.Errorf("v%d changed the lines you edited · :w! saves over it, :e! takes it", a.Version)
 		}
-		text = merged
+		text = m.Merged
 	}
 	if text == old {
 		return a, text, nil
@@ -1352,6 +1352,28 @@ func (h *Hub) EditArtifact(workspaceName, name, text, baseText string, base int,
 	}
 	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: a.Thread, Artifact: &a})
 	return a, text, nil
+}
+
+// MergeArtifact is the merge an edit from version base would get on save,
+// without the save, so a client can show the newer version inside an edit.
+func (h *Hub) MergeArtifact(workspaceName, name, text, baseText string, base int) (model.Merge, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, err := h.workspace(workspaceName); err != nil {
+		return model.Merge{}, err
+	}
+	a, old, err := workspace.Artifact(workspaceName, name)
+	if errors.Is(err, os.ErrNotExist) {
+		return model.Merge{}, fmt.Errorf("no artifact %q in %s", name, workspaceName)
+	} else if err != nil {
+		return model.Merge{}, err
+	}
+	if a.Version == base {
+		return model.Merge{Merged: text, Clean: true, Version: a.Version}, nil
+	}
+	m := mergeBlocks(baseText, text, old)
+	m.Version = a.Version
+	return m, nil
 }
 
 // editNotes tells a thread what the person changed in the artifacts it

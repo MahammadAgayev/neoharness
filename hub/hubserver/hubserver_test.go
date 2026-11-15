@@ -131,6 +131,12 @@ func TestClientServerRoundTrip(t *testing.T) {
 	if _, text, _ := c.Artifact("demo", "plan"); text != "# Plan\n\nnew\n" {
 		t.Fatalf("artifact text = %q", text)
 	}
+	if m, err := c.MergeArtifact("demo", "plan", "# Plan\n\nold\n\nmore\n", "# Plan\n\nold\n", 1); err != nil || !m.Clean || m.Version != 2 || m.Merged != "# Plan\n\nnew\n\nmore\n" {
+		t.Fatalf("merge = %+v, %v", m, err)
+	}
+	if m, _ := c.MergeArtifact("demo", "plan", "# Plan\n\nmine\n", "# Plan\n\nold\n", 1); m.Clean || len(m.Conflicts) != 1 {
+		t.Fatalf("conflicting merge = %+v", m)
+	}
 	dir := t.TempDir()
 	if err := c.SetFolder("demo", dir); err != nil {
 		t.Fatal(err)

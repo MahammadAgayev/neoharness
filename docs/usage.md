@@ -161,8 +161,10 @@ reports. They belong to the workspace, and every session can read them.
   chat opens it too. It opens in the current window, and `<C-o>` goes back.
 - The open document reloads when an agent writes a new version.
 - `:e`, or `i a I A o O`, shows the markdown source for editing. `:w` saves.
-  If the agent wrote since, the hub merges by lines. Changes to the same
-  lines are refused: `:w!` saves over them, `:e!` takes the agent's version.
+  If the agent wrote since, the hub merges by blocks: changes to different
+  paragraphs, lists, tables or code blocks both stay, and so do changes to
+  different lines of one block. Changes to the same lines are refused:
+  `:w!` saves over them, `:e!` takes the agent's version.
 - The agent sees your edit as a diff in its next turn.
 - `gx` opens the link under the cursor.
 
