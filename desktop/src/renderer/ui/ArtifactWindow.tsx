@@ -71,7 +71,6 @@ function DocEditor(props: {
       dispatchTransaction(tr) {
         const v = viewRef.current!
         v.updateState(v.state.apply(tr))
-        if (tr.selectionSet && !tr.docChanged) vimMode?.mouse(!!tr.getMeta('pointer'))
         if (tr.docChanged && !tr.getMeta('remote')) {
           const text = md.current!.markdown(v.state.doc)
           last.current = text

@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "e2e": "electron-vite build && playwright test",
+    "perf": "electron-vite build && playwright test -c playwright.perf.config.ts",
     "package:app": "electron-packager . neoharness --platform=darwin --out=dist --overwrite --icon=build/icon.icns --app-bundle-id=dev.neoharness.desktop --ignore=\"^/(src|test|test-results|playwright-report|build|dist)($|/)\" --ignore=\"\\.(ts|md)$\"",
     "dist": "electron-vite build && npm run package:app && codesign --force --deep --sign - dist/neoharness-darwin-*/neoharness.app"
   },

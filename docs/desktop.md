@@ -107,10 +107,7 @@ The keys are Vim's where they fit. Normal mode moves: `h j k l`, `w b e`,
 `0 $`, `gg G`, `{ }`, `<C-d> <C-u>`, `/` and `n N`. A block (a paragraph,
 a heading, a list item, a table cell) is Vim's line, so `dd`, `yy`, `p`
 and `o` act on blocks, and `cw`, `ciw`, `x`, `u` and `<C-r>` work as in
-Vim. `v` and `V` select; so does a mouse drag, as with Vim and a mouse,
-and a click leaves Visual mode. `j` and `k` keep the cursor four lines
-from the edge and scroll the text under it, as Vim's `scrolloff`. `i`,
-`a` or `o` start Insert; `<Esc>` leaves it.
+Vim. `v` and `V` select. `i`, `a` or `o` start Insert; `<Esc>` leaves it.
 Normal mode types nothing. The cursor is a block in Normal and Visual mode and a
 line in Insert, as in Vim and in the prompt. Without Vim (`:set novim`) the page is always
 in Insert, as a text editor is.
@@ -281,7 +278,17 @@ npm run e2e        # the app on a scratch hub and on a fake hub, with screenshot
 NEOHARNESS_APP=dist/neoharness-darwin-arm64/neoharness.app/Contents/MacOS/neoharness npx playwright test cards   # the packaged app
 NEOHARNESS_LIVE=1 npx playwright test live   # real turns with haiku: a reply, and an artifact the agent rewrites while you edit it
 NEOHARNESS_DEMO=1 npx playwright test demo   # records docs/demo/desktop.gif on the fake hub; needs ffmpeg
+npm run perf       # the frame budget: each scenario on the fake hub with the CPU slowed 4×; test-results/perf.json
 ```
+
+`npm run perf` measures what the person feels: frames while a long chat
+streams, scrolls and moves, the rail folds, and keys are typed in the prompt
+and the page. At 120 Hz a frame is 8.3 ms, so the budget is at most one frame
+over 17 ms and no long task per scenario, and a key shows within 16 ms. It
+runs with the CPU slowed 4× (`PERF_THROTTLE=1` for full speed), as on an
+older or busy Mac. A scenario over budget fails, except those listed in
+`known` in `test/perf.perf.ts` with the change that brings them in. Run it
+with nothing else loading the Mac, as other work moves the numbers.
 
 The end-to-end tests make their own `NEOHARNESS_HOME` and MCP port and stop
 their hub after. They never touch `~/.neoharness`. `test/fakehub.ts` is the
