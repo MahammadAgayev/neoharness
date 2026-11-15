@@ -28,17 +28,15 @@
 .doc-page {
   max-width: 90ch;
   margin: 0 auto;
-  padding: 48px 56px 40vh;
+  padding: var(--s-7) var(--s-7) 40vh;
   line-height: 1.6;
   outline: none;
-  caret-color: var(--iris);
-}
-/* In Normal and Visual mode the cursor is a block, as the prompt's. */
-.doc-page.vim-normal {
+  /* The page draws its own caret (Caret.tsx): the browser's has no width
+     and blinks. */
   caret-color: transparent;
 }
 .doc-page:focus .doc-fat-cursor {
-  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: var(--caret-block);
   color: var(--fg);
 }
 .doc-fat-cursor.eol {
@@ -121,8 +119,12 @@
   color: var(--fg-3);
   text-decoration: line-through;
 }
+/* A code block is raised, with no border, as the frame's other surfaces. */
 .doc-page pre.code {
-  padding: 14px 16px;
+  padding: var(--s-3) var(--s-4);
+  background: var(--bg-raised);
+  border: 0;
+  border-radius: var(--r-2);
 }
 .doc-page pre.code code {
   font-size: 0.86em;
@@ -130,8 +132,8 @@
 .doc-page pre.code[data-lang]::after {
   content: attr(data-lang);
   position: absolute;
-  top: 6px;
-  right: 10px;
+  top: var(--s-2);
+  right: var(--s-3);
   font-family: var(--font-text);
   font-size: var(--fs-small);
   color: var(--fg-3);
@@ -210,7 +212,7 @@
 .doc-page th,
 .doc-page td {
   border: 0;
-  border-bottom: 1px solid var(--hairline);
+  border-bottom: var(--hairline-w) solid var(--hairline);
 }
 .doc-page th {
   font-weight: 600;
@@ -279,7 +281,7 @@
   gap: var(--s-2);
   padding: var(--s-1) var(--s-4) var(--s-1) var(--s-3);
   border-left: 3px solid var(--wait);
-  border-bottom: 1px solid var(--hairline);
+  border-bottom: var(--hairline-w) solid var(--hairline);
   background: color-mix(in srgb, var(--wait) 10%, var(--bg-raised));
   color: var(--fg-2);
   font-size: var(--fs-secondary);

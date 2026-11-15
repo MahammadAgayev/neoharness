@@ -26,6 +26,7 @@ import { DocVim } from '../lib/docvim'
 import { MarkdownDoc } from '../lib/mdoc'
 import { store, useStore, type Win } from '../store'
 import { docs, handlers, yank, type DocKeys, type WinAction } from './registry'
+import { Caret, type CaretAt } from './Caret'
 import { CloseWindow } from './CloseWindow'
 import { Icon } from './Icon'
 import 'prosemirror-view/style/prosemirror.css'
@@ -109,6 +110,19 @@ function DocEditor(props: {
   arts.current = props.artifacts
   const [find, setFind] = useState<string | null>(null)
   const [slash, setSlash] = useState<Slash | null>(null)
+  const [caret, setCaret] = useState<CaretAt | null>(null)
+  // placeCaret draws the Insert caret at the head, after the view has
+  // scrolled, in the scroller's content so it scrolls with the text.
+  const placeCaret = useRef(() => {})
+  placeCaret.current = () => {
+    const v = viewRef.current
+    const sc = scroller.current
+    if (!v || !sc || fatCursorKey.getState(v.state)?.on !== false || !v.hasFocus()) return setCaret(null)
+    const c = v.coordsAtPos(v.state.selection.head)
+    const box = sc.getBoundingClientRect()
+    const at = { left: c.left - box.left + sc.scrollLeft - 1, top: c.top - box.top + sc.scrollTop, height: c.bottom - c.top }
+    setCaret((old) => (old && old.left === at.left && old.top === at.top && old.height === at.height ? old : at))
+  }
   const newPage = useRef<(name: string) => void>(() => {})
 
   useEffect(() => {
@@ -136,6 +150,7 @@ function DocEditor(props: {
         vimMode?.group(tr)
         v.updateState(v.state.apply(tr))
         setSlash(slashKey.getState(v.state) ?? null)
+        placeCaret.current()
         if (tr.selectionSet && !tr.docChanged) vimMode?.mouse(!!tr.getMeta('pointer'))
         if (tr.docChanged && !tr.getMeta('remote')) {
           // Taking theirs, or writing in the block yourself, decides a conflict.
@@ -153,10 +168,12 @@ function DocEditor(props: {
         focus: () => {
           store.focus(props.win)
           store.setInsert(!store.state.settings.vim || vimMode?.mode === 'insert')
+          placeCaret.current()
           return false
         },
         blur: () => {
           store.setInsert(false)
+          placeCaret.current()
           return false
         },
         // A click opens an artifact named in the page, or a link, as in a
@@ -286,6 +303,9 @@ function DocEditor(props: {
       view.dispatch(openSlash(view.state))
     }
     document.addEventListener('nh:slash', onSlash)
+    // Text that wraps again, or a pane that resizes, moves the caret too.
+    const resized = new ResizeObserver(() => placeCaret.current())
+    resized.observe(host.current!)
     // A new doc opens ready to write: the cursor at its end, in Insert.
     if (store.writeDoc === props.name) {
       store.writeDoc = ''
@@ -301,6 +321,7 @@ function DocEditor(props: {
       document.removeEventListener('nh:table', onTable)
       document.removeEventListener('nh:page', onPage)
       document.removeEventListener('nh:slash', onSlash)
+      resized.disconnect()
       docs.delete(keys)
       props.onView(null)
       view.destroy()
@@ -385,6 +406,7 @@ function DocEditor(props: {
       )}
       <div className="doc-editor" ref={scroller}>
         <div className="doc-host" ref={host} />
+        <Caret at={caret} className="doc-caret" />
         {slash && viewRef.current && scroller.current && <SlashMenu view={viewRef.current} slash={slash} scroller={scroller.current} newPage={newPage.current} />}
       </div>
     </>

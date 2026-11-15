@@ -73,6 +73,10 @@
   --run: var(--foam);
   --done: var(--pine);
   --peer: var(--rose);
+  /* The cursor the editors draw: a line in Insert, a soft block in Normal
+     and Visual with the letter under it in --fg. It never blinks. */
+  --caret-w: 2px;
+  --caret-block: color-mix(in srgb, var(--accent) 35%, transparent);
 
   /* The old names, until no change in flight uses them. */
   --text: var(--fg);

@@ -1,0 +1,9 @@
+/* The Insert caret an editor draws itself (ui/Caret.tsx): placed by the
+   editor in its scroller, so it scrolls with the text. */
+.caret {
+  position: absolute;
+  z-index: 1;
+  width: var(--caret-w);
+  background: var(--accent);
+  pointer-events: none;
+}

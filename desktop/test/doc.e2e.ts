@@ -63,6 +63,18 @@ test('an artifact edits as a rendered page: tables, tasks, code and Vim motions,
   await expect(doc.locator('li.task.done .task-body')).toHaveCSS('text-decoration-line', 'line-through')
   await expect(doc.locator('li.task:not(.done) .task-body')).toHaveCSS('text-decoration-line', 'none')
   await expect(doc.locator('pre.code .hljs-keyword', { hasText: 'func' })).toBeVisible()
+  // A code block is raised, with no border, and its language is muted.
+  const raised = await page.evaluate(() => {
+    const probe = document.createElement('div')
+    probe.style.background = 'var(--bg-raised)'
+    document.body.append(probe)
+    const c = getComputedStyle(probe).backgroundColor
+    probe.remove()
+    return c
+  })
+  await expect(doc.locator('pre.code')).toHaveCSS('background-color', raised)
+  await expect(doc.locator('pre.code')).toHaveCSS('border-top-width', '0px')
+  await expect(doc.locator('pre.code')).toHaveCSS('border-top-left-radius', '6px')
   await expect(doc.locator('blockquote.alert.alert-note')).toBeVisible()
   // [!NOTE] shows as the alert's title, not as the text it is.
   await expect(doc.locator('.alert-mark[data-label="Note"]')).toHaveCSS('font-size', '0px')
@@ -130,7 +142,45 @@ test('the page cursor is a block in Normal and Visual mode and a line in Insert,
   await page.keyboard.press('Escape')
   await page.keyboard.press('i')
   await expect(fat).toHaveCount(0)
-  await expect(doc).not.toHaveCSS('caret-color', 'rgba(0, 0, 0, 0)')
+  // In Insert the page draws its caret: a 2px accent line that never
+  // blinks, in place of the browser's thin blinking one.
+  const caret = win.locator('.doc-caret')
+  await expect(caret).toBeVisible()
+  await expect(doc).toHaveCSS('caret-color', 'rgba(0, 0, 0, 0)')
+  await expect(caret).toHaveCSS('width', '2px')
+  await expect(caret).toHaveCSS('animation-name', 'none')
+  expect(
+    await caret.evaluate((e) => {
+      const probe = document.createElement('div')
+      probe.style.background = 'var(--accent)'
+      document.body.append(probe)
+      const accent = getComputedStyle(probe).backgroundColor
+      probe.remove()
+      return getComputedStyle(e).backgroundColor === accent
+    }),
+  ).toBe(true)
+  const letterX = (i: number) =>
+    doc.locator('p', { hasText: 'alpha' }).evaluate((e, i) => {
+      const r = document.createRange()
+      r.setStart(e.firstChild!, i)
+      r.setEnd(e.firstChild!, i + 1)
+      return r.getBoundingClientRect().left
+    }, i)
+  // i put the cursor before the e of beta.
+  expect(Math.abs((await caret.boundingBox())!.x - (await letterX('alpha b'.length)))).toBeLessThan(2)
+  const before = (await caret.boundingBox())!
+  await page.keyboard.type('X')
+  await expect.poll(async () => Math.abs((await caret.boundingBox())!.x - (await letterX('alpha bX'.length)))).toBeLessThan(2)
+  expect((await caret.boundingBox())!.x).toBeGreaterThan(before.x)
+  await shot('51-artifact-insert-caret')
+  // No blink: it is there, the same, a while later.
+  await page.waitForTimeout(700)
+  await expect(caret).toBeVisible()
+  await expect(caret).toHaveCSS('opacity', '1')
+  await page.keyboard.press('Escape')
+  await expect(caret).toHaveCount(0)
+  await page.keyboard.press('u')
+  await expect(doc.locator('p', { hasText: 'alpha' })).toHaveText('alpha beta')
   // On an empty block the block cursor still shows, one space wide.
   await page.keyboard.press('Escape')
   await page.keyboard.press('o')
