@@ -94,7 +94,8 @@ export function editorPlugins(leave: () => void): Plugin[] {
       'Mod-z': undo,
       'Shift-Mod-z': redo,
       Enter: splitListItem(n.list_item),
-      'Shift-Enter': chainCommands(exitCode, (state, dispatch) => {
+      // A GFM table cell is one line, so it takes no line break.
+      'Shift-Enter': chainCommands(exitCode, isInTable, (state, dispatch) => {
         dispatch?.(state.tr.replaceSelectionWith(n.hard_break.create()).scrollIntoView())
         return true
       }),

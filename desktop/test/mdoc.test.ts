@@ -125,4 +125,13 @@ describe('markdown documents', () => {
     expect(toMarkdown(parse('> [!WARNING]\n> careful').child(0))).toBe('> [!WARNING]\n> careful')
     expect(toMarkdown(parse('````\n```\n````').child(0))).toBe('````\n```\n````')
   })
+
+  it('a line break in a table cell saves as a space, as a GFM cell is one line', () => {
+    const { table, table_row, table_header, table_cell, hard_break } = schema.nodes
+    const t = table.create(null, [
+      table_row.create(null, [table_header.create(null, schema.text('a')), table_header.create(null, schema.text('b'))]),
+      table_row.create(null, [table_cell.create(null, [schema.text('x'), hard_break.create(), schema.text('z')]), table_cell.create(null, schema.text('y'))]),
+    ])
+    expect(toMarkdown(t)).toBe('| a | b |\n|---|---|\n| x z | y |')
+  })
 })

@@ -184,7 +184,7 @@ function cellText(state: MarkdownSerializerState, c: Node): string {
     state.options,
   )
   s.renderInline(c)
-  return (s as unknown as { out: string }).out.replace(/\n/g, ' ').replace(/\|/g, '\\|').trim()
+  return (s as unknown as { out: string }).out.replace(/\\?\n/g, ' ').replace(/\|/g, '\\|').trim()
 }
 
 const serializer = new MarkdownSerializer(
