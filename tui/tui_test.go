@@ -534,7 +534,6 @@ func TestPermissionCardAndAnswer(t *testing.T) {
 	v.Permission = &model.Permission{ID: "p1", Tool: "Bash", Detail: "rm -rf ./tmp/cache"}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
-	h.see("needs permission · Bash")
 	h.see("permission · Bash  rm -rf ./tmp/cache")
 
 	// The card shows in its window; <leader>a allows it.
@@ -1215,7 +1214,7 @@ func TestThreadsPaneGroupsByStateAndFoldsResolved(t *testing.T) {
 		return out
 	}
 	got := strings.Join(rows(), " | ")
-	want := "waiting · 1 | ◆ auth-refactor | question | ▸ 1 resolved"
+	want := "waiting · 1 | ◆ auth-refactor now | question | ▸ 1 resolved"
 	if got != want {
 		t.Fatalf("rows = %q\nwant   %q", got, want)
 	}
@@ -1320,6 +1319,9 @@ func TestMessagesPickerOpensTheThread(t *testing.T) {
 func TestToastsForThreadsOffScreen(t *testing.T) {
 	h := start(t)
 	h.openDemo()
+	// The open board shows a waiting thread as its row; the notice is for
+	// a closed board.
+	h.press("<C-w>o")
 	v := h.a.threads["api-tests"]
 	v.State = model.StateWaiting
 	v.Waiting = "Which branch?"
@@ -3091,7 +3093,9 @@ func TestThreadsListShowsHowLongAThreadRuns(t *testing.T) {
 	v.State, v.Since = model.StateRunning, time.Now().Add(-95*time.Second)
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
-	h.see("auth-refactor  1m")
+	if row := strings.TrimSpace(h.line(h.rowOf("auth-refactor"))); !strings.HasSuffix(row, "1m") {
+		t.Fatalf("the row should end with its time: %q", row)
+	}
 }
 
 func TestWorkspaceKeepsItsSplits(t *testing.T) {
@@ -3440,6 +3444,9 @@ func TestWorkspacePickerShowsWhatWaits(t *testing.T) {
 func TestToastsSayTheirWorkspaceInMessages(t *testing.T) {
 	h := start(t)
 	h.openDemo()
+	// The open board shows a waiting thread as its row; the notice is for
+	// a closed board.
+	h.press("<C-w>o")
 	v := h.a.threads["api-tests"]
 	v.State = model.StateWaiting
 	v.Waiting = "Which branch?"
@@ -3557,6 +3564,9 @@ func TestAnIdleThreadSaysWhenItWakes(t *testing.T) {
 func TestQuietThreadsToastOnlyWhenTheyWait(t *testing.T) {
 	h := start(t)
 	h.openDemo()
+	// The open board shows a waiting thread as its row; the notice is for
+	// a closed board.
+	h.press("<C-w>o")
 	done := h.a.threads["auth-refactor"]
 	done.Quiet, done.State = true, model.StateIdle
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: done.Name, View: &done})

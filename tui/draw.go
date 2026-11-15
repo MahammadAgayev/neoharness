@@ -40,10 +40,6 @@ func (a *App) draw() {
 	a.cursorX, a.cursorY = -1, -1
 	now := a.now()
 	a.spin = phase(now, spinEvery)
-	// Which threads are on screen changes with every window command, so the
-	// list is redrawn here rather than after each of them.
-	a.renderThreads()
-
 	sep := func(x, y, h int) {
 		for i := 0; i < h; i++ {
 			s.SetContent(x, y+i, '│', nil, a.th.Separator)
@@ -53,6 +49,10 @@ func (a *App) draw() {
 	// The last two rows are the global status line and the command line.
 	area := Rect{margin, 0, W - 2*margin, H - 2}
 	a.root.layout(area, sep)
+	// Which threads are on screen changes with every window command, so the
+	// list is redrawn here rather than after each of them. Its rows fit the
+	// width the layout gives.
+	a.renderThreads()
 	a.bindDiff()
 	for _, w := range a.root.windows() {
 		a.drawWindow(w, w == a.cur)
@@ -562,8 +562,7 @@ func (a *App) drawStatusLine(W, H int) {
 		x = a.put(x, y, W, a.workspace, th.Fg2) + 3
 	}
 	// With the board closed, the newest notice shows here.
-	board := slices.ContainsFunc(a.root.windows(), func(w *Window) bool { return w.Buf.Kind == KindThreads })
-	if ts := a.shownToasts(); !board && len(ts) > 0 {
+	if ts := a.shownToasts(); a.boardWin() == nil && len(ts) > 0 {
 		x = a.drawLine(x, y, W-margin, Line{Spans: a.toastLine(ts[len(ts)-1])}) + 3
 	}
 	n := map[model.State]int{}
@@ -901,6 +900,32 @@ func elapsed(d time.Duration) string {
 		return fmt.Sprintf("%dm", int(d.Minutes()))
 	}
 	return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+}
+
+// ago is a board row's time: one unit, at most three columns, so the
+// column stays even.
+func ago(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+	return fmt.Sprintf("%dd", int(d.Hours()/24))
+}
+
+// agoTurns is when ago(now-since) next changes.
+func agoTurns(since, now time.Time) time.Time {
+	d, unit := now.Sub(since), time.Minute
+	switch {
+	case d >= 24*time.Hour:
+		unit = 24 * time.Hour
+	case d >= time.Hour:
+		unit = time.Hour
+	}
+	return since.Add((d/unit + 1) * unit)
 }
 
 func shortHome(p string) string {

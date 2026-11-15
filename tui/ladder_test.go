@@ -66,12 +66,9 @@ func TestANoticeWaitsWhileYouTypeAndNeedsYouDoesNot(t *testing.T) {
 	if strings.Contains(h.screen(), "Moved the store.") {
 		t.Fatal("a notice should wait while you are in Insert")
 	}
-	v := h.a.threads["auth-refactor"]
-	v.State = model.StateWaiting
-	h.a.threads[v.Name] = v
-	h.a.toast("auth-refactor", Span{"◆", h.a.th.Wait}, "needs permission · Bash", h.a.th.Wait, 0)
+	h.a.showNotice("ops", model.Event{Text: "needs you · Bash", NeedsYou: true})
 	h.a.draw()
-	h.see("needs permission · Bash")
+	h.see("needs you · Bash")
 	c.now = c.now.Add(10 * time.Second)
 	h.press("<Esc>")
 	h.see("Moved the store.")
@@ -184,4 +181,49 @@ func TestABoardRowSettlesWithATintAndWaitsWhileYouAreOnTheBoard(t *testing.T) {
 	if h.rowOf("○ api-tests") < h.rowOf("idle · 1") || !tinted("api-tests") {
 		t.Fatalf("the row moves when the cursor leaves the board:\n%s", h.screen())
 	}
+}
+
+func TestBoardRowsShowTheirTimeOnTheRight(t *testing.T) {
+	c := startClocked(t)
+	h := c.h
+	h.openDemo()
+	h.setThread("api-tests", func(v *model.ThreadView) { v.Since = c.now.Add(-6 * 24 * time.Hour) })
+	h.setThread("auth-refactor", func(v *model.ThreadView) { v.Since = c.now.Add(-4*time.Minute - 10*time.Second) })
+	b := h.board()
+	for name, want := range map[string]string{"○ api-tests": "6d", "◉ auth-refactor": "4m"} {
+		if !strings.Contains(h.screen(), name) {
+			name = "● auth-refactor"
+		}
+		line := []rune(h.line(h.rowOf(name)))
+		end := b.rect.X + b.rect.W - 1
+		if got := strings.TrimSpace(string(line[end-len(want) : end])); got != want {
+			t.Fatalf("%s should end with %q one column before the edge, got %q:\n%s", name, want, got, h.screen())
+		}
+	}
+	if h.fgAt("6d") != fgOf(h.a.th.Fg3) {
+		t.Fatal("a row's time is in fg-3")
+	}
+	// The time of an idle row changes on its own, so the screen wakes for it.
+	c.timers = nil
+	h.a.wakeAt = time.Time{}
+	h.setThread("auth-refactor", func(v *model.ThreadView) { v.State = model.StateIdle })
+	h.setThread("api-tests", func(v *model.ThreadView) { v.Since = c.now.Add(-59*time.Minute - 30*time.Second) })
+	h.a.step(evUpdate{})
+	c.run(31*time.Second, nil)
+	h.see("1h")
+}
+
+func TestNoFootNoticeForAWaitingThreadTheBoardShows(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.setThread("api-tests", func(v *model.ThreadView) {
+		v.State = model.StateWaiting
+		v.Permission = &model.Permission{ID: "p1", Tool: "Bash", Detail: "curl -X POST"}
+	})
+	if strings.Contains(h.screen(), "needs permission") {
+		t.Fatalf("the board's row says it already:\n%s", h.screen())
+	}
+	h.press("<C-w>o")
+	h.a.draw()
+	h.see("needs permission · Bash")
 }

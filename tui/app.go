@@ -1289,6 +1289,10 @@ func (a *App) renderThreads() {
 	}
 	now := a.now()
 	tint := func(n string) bool { return now.Before(a.settleUntil[n]) }
+	boardW := 0
+	if w := a.boardWin(); w != nil {
+		boardW = a.textWidth(w)
+	}
 	rows := func(n string) []Line {
 		v := a.threads[n]
 		nameSt, info := th.Fg2, ""
@@ -1298,24 +1302,30 @@ func (a *App) renderThreads() {
 		if v.State == model.StateResolved {
 			nameSt = th.Fg3
 		}
-		if v.State == model.StateRunning && !v.Since.IsZero() {
-			info = elapsed(now.Sub(v.Since))
-		}
-		if w := wakeLabel(v); w != "" {
-			info = strings.TrimSuffix(w+" · "+info, " · ")
-		}
+		info = wakeLabel(v)
 		if v.Queued > 0 {
 			info = strings.TrimSpace(fmt.Sprintf("+%d queued  %s", v.Queued, info))
 		}
+		spans := []Span{
+			{a.glyph(v.State) + " ", th.state(v.State)},
+			{pad(n, nameW+2), nameSt},
+			{info, th.Fg3},
+		}
+		if !v.Since.IsZero() {
+			// One column of the row's width is its prefix, one stays blank
+			// at the edge.
+			t := ago(now.Sub(v.Since))
+			used := 0
+			for _, s := range spans {
+				used += width(s.Text)
+			}
+			spans = append(spans, Span{strings.Repeat(" ", max(boardW-1-used-width(t), 1)) + t, th.Fg3})
+		}
 		out := []Line{{
 			Prefix: []Span{{" ", th.Fg}},
-			Spans: []Span{
-				{a.glyph(v.State) + " ", th.state(v.State)},
-				{pad(n, nameW+2), nameSt},
-				{info, th.Fg3},
-			},
-			Item: n,
-			Tint: tint(n),
+			Spans:  spans,
+			Item:   n,
+			Tint:   tint(n),
 		}}
 		// What a waiting thread needs, to read without opening it.
 		var need []Span
@@ -1394,6 +1404,19 @@ func (a *App) renderThreads() {
 		lines = []Line{{Prefix: []Span{{" ", th.Fg}}, Spans: []Span{{"no threads yet", th.Fg3}}}}
 	}
 	a.threadsBuf.SetLines(lines)
+}
+
+// boardWin is the window that shows the board, nil when it is closed.
+func (a *App) boardWin() *Window {
+	if a.root == nil {
+		return nil
+	}
+	for _, w := range a.root.windows() {
+		if w.Buf.Kind == KindThreads {
+			return w
+		}
+	}
+	return nil
 }
 
 // settle is how long a board row that changed group keeps its tint.

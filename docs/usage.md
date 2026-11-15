@@ -63,7 +63,8 @@ yourself:
 - The threads pane groups threads by state, each group with its count
   (`waiting · 1`): what waits for you and what failed on top, then what
   runs, then what is idle. Resolved threads fold into `▸ N resolved`. A
-  row is the state's glyph and the name; a waiting thread has a second row
+  row is the state's glyph, the name, and on the right how long the thread
+  has been in its state (`now`, `4m`, `2h`, `6d`); a waiting thread has a second row
   with what it waits for, such as `permission · Bash  psql -c …`. `K` on a
   row shows the thread's last reply on the command line.
 - A row that changes group moves only when your cursor is not in the
@@ -147,7 +148,9 @@ Toasts are one line each in the foot of the threads pane, under its rows,
 which they never cover; with the pane closed, the newest shows in the status
 line. Each names the thread, and the workspace when it is not the open one.
 A toast that does not need you waits while you are in Insert or on the
-command line, and shows when you leave it. What needs you shows at once.
+command line, and shows when you leave it. What needs you shows at once,
+except a thread of the open workspace while the threads pane is open: its
+row already says it.
 What needs you, in every workspace, is also in one list, oldest first, as
 Vim's quickfix list: permission requests, questions, failed turns and
 notices that need you. The status line counts it as `◆ N waiting`. `]q` and

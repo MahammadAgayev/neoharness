@@ -11,7 +11,8 @@ import (
 // The frame scheduler spends the person's attention, and bytes over ssh, on
 // purpose: a key draws at once; hub events draw at most frameEvery; a timer
 // wakes the loop only when a cell will change: the live tool row's spinner,
-// the running glyph's pulse, or a time that turns a minute.
+// the running glyph's pulse, or a time that turns a minute, or a board
+// row's time that turns its unit.
 const (
 	frameEvery = time.Second / 8
 	spinEvery  = 250 * time.Millisecond
@@ -84,6 +85,7 @@ func (a *App) scheduleNext(now time.Time, live bool) {
 	if live {
 		consider(nextPhase(now, spinEvery))
 	}
+	board := a.boardWin() != nil
 	for _, v := range a.threads {
 		if v.State == model.StateRunning {
 			consider(nextPhase(now, pulseEvery))
@@ -91,6 +93,9 @@ func (a *App) scheduleNext(now time.Time, live bool) {
 		if !v.Since.IsZero() && v.State != model.StateIdle {
 			d := now.Sub(v.Since)
 			consider(v.Since.Add((d/time.Minute + 1) * time.Minute))
+		}
+		if !v.Since.IsZero() && board {
+			consider(agoTurns(v.Since, now))
 		}
 	}
 	for k, t := range a.seenFrom {

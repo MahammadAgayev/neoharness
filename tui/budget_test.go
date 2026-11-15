@@ -100,7 +100,7 @@ func TestAKeyDrawsAtOnceEvenInsideTheBudget(t *testing.T) {
 	}
 }
 
-func TestAnIdleWorkspaceSchedulesNothing(t *testing.T) {
+func TestAnIdleWorkspaceSchedulesOnlyTheBoardsTimes(t *testing.T) {
 	c := startClocked(t)
 	c.h.openDemo()
 	v := c.h.a.threads["auth-refactor"]
@@ -116,8 +116,17 @@ func TestAnIdleWorkspaceSchedulesNothing(t *testing.T) {
 	c.h.a.wakeAt = time.Time{}
 	c.now = c.now.Add(time.Second)
 	c.h.a.step(evUpdate{})
+	// Only the board's times turn, at most once a minute.
+	if len(c.timers) > 1 || len(c.timers) == 1 && c.timers[0].at.Sub(c.now) < 59*time.Second {
+		t.Fatalf("nothing else moves on an idle screen, yet timers wait: %+v", c.timers)
+	}
+	c.h.press("<C-w>o")
+	c.timers = nil
+	c.h.a.wakeAt = time.Time{}
+	c.now = c.now.Add(time.Second)
+	c.h.a.step(evUpdate{})
 	if len(c.timers) != 0 {
-		t.Fatalf("nothing moves on an idle screen, yet %d timers wait", len(c.timers))
+		t.Fatalf("with the board closed nothing moves, yet %d timers wait", len(c.timers))
 	}
 }
 

@@ -177,12 +177,18 @@ func (a *App) pruneToasts() {
 
 // shownToasts are the toasts to draw now, the newest last. A notice that
 // has not shown yet waits while the person types: in Insert or on the
-// command line. What needs the person shows at once.
+// command line. What needs the person shows at once, unless it is a row of
+// the open board.
 func (a *App) shownToasts() []*toast {
 	a.pruneToasts()
 	typing := a.mode == modeInsert || a.mode == modeCommand
+	board := a.boardWin() != nil
 	var out []*toast
 	for _, t := range a.toasts {
+		// The board's row and detail row say it already.
+		if board && t.life == 0 && !t.notice && t.workspace == a.workspace {
+			continue
+		}
 		if t.life > 0 && t.shown.IsZero() {
 			if typing {
 				continue
