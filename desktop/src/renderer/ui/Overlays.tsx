@@ -165,6 +165,10 @@ export function Picker() {
   )
 }
 
+// roles are the tones that keep their color on a toast: what waits for
+// you, a failure and a finished turn.
+const roles = new Set(['gold', 'love', 'pine'])
+
 export function Toasts() {
   useStore((s) => s.toasts)
   const shown = store.visibleToasts()
@@ -173,10 +177,10 @@ export function Toasts() {
       {shown.map((t) => (
         <div key={t.id} className={`toast b-${t.tone}`} onClick={() => void store.goThread(t.workspace, t.thread)}>
           <div className="toast-head">
-            <span className={`glyph t-${t.tone}`}>
+            <span className={`glyph t-${roles.has(t.tone) ? t.tone : 'muted'}`}>
               <Glyph g={t.glyph} />
             </span>
-            <span className="t-subtle">{t.workspace} ·</span>
+            <span className="t-muted">{t.workspace} ·</span>
             <span className="name">{t.thread}</span>
           </div>
           <div className="toast-body">{t.body}</div>

@@ -1112,6 +1112,13 @@ test('a notice waits while you type and shows when you leave Insert; what needs 
   await normal()
   await expect(toast('opened in')).toBeVisible()
   await expect(page.locator('.toast:not(.leaving)').first()).toContainText('needs permission')
+  // What needs you has the wait bar; a plain notice the hairline and a quiet
+  // glyph, never the accent.
+  await expect(toast('needs permission')).toHaveClass(/b-gold/)
+  await expect(toast('opened in').locator('.glyph')).toHaveClass(/t-muted/)
+  const bar = await toast('opened in').evaluate((e) => getComputedStyle(e).borderLeftColor)
+  const hairline = await toast('opened in').evaluate((e) => getComputedStyle(e).borderTopColor)
+  expect(bar).toBe(hairline)
   await shot('50-toasts-order')
   hub.setView(view('demo', 'ledger', { state: 'resolved' }))
   hub.setView(view('demo', 'notes', { state: 'resolved' }))

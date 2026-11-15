@@ -15,7 +15,7 @@
   pointer-events: auto;
   background: var(--bg-raised);
   border: 1px solid var(--hairline-strong);
-  border-left: 3px solid var(--fg-3);
+  border-left: 3px solid var(--hairline-strong);
   border-radius: var(--r-2);
   padding: var(--s-2) var(--s-3);
   box-shadow: var(--e1);
@@ -23,18 +23,15 @@
   --arrive-x: 8px;
   animation: arrive var(--t-3) var(--ease-out);
 }
-.toast.b-gold { border-left-color: var(--gold); }
-.toast.b-pine { border-left-color: var(--pine); }
-.toast.b-love { border-left-color: var(--love); }
-.toast.b-iris { border-left-color: var(--iris); }
-.toast.b-foam { border-left-color: var(--foam); }
+/* The bar says the role: what waits for you, a failure, a finished turn.
+   Any other notice keeps the hairline, and never the accent. */
+.toast.b-gold { border-left-color: var(--wait); }
+.toast.b-love { border-left-color: var(--alert); }
+.toast.b-pine { border-left-color: var(--done); }
 .toast-head {
   display: flex;
   gap: 6px;
   font-size: var(--fs-secondary);
-}
-.toast-head .name {
-  font-weight: 600;
 }
 .toast-body {
   font-size: var(--fs-secondary);
