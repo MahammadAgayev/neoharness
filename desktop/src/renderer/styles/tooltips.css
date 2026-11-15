@@ -7,12 +7,12 @@
   align-items: center;
   gap: 6px;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-1);
   background: var(--overlay);
   color: var(--fg);
   font-size: var(--fs-small);
   border: 1px solid var(--hairline-strong);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--e1);
   pointer-events: none;
   white-space: nowrap;
   animation: arrive var(--t-1) var(--ease-std);

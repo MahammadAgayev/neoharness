@@ -49,9 +49,9 @@
   font-size: var(--fs-secondary);
   color: var(--fg);
   background: var(--base);
-  border: 1px solid var(--hairline-strong);
-  border-radius: 7px;
-  padding: 4px 8px;
+  border: var(--hairline-w) solid var(--hairline-strong);
+  border-radius: var(--r-2);
+  padding: var(--s-1) var(--s-2);
   outline: none;
 }
 .field:focus {
@@ -125,7 +125,7 @@
 .swatch-colors {
   width: 56px;
   height: 36px;
-  border-radius: 7px;
+  border-radius: var(--r-1);
   border: 1px solid var(--hairline-strong);
   display: flex;
   align-items: flex-end;

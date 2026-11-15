@@ -244,7 +244,7 @@ export function Prompt(props: {
           tooltips({ parent: document.body }),
           markdown(),
           EditorView.lineWrapping,
-          placeholder(props.resolved ? 'resolved · write to bring it back' : `write to ${thread.replace('/', ' · ')} · / commands · @ threads and files`),
+          placeholder(props.resolved ? 'resolved · write to bring it back' : `write to ${thread.replace('/', ' · ')}`),
           theme,
           EditorView.updateListener.of((u) => {
             if (u.docChanged) drafts.set(thread, u.state.doc.toString())

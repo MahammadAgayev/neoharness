@@ -96,10 +96,7 @@ export function Workspaces() {
         </div>
         {workspaces.length === 0 && (
           <div className="ws-empty">
-            <p>A workspace is a coordinator and its threads, working in one folder.</p>
-            <p className="t-muted">
-              <kbd>:new api</kbd> creates one and asks for its folder.
-            </p>
+            No workspaces yet. <span className="mono">:new api</span> starts one.
           </div>
         )}
         <div className="ws-list">

@@ -1,36 +1,33 @@
-/* key hints, as which-key */
+/* key hints, as which-key: a sheet at the foot of the window in focus */
 .keyhints {
   position: fixed;
-  left: 50%;
-  bottom: 36px;
-  transform: translateX(-50%);
-  width: min(860px, 92vw);
+  box-sizing: border-box;
   z-index: 55;
-  padding: 10px 14px 12px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--s-2) var(--s-4) var(--s-3);
   background: var(--bg-raised);
-  border: 1px solid var(--hairline-strong);
-  border-radius: 10px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
+  border-top: var(--hairline-w) solid var(--hairline-strong);
+  box-shadow: var(--e1);
   font-size: var(--fs-secondary);
 }
 .keyhints-head {
   color: var(--fg-3);
-  margin-bottom: 6px;
+  margin-bottom: var(--s-1);
 }
 .keyhints-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 3px 18px;
+  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: var(--s-0) var(--s-4);
 }
+/* A long label wraps under itself; it is never cut. */
 .keyhint {
   display: flex;
-  gap: 10px;
+  gap: var(--s-2);
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .keyhint-key {
-  color: var(--iris);
-  min-width: 64px;
+  flex: 0 0 auto;
+  color: var(--accent);
+  min-width: 4em;
 }

@@ -20,15 +20,14 @@
   font-weight: 650;
   letter-spacing: -0.01em;
 }
+/* One line and the command, a third of the way down. */
 .ws-empty {
-  border: 1px dashed var(--hairline-strong);
-  border-radius: 12px;
-  padding: 28px;
+  margin-top: 25vh;
   color: var(--fg-2);
 }
 .ws-list {
-  border: 1px solid var(--hairline);
-  border-radius: 12px;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--r-2);
   overflow: hidden;
 }
 .ws-row {
@@ -80,4 +79,7 @@
 .ws-foot {
   margin-top: 16px;
   font-size: var(--fs-secondary);
+}
+.ws-list:empty {
+  display: none;
 }
