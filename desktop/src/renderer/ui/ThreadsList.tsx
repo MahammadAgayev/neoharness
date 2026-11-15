@@ -40,7 +40,7 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
       return
     }
     if (how) store.split(how === 'right', { kind: 'chat', thread: r.name })
-    else store.show(win.id, { kind: 'chat', thread: r.name })
+    else store.showThread(r.name)
     store.focusPrompt()
   }
 

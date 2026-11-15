@@ -246,6 +246,10 @@ class Store {
   // settled is when each row that moved took its new group.
   private boardAt: Record<string, string> = {}
   private boardHold = false
+  // lastChat is the chat window that had focus last: what the board and the
+  // waits list open a thread in, as Vim's quickfix opens in the previous
+  // window.
+  private lastChat = 0
   settled: Record<string, number> = {}
   // held are the updates of the workspace that loads: they come after the
   // history it fetches, so they go on top of it, not under it.
@@ -260,6 +264,10 @@ class Store {
 
   private set(patch: Partial<State>): void {
     this.state = { ...this.state, ...patch }
+    if (patch.layout) {
+      const f = this.cur()
+      if (f?.buf.kind === 'chat') this.lastChat = f.id
+    }
     if (this.batching) this.changed = true
     else for (const fn of this.listeners) fn()
   }
@@ -969,6 +977,7 @@ class Store {
 
   goBack(): void {
     const w = this.cur()
+    if (w?.buf.kind === 'waits' && w.back.length === 0) return this.close(w.id)
     if (!w || w.back.length === 0) return
     const buf = w.back[w.back.length - 1]
     this.updateWin(w.id, { buf, back: w.back.slice(0, -1), fwd: [...w.fwd, w.buf], cursor: buf.kind === 'threads' ? 0 : -1, follow: true })
@@ -1053,19 +1062,26 @@ class Store {
 
   // --- threads ---
 
-  // showThread shows a thread: where it is on screen already, else in the
-  // threads pane's window, else in this window.
+  // showThread shows a thread: where it is on screen already, else in this
+  // window, or from a list in the window listWin gives, so the list stays.
   showThread(name: string): void {
-    const wins = this.wins()
-    const there = wins.find((w) => w.buf.kind === 'chat' && w.buf.thread === name)
+    const there = this.wins().find((w) => w.buf.kind === 'chat' && w.buf.thread === name)
     if (there) {
       this.focus(there.id)
       return
     }
-    const cur = this.cur()
-    const pane = cur?.buf.kind === 'threads' ? cur : wins.find((w) => w.buf.kind === 'threads')
-    const target = pane ?? cur
+    const target = this.listWin()
     if (target) this.show(target.id, { kind: 'chat', thread: name })
+  }
+
+  // listWin is the window in focus, or, from the board or the waits list,
+  // the chat window that had focus last, else any window that is not a list.
+  private listWin(): Win | undefined {
+    const cur = this.cur()
+    const list = (w: Win) => w.buf.kind === 'threads' || w.buf.kind === 'waits'
+    if (!cur || !list(cur)) return cur
+    const wins = this.wins()
+    return wins.find((w) => w.id === this.lastChat) ?? wins.find((w) => !list(w)) ?? cur
   }
 
   async goThread(workspace: string, thread: string): Promise<void> {
@@ -1087,13 +1103,26 @@ class Store {
     this.set({ layout: { cols: [...this.state.layout.cols, { id: nextId(), wins: [nw] }], focus: nw.id } })
   }
 
+  // waitsPane is :waits: the list in a window of its own under the board,
+  // or in a column of its own on the right, so what is on screen stays.
+  waitsPane(): void {
+    const s = this.state
+    const there = this.wins().find((x) => x.buf.kind === 'waits')
+    if (there) return this.focus(there.id)
+    const nw = { ...this.win({ kind: 'waits' }), cursor: 0, follow: false }
+    const ci = s.layout.cols.findIndex((c) => c.wins.some((x) => x.buf.kind === 'threads'))
+    const cols = s.layout.cols.map((c, i) => (i === ci ? { ...c, wins: [...c.wins, nw] } : c))
+    if (ci < 0) cols.push({ id: nextId(), wins: [nw] })
+    this.set({ layout: { cols, focus: nw.id } })
+  }
+
   coordinator(): void {
     if (!this.needWorkspace()) return
     if (this.state.screen !== 'workspace') void this.openWorkspace(this.state.workspace)
     const w = this.wins().find((x) => x.buf.kind === 'chat' && x.buf.thread === Coordinator)
     if (w) this.focus(w.id)
     else {
-      const c = this.cur()
+      const c = this.listWin()
       if (c) this.show(c.id, { kind: 'chat', thread: Coordinator })
     }
   }
@@ -1159,7 +1188,12 @@ class Store {
       this.opening.delete(name)
       return
     }
-    this.showThread(name)
+    // A new thread opens beside the chat you write in, as the TUI's thread
+    // pane, so the chat and the board stay.
+    const cur = this.cur()
+    if (cur?.buf.kind === 'chat' && !this.wins().some((w) => w.buf.kind === 'chat' && w.buf.thread === name))
+      this.split(true, { kind: 'chat', thread: name })
+    else this.showThread(name)
     this.focusPrompt()
   }
 
@@ -1649,8 +1683,7 @@ class Store {
       case 'cope':
       case 'cw':
       case 'cwindow':
-        if (w) this.show(w.id, { kind: 'waits' })
-        return
+        return this.waitsPane()
       case 'cn':
       case 'cnext':
         return this.nextWait(1)

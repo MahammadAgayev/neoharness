@@ -882,6 +882,9 @@ test('the waits list: ]q and [q walk what needs you, :waits shows it, x dismisse
   await page.keyboard.press('Enter')
   const rows = page.locator('.window.waits .list-row')
   await expect(rows).toHaveCount(2)
+  // The list opens in a window of its own; the board stays.
+  await expect(page.locator('.window.threads')).toHaveCount(1)
+  await expect(rows.nth(0).locator('.wait-body')).toHaveText('Bash go test ./...')
   await expect(rows.nth(1)).toContainText('failed · the model is overloaded')
   await shot('49-waits')
   await page.keyboard.press('j')
@@ -893,6 +896,8 @@ test('the waits list: ]q and [q walk what needs you, :waits shows it, x dismisse
   await expect(line).toContainText('answer it in its thread')
   await page.keyboard.press('Enter')
   await expect(name).toHaveText('api')
+  await expect(page.locator('.window.waits')).toHaveCount(1)
+  await expect(page.locator('.window.threads')).toHaveCount(1)
 
   hub.setWaits([])
   await expect(pill).toHaveCount(0)
@@ -900,7 +905,7 @@ test('the waits list: ]q and [q walk what needs you, :waits shows it, x dismisse
   await page.keyboard.press(']')
   await page.keyboard.press('q')
   await expect(line).toContainText('nothing waits for you')
-  // Back to what the window showed before the list.
+  // <C-o> closes the list, which has nothing to go back to.
   await page.locator('.window.waits .statusline').click()
   await page.keyboard.press('Control+o')
   await expect(page.locator('.window.waits')).toHaveCount(0)

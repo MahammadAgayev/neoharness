@@ -80,14 +80,18 @@ waiting thread shows what it waits for. An idle row is the name alone: the
 start of its last reply shows on hover, and `K` on the row shows it on the
 command line. While the cursor or the mouse is on the list, a thread that
 changes state keeps its place; it moves to its new group when you leave,
-with a short tint.
+with a short tint. A resolved thread leaves at once. `<CR>`, `:b` and
+`:open` on the list open the thread in the chat window that had the focus
+last, as Vim's quickfix does, so the list stays. `:open` from a chat opens
+the new thread in a window beside it.
 
 The waits list is what needs you in every workspace, oldest first, as in
 the TUI: permissions, questions, failed turns and notices that ask for
 you. `]q` and `[q`, or `:cn` and `:cp`, open the next or the previous one
 at its card, and the command line says `(2 of 5) permission · …`.
-`:waits` or `:copen` shows the list in the window: `<CR>` goes there, `x`
-dismisses a notice or a failure. The title bar shows `◆ N waiting` while it
+`:waits` or `:copen` opens the list in a window of its own under the
+threads list: `<CR>` goes there and the list stays, `x` dismisses a notice
+or a failure, and `:q` or `<C-o>` closes it. The title bar shows `◆ N waiting` while it
 is not empty; a click opens the list. A chat that shows for 2 seconds in a
 window in front counts as seen, so the hub quiets what came in it since.
 

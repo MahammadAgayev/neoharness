@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 
+import type { Wait } from '../../shared/model'
 import { commands } from '../commands'
 import { keyName } from '../lib/keys'
 import { store, useStore, type Win } from '../store'
@@ -76,8 +77,9 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['<C-w>c  <C-w>o  <C-w>=', 'close, only, equal sizes'],
       [']b [b  <C-^>', 'next / previous thread, alternate'],
       [']q [q  :cn :cp', 'next / previous thing that waits for you, in any workspace: its thread opens at the card'],
-      [':waits  :copen', 'the waits list: <CR> goes there, x dismisses a notice or a failure'],
+      [':waits  :copen', 'the waits list, in a window under the threads list: <CR> goes there and the list stays, x dismisses a notice or a failure'],
       ['<C-o>  <C-i>  ⌘[  ⌘]', 'back and forward through what the window showed, from Insert too; or the arrows at the top'],
+      ['<CR>  :b  :open', 'on the threads list or the waits list: the thread opens in the chat window that had the focus last, and the list stays'],
       ['<C-v>  <C-x>', 'thread in a split on the right / above (threads list, search)'],
       ['<C-d>', 'delete the thread or workspace, after y (search)'],
     ],
@@ -122,7 +124,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       [':setlocal coordinator=<agent>', "this workspace's coordinator runs that agent; threads= for its threads"],
       [':setlocal reopen_compact=ask', 'when the coordinator reopens a thread past compactwarn: compact first, ask you, or off'],
       [':setlocal auto_compact=90', 'past this context %, a session compacts before its next turn; 0 never'],
-      [':open <name> [where]', 'open a thread: folder or host:dir'],
+      [':open <name> [where]', 'open a thread: folder or host:dir; from a chat it opens beside it'],
       [':resolve  :reopen  :stop', 'close or bring back a thread, stop its turn'],
       [':allow :always :deny', 'answer a permission; always covers what the card names (:deny <reason>)'],
       [':b <name>  :ls', 'switch buffer'],
@@ -211,6 +213,19 @@ export function Help() {
 
 // WaitsWindow is :waits, Vim's quickfix window for what needs you: <CR>
 // goes there, x dismisses a notice or a failure.
+// WaitBody reads as the board's detail row: a permission's tool in fg-2,
+// then its command. The hub joins them as "Tool: command".
+function WaitBody(props: { w: Wait }) {
+  const text = props.w.text.replace(/\s+/g, ' ')
+  const i = props.w.kind === 'permission' ? text.indexOf(': ') : -1
+  if (i < 0) return <span className="wait-body">{text}</span>
+  return (
+    <span className="wait-body">
+      <span className="t-subtle">{text.slice(0, i)}</span> {text.slice(i + 2)}
+    </span>
+  )
+}
+
 export function WaitsWindow(props: { win: Win; focused: boolean }) {
   const { win, focused } = props
   const waits = useStore((s) => s.waits)
@@ -270,7 +285,7 @@ export function WaitsWindow(props: { win: Win; focused: boolean }) {
             </span>
             <span className="name">{w.workspace === open ? w.thread : `${w.workspace} · ${w.thread}`}</span>
             <span className={`wait-text ${w.kind === 'failed' ? 't-love' : 't-gold'}`}>{`${w.kind} · `}</span>
-            <span className="wait-body">{w.text.replace(/\s+/g, ' ')}</span>
+            <WaitBody w={w} />
             <span className="time">{age(w.since, now) || 'now'}</span>
           </div>
         ))}
