@@ -10,6 +10,7 @@ import {
   freshKey,
   linkAt,
   marksKey,
+  table,
   takeKey,
   takeTr,
   TaskItem,
@@ -212,6 +213,13 @@ function DocEditor(props: {
       }
     }
     document.addEventListener('nh:heading', onHeading)
+    const onTable = (e: Event) => {
+      const d = (e as CustomEvent<{ win: number; args: string[] }>).detail
+      if (d.win !== props.win) return
+      const err = table(view, d.args)
+      if (err) store.say(err, 'love')
+    }
+    document.addEventListener('nh:table', onTable)
     // A new doc opens ready to write: the cursor at its end, in Insert.
     if (store.writeDoc === props.name) {
       store.writeDoc = ''
@@ -224,6 +232,7 @@ function DocEditor(props: {
     }
     return () => {
       document.removeEventListener('nh:heading', onHeading)
+      document.removeEventListener('nh:table', onTable)
       docs.delete(keys)
       props.onView(null)
       view.destroy()

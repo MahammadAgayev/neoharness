@@ -10,7 +10,7 @@ import { keymap } from 'prosemirror-keymap'
 import { DOMSerializer, Fragment, type MarkType, type Node } from 'prosemirror-model'
 import { type Command, type EditorState, Plugin, PluginKey, Selection, TextSelection, type Transaction } from 'prosemirror-state'
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list'
-import { addRowAfter, goToNextCell, isInTable, selectedRect, tableEditing } from 'prosemirror-tables'
+import { addColumnAfter, addRowAfter, deleteColumn, deleteRow, goToNextCell, isInTable, selectedRect, tableEditing } from 'prosemirror-tables'
 import { Decoration, DecorationSet, type EditorView, type NodeView } from 'prosemirror-view'
 
 import { MarkdownDoc, schema } from './mdoc'
@@ -126,6 +126,42 @@ const listEnter: Command = (state, dispatch) => {
   const tr = state.tr.insert(at, n.list_item.create({ checked }, n.paragraph.create()))
   dispatch?.(tr.setSelection(TextSelection.create(tr.doc, at + 2)).scrollIntoView())
   return true
+}
+
+const aligns: Record<string, string | null> = { l: 'left', left: 'left', c: 'center', center: 'center', r: 'right', right: 'right', none: null }
+
+// table runs :table on the table under the cursor: col+ adds a column after
+// the cursor's, col- and row- take its column or row away, align sets its
+// column's alignment, as GFM aligns by column. It says what went wrong.
+export function table(view: EditorView, args: string[]): string | null {
+  const [op, arg = ''] = args
+  let cmd: Command
+  if (op === 'col+') cmd = addColumnAfter
+  else if (op === 'col-') cmd = deleteColumn
+  else if (op === 'row-') cmd = deleteRow
+  else if (op === 'align' && arg in aligns)
+    cmd = (state, dispatch) => {
+      const rect = selectedRect(state)
+      const tr = state.tr
+      for (let r = 0; r < rect.map.height; r++) {
+        const pos = rect.tableStart + rect.map.positionAt(r, rect.left, rect.table)
+        tr.setNodeMarkup(pos, undefined, { ...state.doc.nodeAt(pos)!.attrs, align: aligns[arg] })
+      }
+      dispatch?.(tr)
+      return true
+    }
+  else return op === 'align' ? 'usage: :table align l|c|r|none' : 'usage: :table col+|col-|row-|align l|c|r|none'
+  if (!isInTable(view.state)) return 'not in a table'
+  const { top, left } = selectedRect(view.state)
+  if (!cmd(view.state, view.dispatch)) return 'a table keeps one column and one row'
+  // A column command keeps the cursor in its row, in the column it was in
+  // or the one now there.
+  if (op.startsWith('col') && isInTable(view.state)) {
+    const r = selectedRect(view.state)
+    const pos = r.tableStart + r.map.positionAt(Math.min(top, r.map.height - 1), Math.min(left, r.map.width - 1), r.table)
+    view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(pos + 1))))
+  }
+  return null
 }
 
 export function editorPlugins(leave: () => void): Plugin[] {

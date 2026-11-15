@@ -176,6 +176,19 @@
   margin: 1.2em 0;
   overflow-x: auto;
 }
+/* A wide table may grow past the text column, up to the pane, centered on
+   the column; a narrow one stays at the column's left edge. */
+.doc-editor {
+  container-type: inline-size;
+}
+.doc-page > .table-wrap {
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  min-width: 100%;
+  max-width: calc(100cqw - 2 * var(--s-5));
+}
 .doc-page table {
   display: table;
   margin: 0;

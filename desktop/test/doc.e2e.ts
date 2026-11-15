@@ -393,6 +393,59 @@ test('where both changed a block, the page shows theirs under yours to take, blo
   await page.keyboard.press('Control+o')
 })
 
+test(':table adds and takes away columns, takes away a row, and aligns a column', async () => {
+  hub.artifact('demo', 'cols', 'Cols', '# Cols\n\nintro\n\n| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n')
+  hub.event('demo', 'api', { kind: 'artifact', detail: 'cols', text: 'Cols', version: 1 })
+  await page.locator('.b-artifact', { hasText: 'Cols' }).click()
+  const win = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'cols' }) })
+  const doc = win.locator('.doc-page')
+  const ex = async (cmd: string) => {
+    await page.keyboard.type(':')
+    await page.keyboard.type(cmd)
+    await page.keyboard.press('Enter')
+  }
+  await doc.locator('p', { hasText: 'intro' }).click()
+  await normal()
+  await ex('table col+')
+  await expect(page.locator('.cmdline', { hasText: 'not in a table' })).toBeVisible()
+  await doc.locator('td', { hasText: '2' }).click()
+  await normal()
+  await ex('table col-')
+  await expect(doc.locator('th')).toHaveCount(1)
+  await ex('table col+')
+  await expect(doc.locator('th')).toHaveCount(2)
+  await ex('table align c')
+  await expect(doc.locator('th').first()).toHaveCSS('text-align', 'center')
+  await ex('table row-')
+  await expect(doc.locator('tr')).toHaveCount(2)
+  await ex('table sideways')
+  await expect(page.locator('.cmdline', { hasText: 'usage: :table' })).toBeVisible()
+  await page.keyboard.press('Meta+s')
+  await expect
+    .poll(() => hub.calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/artifacts/cols')).pop()?.body)
+    .toMatchObject({ text: '# Cols\n\nintro\n\n| a |  |\n|:---:|---|\n| 3 |  |\n' })
+  await page.keyboard.press('Control+o')
+})
+
+test('a wide table grows past the text column, up to the pane, and a narrow one stays in it', async () => {
+  const long = 'a cell with enough words in it to need room'
+  hub.artifact('demo', 'wide', 'Wide', `# Wide\n\nSome text.\n\n| x | y | z | w | v |\n|---|---|---|---|---|\n| ${long} | ${long} | ${long} | ${long} | ${long} |\n\n| p | q |\n|---|---|\n| 1 | 2 |\n`)
+  hub.event('demo', 'api', { kind: 'artifact', detail: 'wide', text: 'Wide', version: 1 })
+  await page.locator('.b-artifact', { hasText: 'Wide' }).click()
+  const win = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'wide' }) })
+  const doc = win.locator('.doc-page')
+  const text = (await doc.locator('p', { hasText: 'Some text' }).boundingBox())!
+  const pane = (await win.locator('.doc-editor').boundingBox())!
+  const wide = (await doc.locator('.table-wrap').first().boundingBox())!
+  const narrow = (await doc.locator('.table-wrap').last().locator('table').boundingBox())!
+  expect(wide.width).toBeGreaterThan(text.width + 40)
+  expect(wide.x).toBeGreaterThanOrEqual(pane.x)
+  expect(wide.x + wide.width).toBeLessThanOrEqual(pane.x + pane.width)
+  expect(Math.abs(narrow.x - text.x)).toBeLessThan(2)
+  await shot('47-artifact-wide-table')
+  await page.keyboard.press('Control+o')
+})
+
 test('a mouse drag selects in Visual mode, so d takes the words away, as with Vim and a mouse', async () => {
   hub.artifact('demo', 'drag', 'Drag', '# Drag\n\nfirst second third\n')
   hub.event('demo', 'api', { kind: 'artifact', detail: 'drag', text: 'Drag', version: 1 })

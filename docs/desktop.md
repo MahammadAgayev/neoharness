@@ -133,7 +133,10 @@ heading, `- ` or `1. ` a list, `> ` a quote, ` ``` ` code, `[ ] ` a task,
 close them. `<Tab>` and `<S-Tab>` indent a list item, and `<CR>` on an empty
 one takes it out a level; in a table `<Tab>`
 goes to the next cell and adds a row at the end, and `<CR>` goes to the
-cell below; on an empty last row it leaves the table. A click on a task box
+cell below; on an empty last row it leaves the table. `:table col+` adds a
+column after the cursor's, `:table col-` and `:table row-` take its column
+or row away, and `:table align l|c|r|none` aligns its column. A wide table
+grows past the text column, up to the pane. A click on a task box
 checks it and strikes its text through. A link pasted over selected words links them. `:w` or `⌘S`
 saves.
 

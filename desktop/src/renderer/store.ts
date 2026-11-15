@@ -1544,6 +1544,10 @@ class Store {
         return this.say('the hub commands here: :hub restart', 'love')
       case 'cost':
         return this.openCost(a[0] === 'all' ? 'all' : 'workspace')
+      case 'table':
+        if (!art || !w) return this.say(':table works in an artifact', 'muted')
+        document.dispatchEvent(new CustomEvent('nh:table', { detail: { win: w.id, args: a } }))
+        return
       case 'w':
       case 'write':
         if (!art) return this.say('nothing to write here; :w saves an artifact', 'muted')
