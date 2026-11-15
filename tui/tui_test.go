@@ -85,6 +85,11 @@ func (f *fakeClient) Artifact(p, name string) (model.Artifact, string, error) {
 }
 func (f *fakeClient) EditArtifact(p, name, text, baseText string, base int, force bool) (model.Artifact, string, error) {
 	i := slices.IndexFunc(f.arts, func(a model.Artifact) bool { return a.Name == name })
+	if i < 0 && base == 0 {
+		f.arts = append(f.arts, model.Artifact{Name: name, Version: 1, UserEdit: true})
+		f.docs[name] = text
+		return f.arts[len(f.arts)-1], text, nil
+	}
 	if i < 0 {
 		return model.Artifact{}, "", fmt.Errorf("no artifact %q", name)
 	}
@@ -3485,6 +3490,24 @@ func TestQuitKeepsAnEditedArtifactOpen(t *testing.T) {
 	if h.a.cur.Buf == b || b.Edit.Dirty {
 		t.Fatal(":q! should close the window and drop the edit")
 	}
+}
+
+func TestPageMakesAPageAndLinksItAtTheCursor(t *testing.T) {
+	h := editDemo(t, "# Design\n\nRead:\n\n")
+	h.press("G", ":page runbook", "<CR>")
+	if h.hub.docs["runbook"] != "# Runbook\n\n" {
+		t.Fatalf("runbook = %q, want a new page with its title", h.hub.docs["runbook"])
+	}
+	e := h.a.cur.Buf.Edit
+	if !strings.Contains(e.Text(), "\n`runbook`") || !e.Dirty {
+		t.Fatalf("the link goes in at the cursor, as the agents write it:\n%s", e.Text())
+	}
+	h.press(":page design", "<CR>")
+	if len(h.hub.arts) != 2 || !strings.Contains(e.Text(), "`design`") {
+		t.Fatalf("a page that is there already is only linked: %d artifacts\n%s", len(h.hub.arts), e.Text())
+	}
+	h.press(":page", "<CR>")
+	h.see("usage: :page <name>")
 }
 
 func TestThreadPickerShowsState(t *testing.T) {

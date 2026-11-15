@@ -31,7 +31,7 @@ type cmdline struct {
 
 var commands = []string{
 	"allow", "always", "artifacts", "b", "buffer", "cn", "copen", "cp", "deny", "diffoff", "edit", "folder", "help", "hub", "image", "ls", "messages", "new",
-	"only", "open", "q", "qa", "quit", "recap", "reopen", "resolve", "restore", "cost", "setlocal", "split", "threads",
+	"only", "open", "page", "q", "qa", "quit", "recap", "reopen", "resolve", "restore", "cost", "setlocal", "split", "threads",
 	"vsplit", "waits", "workspace", "workspaces", "wq",
 }
 
@@ -356,6 +356,8 @@ func (a *App) exec(line string) {
 			return
 		}
 		a.saveEdit(strings.HasSuffix(cmd, "!"))
+	case "page":
+		a.newPage(edit, arg(0))
 	case "wq", "x", "xit":
 		switch {
 		case edit == nil:
@@ -779,6 +781,7 @@ func (a *App) helpBuf() *Buffer {
 		row("f t F T  %", "finds and brackets after d c y: dt, cf) d%"),
 		row("p P  u <C-r>  .", "paste, undo, redo, repeat"),
 		row("gx  gf", "open the link, or the artifact named, under the cursor"),
+		row(":page <name>", "make a page, unless it is there, and link it at the cursor"),
 	}
 	b := newBuffer("neoharness://help", KindHelp)
 	for _, hl := range lines {

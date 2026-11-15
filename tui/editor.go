@@ -1062,6 +1062,33 @@ func (a *App) yankMotion(motion string, n int) {
 	a.clip(a.reg.text, 1)
 }
 
+// newPage makes a page, unless it is there already, and links it at the
+// cursor in code, as the agents write a link to an artifact.
+func (a *App) newPage(e *Editor, name string) {
+	switch {
+	case e == nil:
+		a.notify(":page works in an artifact", a.th.Fg3)
+		return
+	case name == "":
+		a.notify("usage: :page <name>", a.th.Alert)
+		return
+	}
+	if err := model.ValidName(name); err != nil {
+		a.notify(err.Error(), a.th.Alert)
+		return
+	}
+	if !slices.ContainsFunc(a.artifacts, func(x model.Artifact) bool { return x.Name == name }) {
+		title := strings.ToUpper(name[:1]) + strings.ReplaceAll(name[1:], "-", " ")
+		if _, _, err := a.c.EditArtifact(a.cur.Buf.Workspace, name, "# "+title+"\n\n", "", 0, false); err != nil {
+			a.notify(err.Error(), a.th.Alert)
+			return
+		}
+	}
+	e.save()
+	e.insertText("`" + name + "`")
+	a.toWindow(a.cur)
+}
+
 // saveEdit sends the source to the hub as the person's new version.
 func (a *App) saveEdit(force bool) bool {
 	b := a.cur.Buf

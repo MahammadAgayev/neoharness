@@ -201,6 +201,8 @@ reports. They belong to the workspace, and every session can read them.
   `:w!` saves over them, `:e!` takes the agent's version.
 - The agent sees your edit as a diff in its next turn.
 - `gx` opens the link under the cursor.
+- `:page <name>` makes a page, unless it is there already, and links it at
+  the cursor as the agents write a link: `` `name` ``.
 
 ## Keys
 
