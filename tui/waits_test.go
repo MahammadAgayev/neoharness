@@ -134,3 +134,22 @@ func TestAThreadOnScreenForTwoSecondsIsSeen(t *testing.T) {
 		t.Fatal("seen is for levels 1 and 2; what needs you stays until it is resolved")
 	}
 }
+
+func TestTheWaitsListReadsAsTheBoard(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.setWaits(demoWaits()...)
+	h.press(":waits", "<CR>")
+	w := h.a.cur
+	if w.Buf.Kind != KindWaits {
+		t.Fatal(":waits should open the list")
+	}
+	if h.fgAt("permission · ") != fgOf(h.a.th.Wait) || h.fgAt("question · ") != fgOf(h.a.th.Wait) {
+		t.Fatal("the kind is in wait ink, as on the board")
+	}
+	row := []rune(h.line(h.rowOf("permission · ")))
+	end := w.rect.X + w.rect.W - 1
+	if got := string(row[end-2 : end]); got != "1m" {
+		t.Fatalf("the time is right-aligned one column before the edge, got %q:\n%s", got, string(row))
+	}
+}

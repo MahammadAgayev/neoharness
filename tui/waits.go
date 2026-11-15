@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/MahammadAgayev/neoharness/api/model"
@@ -96,12 +97,20 @@ func (a *App) renderWaits() {
 		a.waitsBuf.SetLines([]Line{{Prefix: []Span{{" ", th.Fg}}, Spans: []Span{{"nothing waits for you", th.Fg3}}}})
 		return
 	}
+	tw := 80
+	if a.root != nil {
+		for _, w := range a.root.windows() {
+			if w.Buf == a.waitsBuf {
+				tw = a.textWidth(w)
+			}
+		}
+	}
 	var lines []Line
 	for _, w := range a.waits {
-		glyph := Span{"◆ ", th.Wait}
+		glyph, ink := Span{"◆ ", th.Wait}, th.Wait
 		switch w.Kind {
 		case model.WaitFailed:
-			glyph = Span{"✗ ", th.Alert}
+			glyph, ink = Span{"✗ ", th.Alert}, th.Alert
 		case model.WaitNotice:
 			glyph = Span{"↗ ", th.Wait}
 		}
@@ -109,9 +118,18 @@ func (a *App) renderWaits() {
 		if w.Workspace != a.workspace {
 			name = w.Workspace + " · " + name
 		}
+		spans := []Span{glyph, {name + "  ", th.Fg2}, {string(w.Kind) + " · ", ink}}
+		at := ago(a.now().Sub(w.Since))
+		used := 0
+		for _, s := range spans {
+			used += width(s.Text)
+		}
+		// As on the board: the time at the right, one column from the edge.
+		text := truncate(flatten(w.Text), tw-1-used-2-width(at))
+		spans = append(spans, Span{text, th.Fg}, Span{strings.Repeat(" ", max(tw-1-used-width(text)-width(at), 2)) + at, th.Fg3})
 		lines = append(lines, Line{
 			Prefix: []Span{{" ", th.Fg}},
-			Spans:  []Span{glyph, {name + "  ", th.Fg2}, {string(w.Kind) + " · ", th.Fg3}, {flatten(w.Text), th.Fg}, {"  " + elapsed(a.now().Sub(w.Since)), th.Fg3}},
+			Spans:  spans,
 			Item:   waitKey(w),
 		})
 	}

@@ -130,7 +130,8 @@ yourself:
 ### Permissions
 
 Turns run in Claude's auto permission mode. When Claude asks for approval, a
-card shows in the chat:
+card shows above the prompt: a bar in gold, the tool, and the full command,
+up to 8 rows. It has no key hints; these are the keys:
 
 ```
 <leader>a   :allow           allow once

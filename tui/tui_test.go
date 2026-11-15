@@ -544,7 +544,9 @@ func TestPermissionCardAndAnswer(t *testing.T) {
 	if len(h.hub.answers) != 0 {
 		t.Fatal("<leader>y yanks; it must not answer a permission")
 	}
-	h.see("␣a allow")
+	if strings.Contains(h.screen(), "␣a") {
+		t.Fatalf("the card has no key hints; they are in :help:\n%s", h.screen())
+	}
 	h.press("<Space>", "a")
 	if len(h.hub.answers) != 1 || h.hub.answers[0] != "auth-refactor p1 allow " {
 		t.Fatalf("answers = %q", h.hub.answers)
@@ -566,7 +568,7 @@ func TestPermissionCardShowsTheScopeOfAlways(t *testing.T) {
 	v.Permission = &model.Permission{ID: "p1", Tool: "Bash", Detail: "git push origin main", Scope: "git push"}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.press(":b auth-refactor", "<CR>")
-	h.see("␣A always: git push")
+	h.see("always: git push")
 
 	v.Permission = &model.Permission{ID: "p2", Tool: "Bash", Detail: "git push --force origin main"}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
@@ -3176,7 +3178,9 @@ func TestAQuestionWaitsInACardLikeAPermission(t *testing.T) {
 		t.Fatalf("the question shows %d times:\n%s", n, h.screen())
 	}
 	h.see("question")
-	h.see("␣x skip")
+	if strings.Contains(h.screen(), "␣x") {
+		t.Fatalf("the card has no key hints; they are in :help:\n%s", h.screen())
+	}
 	h.press("i", "phase one", "<CR>", "<Esc>")
 	if last := h.hub.sent[len(h.hub.sent)-1]; last != model.Coordinator+": phase one" {
 		t.Fatalf("sent = %q", h.hub.sent)

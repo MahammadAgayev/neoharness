@@ -621,7 +621,7 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 		return wrap([]Span{{bl.text, th.Alert}}, w, []Span{{"  ✗ ", th.Alert}}, []Span{{"    ", th.Alert}})
 	case bPermission:
 		if bl.text2 == "" {
-			return wrap([]Span{{shortTool(bl.from), th.Fg2}, {"  " + bl.text, th.Fg3}}, w,
+			return wrap([]Span{{shortTool(bl.from), th.Fg2}, {"  " + bl.text, th.Fg}}, w,
 				[]Span{{"  ◆ ", th.Wait}}, []Span{{"    ", th.Fg}})
 		}
 		st := th.Fg3

@@ -53,6 +53,9 @@ func (a *App) draw() {
 	// list is redrawn here rather than after each of them. Its rows fit the
 	// width the layout gives.
 	a.renderThreads()
+	if a.waitsBuf != nil {
+		a.renderWaits()
+	}
 	a.bindDiff()
 	for _, w := range a.root.windows() {
 		a.drawWindow(w, w == a.cur)
@@ -128,8 +131,8 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	textBottom := promptTop
 	// The transcript ends above the card, so the card hides none of it.
 	cardBottom := textBottom
-	if title, body, _ := a.card(w); title != "" && textBottom-len(body)-2 > top {
-		textBottom -= len(body) + 2
+	if title, body, _ := a.card(w); title != "" && textBottom-len(body)-1 > top {
+		textBottom -= len(body) + 1
 	}
 	// Notices dock in the board's foot, under its rows.
 	if b.Kind == KindThreads {
@@ -698,7 +701,7 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 	if w.Buf.Kind != KindChat || !ok || v.State != model.StateWaiting {
 		return
 	}
-	bw = min(w.rect.W-4, 64)
+	bw = a.textWidth(w)
 	if bw < 20 {
 		return
 	}
@@ -706,22 +709,29 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 	switch {
 	case v.Permission != nil:
 		title = "permission"
-		keys := []Span{{"␣a", th.Accent}, {" allow   ", th.Fg3}}
-		if sc := v.Permission.Scope; sc != "" {
-			keys = append(keys, Span{"␣A", th.Accent}, Span{" always: " + truncate(sc, bw-36) + "   ", th.Fg3})
+		body = [][]Span{{{v.Permission.Tool, th.Fg2}}}
+		var rows [][]Span
+		for _, l := range strings.Split(v.Permission.Detail, "\n") {
+			for _, r := range wrap([]Span{{l, th.Fg}}, bw-2, nil, nil) {
+				rows = append(rows, r.Spans)
+			}
 		}
-		body = [][]Span{
-			{{v.Permission.Tool, th.Fg.Bold(true)}, {"  " + truncate(v.Permission.Detail, bw-8-width(v.Permission.Tool)), th.Fg2}},
-			append(keys, Span{"␣x", th.Accent}, Span{" deny", th.Fg3}),
+		if len(rows) > commandRows {
+			rows = rows[:commandRows]
+			rows[commandRows-1] = append(clone(rows[commandRows-1]), Span{" …", th.Fg3})
+		}
+		body = append(body, rows...)
+		// What "always" would allow is part of the decision, not a key hint.
+		if sc := v.Permission.Scope; sc != "" {
+			body = append(body, []Span{{"always: " + truncate(sc, bw-10), th.Fg3}})
 		}
 	case v.Waiting == "paused":
 		title = "paused"
-		body = [][]Span{
-			{{"i", th.Accent}, {" write to continue", th.Fg3}},
-		}
+		body = [][]Span{{{"paused", th.Fg2}}, {{"write to continue", th.Fg3}}}
 	case v.QuestionID != "":
 		title = "question"
-		rows := renderMarkdown(v.Waiting, bw-4, th, nil)
+		body = [][]Span{{{"question", th.Fg2}}}
+		rows := renderMarkdown(v.Waiting, bw-2, th, nil)
 		// A long question leaves the window room for the chat.
 		if n := max(min(questionRows, w.rect.H/2-4), 1); len(rows) > n {
 			rows = rows[:n]
@@ -730,10 +740,12 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 		for _, l := range rows {
 			body = append(body, append(clone(l.Prefix), l.Spans...))
 		}
-		body = append(body, []Span{{"i", th.Accent}, {" answer   ", th.Fg3}, {"␣x", th.Accent}, {" skip", th.Fg3}})
 	}
 	return title, body, bw
 }
+
+// commandRows is the most rows of a command the card shows.
+const commandRows = 8
 
 // questionRows is the most rows of a question the card shows.
 const questionRows = 12
@@ -745,17 +757,17 @@ func (a *App) drawFloats(w *Window, top, bottom int) {
 	if title == "" {
 		return
 	}
-	bh := len(body) + 2
-	y0 := bottom - bh
-	if y0 < top {
+	// One blank row parts the card from the chat above it.
+	y0 := bottom - len(body)
+	if y0-1 < top {
 		return
 	}
-	x0 := w.rect.X + 2
-	a.box(x0, y0, bw, bh, title, a.th.Wait)
+	x0 := w.rect.X
 	for i, spans := range body {
-		x := x0 + 2
+		a.fill(x0, y0+i, x0+bw, a.th.Base)
+		x := a.put(x0, y0+i, x0+bw, "┃ ", a.th.Wait)
 		for _, sp := range spans {
-			x = a.put(x, y0+1+i, x0+bw-2, sp.Text, sp.Style)
+			x = a.put(x, y0+i, x0+bw, sp.Text, sp.Style)
 		}
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
+
 	"github.com/MahammadAgayev/neoharness/api/model"
 )
 
@@ -226,4 +228,59 @@ func TestNoFootNoticeForAWaitingThreadTheBoardShows(t *testing.T) {
 	h.press("<C-w>o")
 	h.a.draw()
 	h.see("needs permission · Bash")
+}
+
+func TestThePermissionCardIsAWaitBarWithTheFullCommand(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	long := "curl -X POST https://example.com/api/v1/deploy -H 'content-type: application/json' -d '{\"service\":\"api\",\"version\":\"1.2.3\",\"region\":\"eu\"}' --fail-with-body"
+	h.setThread("auth-refactor", func(v *model.ThreadView) {
+		v.State = model.StateWaiting
+		v.Waiting = "permission"
+		v.Permission = &model.Permission{ID: "p1", Tool: "Bash", Detail: long}
+	})
+	h.press(":b auth-refactor", "<CR>")
+	w := h.a.cur
+	if strings.ContainsAny(h.screen(), "╭╮╰╯") {
+		t.Fatalf("the card is a bar, not a box:\n%s", h.screen())
+	}
+	tool := h.rowOf("┃ Bash")
+	if tool < 0 {
+		t.Fatalf("the card starts with its tool after a bar:\n%s", h.screen())
+	}
+	cells, sw, _ := h.s.GetContents()
+	x := w.rect.X
+	if fg, _, _ := cells[tool*sw+x].Style.Decompose(); fg != fgOf(h.a.th.Wait) {
+		t.Fatal("the bar is in wait ink")
+	}
+	if _, _, attr := cells[tool*sw+x+2].Style.Decompose(); attr&tcell.AttrBold != 0 {
+		t.Fatal("the tool is not bold: bold is for names with focus")
+	}
+	if fg, _, _ := cells[tool*sw+x+2].Style.Decompose(); fg != fgOf(h.a.th.Fg2) {
+		t.Fatal("the tool is in fg-2")
+	}
+	in := func(y int) string { return strings.TrimSpace(string([]rune(h.line(y))[x : x+w.rect.W])) }
+	var cmd string
+	for y := tool + 1; strings.HasPrefix(in(y), "┃"); y++ {
+		if fg, _, _ := cells[y*sw+x+2].Style.Decompose(); fg != fgOf(h.a.th.Fg) {
+			t.Fatalf("row %d of the command is not in fg", y)
+		}
+		cmd += strings.TrimPrefix(in(y), "┃")
+	}
+	if strings.ReplaceAll(cmd, " ", "") != strings.ReplaceAll(long, " ", "") {
+		t.Fatalf("the card should hold the full command, wrapped; got %q", cmd)
+	}
+}
+
+func TestAPendingPermissionLineShowsItsCommandInFg(t *testing.T) {
+	b := newChat("demo", "api")
+	b.AddEvent(model.Event{Kind: model.EventPermission, Tool: "Bash", Detail: "curl -X POST"})
+	th := newTheme(256)
+	for _, l := range b.Lines(80, th, 0) {
+		for _, s := range l.Spans {
+			if strings.Contains(s.Text, "curl") && s.Style != th.Fg {
+				t.Fatal("you judge the command, so it is in fg")
+			}
+		}
+	}
 }
