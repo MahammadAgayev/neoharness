@@ -34,11 +34,6 @@ func distance(a, b tcell.Color) float64 {
 	return math.Sqrt(float64((ar-br)*(ar-br) + (ag-bg)*(ag-bg) + (ab-bb)*(ab-bb)))
 }
 
-func fgOf(st tcell.Style) tcell.Color {
-	fg, _, _ := st.Decompose()
-	return fg
-}
-
 func TestThemeRolesReadAtTheirContrastInTrueAnd256Colors(t *testing.T) {
 	for _, colors := range []int{1 << 24, 256} {
 		th := newTheme(colors)

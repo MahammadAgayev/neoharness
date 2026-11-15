@@ -3117,7 +3117,7 @@ func TestPlainWordArtifactsLinkOnlyInCode(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	h.a.artifacts = []model.Artifact{{Name: "plan"}, {Name: "doc-notes"}}
-	link := h.a.th.Run.Underline(true)
+	link := h.a.th.Link()
 	linked := func(spans []Span) []string {
 		var out []string
 		for _, sp := range h.a.linkify(spans) {

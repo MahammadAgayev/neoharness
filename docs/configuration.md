@@ -50,7 +50,10 @@ names: `Fg` what you read, `Fg2` what you scan, `Fg3` meta, `Accent` where
 you type, `Wait` what waits for you, `Alert` errors, and `Run`, `Done` and
 `Peer` for glyphs and bars. On a terminal without true color (no
 `COLORTERM=truecolor`), each role takes its `ctermfg` from the 256 colors,
-chosen so waiting, errors and another session's words stay apart. The
+chosen so waiting, errors and another session's words stay apart. Links
+and artifact names have a dotted underline in `Run`, and the command of a
+failed tool call a curly one in `Alert`; a terminal without these draws a
+plain underline. The
 background is never painted, so transparent terminals stay transparent.
 `NO_COLOR` is supported.
 

@@ -1032,7 +1032,7 @@ func (a *App) linkify(spans []Span) []Span {
 			if m.start < at {
 				continue
 			}
-			out = append(out, Span{sp.Text[at:m.start], sp.Style}, Span{sp.Text[m.start:m.end], a.th.Run.Underline(true)})
+			out = append(out, Span{sp.Text[at:m.start], sp.Style}, Span{sp.Text[m.start:m.end], a.th.Link()})
 			at = m.end
 		}
 		out = append(out, Span{sp.Text[at:], sp.Style})

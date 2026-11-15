@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
+
 	"github.com/MahammadAgayev/neoharness/api/model"
 )
 
@@ -770,9 +772,15 @@ func (bl *block) renderTools(w int, th *Theme, spin int) []Line {
 	lines := []Line{head}
 	if bl.open {
 		for _, t := range bl.tools {
+			detail := th.Fg3
+			if t.failed != "" {
+				// A curly line in alert says which call failed, as a
+				// spell checker marks a word; plain where the terminal has no curl.
+				detail = detail.Underline(tcell.UnderlineStyleCurly, fgOf(th.Alert))
+			}
 			lines = append(lines, Line{Prefix: []Span{{"      ", th.Fg}}, Spans: []Span{
 				{shortTool(t.tool), th.Fg2},
-				{"  " + truncate(shortTools(t.detail), max(w-24, 10)), th.Fg3},
+				{"  " + truncate(shortTools(t.detail), max(w-24, 10)), detail},
 			}})
 			if t.failed != "" {
 				// The reason wraps, at most three rows: it says why.

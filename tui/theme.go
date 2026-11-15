@@ -104,6 +104,18 @@ func newTheme(colors int) *Theme {
 	}
 }
 
+// Link is a link or an artifact name: run, with a dotted line in run that
+// stays quieter than the text; plain underline where the terminal has no
+// dotted one.
+func (t *Theme) Link() tcell.Style {
+	return t.Run.Underline(tcell.UnderlineStyleDotted, fgOf(t.Run))
+}
+
+func fgOf(st tcell.Style) tcell.Color {
+	fg, _, _ := st.Decompose()
+	return fg
+}
+
 // overlay applies a background (cursor line, selection) on top of a style
 // without losing its foreground.
 func overlay(st, bg tcell.Style) tcell.Style {

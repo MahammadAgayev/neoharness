@@ -436,7 +436,7 @@ var lineBreak = regexp.MustCompile(`(?i)^<br\s*/?>$`)
 // linkStyle is the style of a link's text. It carries the URL, so the
 // terminal opens it on a click and gx finds it.
 func linkStyle(th *Theme, url string) tcell.Style {
-	return th.Run.Underline(true).Url(url)
+	return th.Link().Url(url)
 }
 
 // alert returns the kind of a GitHub alert quote, or "".
