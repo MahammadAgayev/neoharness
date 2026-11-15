@@ -161,6 +161,58 @@ type Event struct {
 	// Version is an artifact's version.
 	Version  int  `json:"version,omitempty"`
 	NeedsYou bool `json:"needsYou,omitempty"`
+	// Level is how much of the person's attention the event asks for. The
+	// hub sets it once, so every client draws the same thing.
+	Level Level `json:"level,omitempty"`
+}
+
+// Level is a step of the attention ladder. A client chooses how to draw a
+// level, never which level an event has.
+type Level int
+
+const (
+	// LevelQuiet is the work itself: text, tool calls, progress.
+	LevelQuiet Level = iota
+	// LevelAmbient changes in place: a new artifact, a thread's turn end
+	// when the coordinator decides what reaches the person.
+	LevelAmbient
+	// LevelNotice may show a short notice, but never while the person types.
+	LevelNotice
+	// LevelNeedsYou waits for the person: a permission, a question, a
+	// failure, a notice that needs them. Being seen does not clear it.
+	LevelNeedsYou
+)
+
+// SeenDwell is how long a thread must be on screen, in a window in front,
+// before a client says it was seen. A glance while moving past is not
+// reading.
+const SeenDwell = 2 * time.Second
+
+// WaitKind says what a wait is and how it is resolved.
+type WaitKind string
+
+const (
+	// WaitPermission is answered with allow or deny.
+	WaitPermission WaitKind = "permission"
+	// WaitQuestion is answered by writing to the thread, or skipped.
+	WaitQuestion WaitKind = "question"
+	// WaitFailed is a turn that failed; it goes when the thread runs again
+	// or the person dismisses it.
+	WaitFailed WaitKind = "failed"
+	// WaitNotice is a notice that needs the person; it goes when they write
+	// to the session or dismiss it.
+	WaitNotice WaitKind = "notice"
+)
+
+// Wait is one item of the waits list: something that needs the person, in
+// any workspace. ID names it to Answer or Dismiss.
+type Wait struct {
+	Workspace string    `json:"workspace"`
+	Thread    string    `json:"thread"`
+	Kind      WaitKind  `json:"kind"`
+	ID        string    `json:"id"`
+	Text      string    `json:"text"`
+	Since     time.Time `json:"since"`
 }
 
 // Artifact is a markdown document an agent wrote for the person to read. Its
@@ -216,6 +268,10 @@ type ThreadView struct {
 	// Todos is the todo list the session keeps while it works, in the
 	// order it made the items.
 	Todos []Todo `json:"todos,omitempty"`
+	// Level is the highest attention level still open on the thread:
+	// what waits on the person, or what came since SeenAt.
+	Level  Level     `json:"level,omitempty"`
+	SeenAt time.Time `json:"seenAt,omitzero"`
 	// Quiet says the coordinator decides what of this thread reaches the
 	// person: only its questions and permission requests notify them.
 	Quiet bool `json:"quiet,omitempty"`
@@ -350,6 +406,8 @@ const (
 	// UpdateStopped is the last update of a hub that was asked to stop. A
 	// client must not start a new hub for it.
 	UpdateStopped UpdateKind = "stopped"
+	// UpdateWaits is the whole waits list, after it changed.
+	UpdateWaits UpdateKind = "waits"
 )
 
 // Update is one change pushed to subscribers.
@@ -361,6 +419,7 @@ type Update struct {
 	View      *ThreadView    `json:"view,omitempty"`
 	Summary   *WorkspaceView `json:"summary,omitempty"`
 	Artifact  *Artifact      `json:"artifact,omitempty"`
+	Waits     []Wait         `json:"waits,omitempty"`
 }
 
 // Decision is the user's answer to a permission request.

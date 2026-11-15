@@ -84,6 +84,11 @@ type (
 		Decision model.Decision `json:"decision"`
 		Message  string         `json:"message,omitempty"`
 	}
+	// Seen says when the person saw a thread: on screen, in a window in
+	// front, for model.SeenDwell.
+	Seen struct {
+		At time.Time `json:"at"`
+	}
 	Error struct {
 		Error string `json:"error"`
 	}
@@ -242,6 +247,21 @@ func (c *Client) Reopen(workspace, thread string) error {
 
 func (c *Client) Answer(workspace, thread, id string, d model.Decision, msg string) error {
 	return c.do("POST", threadPath(workspace, thread)+"/answer", Answer{ID: id, Decision: d, Message: msg}, nil)
+}
+
+// Waits is what needs the person in every workspace, oldest first.
+func (c *Client) Waits() ([]model.Wait, error) {
+	var ws []model.Wait
+	return ws, c.do("GET", "/waits", nil, &ws)
+}
+
+func (c *Client) Seen(workspace, thread string, at time.Time) error {
+	return c.do("POST", threadPath(workspace, thread)+"/seen", Seen{At: at}, nil)
+}
+
+// Dismiss takes a notice or a failure off the waits list.
+func (c *Client) Dismiss(workspace, thread, id string) error {
+	return c.do("DELETE", threadPath(workspace, thread)+"/waits/"+esc(id), nil, nil)
 }
 
 // Updates streams hub updates until ctx ends or the connection drops. The

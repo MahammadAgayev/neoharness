@@ -134,6 +134,39 @@ the thread and sends it in the thread's view; the TUI and the app show it
 in a card at the top of the chat when the person comes back (see
 usage.md). Which recap the person closed stays in the client.
 
+## Attention
+
+The hub decides how much of the person's attention each event asks for,
+once, so the TUI and the app draw the same thing. A client chooses how to
+draw a level, never which level an event has.
+
+| Level | Events |
+|---|---|
+| 0 quiet | text, tool calls, progress, messages, notes |
+| 1 ambient | a new artifact; a thread's turn end when `notify = "coordinator"` |
+| 2 notice | a turn end; a notice from the coordinator |
+| 3 needs you | a permission, a question, an error, a notice that needs the person |
+
+- Each event carries its `level`. A thread's view carries the highest level
+  still open on it: 3 while something waits on the person, else the highest
+  level 1 or 2 since it was last seen.
+- `POST /workspaces/{w}/threads/{t}/seen {at}` says the person saw the
+  thread. A client sends it after the thread was on screen, in a window in
+  front, for `model.SeenDwell` (2 s) without a break. It quiets levels 1 and
+  2 that came before `at`, in every client. It never clears level 3.
+- The waits list is what needs the person in every workspace, oldest first:
+  pending permissions, questions, failed turns, and notices that need the
+  person. `GET /waits` returns it, and a `waits` update carries the whole
+  list each time it changes (no `waits` field is an empty list). An item
+  leaves only when it is resolved: a permission is answered, a question
+  answered or skipped, a turn stopped, a thread resolved or deleted, a
+  failed thread runs again, the person writes to the coordinator that sent
+  the notice. `DELETE /workspaces/{w}/threads/{t}/waits/{id}` dismisses a
+  notice or a failure; a permission or a question is answered instead.
+- Failures, notices, questions and seen times are kept in `thread.json`, so
+  the list survives a restart. A pending permission does not: its turn
+  ends with the hub.
+
 ## Permissions
 
 When Claude asks for approval, it calls `permission_prompt`. The hub holds

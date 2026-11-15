@@ -150,6 +150,19 @@ func Handler(h *hub.Hub, info hubapi.Info, stop func()) http.Handler {
 		}
 		reply(w, nil, h.Answer(r.PathValue("p"), r.PathValue("t"), in.ID, in.Decision, in.Message))
 	})
+	mux.HandleFunc("GET /waits", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, h.Waits(), nil)
+	})
+	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/seen", func(w http.ResponseWriter, r *http.Request) {
+		var in hubapi.Seen
+		if !decode(w, r, &in) {
+			return
+		}
+		reply(w, nil, h.Seen(r.PathValue("p"), r.PathValue("t"), in.At))
+	})
+	mux.HandleFunc("DELETE /workspaces/{p}/threads/{t}/waits/{id}", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, nil, h.Dismiss(r.PathValue("p"), r.PathValue("t"), r.PathValue("id")))
+	})
 	mux.HandleFunc("GET /updates", func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {

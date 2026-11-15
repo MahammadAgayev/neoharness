@@ -128,6 +128,8 @@ type Hub struct {
 	subs       map[int]chan model.Update
 	nextSub    int
 	nextPerm   int
+	// lastWaits is the waits list as last published.
+	lastWaits []model.Wait
 
 	filesMu sync.Mutex
 	files   map[model.Location]fileList
@@ -189,6 +191,7 @@ type pending struct {
 	model.Permission
 	done chan model.Decision
 	msg  string
+	at   time.Time
 }
 
 type ident struct {
@@ -517,6 +520,7 @@ func (h *Hub) DeleteWorkspace(name string) error {
 	}
 	delete(h.workspaces, name)
 	h.publish(model.Update{Kind: model.UpdateDeleted, Workspace: name})
+	h.publishWaits()
 	return nil
 }
 
@@ -1073,6 +1077,7 @@ func (h *Hub) enqueue(ws *space, th *thread, from, text string, images ...string
 		t.AgentTurns = 0
 		t.Paused = false
 		t.Asking = ""
+		t.Notices = nil
 	}
 	h.changed(ws, th)
 	h.kick(ws, th)
@@ -1136,6 +1141,7 @@ func (h *Hub) Delete(workspaceName, name string) error {
 		return err
 	}
 	h.publish(model.Update{Kind: model.UpdateDeleted, Workspace: workspaceName, Thread: name})
+	h.publishWaits()
 	h.publishWorkspace(ws)
 	return nil
 }
@@ -1633,7 +1639,12 @@ func (h *Hub) Notify(workspaceName, name, text string, needsYou bool) error {
 	if text = strings.TrimSpace(text); text == "" {
 		return errors.New("empty notice")
 	}
-	h.event(ws, th, model.Event{Kind: model.EventNotice, Text: text, NeedsYou: needsYou})
+	at := time.Now().UTC()
+	h.event(ws, th, model.Event{At: at, Kind: model.EventNotice, Text: text, NeedsYou: needsYou})
+	if needsYou {
+		th.t.Notices = append(th.t.Notices, workspace.Notice{ID: fmt.Sprintf("n%d", at.UnixNano()), Text: text, At: at})
+		h.changed(ws, th)
+	}
 	return nil
 }
 
@@ -1683,6 +1694,7 @@ func (h *Hub) Permission(ctx context.Context, workspaceName, name string, q agen
 	p := &pending{
 		Permission: model.Permission{ID: fmt.Sprintf("p%d", h.nextPerm), Tool: q.Tool, Detail: q.Detail, Scope: q.Scope},
 		done:       make(chan model.Decision, 1),
+		at:         time.Now().UTC(),
 	}
 	th.perms = append(th.perms, p)
 	h.event(ws, th, model.Event{Kind: model.EventPermission, ID: p.ID, Tool: q.Tool, Detail: q.Detail})
@@ -1949,8 +1961,14 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 			t.Summary = ""
 		}
 	}
+	if !compact {
+		t.Failed, t.FailedAt = failure, time.Time{}
+		if failure != "" {
+			t.FailedAt = time.Now().UTC()
+		}
+	}
 	if t.Role == model.RoleThread && !compact {
-		t.Reply, t.Failed = "", failure
+		t.Reply = ""
 		if ended {
 			t.Reply = oneLine(res.Text, replyLimit)
 		}
@@ -2281,10 +2299,17 @@ func (h *Hub) changed(ws *space, th *thread) {
 		th.t.Since = time.Now().UTC()
 	}
 	th.clock.hold(len(th.perms) > 0 || th.ask != nil)
+	switch {
+	case th.t.Asking == "":
+		th.t.AskedAt = time.Time{}
+	case th.t.AskedAt.IsZero():
+		th.t.AskedAt = time.Now().UTC()
+	}
 	_ = workspace.SaveThread(ws.p.Name, th.t)
 	v := h.view(ws, th)
 	h.publish(model.Update{Kind: model.UpdateThread, Workspace: ws.p.Name, Thread: th.t.Name, View: &v})
 	h.publishWorkspace(ws)
+	h.publishWaits()
 }
 
 func (h *Hub) publishWorkspace(ws *space) {
@@ -2300,8 +2325,14 @@ func (h *Hub) event(ws *space, th *thread, e model.Event) {
 	if e.At.IsZero() {
 		e.At = time.Now().UTC()
 	}
+	e.Level = level(e, th.t.Role, h.cfg.Notify)
 	_ = workspace.AppendEvent(ws.p.Name, th.t.Name, e)
 	h.publish(model.Update{Kind: model.UpdateEvent, Workspace: ws.p.Name, Thread: th.t.Name, Event: &e})
+	if e.Level == model.LevelAmbient || e.Level == model.LevelNotice {
+		th.t.Unseen = max(th.t.Unseen, e.Level)
+		th.t.UnseenAt = e.At
+		h.changed(ws, th)
+	}
 }
 
 // quietKind says an event is the turn's talk, which a quiet turn keeps out of
@@ -2370,6 +2401,8 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		Recap:         t.Recap,
 		RecapAt:       t.RecapAt,
 		Todos:         t.Todos,
+		Level:         threadLevel(ws, th),
+		SeenAt:        t.SeenAt,
 		WakeAt:        t.WakeAt,
 		Model:         t.Model,
 		Context:       t.Context,

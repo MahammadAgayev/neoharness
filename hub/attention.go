@@ -1,0 +1,164 @@
+package hub
+
+import (
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/MahammadAgayev/neoharness/api/model"
+	"github.com/MahammadAgayev/neoharness/hub/workspace"
+)
+
+// level is the attention an event asks for. quiet says the coordinator
+// decides what of the threads reaches the person.
+func level(e model.Event, role model.Role, quiet bool) model.Level {
+	switch e.Kind {
+	case model.EventPermission, model.EventAsk, model.EventError:
+		return model.LevelNeedsYou
+	case model.EventNotice:
+		if e.NeedsYou {
+			return model.LevelNeedsYou
+		}
+		return model.LevelNotice
+	case model.EventTurnEnd:
+		if quiet && role == model.RoleThread {
+			return model.LevelAmbient
+		}
+		return model.LevelNotice
+	case model.EventArtifact:
+		return model.LevelAmbient
+	}
+	return model.LevelQuiet
+}
+
+// waitsOf is what waits on the person in one thread.
+func waitsOf(ws *space, th *thread) []model.Wait {
+	t := th.t
+	w := func(kind model.WaitKind, id, text string, since time.Time) model.Wait {
+		return model.Wait{Workspace: ws.p.Name, Thread: t.Name, Kind: kind, ID: id, Text: text, Since: since}
+	}
+	var out []model.Wait
+	for _, p := range th.perms {
+		out = append(out, w(model.WaitPermission, p.ID, strings.TrimSuffix(p.Tool+": "+p.Detail, ": "), p.at))
+	}
+	if t.Asking != "" {
+		id := ""
+		if th.ask != nil {
+			id = th.ask.id
+		}
+		out = append(out, w(model.WaitQuestion, id, t.Asking, t.AskedAt))
+	}
+	if failed(th) {
+		out = append(out, w(model.WaitFailed, failedID, t.Failed, t.FailedAt))
+	}
+	for _, n := range t.Notices {
+		out = append(out, w(model.WaitNotice, n.ID, n.Text, n.At))
+	}
+	return out
+}
+
+// failedID names a thread's failure in the waits list; a thread has at
+// most one.
+const failedID = "failed"
+
+// failed says the thread's last turn failed and nothing came after it.
+func failed(th *thread) bool {
+	t := th.t
+	return t.Failed != "" && !t.FailedAt.IsZero() && !t.Resolved && !th.busy && len(t.Queue) == 0
+}
+
+// threadLevel is the highest level still open on a thread.
+func threadLevel(ws *space, th *thread) model.Level {
+	if len(waitsOf(ws, th)) > 0 {
+		return model.LevelNeedsYou
+	}
+	return th.t.Unseen
+}
+
+// Waits is what needs the person in every workspace, oldest first.
+func (h *Hub) Waits() []model.Wait {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.waits()
+}
+
+func (h *Hub) waits() []model.Wait {
+	out := []model.Wait{}
+	for _, ws := range h.workspaces {
+		for _, th := range ws.threads {
+			if !th.deleted {
+				out = append(out, waitsOf(ws, th)...)
+			}
+		}
+	}
+	slices.SortStableFunc(out, func(a, b model.Wait) int {
+		if c := a.Since.Compare(b.Since); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Workspace+"\x00"+a.Thread+"\x00"+a.ID, b.Workspace+"\x00"+b.Thread+"\x00"+b.ID)
+	})
+	return out
+}
+
+// publishWaits sends the waits list when it changed. Callers hold h.mu.
+func (h *Hub) publishWaits() {
+	ws := h.waits()
+	if slices.EqualFunc(ws, h.lastWaits, func(a, b model.Wait) bool {
+		return a.Workspace == b.Workspace && a.Thread == b.Thread && a.Kind == b.Kind && a.ID == b.ID && a.Text == b.Text && a.Since.Equal(b.Since)
+	}) {
+		return
+	}
+	h.lastWaits = ws
+	h.publish(model.Update{Kind: model.UpdateWaits, Waits: ws})
+}
+
+// Seen says the person saw a thread at a time: what came before it at
+// levels 1 and 2 is quiet now. What needs them stays until it is resolved.
+func (h *Hub) Seen(workspaceName, name string, at time.Time) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	at = at.UTC()
+	if now := time.Now().UTC(); at.IsZero() || at.After(now) {
+		at = now
+	}
+	t := th.t
+	if !at.After(t.SeenAt) {
+		return nil
+	}
+	t.SeenAt = at
+	if t.Unseen > 0 && !at.Before(t.UnseenAt) {
+		t.Unseen = 0
+	}
+	h.changed(ws, th)
+	return nil
+}
+
+// Dismiss takes a notice or a failure off the waits list. A permission or
+// a question is answered instead.
+func (h *Hub) Dismiss(workspaceName, name, id string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws, th, err := h.lookup(workspaceName, name)
+	if err != nil {
+		return err
+	}
+	t := th.t
+	switch {
+	case id == failedID && failed(th):
+		t.FailedAt = time.Time{}
+	case slices.ContainsFunc(t.Notices, func(n workspace.Notice) bool { return n.ID == id }):
+		t.Notices = slices.DeleteFunc(t.Notices, func(n workspace.Notice) bool { return n.ID == id })
+	case slices.ContainsFunc(th.perms, func(p *pending) bool { return p.ID == id }), th.ask != nil && th.ask.id == id:
+		return errors.New("answer it instead: allow, deny, or skip")
+	default:
+		return fmt.Errorf("nothing waits as %q on %s", id, name)
+	}
+	h.changed(ws, th)
+	return nil
+}

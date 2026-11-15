@@ -86,7 +86,9 @@ type Thread struct {
 
 	Resolved bool   `json:"resolved,omitempty"`
 	Asking   string `json:"asking,omitempty"`
-	Paused   bool   `json:"paused,omitempty"`
+	// AskedAt is when the question in Asking came.
+	AskedAt time.Time `json:"askedAt,omitzero"`
+	Paused  bool      `json:"paused,omitempty"`
 
 	// WakeAt is when the thread asked to be woken, with WakeNote as the
 	// reason; zero is never.
@@ -125,6 +127,17 @@ type Thread struct {
 	// turn failed, for the coordinator's board and the threads pane.
 	Reply  string `json:"reply,omitempty"`
 	Failed string `json:"failed,omitempty"`
+	// FailedAt is when the turn failed; zero once the person dismissed it.
+	FailedAt time.Time `json:"failedAt,omitzero"`
+	// Notices are the coordinator's notices that need the person, until
+	// the person writes to it or dismisses them.
+	Notices []Notice `json:"notices,omitempty"`
+	// SeenAt is when the person last saw the thread. Unseen is the highest
+	// attention level of 1 and 2 since then, and UnseenAt when the last of
+	// those came.
+	SeenAt   time.Time   `json:"seenAt,omitzero"`
+	Unseen   model.Level `json:"unseen,omitempty"`
+	UnseenAt time.Time   `json:"unseenAt,omitzero"`
 	// News is what changed since the coordinator's last board; nil when
 	// nothing did.
 	News *News `json:"news,omitempty"`
@@ -137,6 +150,13 @@ type Thread struct {
 	Since     time.Time `json:"since"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// Notice is a notice that waits for the person.
+type Notice struct {
+	ID   string    `json:"id"`
+	Text string    `json:"text"`
+	At   time.Time `json:"at"`
 }
 
 // News is what a thread brings the coordinator's next board: a new recap,

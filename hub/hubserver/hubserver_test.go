@@ -204,3 +204,69 @@ func TestStopRequest(t *testing.T) {
 		}
 	}
 }
+
+// TestWaitsOverTheAPI: the waits list, seen and dismiss reach the hub, and
+// the list comes on the update stream when it changes.
+func TestWaitsOverTheAPI(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("NEOHARNESS_HOME", home)
+	h, err := hub.New(hub.Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return echo{} }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close()
+	sock := filepath.Join(home, "hub.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: Handler(h, hubapi.Info{}, func() {})}
+	go srv.Serve(ln)
+	defer srv.Close()
+	c := hubapi.New(sock)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	updates, err := c.Updates(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.CreateWorkspace("demo", t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if ws, err := c.Waits(); err != nil || len(ws) != 0 {
+		t.Fatalf("waits = %+v, %v", ws, err)
+	}
+	if err := h.Notify("demo", model.Coordinator, "pick a database", true); err != nil {
+		t.Fatal(err)
+	}
+	timeout := time.After(3 * time.Second)
+	var w model.Wait
+	for w.ID == "" {
+		select {
+		case u := <-updates:
+			if u.Kind == model.UpdateWaits && len(u.Waits) == 1 {
+				w = u.Waits[0]
+			}
+		case <-timeout:
+			t.Fatal("no waits update")
+		}
+	}
+	if ws, _ := c.Waits(); len(ws) != 1 || ws[0].ID != w.ID || ws[0].Kind != model.WaitNotice {
+		t.Fatalf("waits = %+v", ws)
+	}
+	if err := c.Seen("demo", model.Coordinator, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if vs, _ := c.Threads("demo"); vs[0].SeenAt.IsZero() || vs[0].Level != model.LevelNeedsYou {
+		t.Fatalf("after seen = %+v", vs[0])
+	}
+	if err := c.Dismiss("demo", model.Coordinator, w.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Dismiss("demo", model.Coordinator, w.ID); err == nil {
+		t.Fatal("dismissed twice")
+	}
+	if ws, _ := c.Waits(); len(ws) != 0 {
+		t.Fatalf("waits after dismiss = %+v", ws)
+	}
+}
