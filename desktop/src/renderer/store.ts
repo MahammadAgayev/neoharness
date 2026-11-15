@@ -1125,7 +1125,8 @@ class Store {
     for (const v of Object.values(this.state.threads)) {
       const k = `${this.state.workspace}/${v.name}`
       const was = this.boardAt[k]
-      if (was === undefined || was === v.state) this.boardAt[k] = v.state
+      // A resolved thread is done with; holding it would show it as waiting.
+      if (was === undefined || was === v.state || v.state === 'resolved') this.boardAt[k] = v.state
       else if (!hold) {
         this.boardAt[k] = v.state
         this.settled[k] = now

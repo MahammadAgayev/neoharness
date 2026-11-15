@@ -829,6 +829,15 @@ test('a row that changes group waits while you are on the board, then settles; a
   await expect(page.locator('.board .list-need')).toHaveText('permission · Bash go test ./...')
   await shot('47-board-settle')
 
+  // A thread resolved while you are on the board does not stay under waiting.
+  await page.keyboard.press('Control+w')
+  await page.keyboard.press('l')
+  hub.setView(view('demo', 'api', { state: 'resolved' }))
+  await expect(page.locator('.group-head', { hasText: 'waiting' })).toHaveCount(0)
+  await page.keyboard.press('Control+w')
+  await page.keyboard.press('h')
+  await page.mouse.move(100, 500)
+
   hub.setView(view('demo', 'api', { state: 'failed' }))
   await expect(page.locator('.group-head').first()).toHaveText('failed · 1')
   await expect(api.locator('.glyph')).toHaveClass(/t-love/)
