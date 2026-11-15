@@ -3298,8 +3298,8 @@ func TestAFinishedTurnElsewhereToastsItsReply(t *testing.T) {
 	text("Partly. Renaming makes sense.\n\nWhy rename: ...")
 	view(model.StateIdle)
 	tt := h.a.toasts[len(h.a.toasts)-1]
-	if tt.body != "Partly. Renaming makes sense." || time.Until(tt.until) < 6*time.Second {
-		t.Fatalf("toast = %q for %v, want the reply's first line for longer than in the open workspace", tt.body, time.Until(tt.until))
+	if tt.body != "Partly. Renaming makes sense." || tt.life < 6*time.Second {
+		t.Fatalf("toast = %q for %v, want the reply's first line for longer than in the open workspace", tt.body, tt.life)
 	}
 
 	// A turn with no reply does not show the last turn's reply.
@@ -3443,7 +3443,7 @@ func TestWorkspacePickerShowsWhatWaits(t *testing.T) {
 	}
 }
 
-func TestToastsSayTheWorkspace(t *testing.T) {
+func TestToastsSayTheirWorkspaceInMessages(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	v := h.a.threads["api-tests"]
@@ -3451,7 +3451,8 @@ func TestToastsSayTheWorkspace(t *testing.T) {
 	v.Waiting = "Which branch?"
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
-	h.see("demo · api-tests")
+	// This workspace is in the status line; the notice names only the thread.
+	h.see("◆ api-tests  asks: Which branch?")
 	h.press("<Esc>", ":messages", "<CR>")
 	h.see("demo · api-tests: asks: Which branch?")
 }

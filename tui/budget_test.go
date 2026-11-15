@@ -110,6 +110,7 @@ func TestAnIdleWorkspaceSchedulesNothing(t *testing.T) {
 	for _, bl := range b.blocks {
 		bl.live = false
 	}
+	c.h.a.toasts = nil
 	c.timers = nil
 	c.h.a.wakeAt = time.Time{}
 	c.now = c.now.Add(time.Second)

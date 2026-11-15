@@ -14,15 +14,19 @@ import (
 // :messages.
 const toastsShown = 3
 
-// toast is a small note in the top right corner about a thread that is not
-// on screen, like snacks.nvim's notifier.
+// toast is a one-line notice about a thread that is not on screen, in the
+// foot of the board, or in the status line when the board is closed. It never
+// covers the board's rows.
 type toast struct {
 	workspace, thread string
 	glyph             Span
 	body              string
 	border            tcell.Style
-	// until is when it goes away. Zero keeps it while the thread waits for
-	// the person and is not on screen.
+	// life is how long it shows; 0 keeps it while the thread waits for the
+	// person and is not on screen. A notice with a life waits while the
+	// person types, and its life counts from when it shows, until then.
+	life  time.Duration
+	shown time.Time
 	until time.Time
 	// notice is the coordinator's: with until zero it stays until the
 	// coordinator is on screen.
@@ -85,10 +89,7 @@ func (a *App) showNotice(workspace string, e model.Event) {
 
 func (a *App) addToast(t *toast, life time.Duration) {
 	thread := t.thread
-	if life > 0 {
-		t.until = time.Now().Add(life)
-		time.AfterFunc(life, func() { _ = a.s.PostEvent(evRedraw{}) })
-	}
+	t.life = life
 	// One toast per thread: the newest says where it is now.
 	for i, o := range a.toasts {
 		if o.workspace == t.workspace && o.thread == thread {
@@ -159,37 +160,48 @@ func (a *App) showsError(workspace, thread string) bool {
 // pruneToasts drops toasts whose time is up, and waiting ones whose thread
 // no longer waits or is now on screen.
 func (a *App) pruneToasts() {
-	now := time.Now()
+	now := a.now()
 	keep := a.toasts[:0]
 	for _, t := range a.toasts {
-		if t.until.IsZero() {
+		switch {
+		case t.life == 0:
 			if a.stillWaits(t) {
 				keep = append(keep, t)
 			}
-		} else if now.Before(t.until) {
+		case t.shown.IsZero() || now.Before(t.until):
 			keep = append(keep, t)
 		}
 	}
 	a.toasts = keep
 }
 
-func (a *App) drawToasts(W, H int) {
+// shownToasts are the toasts to draw now, the newest last. A notice that
+// has not shown yet waits while the person types: in Insert or on the
+// command line. What needs the person shows at once.
+func (a *App) shownToasts() []*toast {
 	a.pruneToasts()
-	tw := min(56, W-4)
-	if tw < 20 {
-		return
+	typing := a.mode == modeInsert || a.mode == modeCommand
+	var out []*toast
+	for _, t := range a.toasts {
+		if t.life > 0 && t.shown.IsZero() {
+			if typing {
+				continue
+			}
+			t.shown, t.until = a.now(), a.now().Add(t.life)
+			a.after(t.life, evRedraw{})
+		}
+		out = append(out, t)
 	}
-	x0, y := W-tw-margin, 1
-	shown := a.toasts[max(len(a.toasts)-toastsShown, 0):]
-	for i := len(shown) - 1; i >= 0 && y+4 < H; i-- {
-		t := shown[i]
-		a.box(x0, y, tw, 4, "", t.border)
-		x := a.put(x0+2, y+1, x0+tw-2, t.glyph.Text+" ", t.glyph.Style)
-		x = a.put(x, y+1, x0+tw-2, t.workspace+" · ", a.th.Fg2)
-		a.put(x, y+1, x0+tw-2, t.thread, a.th.Fg.Bold(true))
-		a.put(x0+4, y+2, x0+tw-2, truncate(flatten(t.body), tw-6), a.th.Fg2)
-		y += 4
+	return out[max(len(out)-toastsShown, 0):]
+}
+
+// toastLine is a toast as one line: glyph, name, text.
+func (a *App) toastLine(t *toast) []Span {
+	name := t.thread
+	if t.workspace != a.workspace {
+		name = t.workspace + " · " + name
 	}
+	return []Span{{t.glyph.Text + " ", t.glyph.Style}, {name + "  ", a.th.Fg2}, {flatten(t.body), a.th.Fg2}}
 }
 
 // stillWaits reports whether a waiting toast's thread still waits and is not

@@ -62,7 +62,6 @@ func (a *App) draw() {
 	for _, w := range a.bindDiff() {
 		a.drawWindow(w, false)
 	}
-	a.drawToasts(W, H)
 	if a.picker != nil {
 		a.drawPicker(W, H)
 	}
@@ -130,6 +129,16 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	cardBottom := textBottom
 	if title, body, _ := a.card(w); title != "" && textBottom-len(body)-2 > top {
 		textBottom -= len(body) + 2
+	}
+	// Notices dock in the board's foot, under its rows.
+	if b.Kind == KindThreads {
+		ts := a.shownToasts()
+		for i, t := range ts {
+			a.drawLine(r.X, bottom-len(ts)+i, right, Line{Prefix: []Span{{" ", a.th.Fg}}, Spans: a.toastLine(t)})
+		}
+		if len(ts) > 0 {
+			textBottom -= len(ts) + 1
+		}
 	}
 	// The recap is the top of the prompt dock, the end of the chat's lines.
 	b.SetRecap(a.recapText(w))
@@ -550,6 +559,11 @@ func (a *App) drawStatusLine(W, H int) {
 	}
 	if a.workspace != "" {
 		x = a.put(x, y, W, a.workspace, th.Fg2) + 3
+	}
+	// With the board closed, the newest notice shows here.
+	board := slices.ContainsFunc(a.root.windows(), func(w *Window) bool { return w.Buf.Kind == KindThreads })
+	if ts := a.shownToasts(); !board && len(ts) > 0 {
+		x = a.drawLine(x, y, W-margin, Line{Spans: a.toastLine(ts[len(ts)-1])}) + 3
 	}
 	n := map[model.State]int{}
 	for _, v := range a.threads {

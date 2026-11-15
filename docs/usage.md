@@ -135,7 +135,11 @@ chained command or `rm`, offers no "always".
 
 ## Notifications
 
-Toasts show in the top right corner and name the workspace and the thread.
+Toasts are one line each in the foot of the threads pane, under its rows,
+which they never cover; with the pane closed, the newest shows in the status
+line. Each names the thread, and the workspace when it is not the open one.
+A toast that does not need you waits while you are in Insert or on the
+command line, and shows when you leave it. What needs you shows at once.
 `<leader>nc` dismisses them and `<leader>nh` shows their history.
 `<leader>pm` picks one, newest first, and opens its thread, in any
 workspace.
