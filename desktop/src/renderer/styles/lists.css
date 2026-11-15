@@ -68,3 +68,70 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The board: one 28px row per thread, a detail row only for what waits. */
+.board {
+  padding: var(--s-1) var(--s-2);
+}
+.board .group-head {
+  height: var(--row-dense);
+  display: flex;
+  align-items: flex-end;
+  padding: 0 var(--s-2) var(--s-1);
+  margin-top: var(--s-2);
+  letter-spacing: 0;
+}
+.board .list-row {
+  position: relative;
+  height: var(--row);
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0 var(--s-2);
+  border-radius: var(--r-1);
+  font-size: var(--fs-secondary);
+}
+.board .list-row .glyph {
+  margin-top: 0;
+  display: inline-flex;
+}
+.board .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-2);
+}
+.board .name.open {
+  color: var(--fg);
+  font-weight: 600;
+}
+.board .time {
+  margin-left: auto;
+  font-size: var(--fs-small);
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+}
+.list-need {
+  padding: 0 var(--s-2) var(--s-1) calc(var(--s-2) + 14px + var(--s-2));
+  font-size: var(--fs-small);
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A row that just took its new group: a tint that fades once. */
+.board .list-row.settle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--bg-select);
+  opacity: 0;
+  pointer-events: none;
+  animation: settle var(--t-settle) var(--ease-std);
+}
+@keyframes settle {
+  from {
+    opacity: 1;
+  }
+}

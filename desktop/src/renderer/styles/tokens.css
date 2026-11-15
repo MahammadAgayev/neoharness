@@ -7,16 +7,24 @@
 :root {
   --font-text: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif;
   --font-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
-  --font-size: var(--font-size);
+  /* The settings set the text size on :root. */
+  --font-size: 14px;
   /* Three sizes, all from the text size: body, secondary and small. */
   --fs-secondary: calc(var(--font-size) - 1px);
   --fs-small: calc(var(--font-size) - 2px);
   /* The width of a column of prose: about 90 characters of reading text.
      With the line height and the paragraph gaps the eye still finds the
-     next line, and a long reply wraps less. It follows the text size. */
-  --measure: calc(var(--font-size) * 60);
-  --radius: 8px;
-  --titlebar: 40px;
+     next line, and a long reply wraps less. */
+  --measure: 90ch;
+
+  /* Sizes: rows, dense rows (group heads, todo items), the bar on top, the
+     rail folded and open, and the board. */
+  --row: 28px;
+  --row-dense: 24px;
+  --bar: 36px;
+  --rail: 48px;
+  --rail-open: 200px;
+  --board: 260px;
 
   /* Space: a 4px grid, and no other values. */
   --s-0: 2px;
@@ -33,6 +41,10 @@
   --r-1: 4px;
   --r-2: 6px;
   --r-3: 10px;
+
+  /* Elevation: flat, or --e1 for overlays and toasts, and --scrim to dim
+     what is behind an overlay, with no blur. Both come from the scheme
+     (lib/themes.ts). No glows. */
 
   /* A hairline is one device pixel: half a CSS pixel on a Retina screen. */
   --hairline-w: 1px;

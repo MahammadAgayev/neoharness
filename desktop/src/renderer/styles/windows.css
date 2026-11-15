@@ -47,11 +47,11 @@
 }
 
 .statusline {
-  flex: 0 0 34px;
+  flex: 0 0 var(--bar);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 14px;
+  gap: var(--s-2);
+  padding: 0 var(--s-4);
   font-size: var(--fs-secondary);
   color: var(--fg-3);
   border-bottom: 1px solid var(--hairline);
@@ -59,15 +59,22 @@
   overflow: hidden;
 }
 .statusline .sl-ws {
-  color: var(--fg-3);
+  display: none;
+}
+/* Only a thread of another workspace names it: where your words go is not
+   the rail's. */
+.statusline .sl-ws.peek {
+  display: inline;
+  color: var(--run);
   margin-right: -6px;
 }
-/* A thread of another workspace: where your words go is not the sidebar's. */
-.statusline .sl-ws.peek {
-  color: var(--foam);
-}
 .statusline .sl-name {
-  color: var(--fg-2);
+  color: var(--fg-3);
+}
+/* The focused pane: a line in the accent on top, and its name in full ink.
+   It moves at once with the focus. */
+.statusline.focused {
+  box-shadow: inset 0 2px 0 var(--accent);
 }
 .statusline.focused .sl-name {
   color: var(--fg);

@@ -1,29 +1,27 @@
 import { useRef, useState } from 'react'
 
+import type { WorkspaceView } from '../../shared/model'
+import { inState } from '../search'
 import { store, useStore } from '../store'
-import { Icon } from './Icon'
+import { Glyph, Icon } from './Icon'
 import { Leave } from './Leave'
 
 const minWidth = 160
-const maxWidth = 400
+const maxWidth = 320
+const openWidth = 200
 
-const railWidth = 48
-
-// Sidebar lists the workspaces and what in each needs you, so a thread that
-// waits in another workspace is one look away. ⌘B folds it to a rail of
-// icons, as Chrome's vertical tabs: the mouse on the rail shows it whole,
-// over the windows, until the mouse leaves.
+// The rail lists the workspaces and what in each needs you, so a thread that
+// waits in another workspace is one look away. ⌘B folds it to 48 px of
+// letters: the mouse resting on it shows it whole, over the windows, until
+// the mouse leaves. Everything else is in the palette and the ⋯ menu.
 export function Sidebar(props: { folded: boolean }) {
   const workspaces = useStore((s) => s.workspaces)
   const open = useStore((s) => s.workspace)
   const screen = useStore((s) => s.screen)
-  const artifacts = useStore((s) => s.artifacts)
-  const leader = useStore((s) => s.settings.leader)
-  const lead = leader === '<Space>' ? 'Space' : leader.replace(/^<|>$/g, '')
   const saved = useStore((s) => s.settings.sidebarWidth)
   // While a drag runs the width is local; it is saved when the drag ends.
   const [dragged, setDragged] = useState<number | null>(null)
-  const width = dragged ?? saved
+  const width = Math.min(Math.max(dragged ?? saved, minWidth), maxWidth)
   const drag = (e: React.MouseEvent) => {
     e.preventDefault()
     const x0 = e.clientX
@@ -45,95 +43,63 @@ export function Sidebar(props: { folded: boolean }) {
   }
   const [over, setOver] = useState(false)
   const wait = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // A short wait, so a mouse on its way to the title bar does not open it.
+  // The peek waits for a mouse that rests, so one on its way to the bar
+  // does not open it, and stays a moment after, so one that slips off the
+  // edge does not close it.
   const hover = (on: boolean) => {
     if (wait.current) clearTimeout(wait.current)
-    wait.current = on ? setTimeout(() => setOver(true), 150) : null
-    if (!on) setOver(false)
+    wait.current = setTimeout(() => setOver(on), on ? 300 : 150)
+  }
+  const item = (w: WorkspaceView, i: number, rail: boolean) => {
+    const st = wsState(w)
+    const tip = [w.pin ? store.short(w.pin) : 'not pinned', ...st.parts].join(' · ')
+    return (
+      <button
+        key={w.name}
+        className={`sb-item ${w.name === open && screen === 'workspace' ? 'active' : ''}`}
+        onClick={() => void store.openWorkspace(w.name)}
+        data-tip={rail ? `${w.name} · ${tip}` : tip}
+        data-keys={i < 9 ? `⌘${i + 1}` : undefined}
+      >
+        {rail && <span className="sb-letter">{w.name.slice(0, 1).toUpperCase()}</span>}
+        {!rail && <span className="sb-label">{w.name}</span>}
+        {st.glyph && (
+          <span className={`sb-state t-${st.tone} ${st.glyph === '●' ? 'pulse' : ''}`}>
+            {rail ? <span className="sb-dot" /> : <Glyph g={st.glyph} size={12} />}
+          </span>
+        )}
+      </button>
+    )
   }
   // Folded, the rail keeps its width in the layout, and the whole sidebar
   // arrives over the windows: a slide, not a resize, so nothing reflows.
   const nav = (mode: '' | 'rail' | 'peek') => (
-    <nav className={`sidebar ${mode}`} style={mode === '' ? { flexBasis: width } : { width: mode === 'peek' ? width : railWidth }}>
-      {!props.folded && (
+    <nav className={`sidebar ${mode}`} style={mode === '' ? { flexBasis: width } : mode === 'peek' ? { width } : undefined}>
+      {mode === '' && (
         <div
           className="sb-resizer"
           onMouseDown={drag}
-          onDoubleClick={() => store.setSettings({ sidebarWidth: 216 })}
+          onDoubleClick={() => store.setSettings({ sidebarWidth: openWidth })}
           data-tip="Drag to resize · double-click resets"
         />
       )}
-      <div className="sb-section">
-        {open && artifacts.length > 0 && (
-          <button className="sb-item" onClick={() => store.openPicker('artifacts', true)}>
-            <Icon name="diamond" className="sb-icon t-foam" />
-            <span className="sb-label">Artifacts</span>
-            <span className="sb-count">{artifacts.length}</span>
-          </button>
-        )}
-        {open && (
-          <button className="sb-item" onClick={() => store.openNewDoc()}>
-            <Icon name="file-plus" className="sb-icon" />
-            <span className="sb-label">New doc</span>
-            <kbd className="sb-kbd shown">{lead} d</kbd>
-          </button>
-        )}
-      </div>
       {/* The heading opens the overview of every workspace; the list marks the open one. */}
-      <button
-        className={`sb-head ${screen === 'workspaces' ? 'active' : ''}`}
-        onClick={() => store.showWorkspaces()}
-        data-tip="All workspaces"
-        data-keys={`${lead} p v`}
-      >
+      <button className={`sb-head ${screen === 'workspaces' ? 'active' : ''}`} onClick={() => store.showWorkspaces()} data-tip="All workspaces">
         Workspaces
       </button>
       <div className="sb-section sb-scroll">
-        {workspaces.map((w, i) => {
-          const waiting = (w.counts.waiting ?? 0) + (w.coordinator === 'waiting' ? 1 : 0)
-          const running = (w.counts.running ?? 0) + (w.coordinator === 'running' ? 1 : 0)
-          return (
-            <button
-              key={w.name}
-              className={`sb-item ${w.name === open && screen === 'workspace' ? 'active' : ''}`}
-              onClick={() => void store.openWorkspace(w.name)}
-              data-tip={w.pin ? store.short(w.pin) : 'not pinned'}
-            >
-              <Icon
-                name={waiting ? 'waiting' : running ? 'running' : 'idle'}
-                className={`sb-icon ${waiting ? 't-gold' : running ? 't-foam pulse' : 't-muted'}`}
-              />
-              <span className="sb-label">{w.name}</span>
-              {waiting > 0 ? (
-                <span className="sb-count t-gold">{waiting}</span>
-              ) : running > 0 ? (
-                <span className="sb-count t-foam">{running}</span>
-              ) : (
-                i < 9 && <kbd className="sb-kbd">⌘{i + 1}</kbd>
-              )}
-            </button>
-          )
-        })}
-        <button className="sb-item sb-new" onClick={() => store.openNewWorkspace()}>
+        {workspaces.map((w, i) => item(w, i, mode === 'rail'))}
+        <button className="sb-item sb-new" onClick={() => store.openNewWorkspace()} data-tip="New workspace">
           <Icon name="plus" className="sb-icon" />
-          <span className="sb-label">New workspace</span>
+          {mode !== 'rail' && <span className="sb-label">New workspace</span>}
         </button>
       </div>
       <div className="sb-foot">
-        <button className="sb-item" onClick={() => store.openCost('workspace')}>
-          <Icon name="chart-column" className="sb-icon" />
-          <span className="sb-label">Cost</span>
-          <kbd className="sb-kbd shown">{lead} $</kbd>
+        <button className="sb-btn" onClick={() => store.openPicker('all')} data-tip="Search everything" data-keys="⌘K">
+          ⌘K
         </button>
-        <button className="sb-item" onClick={() => store.openSettings()}>
-          <Icon name="settings" className="sb-icon" />
-          <span className="sb-label">Settings</span>
-          <kbd className="sb-kbd shown">{lead} s</kbd>
-        </button>
-        <button className="sb-item" onClick={() => void store.ex('help')}>
-          <Icon name="keyboard" className="sb-icon" />
-          <span className="sb-label">Help</span>
-          <kbd className="sb-kbd shown">{lead} h</kbd>
+        <button className="sb-btn" onClick={() => void more()} data-tip="Artifacts, new doc, cost, settings, help">
+          ⋯
         </button>
       </div>
     </nav>
@@ -145,4 +111,42 @@ export function Sidebar(props: { folded: boolean }) {
       <Leave>{over && nav('peek')}</Leave>
     </div>
   )
+}
+
+// wsState is what a workspace shows on the rail: what needs you first, then
+// what failed, then what runs.
+function wsState(w: WorkspaceView): { glyph: string; tone: string; parts: string[] } {
+  const waiting = inState(w, 'waiting')
+  const failed = inState(w, 'failed')
+  const running = inState(w, 'running')
+  const parts = [waiting && `${waiting} waiting`, failed && `${failed} failed`, running && `${running} running`].filter(
+    (p): p is string => !!p,
+  )
+  if (waiting) return { glyph: '◆', tone: 'gold', parts }
+  if (failed) return { glyph: '✗', tone: 'love', parts }
+  if (running) return { glyph: '●', tone: 'foam', parts }
+  return { glyph: '', tone: 'muted', parts }
+}
+
+// more is the ⋯ menu: what the rail held before, each one also a key and a
+// palette command.
+async function more(): Promise<void> {
+  const ws = !!store.state.workspace
+  const id = await window.nh.menu([
+    ...(ws
+      ? [
+          { id: 'artifacts', label: 'Artifacts' },
+          { id: 'newdoc', label: 'New doc' },
+          { id: '-', label: '' },
+        ]
+      : []),
+    { id: 'cost', label: 'Cost' },
+    { id: 'settings', label: 'Settings' },
+    { id: 'help', label: 'Help' },
+  ])
+  if (id === 'artifacts') store.openPicker('artifacts', true)
+  else if (id === 'newdoc') store.openNewDoc()
+  else if (id === 'cost') store.openCost('workspace')
+  else if (id === 'settings') store.openSettings()
+  else if (id === 'help') void store.ex('help')
 }

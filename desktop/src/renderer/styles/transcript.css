@@ -52,7 +52,7 @@
   white-space: pre-wrap;
   word-break: break-word;
   padding: 8px 12px;
-  border-radius: var(--radius);
+  border-radius: var(--r-2);
   background: color-mix(in srgb, var(--iris) 9%, transparent);
   border-left: 2px solid var(--iris);
 }
@@ -63,7 +63,7 @@
 .b-ask {
   border-left: 2px solid var(--gold);
   padding: 6px 12px;
-  border-radius: 0 var(--radius) var(--radius) 0;
+  border-radius: 0 var(--r-2) var(--r-2) 0;
   background: color-mix(in srgb, var(--gold) 7%, transparent);
 }
 .b-label {

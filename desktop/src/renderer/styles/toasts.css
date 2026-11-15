@@ -2,13 +2,13 @@
 .toasts {
   position: fixed;
   /* Under the window headers, which name the thread and its state. */
-  top: calc(var(--titlebar) + 44px);
+  top: calc(var(--bar) + 44px);
   right: 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   z-index: 40;
-  width: 360px;
+  width: 320px;
   pointer-events: none;
 }
 .toast {
@@ -16,9 +16,9 @@
   background: var(--bg-raised);
   border: 1px solid var(--hairline-strong);
   border-left: 3px solid var(--fg-3);
-  border-radius: 10px;
-  padding: 9px 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  border-radius: var(--r-2);
+  padding: var(--s-2) var(--s-3);
+  box-shadow: var(--e1);
   cursor: default;
   --arrive-x: 8px;
   animation: arrive var(--t-3) var(--ease-out);

@@ -2,7 +2,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--base) 55%, transparent);
+  background: var(--scrim);
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -17,10 +17,8 @@
   flex-direction: column;
   background: var(--bg-raised);
   border: 1px solid var(--hairline-strong);
-  border-radius: 12px;
-  box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.35),
-    0 2px 8px rgba(0, 0, 0, 0.2);
+  border-radius: var(--r-3);
+  box-shadow: var(--e1);
   overflow: hidden;
   --arrive-scale: 0.98;
   animation: arrive var(--t-4) var(--ease-out);

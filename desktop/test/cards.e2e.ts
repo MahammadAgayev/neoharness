@@ -632,7 +632,7 @@ test('the sidebar resizes by its edge, keeps the width, and a double-click reset
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('settings') || '{}').sidebarWidth)
   expect(saved).toBe(Math.round(before + 80))
   await page.locator('.sb-resizer').dblclick()
-  await expect.poll(async () => Math.round((await bar.boundingBox())!.width)).toBe(216)
+  await expect.poll(async () => Math.round((await bar.boundingBox())!.width)).toBe(200)
   await page.mouse.move(700, 400)
 })
 
@@ -651,7 +651,7 @@ test('⌘B folds the sidebar to a rail; the mouse on the rail shows it whole ove
   // The whole sidebar slides in over the rail, which keeps its place.
   const peek = page.locator('.sidebar.peek:not(.leaving)')
   await expect(peek).toBeVisible()
-  await expect.poll(async () => Math.round((await peek.boundingBox())!.width)).toBe(216)
+  await expect.poll(async () => Math.round((await peek.boundingBox())!.width)).toBe(200)
   await expect(peek.locator('.sb-label', { hasText: 'demo' })).toBeVisible()
   // Over the windows: they do not move.
   expect((await layout.boundingBox())!.x).toBe(x1)
@@ -770,9 +770,19 @@ test('<leader>$ shows what the workspace cost, Tab every workspace, and a turn o
   await expect(d).toHaveCount(0)
   await expect(page.locator('.statusline.focused .sl-name')).toHaveText('api')
 
-  // From the sidebar, and Esc closes it.
-  await page.locator('.sb-item', { hasText: 'Cost' }).click()
+  // From the rail's ⋯ menu, and Esc closes it. A native menu is out of
+  // Playwright's reach: a stub picks Cost.
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('menu')
+    ipcMain.handle('menu', (_e, items: { label: string }[]) => {
+      ;(globalThis as { menuItems?: string[] }).menuItems = items.map((i) => i.label)
+      return 'cost'
+    })
+  })
+  await page.locator('.sb-btn', { hasText: '⋯' }).click()
   await expect(d).toBeVisible()
+  const labels = await app.evaluate(() => (globalThis as { menuItems?: string[] }).menuItems)
+  expect(labels).toEqual(expect.arrayContaining(['Artifacts', 'New doc', 'Cost', 'Settings', 'Help']))
   await page.keyboard.press('Escape')
   await expect(d).toHaveCount(0)
 
@@ -781,14 +791,45 @@ test('<leader>$ shows what the workspace cost, Tab every workspace, and a turn o
   await expect(page.locator('.sb-item', { hasText: 'demo' })).not.toContainText('$')
 })
 
-test("an idle thread's row shows the start of its last reply, its group a count", async () => {
-  const row = page.locator('.list-row', { hasText: 'api' })
+test("an idle thread's row is its name, and K shows its last reply", async () => {
+  const row = page.locator('.board .list-row', { hasText: 'api' })
   hub.setView(view('demo', 'api', { state: 'idle', reply: 'Added /healthz and a test.' }))
-  await expect(row.locator('.list-detail')).toHaveText('Added /healthz and a test.')
+  await expect(row).toHaveAttribute('data-tip', 'Added /healthz and a test.')
+  await expect(page.locator('.board .list-need')).toHaveCount(0)
   await expect(page.locator('.group-head', { hasText: 'idle' })).toHaveText(/^idle · \d+$/)
-  // Without a reply the row is its name alone, not its folder.
-  hub.setView(view('demo', 'api', { state: 'idle' }))
-  await expect(row.locator('.list-detail')).toHaveCount(0)
+  await page.locator('.window.threads .statusline').click()
+  const i = await row.getAttribute('data-i')
+  await page.keyboard.press('g')
+  await page.keyboard.press('g')
+  for (let n = 0; n < Number(i); n++) await page.keyboard.press('j')
+  await page.keyboard.press('Shift+K')
+  await expect(page.locator('.cmdline', { hasText: 'api: Added /healthz and a test.' })).toBeVisible()
+})
+
+test('a row that changes group waits while you are on the board, then settles; a failed thread has its own group', async () => {
+  const names = () => page.locator('.board [data-name]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.name))
+  const api = page.locator('.board .list-row', { hasText: 'api' })
+  // The cursor is on the board: api stays where it is.
+  hub.setView(view('demo', 'api', { state: 'waiting', permission: { id: 'p9', tool: 'Bash', detail: 'go test ./...' } }))
+  await expect(api.locator('.glyph')).toHaveClass(/t-gold/)
+  await page.waitForTimeout(200)
+  await expect(page.locator('.group-head', { hasText: 'waiting' })).toHaveCount(0)
+  // Off the board, it moves to the top with what it needs, and a tint.
+  await page.keyboard.press('Control+w')
+  await page.keyboard.press('h')
+  await page.mouse.move(400, 400)
+  await expect(page.locator('.group-head').first()).toHaveText('waiting · 1')
+  await expect.poll(names).toEqual(expect.arrayContaining(['api']))
+  expect((await names())[0]).toBe('api')
+  await expect(api).toHaveClass(/settle/)
+  await expect(page.locator('.board .list-need')).toHaveText('permission · Bash go test ./...')
+  await shot('47-board-settle')
+
+  hub.setView(view('demo', 'api', { state: 'failed' }))
+  await expect(page.locator('.group-head').first()).toHaveText('failed · 1')
+  await expect(api.locator('.glyph')).toHaveClass(/t-love/)
+  hub.setView(view('demo', 'api', { state: 'idle', reply: 'Added /healthz and a test.' }))
+  await expect(page.locator('.group-head', { hasText: 'failed' })).toHaveCount(0)
 })
 
 test('the recap card shows above the prompt after two minutes away; Esc, q or × closes it until a new recap', async () => {

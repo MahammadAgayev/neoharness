@@ -32,10 +32,10 @@
   width: calc(100% - 32px);
   margin: 0 auto 8px;
   padding: 8px 14px 10px;
-  border: 1px solid var(--pine);
-  border-radius: 10px;
+  border: var(--hairline-w) solid var(--hairline-strong);
+  border-left: 3px solid var(--done);
+  border-radius: var(--r-2);
   background: var(--bg-raised);
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--pine) 18%, transparent);
   --arrive-y: 6px;
   animation: arrive var(--t-3) var(--ease-out);
 }

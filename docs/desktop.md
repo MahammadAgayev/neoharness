@@ -63,11 +63,16 @@ The todo list shows above the prompt as in the TUI: one line,
 `<CR>` on it, a click, or `<leader>T` unfolds it; done items are struck
 through, there, in `:todo`, and as tasks in replies and artifacts.
 
-The threads list groups threads by state with a count, as in the TUI. A
-row shows the thread's name and, on the right, how long it has run or
-waited, or when it last changed (`5m`, `6d`, then the date). Under the
-name, a waiting thread shows what it waits for and an idle one the start
-of its last reply; with nothing to say, the row is the name alone.
+The threads list groups threads by state with a count, as in the TUI:
+waiting and failed (`✗`) on top, then running and idle. A row shows the
+thread's name, in full ink when a window shows it, and on the right how
+long it has run or waited, or when it last changed (`now`, `5m`, `6d`,
+then the date); the time changes at most once a minute. Under the name, a
+waiting thread shows what it waits for. An idle row is the name alone: the
+start of its last reply shows on hover, and `K` on the row shows it on the
+command line. While the cursor or the mouse is on the list, a thread that
+changes state keeps its place; it moves to its new group when you leave,
+with a short tint.
 
 The app does not read `init.lua`; the hub settings in it apply to both.
 What the TUI takes from `init.lua` for itself is in Settings instead.
@@ -168,7 +173,7 @@ below.
 
 ### Docs
 
-`<leader>d`, `⌘⇧N`, New doc in the sidebar or `:doc <name>` starts a
+`<leader>d`, `⌘⇧N`, New doc in the sidebar's `⋯` menu or `:doc <name>` starts a
 document you write: a plan, a spec, a list of tasks. It opens beside the
 chat, ready to type. When you save, the coordinator holds it: its next turn
 reads it in full, works from it, and keeps its status true as the threads
@@ -206,7 +211,7 @@ version. Writing in the block yourself decides it too.
 - **Todo list** (`:todo [name]`): the todo list of the thread in the
   window, or of another, in the window as in the TUI. It follows the work,
   and `<C-o>` goes back.
-- **Cost** (`<leader>$`, `:cost`, or Cost in the sidebar): what the
+- **Cost** (`<leader>$`, `:cost`, or Cost in the sidebar's `⋯` menu): what the
   workspace cost, in all and today, the last 14 days as bars, by thread and
   by model, and the turns that cost the most; a click opens the thread. Tab
   shows every workspace (`:cost all`), by workspace. Cost shows nowhere
@@ -222,11 +227,14 @@ version. Writing in the block yourself decides it too.
   no trap. `<C-w>` alone, or followed by any other key, still deletes a word.
   `<C-o>` and `<C-i>` are the app's back and forward in Insert too, over
   Vim's one Normal command, and `:w` saves from Visual mode too.
-- **A sidebar** of workspaces, each with what waits or runs in it. `⌘B`,
-  `:set nosidebar` or the button at the top left folds it to a rail of
-  icons, as Chrome's vertical tabs: the mouse on the rail shows it whole,
-  over the windows. Drag its edge to resize it; a double-click on the edge
-  resets it. The work sits on a raised panel beside it, and
+- **A sidebar** of workspaces only, each with a glyph on the right when
+  something in it waits (`◆`), failed (`✗`) or runs (`●`). At its foot,
+  `⌘K` searches and `⋯` opens Artifacts, New doc, Cost, Settings and Help.
+  `⌘B`, `:set nosidebar` or the button at the top left folds it to a 48 px
+  rail of letters with a state dot: the mouse resting on the rail shows it
+  whole, over the windows, until a moment after it leaves. Drag its edge to
+  resize it; a double-click on the edge resets it. The work is one flat
+  plane beside it; the window in focus has a line in the accent on top. The
   icons are Lucide's line icons (ISC). The Rosé Pine text and accents are
   drawn darker on paper and brighter at night, until each reads at a set
   contrast on every background: text 12:1 (15:1 on paper), secondary

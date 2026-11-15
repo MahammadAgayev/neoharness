@@ -158,6 +158,9 @@ export function colors(p: Palette): Record<string, string> {
     '--foam': legible(p.foam, ink, bgs, ratios.muted),
     '--iris': legible(p.iris, ink, bgs, ratios.muted),
     '--hl-high': p.hlHigh,
+    // A shadow and a scrim show less on paper, so they are lighter there.
+    '--e1': `0 8px 24px rgb(0 0 0 / ${p.dark ? 0.28 : 0.1})`,
+    '--scrim': `rgb(0 0 0 / ${p.dark ? 0.32 : 0.16})`,
   }
 }
 

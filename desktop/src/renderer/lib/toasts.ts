@@ -70,6 +70,7 @@ export function viewToast(
     const body = plain(opts.reply) || (opts.away ? plain(v.reply ?? '') : '') || 'finished a turn'
     return t('✓', 'pine', body, opts.away ? 10 * s : 4 * s)
   }
+  if (old?.state === 'running' && v.state === 'failed') return t('✗', 'love', 'the turn failed', 10 * s)
   return null
 }
 

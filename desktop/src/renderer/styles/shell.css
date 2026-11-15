@@ -6,8 +6,8 @@
 }
 
 .titlebar {
-  height: var(--titlebar);
-  flex: 0 0 var(--titlebar);
+  height: var(--bar);
+  flex: 0 0 var(--bar);
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -118,20 +118,13 @@
   min-height: 0;
   display: flex;
   background: var(--bg-shell);
-  /* No gap at the bottom: the command line under the panel is the gap. */
-  padding: 0 8px 0 0;
 }
-.main:not(:has(.sidebar)) {
-  padding-left: 8px;
-}
-/* The work sits on a raised panel, as Linear's, over the shell. */
+/* The work is one flat plane beside the rail, with a hairline between. */
 .main > .layout,
 .main > .workspaces-screen {
   background: var(--bg);
-  border: 1px solid var(--hairline-strong);
-  border-radius: 10px;
+  border-left: var(--hairline-w) solid var(--hairline-strong);
   overflow: hidden;
-  box-shadow: 0 1px 2px color-mix(in srgb, #000 8%, transparent);
 }
 
 .cmdline {

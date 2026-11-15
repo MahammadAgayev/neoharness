@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 import type { WorkspaceView } from '../../shared/model'
+import { inState } from '../search'
 import { store, useStore } from '../store'
 import { handlers } from './registry'
 
@@ -24,8 +25,9 @@ function Spark(props: { values: number[] }) {
 function Counts(props: { w: WorkspaceView }) {
   const c = props.w.counts
   const parts: [string, string, number][] = [
-    ['◆', 'gold', (c.waiting ?? 0) + (props.w.coordinator === 'waiting' ? 1 : 0)],
-    ['●', 'foam', (c.running ?? 0) + (props.w.coordinator === 'running' ? 1 : 0)],
+    ['◆', 'gold', inState(props.w, 'waiting')],
+    ['✗', 'love', inState(props.w, 'failed')],
+    ['●', 'foam', inState(props.w, 'running')],
     ['○', 'muted', c.idle ?? 0],
     ['✓', 'pine', c.resolved ?? 0],
   ]

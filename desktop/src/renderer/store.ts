@@ -167,7 +167,7 @@ let ids = 1
 const nextId = () => ids++
 
 function loadSettings(): Settings {
-  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true, sidebarWidth: 216 }
+  const d: Settings = { scheme: 'system', vim: true, fontSize: 14, compactwarn: 80, sidebar: true, leader: '<Space>', maps: [], keyhints: true, sidebarWidth: 200 }
   try {
     return { ...d, ...JSON.parse(localStorage.getItem('settings') || '{}') }
   } catch {
@@ -230,6 +230,12 @@ class Store {
   // opening are threads the person opens here: they see them open, so the
   // "opened" toast would only cover the screen.
   private opening = new Set<string>()
+  // boardAt is the state each board row is grouped by: it lags the thread's
+  // while the person is on the board, so no row moves under them (settle).
+  // settled is when each row that moved took its new group.
+  private boardAt: Record<string, string> = {}
+  private boardHold = false
+  settled: Record<string, number> = {}
   // held are the updates of the workspace that loads: they come after the
   // history it fetches, so they go on top of it, not under it.
   private held: Update[] | null = null
@@ -527,7 +533,7 @@ class Store {
     const order = old ? s.order : [...s.order, v.name]
     let chat = s.chats[v.name] ?? []
     // A stopped turn sends no turn end, so its tool calls would spin forever.
-    if (v.state === 'idle' || v.state === 'resolved') chat = settle(chat, false)
+    if (v.state === 'idle' || v.state === 'failed' || v.state === 'resolved') chat = settle(chat, false)
     // A turn makes the recap old news; its next one waits for the next return.
     const recapOpen = { ...s.recapOpen }
     if (v.state === 'running') delete recapOpen[`${s.workspace}/${v.name}`]
@@ -541,7 +547,7 @@ class Store {
     const s = this.state
     if (!s.threads[key]) return
     let chat = s.chats[key] ?? []
-    if (v.state === 'idle' || v.state === 'resolved') chat = settle(chat, false)
+    if (v.state === 'idle' || v.state === 'failed' || v.state === 'resolved') chat = settle(chat, false)
     this.set({ threads: { ...s.threads, [key]: v }, chats: { ...s.chats, [key]: chat } })
   }
 
@@ -620,7 +626,7 @@ class Store {
 
   private badge(): void {
     let n = 0
-    for (const w of this.state.workspaces) n += (w.counts.waiting ?? 0) + (w.coordinator === 'waiting' ? 1 : 0)
+    for (const w of this.state.workspaces) n += (w.counts.waiting ?? 0) + (w.counts.failed ?? 0) + (w.coordinator === 'waiting' || w.coordinator === 'failed' ? 1 : 0)
     nh().setBadge(n)
   }
 
@@ -967,15 +973,40 @@ class Store {
   }
 
   // listOrder is the threads of the list, as it groups them: waiting first,
-  // then running, idle and resolved.
+  // then failed, running, idle and resolved.
   listOrder(): string[] {
-    const rank: Record<string, number> = { waiting: 0, running: 1, idle: 2, resolved: 3 }
+    const rank: Record<string, number> = { waiting: 0, failed: 1, running: 2, idle: 3, resolved: 4 }
     return this.state.order
       .filter((n) => n !== Coordinator)
       .map((n) => this.state.threads[n])
       .filter(Boolean)
-      .sort((a, b) => rank[a.state] - rank[b.state] || b.updatedAt.localeCompare(a.updatedAt))
+      .sort((a, b) => (rank[this.boardGroup(a.name)] ?? 3) - (rank[this.boardGroup(b.name)] ?? 3) || b.updatedAt.localeCompare(a.updatedAt))
       .map((v) => v.name)
+  }
+
+  // boardGroup is the group a thread's row shows in.
+  boardGroup(name: string): string {
+    const s = this.state.threads[name]?.state ?? 'idle'
+    return this.boardHold ? (this.boardAt[`${this.state.workspace}/${name}`] ?? s) : s
+  }
+
+  // settleBoard lets each row whose thread changed group take its new one,
+  // unless hold: the person is on the board. It returns the rows that move.
+  settleBoard(hold: boolean): string[] {
+    this.boardHold = hold
+    const moved: string[] = []
+    const now = Date.now()
+    for (const v of Object.values(this.state.threads)) {
+      const k = `${this.state.workspace}/${v.name}`
+      const was = this.boardAt[k]
+      if (was === undefined || was === v.state) this.boardAt[k] = v.state
+      else if (!hold) {
+        this.boardAt[k] = v.state
+        this.settled[k] = now
+        moved.push(v.name)
+      }
+    }
+    return moved
   }
 
   async openThread(name: string, where?: string): Promise<void> {
@@ -1027,11 +1058,11 @@ class Store {
   // threadRows are the rows of the threads list, as the list draws them.
   threadRows(): ({ name: string; state: string } | { name: ''; state: 'resolved-fold' })[] {
     const names = this.listOrder()
-    const open = names.filter((n) => this.state.threads[n].state !== 'resolved')
-    const resolved = names.filter((n) => this.state.threads[n].state === 'resolved')
+    const open = names.filter((n) => this.boardGroup(n) !== 'resolved')
+    const resolved = names.filter((n) => this.boardGroup(n) === 'resolved')
     const rows: ({ name: string; state: string } | { name: ''; state: 'resolved-fold' })[] = open.map((n) => ({
       name: n,
-      state: this.state.threads[n].state,
+      state: this.boardGroup(n),
     }))
     if (resolved.length) {
       rows.push({ name: '', state: 'resolved-fold' })

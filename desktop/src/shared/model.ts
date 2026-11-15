@@ -1,7 +1,8 @@
 // The wire types of api/model. Keep them in step with model.go: the app
 // sees only these neutral fields, never an agent's own.
 
-export type State = 'idle' | 'running' | 'waiting' | 'resolved'
+// failed: the last turn ended in an error and nothing came after it.
+export type State = 'idle' | 'running' | 'waiting' | 'failed' | 'resolved'
 export type Role = 'coordinator' | 'thread'
 export type Decision = 'allow' | 'always' | 'deny'
 

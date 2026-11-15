@@ -20,7 +20,7 @@
 .cost-stat {
   padding: 12px 14px;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius);
+  border-radius: var(--r-2);
 }
 .cost-stat-value {
   font-size: 1.6em;

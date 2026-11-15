@@ -1,7 +1,7 @@
 // The items of search everywhere, per tab. "all" mixes the tabs, best
 // matches first, as JetBrains' Search Everywhere does. ⌘K opens it.
 
-import { Coordinator, type ThreadView } from '../shared/model'
+import { Coordinator, type State, type ThreadView, type WorkspaceView } from '../shared/model'
 import { commands } from './commands'
 import { fuzzy, grep } from './lib/fuzzy'
 import { outline } from './lib/markdown'
@@ -37,11 +37,16 @@ export const tabs: { tab: Tab; title: string }[] = [
 ]
 
 export function stateGlyph(s: string): string {
-  return s === 'running' ? '●' : s === 'waiting' ? '◆' : s === 'resolved' ? '✓' : '○'
+  return s === 'running' ? '●' : s === 'waiting' ? '◆' : s === 'failed' ? '✗' : s === 'resolved' ? '✓' : '○'
 }
 
 export function stateTone(s: string): Tone | 'subtle' {
-  return s === 'running' ? 'foam' : s === 'waiting' ? 'gold' : s === 'resolved' ? 'pine' : 'muted'
+  return s === 'running' ? 'foam' : s === 'waiting' ? 'gold' : s === 'failed' ? 'love' : s === 'resolved' ? 'pine' : 'muted'
+}
+
+// inState counts a workspace's threads in a state, its coordinator too.
+export function inState(w: WorkspaceView, s: State): number {
+  return (w.counts[s] ?? 0) + (w.coordinator === s ? 1 : 0)
 }
 
 export function elapsed(since: string): string {
@@ -152,16 +157,18 @@ function commandItems(): Item[] {
 
 function workspaceItems(): Item[] {
   return store.state.workspaces.map((w) => {
-    const waiting = (w.counts.waiting ?? 0) + (w.coordinator === 'waiting' ? 1 : 0)
-    const running = (w.counts.running ?? 0) + (w.coordinator === 'running' ? 1 : 0)
+    const waiting = inState(w, 'waiting')
+    const failed = inState(w, 'failed')
+    const running = inState(w, 'running')
     const parts = [w.pin ? store.short(w.pin) : 'not pinned']
     if (running) parts.push(`${running} running`)
     if (waiting) parts.push(`${waiting} waiting`)
+    if (failed) parts.push(`${failed} failed`)
     return {
       key: `w:${w.name}`,
       section: 'Workspaces',
-      glyph: waiting ? '◆' : running ? '●' : '▪',
-      tone: waiting ? ('gold' as const) : running ? ('foam' as const) : ('muted' as const),
+      glyph: waiting ? '◆' : failed ? '✗' : running ? '●' : '▪',
+      tone: waiting ? ('gold' as const) : failed ? ('love' as const) : running ? ('foam' as const) : ('muted' as const),
       label: w.name,
       detail: parts.join(' · '),
       run: () => void store.openWorkspace(w.name),

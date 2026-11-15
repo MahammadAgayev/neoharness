@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-import { Coordinator } from '../../shared/model'
-import { age, elapsed, stateGlyph, stateTone } from '../search'
+import { Coordinator, type ThreadView } from '../../shared/model'
+import { plain } from '../lib/toasts'
+import { age, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
 import { Glyph } from './Icon'
@@ -9,18 +10,27 @@ import { CloseWindow } from './CloseWindow'
 
 export function ThreadsList(props: { win: Win; focused: boolean }) {
   const { win, focused } = props
-  const workspace = useStore((s) => s.workspace)
   const threads = useStore((s) => s.threads)
   const showResolved = useStore((s) => s.showResolved)
+  const layout = useStore((s) => s.layout)
   useStore((s) => s.order)
+  const [over, setOver] = useState(false)
+  // Nothing moves under the person: a row that changes group waits while
+  // the cursor or the mouse is on the board, then settles.
+  const moved = store.settleBoard(focused || over)
   const rows = store.threadRows()
   const cursor = Math.min(Math.max(win.cursor, 0), Math.max(rows.length - 1, 0))
   const el = useRef<HTMLDivElement>(null)
   const [, tick] = useState(0)
   useEffect(() => {
-    const t = setInterval(() => tick((n) => n + 1), 1000)
-    return () => clearInterval(t)
+    const t = setInterval(() => tick((n) => n + 1), 60000)
+    return () => {
+      clearInterval(t)
+      store.settleBoard(false)
+    }
   }, [])
+  useFlip(el, moved)
+  const shown = new Set(layout.cols.flatMap((c) => c.wins).flatMap((w) => (w.buf.kind === 'chat' ? [w.buf.thread] : [])))
 
   const open = (i: number, how?: 'right' | 'above') => {
     const r = rows[i]
@@ -63,6 +73,11 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
       case 'fold':
         if (rows[cursor]?.state === 'resolved-fold') store.toggleResolved()
         return true
+      case 'hover': {
+        const v = threads[rows[cursor]?.name ?? '']
+        if (v) store.say(v.reply ? `${v.name}: ${plain(v.reply)}` : `${v.name} has no reply yet`, 'muted')
+        return true
+      }
       case 'splitRight':
         open(cursor, 'right')
         return true
@@ -84,17 +99,15 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
   }, [cursor])
 
   const resolvedCount = Object.values(threads).filter((v) => v.state === 'resolved' && v.role === 'thread').length
+  const now = Date.now()
   let lastGroup = ''
   return (
     <div className="window threads" onMouseDown={() => store.focus(win.id)}>
       <div className={`statusline ${focused ? 'focused' : ''}`}>
-        <span className="sl-ws">{workspace} · </span>
         <span className="sl-name">threads</span>
-        <span className="sl-fill" />
-        <span className="sl-part t-muted">{rows.filter((r) => r.state !== 'resolved-fold').length}</span>
         <CloseWindow id={win.id} />
       </div>
-      <div className="list" ref={el}>
+      <div className="list board" ref={el} onMouseEnter={() => setOver(true)} onMouseLeave={() => setOver(false)}>
         {rows.length === 0 && <div className="empty">No threads yet. The coordinator opens them, or :open a thread yourself.</div>}
         {rows.map((r, i) => {
           if (r.state === 'resolved-fold') {
@@ -107,21 +120,18 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
           }
           const v = threads[r.name]
           if (!v) return null
-          const group = v.state === 'resolved' ? '' : v.state
-          const head = group && group !== lastGroup ? `${group} · ${rows.filter((o) => threads[o.name]?.state === group).length}` : ''
+          const group = r.state === 'resolved' ? '' : r.state
+          const head = group && group !== lastGroup ? `${group} · ${rows.filter((o) => o.state === group).length}` : ''
           lastGroup = group || lastGroup
-          const detail =
-            v.permission ? `permission · ${v.permission.tool}`
-            : v.waiting === 'paused' ? 'paused · write to continue'
-            : v.state === 'waiting' ? v.waiting || 'question'
-            : v.state === 'idle' ? (v.reply ?? '')
-            : ''
+          const live = v.state === 'running' || v.state === 'waiting'
+          const settling = now - (store.settled[`${v.workspace}/${v.name}`] ?? 0) < settleMs
           return (
-            <div key={r.name}>
+            <div key={r.name} data-name={r.name}>
               {head && <div className="group-head">{head}</div>}
               <div
                 data-i={i}
-                className={`list-row ${focused && i === cursor ? 'cursor' : ''}`}
+                className={`list-row ${focused && i === cursor ? 'cursor' : ''} ${settling ? 'settle' : ''}`}
+                data-tip={v.state === 'idle' && v.reply ? plain(v.reply) : undefined}
                 onClick={() => {
                   store.updateWin(win.id, { cursor: i })
                   open(i)
@@ -132,22 +142,67 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
                   void threadMenu(v.name, v.state, (how) => open(i, how))
                 }}
               >
-                <span className={`t-${stateTone(v.state)} glyph ${v.state === 'running' ? 'pulse' : ''}`}><Glyph g={stateGlyph(v.state)} /></span>
-                <div className="list-main">
-                  <div className="list-title">
-                    <span className="name">{v.name}</span>
-                    {v.queued > 0 && <span className="t-muted"> +{v.queued}</span>}
-                    <span className="t-muted right">{v.state === 'running' || v.state === 'waiting' ? elapsed(v.since) : age(v.updatedAt)}</span>
-                  </div>
-                  {detail && <div className={`list-detail ${v.state === 'waiting' ? 't-gold' : 't-muted'}`}>{detail}</div>}
-                </div>
+                <span className={`t-${stateTone(v.state)} glyph ${v.state === 'running' ? 'pulse' : ''}`}>
+                  <Glyph g={stateGlyph(v.state)} />
+                </span>
+                <span className={`name ${shown.has(v.name) ? 'open' : ''}`}>{v.name}</span>
+                {v.queued > 0 && <span className="t-muted">+{v.queued}</span>}
+                <span className="time">{boardTime(live ? v.since : v.updatedAt, now)}</span>
               </div>
+              <Need v={v} />
             </div>
           )
         })}
       </div>
     </div>
   )
+}
+
+const settleMs = 1000
+
+// Need is what a waiting thread needs, to read without opening it.
+function Need(props: { v: ThreadView }) {
+  const { v } = props
+  if (v.state !== 'waiting') return null
+  const [label, text] = v.permission
+    ? [`permission · ${v.permission.tool}`, v.permission.detail]
+    : v.waiting === 'paused'
+      ? ['paused', 'write to continue']
+      : ['question', plain(v.waiting ?? '').split('\n')[0]]
+  return (
+    <div className="list-need">
+      <span className="t-gold">{label}</span> {text}
+    </div>
+  )
+}
+
+// boardTime is a row's time: "now" for the first minute, then whole minutes
+// and up, so it changes at most once a minute.
+function boardTime(at: string, now: number): string {
+  const ms = now - Date.parse(at)
+  if (!(ms > 0)) return ''
+  return ms < 60000 ? 'now' : age(at, now)
+}
+
+// useFlip slides each row that moved to another group from where it was,
+// so the eye can follow it. It runs only when the person is off the board.
+function useFlip(list: React.RefObject<HTMLDivElement | null>, moved: string[]) {
+  const tops = useRef(new Map<string, number>())
+  useLayoutEffect(() => {
+    const el = list.current
+    if (!el) return
+    const next = new Map<string, number>()
+    for (const n of el.querySelectorAll<HTMLElement>('[data-name]')) next.set(n.dataset.name!, n.offsetTop)
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const ms = parseFloat(getComputedStyle(el).getPropertyValue('--t-3')) || 0
+      for (const name of moved) {
+        const dy = (tops.current.get(name) ?? NaN) - (next.get(name) ?? NaN)
+        const row = el.querySelector<HTMLElement>(`[data-name="${CSS.escape(name)}"]`)
+        if (row && dy) row.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: ms, easing: 'cubic-bezier(.16,1,.3,1)' })
+      }
+    }
+    tops.current = next
+  })
 }
 
 // threadMenu is the right click on a thread: what its keys and commands do.
