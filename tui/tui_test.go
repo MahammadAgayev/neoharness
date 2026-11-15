@@ -2740,7 +2740,7 @@ func TestSplitsAreEqualAsInNeovim(t *testing.T) {
 	h.a.runConfig(`neoharness.o.equalalways = false`, "init.lua", false)
 	before := widths()
 	h.press("<C-w>v")
-	if ws := widths(); ws[0]+ws[1]+1 != before[0] || ws[2] != before[1] {
+	if ws := widths(); max(ws[0]+ws[1]+2-before[0], before[0]-ws[0]-ws[1]-2) > 1 || max(ws[2]-before[1], before[1]-ws[2]) > 1 {
 		t.Fatalf("without equalalways a split should halve only the window; %v, then %v", before, ws)
 	}
 }

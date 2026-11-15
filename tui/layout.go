@@ -154,7 +154,9 @@ func (n *node) layout(r Rect, sep func(x, y, h int)) {
 		total += k.weight
 	}
 	if n.vert {
-		avail := r.W - (len(n.kids) - 1)
+		// Each separator takes its column and a blank one after it, so every
+		// pane's text starts as far from the line on its left.
+		avail := r.W - 2*(len(n.kids)-1)
 		x := r.X
 		for i, k := range n.kids {
 			w := int(float64(avail) * k.weight / total)
@@ -165,7 +167,7 @@ func (n *node) layout(r Rect, sep func(x, y, h int)) {
 			x += w
 			if i < len(n.kids)-1 {
 				sep(x, r.Y, r.H)
-				x++
+				x += 2
 			}
 		}
 		return

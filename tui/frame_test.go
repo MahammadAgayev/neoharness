@@ -124,3 +124,19 @@ func TestThePromptDockIsRecapThenTodoThenPrompt(t *testing.T) {
 		t.Fatalf("the recap is a line with a bar, not a box:\n%s", h.screen())
 	}
 }
+
+func TestEveryPaneHasTheSameInsetFromItsSeparator(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("<C-w>v")
+	cells, w, _ := h.s.GetContents()
+	for _, win := range h.a.root.windows()[1:] {
+		x := win.rect.X
+		if sep := string(cells[2*w+x-2].Runes); sep != "│" {
+			t.Fatalf("a pane should start two columns after its separator, found %q", sep)
+		}
+		if gap := string(cells[2*w+x-1].Runes); gap != " " && gap != "" {
+			t.Fatalf("the column after a separator should be blank, found %q", gap)
+		}
+	}
+}
