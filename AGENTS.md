@@ -55,7 +55,11 @@ tcell simulation screen. A bug fix starts with a test that fails without it.
    coordinator; a thread shows only when you open it; an artifact opens in
    the window, and `<C-o>` goes back.
 4. A thing shows its own state. No mode labels, except a muted `visual` /
-   `v-line`. The cursor shape never changes.
-5. Red (Love) only for errors and things that need the person. One accent
-   (Iris) for "you type here". Bold only for names with focus.
+   `v-line`. The cursor follows the Vim mode: a block in Normal and Visual,
+   a line in Insert, no blink. A needs-you item shows in the global status
+   line until it is done.
+5. Love only for errors. Gold for what waits for you. One accent (Iris) for
+   "you type here". Bold only for names with focus.
 6. No all-caps labels.
+7. Nothing moves under the person's cursor or attention. Hold still in
+   Insert and `:`. Animate only the running glyph.

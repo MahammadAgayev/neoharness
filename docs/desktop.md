@@ -259,7 +259,7 @@ e2e` writes the screenshots named here to `test-results/`.
 | Quality | In the app | Test (screenshot) |
 |---|---|---|
 | One search for everything | `⌘K`: threads of every workspace, artifacts, commands, text | app: search everywhere finds them (04); showcase (32, 33) |
-| Every action has a key you can find | `:help`, the commands tab of `⌘K`, hints on hover, keys on buttons | app (06); showcase (35); right click and hint (29) |
+| Every action has a key you can find | `:help`, the commands tab of `⌘K`, keys as hints on hover, in tooltips and in `:help`, not on buttons | app (06); showcase (35); right click and hint (29) |
 | Work without the mouse | Vim keys, or keys as in Claude Code; marks; select and yank | cards: `<leader>a` allows; without Vim; `v` and `y`; marks (27) |
 | The mouse works too | Clicks on toasts, blocks and artifacts; right-click menus | cards: a toast click opens the thread; an artifact click; right click on a thread |
 | Quiet | A toast or notification only for what needs you; it goes when you look | cards: permission toast goes when the thread shows (20) |
