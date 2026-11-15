@@ -10,7 +10,7 @@ import { keymap } from 'prosemirror-keymap'
 import type { MarkType, Node } from 'prosemirror-model'
 import { type Command, Plugin, PluginKey, TextSelection } from 'prosemirror-state'
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list'
-import { addRowAfter, goToNextCell, isInTable, tableEditing } from 'prosemirror-tables'
+import { addRowAfter, goToNextCell, isInTable, selectedRect, tableEditing } from 'prosemirror-tables'
 import { Decoration, DecorationSet, type EditorView, type NodeView } from 'prosemirror-view'
 
 import { schema } from './mdoc'
@@ -82,6 +82,34 @@ const backspace: Command = (state, dispatch) => {
   return false
 }
 
+// Enter in a table goes to the cell below, as in a spreadsheet. In the last
+// row it adds a row; on an empty last row it takes the row away and leaves
+// the table, as Enter on an empty list item leaves the list.
+const tableEnter: Command = (state, dispatch, view) => {
+  if (!isInTable(state)) return false
+  if (!dispatch || !view) return true
+  const rect = selectedRect(state)
+  if (rect.top + 1 >= rect.map.height) {
+    const row = rect.table.child(rect.top)
+    if (row.textContent !== '') {
+      addRowAfter(state, dispatch)
+      return tableEnter(view.state, dispatch, view)
+    }
+    const tableEnd = rect.tableStart - 1 + rect.table.nodeSize
+    const rowPos = rect.tableStart + rect.map.positionAt(rect.top, 0, rect.table) - 1
+    const tr = state.tr
+    if (rect.map.height > 2) tr.delete(rowPos, rowPos + row.nodeSize)
+    const after = tr.mapping.map(tableEnd)
+    if (!tr.doc.resolve(after).nodeAfter?.isTextblock) tr.insert(after, n.paragraph.create())
+    dispatch(tr.setSelection(TextSelection.create(tr.doc, after + 1)).scrollIntoView())
+    return true
+  }
+  const pos = rect.tableStart + rect.map.positionAt(rect.top + 1, rect.left, rect.table)
+  const cell = state.doc.nodeAt(pos)!
+  dispatch(state.tr.setSelection(TextSelection.create(state.doc, pos + 1 + cell.content.size)).scrollIntoView())
+  return true
+}
+
 export function editorPlugins(leave: () => void): Plugin[] {
   return [
     // DocVim.group starts each undo step, by command or by time.
@@ -94,7 +122,7 @@ export function editorPlugins(leave: () => void): Plugin[] {
       },
       'Mod-z': undo,
       'Shift-Mod-z': redo,
-      Enter: splitListItem(n.list_item),
+      Enter: chainCommands(tableEnter, splitListItem(n.list_item)),
       // A GFM table cell is one line, so it takes no line break.
       'Shift-Enter': chainCommands(exitCode, isInTable, (state, dispatch) => {
         dispatch?.(state.tr.replaceSelectionWith(n.hard_break.create()).scrollIntoView())

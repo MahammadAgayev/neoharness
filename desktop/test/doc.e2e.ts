@@ -205,6 +205,32 @@ test('<Esc> puts the cursor on the last letter typed, and u takes back one Inser
   await page.keyboard.press('Control+o')
 })
 
+test('Enter in a table goes to the cell below, adds a row at the end, and leaves on an empty row', async () => {
+  hub.artifact('demo', 'grid', 'Grid', '# Grid\n\n| a | b |\n|---|---|\n| 1 | 2 |\n')
+  hub.event('demo', 'api', { kind: 'artifact', detail: 'grid', text: 'Grid', version: 1 })
+  await page.locator('.b-artifact', { hasText: 'Grid' }).click()
+  const win = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'grid' }) })
+  const doc = win.locator('.doc-page')
+  await doc.locator('td', { hasText: '1' }).click()
+  await normal()
+  await page.keyboard.press('A')
+  // A cell is one line in markdown, so Shift-Enter adds no break.
+  await page.keyboard.press('Shift+Enter')
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('x')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('after')
+  await expect(doc.locator('tr')).toHaveCount(3)
+  await expect(doc.locator('p', { hasText: 'after' })).toBeVisible()
+  await page.keyboard.press('Meta+s')
+  await expect
+    .poll(() => hub.calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/artifacts/grid')).pop()?.body)
+    .toMatchObject({ text: '# Grid\n\n| a | b |\n|---|---|\n| 1 | 2 |\n| x |  |\n\nafter\n' })
+  await normal()
+  await page.keyboard.press('Control+o')
+})
+
 test('a mouse drag selects in Visual mode, so d takes the words away, as with Vim and a mouse', async () => {
   hub.artifact('demo', 'drag', 'Drag', '# Drag\n\nfirst second third\n')
   hub.event('demo', 'api', { kind: 'artifact', detail: 'drag', text: 'Drag', version: 1 })
