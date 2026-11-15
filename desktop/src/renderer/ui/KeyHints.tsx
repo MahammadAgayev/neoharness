@@ -26,7 +26,7 @@ export function KeyHints() {
         {hints!.map((h) => (
           <div key={h.key + h.label} className="keyhint">
             <span className="keyhint-key mono">{h.key}</span>
-            <span className={h.label.startsWith('+') ? 't-iris' : ''}>{h.label}</span>
+            <span className={h.label.startsWith('+') ? 't-subtle' : ''}>{h.label}</span>
           </div>
         ))}
       </div>

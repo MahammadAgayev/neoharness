@@ -371,6 +371,8 @@ test('<leader> shows what can follow at once, as which-key, and <leader>s opens 
   await expect(panel).toBeVisible()
   await expect(panel.locator('.keyhint', { hasText: /^cCoordinator$/ })).toBeVisible()
   await expect(panel.locator('.keyhint', { hasText: /^p\+pick · \d+$/ })).toBeVisible()
+  // A group's label is quieter than a command's, and nothing is in the accent.
+  await expect(panel.locator('.keyhint', { hasText: /^p\+pick/ }).locator('span').nth(1)).toHaveClass(/t-subtle/)
   await shot('36-keyhints')
   await page.keyboard.press('c')
   await expect(panel).toHaveCount(0)

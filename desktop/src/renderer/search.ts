@@ -139,7 +139,7 @@ function artifactItems(): Item[] {
   return store.state.artifacts.map((a) => ({
     key: `a:${a.name}`,
     section: 'Artifacts',
-    glyph: '◇',
+    glyph: '▤',
     tone: 'foam' as const,
     label: a.name,
     detail: `${a.title} · ${a.thread} · v${a.version}`,

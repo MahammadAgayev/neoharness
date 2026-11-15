@@ -28,6 +28,6 @@
 }
 .keyhint-key {
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--fg-3);
   min-width: 4em;
 }
