@@ -38,6 +38,8 @@ func (a *App) draw() {
 		return
 	}
 	a.cursorX, a.cursorY = -1, -1
+	now := a.now()
+	a.spin = phase(now, spinEvery)
 	// Which threads are on screen changes with every window command, so the
 	// list is redrawn here rather than after each of them.
 	a.renderThreads()
@@ -72,14 +74,13 @@ func (a *App) draw() {
 	} else {
 		s.HideCursor()
 	}
+	// The cursor is a block in Normal and Visual, and a line in Insert, as
+	// in Vim.
+	s.bar = a.mode == modeInsert
 	s.Show()
-
-	// Animate only while something is alive on screen; an idle workspace
-	// costs nothing.
-	if live && !a.ticking {
-		a.ticking = true
-		time.AfterFunc(90*time.Millisecond, func() { _ = a.s.PostEvent(evTick{}) })
-	}
+	a.frames++
+	a.lastFrame, a.dirty = now, false
+	a.scheduleNext(now, live)
 }
 
 // put draws text from x, clipped at maxX, and returns where it stopped.
@@ -518,9 +519,9 @@ func (a *App) drawWinbar(w *Window, focused bool) {
 	if !focused && v.State != model.StateWaiting {
 		glyphSt = dim
 	}
-	state := []Span{{stateGlyph(v.State) + " ", glyphSt}, {stateLabel(v.State), dim}}
+	state := []Span{{a.glyph(v.State) + " ", glyphSt}, {stateLabel(v.State), dim}}
 	if !v.Since.IsZero() && v.State != model.StateIdle {
-		state = append(state, Span{" " + elapsed(time.Since(v.Since)), dim})
+		state = append(state, Span{" " + elapsed(a.now().Sub(v.Since)), dim})
 	}
 	if wl := wakeLabel(v); wl != "" {
 		state = append(state, Span{"  " + wl, dim})
@@ -872,13 +873,14 @@ func (a *App) drawGlobal(W, H int) {
 	a.put(x, y, rx-1, truncate(a.notice, rx-x-2), a.noticeSt)
 }
 
+// elapsed is a time in whole minutes, so it changes once a minute and no
+// seconds tick at the edge of the eye.
 func elapsed(d time.Duration) string {
-	d = d.Round(time.Second)
 	switch {
 	case d < time.Minute:
-		return fmt.Sprintf("%ds", int(d.Seconds()))
+		return "now"
 	case d < time.Hour:
-		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+		return fmt.Sprintf("%dm", int(d.Minutes()))
 	}
 	return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
 }

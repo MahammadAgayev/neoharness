@@ -7,15 +7,19 @@ import "github.com/gdamore/tcell/v2"
 // whole screen: each spinner frame was more than a kilobyte. canvas collects
 // a frame and passes on only the cells that changed since the last one.
 //
-// It also draws the cursor itself, in reverse video, and keeps the terminal's
-// cursor hidden. tcell hides, moves, shows and restyles the cursor on every
-// frame; without synchronized output (tmux without the sync feature) the
-// terminal shows each step, and the cursor shivers while a spinner runs.
+// It also draws the block cursor itself, in reverse video, and keeps the
+// terminal's cursor hidden. tcell hides, moves, shows and restyles the cursor
+// on every frame; without synchronized output (tmux without the sync
+// feature) the terminal shows each step, and the cursor shivers while a
+// spinner runs. A cell cannot draw a line, so the line cursor of Insert,
+// bar, is the terminal's own, steady, with no blink.
 type canvas struct {
 	tcell.Screen
 	w, h       int
 	next, last []cell
 	cx, cy     int
+	bar        bool
+	styled     bool
 }
 
 type cell struct {
@@ -52,9 +56,19 @@ func (c *canvas) ShowCursor(x, y int) { c.cx, c.cy = x, y }
 func (c *canvas) HideCursor() { c.cx, c.cy = -1, -1 }
 
 func (c *canvas) Show() {
-	if c.cx >= 0 && c.cy >= 0 && c.cx < c.w && c.cy < c.h {
+	on := c.cx >= 0 && c.cy >= 0 && c.cx < c.w && c.cy < c.h
+	if on && !c.bar {
 		i := c.cy*c.w + c.cx
 		c.next[i].st = c.next[i].st.Reverse(true)
+	}
+	if on && c.bar {
+		if !c.styled {
+			c.Screen.SetCursorStyle(tcell.CursorStyleSteadyBar)
+			c.styled = true
+		}
+		c.Screen.ShowCursor(c.cx, c.cy)
+	} else {
+		c.Screen.HideCursor()
 	}
 	for i, n := range c.next {
 		if c.last != nil && c.last[i] == n {

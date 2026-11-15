@@ -24,6 +24,11 @@
   `laststatus=3`, names the workspace, shows the focused chat's model and
   context, and counts the threads that wait and run. The command line is
   under it.
+- The screen holds still. A running thread's `●` turns to `◉` and back
+  every 0.8 s, the live tool row spins 4 times a second, and times change
+  once a minute (`now`, `4m`, `1h05m`). Nothing else moves on its own. The
+  cursor is a block in Normal and Visual mode and a line in Insert, as in
+  Vim, and it does not blink.
 - The folder picker lists "not pinned", the folder you started in, and every
   folder up to 6 levels below it. Dot folders, `Library` and `node_modules`
   are skipped.

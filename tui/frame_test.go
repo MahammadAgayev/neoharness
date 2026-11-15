@@ -32,7 +32,7 @@ func TestEachPaneHasAWinbarAndFocusShowsAsAnAccentRow(t *testing.T) {
 	if !strings.Contains(top, "coordinator") || !strings.Contains(top, "auth-refactor") || !strings.Contains(top, "threads") {
 		t.Fatalf("the top row should name each pane:\n%s", h.screen())
 	}
-	if !strings.Contains(top, "● running") {
+	if !strings.Contains(top, " running") {
 		t.Fatalf("a winbar should show its thread's state:\n%s", top)
 	}
 	cells, w, _ := h.s.GetContents()

@@ -7,7 +7,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/gdamore/tcell/v2"
@@ -239,7 +238,7 @@ func (a *App) threadDetail(v model.ThreadView) string {
 		detail += " · question"
 	}
 	if (v.State == model.StateRunning || v.State == model.StateWaiting) && !v.Since.IsZero() {
-		detail += " · " + elapsed(time.Since(v.Since))
+		detail += " · " + elapsed(a.now().Sub(v.Since))
 	}
 	if w := wakeLabel(v); w != "" {
 		detail += " · " + w

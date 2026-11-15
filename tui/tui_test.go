@@ -1557,7 +1557,8 @@ func TestFramesSendOnlyWhatChangedAndTheCursorIsDrawn(t *testing.T) {
 	if s.n != 0 {
 		t.Fatalf("an unchanged frame sent %d cells", s.n)
 	}
-	h.a.spin++
+	clock := time.Now().Add(spinEvery)
+	h.a.now = func() time.Time { return clock }
 	h.a.draw()
 	if s.n == 0 || s.n > 3 {
 		t.Fatalf("a spinner frame sent %d cells, want the spinner only", s.n)
@@ -1566,7 +1567,7 @@ func TestFramesSendOnlyWhatChangedAndTheCursorIsDrawn(t *testing.T) {
 	if _, _, visible := sim.GetCursor(); visible {
 		t.Fatal("the terminal cursor should stay hidden")
 	}
-	h.press("i")
+	h.press("k")
 	cells, w, _ := sim.GetContents()
 	c := cells[h.a.cursorY*w+h.a.cursorX]
 	if _, _, attrs := c.Style.Decompose(); attrs&tcell.AttrReverse == 0 {
@@ -3077,7 +3078,7 @@ func TestThreadsListShowsHowLongAThreadRuns(t *testing.T) {
 	v.State, v.Since = model.StateRunning, time.Now().Add(-95*time.Second)
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
-	h.see("1m35s")
+	h.see("auth-refactor  1m")
 }
 
 func TestWorkspaceKeepsItsSplits(t *testing.T) {

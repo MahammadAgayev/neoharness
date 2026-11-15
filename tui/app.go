@@ -77,7 +77,8 @@ type (
 	evUpdate     struct{ u model.Update }
 	evResync     struct{}
 	evDisconnect struct{ stopped bool }
-	evTick       struct{}
+	// evTick is a timer from the frame scheduler, for the frame due at at.
+	evTick       struct{ at time.Time }
 	evKeyTimeout struct{ seq int }
 	evComplete   struct {
 		buf string
@@ -98,7 +99,7 @@ func (evError) When() time.Time      { return time.Now() }
 
 // App is the whole UI.
 type App struct {
-	s  tcell.Screen
+	s  *canvas
 	c  Client
 	th *Theme
 	// openURL runs the system opener on a URL; tests replace it.
@@ -220,10 +221,18 @@ type App struct {
 	cursorX int
 	cursorY int
 	spin    int
-	ticking bool
 	quit    bool
-	pasting bool
-	hub     Hub
+	// The frame scheduler (frames.go): after starts a timer that posts an
+	// event; wakeAt is when the next timer is due; dirty says a hub event
+	// changed what shows since the last frame, at lastFrame; frames counts
+	// them.
+	after     func(time.Duration, tcell.Event)
+	wakeAt    time.Time
+	dirty     bool
+	lastFrame time.Time
+	frames    int
+	pasting   bool
+	hub       Hub
 	// newer is this binary's version while the hub runs another: the hub
 	// restarts on it once no turn runs.
 	newer string
@@ -293,6 +302,9 @@ func newApp(s tcell.Screen, c Client) *App {
 		recapOpen: map[string]bool{},
 		recapSeen: map[string]time.Time{},
 	}
+	a.after = func(d time.Duration, ev tcell.Event) {
+		time.AfterFunc(d, func() { _ = a.s.PostEvent(ev) })
+	}
 	a.workspacesBuf = newBuffer("neoharness://workspaces", KindWorkspaces)
 	a.messagesBuf = newBuffer("neoharness://messages", KindMessages)
 	a.messagesBuf.SetLines([]Line{{Prefix: []Span{{" ", a.th.Fg}}, Spans: []Span{{"no messages yet", a.th.Fg3}}}})
@@ -307,14 +319,15 @@ func newApp(s tcell.Screen, c Client) *App {
 }
 
 func (a *App) loop() {
+	a.draw()
 	for !a.quit {
-		a.draw()
-		a.handle(a.s.PollEvent())
+		urgent := a.take(a.s.PollEvent())
 		// Drain whatever else is queued before drawing again, so a burst of
 		// hub events costs one frame, not one each.
 		for !a.quit && a.s.HasPendingEvent() {
-			a.handle(a.s.PollEvent())
+			urgent = a.take(a.s.PollEvent()) || urgent
 		}
+		a.frame(urgent)
 	}
 }
 
@@ -338,6 +351,7 @@ func (a *App) handle(ev tcell.Event) {
 		a.s.Sync()
 	case evUpdate:
 		a.apply(ev.u)
+		a.dirty = true
 	case evResync:
 		if a.offline {
 			a.notify("reconnected to the hub", a.th.Run)
@@ -355,11 +369,13 @@ func (a *App) handle(ev tcell.Event) {
 			}
 		}
 	case evRedraw:
+		a.dirty = true
 	case evError:
 		a.notify(ev.text, a.th.Alert)
 	case evTick:
-		a.ticking = false
-		a.spin++
+		if ev.at.Equal(a.wakeAt) {
+			a.wakeAt, a.dirty = time.Time{}, true
+		}
 	case evKeyTimeout:
 		if ev.seq == a.pendSeq && len(a.ikeys) > 0 {
 			a.flushInsert(true)
@@ -1259,7 +1275,7 @@ func (a *App) renderThreads() {
 			}
 		}
 		if v.State == model.StateRunning && !v.Since.IsZero() {
-			info = strings.TrimSuffix(elapsed(time.Since(v.Since))+" · "+info, " · ")
+			info = strings.TrimSuffix(elapsed(a.now().Sub(v.Since))+" · "+info, " · ")
 		}
 		if w := wakeLabel(v); w != "" {
 			info = strings.TrimSuffix(w+" · "+info, " · ")
@@ -1270,7 +1286,7 @@ func (a *App) renderThreads() {
 		return Line{
 			Prefix: []Span{{" ", th.Fg}},
 			Spans: []Span{
-				{stateGlyph(v.State) + " ", th.state(v.State)},
+				{a.glyph(v.State) + " ", th.state(v.State)},
 				{pad(n, nameW+2), nameSt},
 				{plain(info), infoSt},
 			},
