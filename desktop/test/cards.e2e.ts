@@ -1102,6 +1102,28 @@ test('a notice waits while you type and shows when you leave Insert; what needs 
   await page.keyboard.press('c')
 })
 
+test('a reply streams in a block at a time, open code shows plain, and the text event replaces it', async () => {
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  const stream = page.locator('.pane.focused .row.stream')
+  hub.delta('demo', 'coordinator', 'First I read the code.')
+  await expect(stream).toContainText('First I read the code.')
+  hub.delta('demo', 'coordinator', 'First I read the code.\n\nThen:\n\n```go\nfunc main() {')
+  await expect(stream.locator('pre.code')).toContainText('func main() {')
+  await expect(stream.locator('pre.code .hljs')).toHaveCount(0)
+  await expect(stream.locator('.md-block.settle-in')).toHaveCount(2)
+  const final = 'First I read the code.\n\nThen:\n\n```go\nfunc main() {}\n```'
+  hub.event('demo', 'coordinator', { kind: 'text', text: final })
+  await expect(stream).toHaveCount(0)
+  await expect(page.locator('.pane.focused .row').last().locator('pre.code .hljs')).toContainText('func main() {}')
+  // An empty delta drops a reply cut short.
+  hub.delta('demo', 'coordinator', 'half a')
+  await expect(stream).toBeVisible()
+  hub.delta('demo', 'coordinator', '')
+  await expect(stream).toHaveCount(0)
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

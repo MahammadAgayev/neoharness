@@ -276,7 +276,9 @@ version. Writing in the block yourself decides it too.
   A reply reads in one ink: headings show their level by size, and inline
   code is the text's color on a plain chip. Prose is about 90 characters
   wide, the chat text two sizes up from the labels, paragraphs a line
-  apart, and every size follows the text size.
+  apart, and every size follows the text size. A reply streams in as it is
+  written: each paragraph, list or code block shows once it is done, and
+  only the open one changes.
 - **The mouse**: the round send button in the prompt (the accent once there is text), buttons on permission cards, a click on a thread, an
   artifact or a queued message, drag the line between columns, the × at
   the end of a window's status line closes it (`⌘W`). A right

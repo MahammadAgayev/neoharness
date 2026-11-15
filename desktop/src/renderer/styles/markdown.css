@@ -3,10 +3,12 @@
   user-select: text;
   word-break: break-word;
 }
-.md > :first-child {
+.md > :first-child,
+.md > .md-block:first-child > :first-child {
   margin-top: 0;
 }
-.md > :last-child {
+.md > :last-child,
+.md > .md-block:last-child > :last-child {
   margin-bottom: 0;
 }
 .md p,
@@ -202,3 +204,17 @@
 .hljs-meta, .hljs-variable, .hljs-property { color: var(--iris); }
 .hljs-deletion { color: var(--love); }
 .hljs-addition { color: var(--pine); }
+
+/* The reply being written: each block is part of the reply's flow, and a
+   finished one fades in once, never a word at a time. */
+.md-block {
+  display: contents;
+}
+.md-block.settle-in > * {
+  animation: settle-in 120ms var(--ease-out);
+}
+@keyframes settle-in {
+  from {
+    opacity: 0;
+  }
+}

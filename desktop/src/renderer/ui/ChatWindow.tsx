@@ -5,7 +5,8 @@ import { blockText, shortTool, shortTools, type Block } from '../lib/transcript'
 import { wakeLabel } from '../lib/wake'
 import { elapsed, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
-import { copied, Markdown } from './Markdown'
+import { blocks as mdBlocks, openFence, render, renderOnce } from '../lib/markdown'
+import { copied, Markdown, mdClick } from './Markdown'
 import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
@@ -314,6 +315,33 @@ function TodoLine(props: { todos: Todo[]; open: boolean; selected: boolean; onCl
   )
 }
 
+// StreamingText is the reply being written: its finished blocks, each
+// rendered once from the cache and faded in as it arrives, and the block
+// still being written, rendered again on each delta. Code whose fence is
+// still open shows plain, highlighted only once it closes.
+function StreamingText(props: { text: string; artifacts: Set<string> }) {
+  const bs = mdBlocks(props.text)
+  const tail = bs.pop() ?? ''
+  return (
+    <div className="md b-text" onClick={mdClick}>
+      {bs.map((b, i) => (
+        <DoneBlock key={i} text={b} artifacts={props.artifacts} />
+      ))}
+      {openFence(tail) ? (
+        <pre className="code">
+          <code>{tail.replace(/^.*\n?/, '')}</code>
+        </pre>
+      ) : (
+        <div className="md-block" dangerouslySetInnerHTML={{ __html: renderOnce(tail, props.artifacts) }} />
+      )}
+    </div>
+  )
+}
+
+const DoneBlock = memo(function DoneBlock(props: { text: string; artifacts: Set<string> }) {
+  return <div className="md-block settle-in" dangerouslySetInnerHTML={{ __html: render(props.text, props.artifacts) }} />
+})
+
 function Queued(props: { e: Event; selected: boolean; onClick: () => void }) {
   return (
     <div className={`row b-queued ${props.selected ? 'cursor' : ''}`} onClick={props.onClick} data-tip="Send it now: the running turn stops" data-keys="<CR>">
@@ -340,7 +368,8 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   const todos = v?.todos ?? []
   const todoAt = todos.some((t) => t.state !== 'done') ? blocks.length + pending.length : -1
   const todoOpen = useStore((s) => !!s.todoOpen[thread])
-  const working = v?.state === 'running' && !blocks.some((b) => 'live' in b && b.live)
+  const streaming = useStore((s) => s.streams[thread])
+  const working = v?.state === 'running' && !streaming && !blocks.some((b) => 'live' in b && b.live)
   const scroller = useRef<HTMLDivElement>(null)
   const [search, setSearch] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -711,6 +740,11 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
               })}
             </div>
           ))}
+          {streaming && (
+            <div className="row stream">
+              <StreamingText text={streaming} artifacts={artifacts} />
+            </div>
+          )}
           {working && (
             <div className="row b-line t-subtle">
               <span className="spinner t-foam" />

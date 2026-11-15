@@ -16,11 +16,7 @@ const events = 2000
 
 // known are the scenarios over budget today, with the build step that brings
 // them in. They report but do not fail; any other scenario over budget fails.
-const known: Record<string, string> = {
-  // A 12 KB reply lays out in one frame; the streamed reply renders it a
-  // block at a time.
-  bigReplies: 'streaming text',
-}
+const known: Record<string, string> = {}
 
 interface Frames {
   frames: number
@@ -227,15 +223,35 @@ test('small events at 60 a second, as text deltas would come', async () => {
   budget('streamSmallEvents', f, frameMisses(f))
 })
 
+// A big reply comes as the hub sends it: the text so far every 50 ms, then
+// the text event, which renders from the blocks the stream left cached.
 test('big replies', async () => {
   const big = Array.from({ length: 40 }, (_, i) => reply(i)).join('\n')
   const f = await frames(async () => {
     for (let i = 0; i < 5; i++) {
+      for (let n = 400; n < big.length; n += 400) {
+        hub.delta('demo', 'long', big.slice(0, n))
+        await page.waitForTimeout(50)
+      }
       hub.event('demo', 'long', { kind: 'text', text: big })
-      await page.waitForTimeout(400)
+      await page.waitForTimeout(200)
     }
   })
   budget('bigReplies', f, frameMisses(f))
+})
+
+test('text deltas at 60 a second into the long chat', async () => {
+  let text = ''
+  const f = await frames(async () => {
+    for (let i = 0; i < 120; i++) {
+      text += i % 15 === 14 ? 'end of a paragraph.\n\n' : 'word '.repeat(5)
+      hub.delta('demo', 'long', text)
+      await page.waitForTimeout(16)
+    }
+    hub.delta('demo', 'long', '')
+    await page.waitForTimeout(300)
+  })
+  budget('streamDeltas', f, frameMisses(f))
 })
 
 test('events into a thread not on screen', async () => {

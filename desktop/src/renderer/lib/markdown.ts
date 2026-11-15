@@ -57,6 +57,61 @@ export function render(md: string, artifacts?: Set<string>): string {
   return html
 }
 
+// renderBlocks renders markdown a block at a time, each from the cache, so a
+// reply that streamed in, or grew, parses only its new blocks.
+export function renderBlocks(md: string, artifacts?: Set<string>): string {
+  return blocks(md)
+    .map((b) => render(b, artifacts))
+    .join('')
+}
+
+// blocks splits markdown at blank lines, but not inside fenced code, and
+// not before an indented line, which goes on the block above it (a list
+// item's second paragraph, an indented code block).
+export function blocks(md: string): string[] {
+  const out: string[] = []
+  let cur: string[] = []
+  let gap = 0
+  let fence = ''
+  for (const line of md.split('\n')) {
+    const t = line.trim()
+    if (fence) {
+      cur.push(line)
+      if (t.startsWith(fence) && /^[`~]+$/.test(t)) fence = ''
+      continue
+    }
+    if (t === '') {
+      gap++
+      continue
+    }
+    if (gap && cur.length && !/^\s/.test(line)) {
+      out.push(cur.join('\n'))
+      cur = []
+    } else if (gap && cur.length) cur.push(...Array(gap).fill(''))
+    gap = 0
+    cur.push(line)
+    const f = /^\s{0,3}(`{3,}|~{3,})/.exec(line)
+    if (f) fence = f[1]
+  }
+  if (cur.length) out.push(cur.join('\n'))
+  return out
+}
+
+// openFence says a block is fenced code whose closing fence has not come
+// yet, as the last block of a reply still being written.
+export function openFence(block: string): boolean {
+  const lines = block.split('\n')
+  const f = /^\s{0,3}(`{3,}|~{3,})/.exec(lines[0])
+  if (!f) return false
+  return !lines.slice(1).some((l) => l.trim().startsWith(f[1]) && /^[`~]+$/.test(l.trim()))
+}
+
+// renderOnce renders markdown that changes as it is written, without the
+// cache: the cache would fill with every step of it.
+export function renderOnce(md: string, artifacts?: Set<string>): string {
+  return parse(md, artifacts)
+}
+
 function parse(md: string, artifacts?: Set<string>): string {
   let html = DOMPurify.sanitize(marked.parse(md, { async: false }) as string, {
     // Task lists are disabled checkboxes; no form can send them anywhere.

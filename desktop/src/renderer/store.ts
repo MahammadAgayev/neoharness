@@ -136,6 +136,9 @@ export interface State {
   threads: Record<string, ThreadView>
   order: string[]
   chats: Record<string, Block[]>
+  // streams are the replies being written now, by chat key: the hub's
+  // delta, which the text event that follows replaces.
+  streams: Record<string, string>
   artifacts: Artifact[]
   docs: Record<string, Doc>
   layout: Layout
@@ -200,6 +203,7 @@ class Store {
     threads: {},
     order: [],
     chats: {},
+    streams: {},
     artifacts: [],
     docs: {},
     layout: { cols: [], focus: 0 },
@@ -484,6 +488,13 @@ class Store {
         this.set({ waits: u.waits ?? [] })
         this.badge()
         return
+      case 'delta': {
+        if (!u.thread) return
+        const key = u.workspace === s.workspace ? u.thread : `${u.workspace}/${u.thread}`
+        if (key !== u.thread && !s.chats[key]) return
+        this.stream(key, u.text ?? '')
+        return
+      }
       case 'workspace': {
         if (!u.summary) return
         const i = s.workspaces.findIndex((w) => w.name === u.workspace)
@@ -508,10 +519,11 @@ class Store {
         if (!e) return
         if (e.kind === 'notice') this.toast(noticeToast(u.workspace, e))
         if (e.kind === 'error') this.toast(errorToast(u.workspace, u.thread ?? '', e))
+        if (u.thread && (e.kind === 'text' || e.kind === 'turn' || e.kind === 'error')) this.stream(u.workspace === s.workspace ? u.thread : `${u.workspace}/${u.thread}`, '')
         if (u.workspace === s.workspace && u.thread) {
           // A held event may be in the history that loaded with it already.
           if (replay && this.loaded[u.thread]?.some((x) => JSON.stringify(x) === JSON.stringify(e))) return
-          this.set({ chats: { ...s.chats, [u.thread]: addEvent(s.chats[u.thread] ?? [], e) } })
+          this.set({ chats: { ...this.state.chats, [u.thread]: addEvent(this.state.chats[u.thread] ?? [], e) } })
         } else if (u.thread) {
           const key = `${u.workspace}/${u.thread}`
           if (s.chats[key]) this.set({ chats: { ...s.chats, [key]: addEvent(s.chats[key], e) } })
@@ -572,6 +584,16 @@ class Store {
     delete this.awayText[key]
     const spec = viewToast(workspace, old, v, { reply, away: true, home: nh().home() })
     if (spec) this.toast(spec)
+  }
+
+  // stream sets the reply a chat writes now; an empty text drops it.
+  private stream(key: string, text: string): void {
+    const streams = this.state.streams
+    if ((streams[key] ?? '') === text) return
+    const next = { ...streams }
+    if (text) next[key] = text
+    else delete next[key]
+    this.set({ streams: next })
   }
 
   private dropThread(name: string): void {

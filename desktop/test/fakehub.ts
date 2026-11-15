@@ -69,6 +69,12 @@ export class FakeHub {
     this.push({ kind: 'thread', workspace: v.workspace, thread: v.name, view: v })
   }
 
+  // delta is the reply a thread writes now, as the hub sends it: the whole
+  // text so far; an empty text drops it.
+  delta(workspace: string, thread: string, text: string): void {
+    this.push({ kind: 'delta', workspace, thread, text })
+  }
+
   setWaits(waits: Wait[]): void {
     this.waits = waits
     this.push({ kind: 'waits', workspace: '', waits })
