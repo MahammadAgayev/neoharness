@@ -100,6 +100,9 @@ kbd {
 
 /* Less motion: nothing moves, things only fade, and quickly. */
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-leave: var(--t-1);
+  }
   *,
   ::before,
   ::after {

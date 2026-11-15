@@ -8,7 +8,7 @@
   align-items: flex-start;
   padding-top: 12vh;
   z-index: 50;
-  animation: arrive var(--t-4) var(--ease-out);
+  animation: arrive var(--t-2) var(--ease-out);
 }
 .palette {
   width: min(720px, 92vw);

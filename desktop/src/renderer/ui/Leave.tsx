@@ -1,9 +1,8 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 
-// leaveMs is how long a thing takes to leave: --t-leave, or 0 when the
-// person asks for less motion.
+// leaveMs is how long a thing takes to leave: --t-leave, which is shorter
+// when the person asks for less motion.
 function leaveMs(): number {
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 0
   return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--t-leave')) || 0
 }
 

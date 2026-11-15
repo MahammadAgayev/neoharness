@@ -51,6 +51,8 @@
   --t-4: 220ms;
   /* Leaving takes 0.7 of arriving, with --ease-in. */
   --t-leave: 126ms;
+  /* One slow tint fade for every "this changed" mark, so all fade alike. */
+  --t-settle: 1000ms;
 
   /* Roles: what a color means, over the scheme's hues. */
   --accent: var(--iris);
