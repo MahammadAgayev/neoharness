@@ -6,6 +6,7 @@ import type {
   Artifact,
   ArtifactText,
   Choices,
+  Merge,
   Completions,
   Decision,
   Event,
@@ -65,6 +66,11 @@ export const calls = {
     method: 'PUT',
     path: `${ws(a.workspace)}/artifacts/${e(a.name)}`,
     body: { text: a.text, base: a.base, baseText: a.baseText, force: a.force ?? false },
+  }),
+  mergeArtifact: (a: { workspace: string; name: string; text: string; base: number; baseText: string }): Req => ({
+    method: 'POST',
+    path: `${ws(a.workspace)}/artifacts/${e(a.name)}/merge`,
+    body: { text: a.text, base: a.base, baseText: a.baseText },
   }),
   threads: (a: { workspace: string }): Req => ({ method: 'GET', path: `${ws(a.workspace)}/threads` }),
   openThread: (a: { workspace: string; name: string; brief?: string; location?: string }): Req => ({
@@ -135,6 +141,7 @@ export interface Results {
   artifacts: Artifact[]
   artifact: ArtifactText
   editArtifact: ArtifactText
+  mergeArtifact: Merge
   threads: ThreadView[]
   events: Event[]
   completions: Completions

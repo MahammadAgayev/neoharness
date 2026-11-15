@@ -308,6 +308,38 @@ test('spellcheck marks words only in Insert, and never in code', async () => {
   await page.keyboard.press('Control+o')
 })
 
+test("an agent's newer version merges into your edit in place, with its blocks and yours marked in the gutter", async () => {
+  hub.artifact('demo', 'live', 'Live', '# Live\n\nfirst para\n\nsecond para\n')
+  hub.event('demo', 'api', { kind: 'artifact', detail: 'live', text: 'Live', version: 1 })
+  await page.locator('.b-artifact', { hasText: 'Live' }).click()
+  const win = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'live' }) })
+  const doc = win.locator('.doc-page')
+  await doc.locator('p', { hasText: 'first' }).click()
+  await normal()
+  await page.keyboard.press('A')
+  await page.keyboard.type(' mine')
+  await page.keyboard.press('Escape')
+  await expect(doc.locator('p', { hasText: 'first para mine' })).toHaveClass(/doc-mark-mine/)
+  hub.artifact('demo', 'live', 'Live', '# Live\n\nfirst para\n\nsecond para theirs\n', 2)
+  // No :w: the clean merge shows at once, and the page keeps your words.
+  const theirs = doc.locator('p', { hasText: 'second para theirs' })
+  await expect(theirs).toBeVisible()
+  await expect(theirs).toHaveClass(/doc-mark-agent/)
+  await expect(theirs).toHaveClass(/doc-fresh/)
+  await shot('45-artifact-merged')
+  await expect(doc.locator('p', { hasText: 'first para mine' })).toHaveClass(/doc-mark-mine/)
+  await expect(win.locator('.sl-name', { hasText: 'live [+]' })).toBeVisible()
+  expect(hub.calls.some((c) => c.method === 'POST' && c.path.endsWith('/artifacts/live/merge'))).toBe(true)
+  // The tint fades and goes; the bars stay until the save.
+  await expect(theirs).not.toHaveClass(/doc-fresh/, { timeout: 3000 })
+  await page.keyboard.press('Meta+s')
+  await expect
+    .poll(() => hub.calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/artifacts/live')).pop()?.body)
+    .toMatchObject({ base: 2, text: '# Live\n\nfirst para mine\n\nsecond para theirs\n' })
+  await expect(doc.locator('.doc-mark-mine, .doc-mark-agent')).toHaveCount(0)
+  await page.keyboard.press('Control+o')
+})
+
 test('a mouse drag selects in Visual mode, so d takes the words away, as with Vim and a mouse', async () => {
   hub.artifact('demo', 'drag', 'Drag', '# Drag\n\nfirst second third\n')
   hub.event('demo', 'api', { kind: 'artifact', detail: 'drag', text: 'Drag', version: 1 })

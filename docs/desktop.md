@@ -156,11 +156,15 @@ which is the raw text this page removes. Editors with their own markdown
 layer (Milkdown, Tiptap) add a framework over ProseMirror and change
 the text on save; here the untouched blocks must stay byte for byte.
 
-If an agent writes a new version while you edit, a line says so, and
-nothing in your edit changes. `:w` merges by blocks: the hub takes both
-sides when they changed different paragraphs, lists, tables or code
-blocks, or different lines of one block. When they changed the same
-lines, the save is refused and you take the changes one by one, as below.
+If an agent writes a new version while you edit, the hub merges it into
+your edit at once, by blocks: it takes both sides when they changed
+different paragraphs, lists, tables or code blocks, or different lines of
+one block. The page takes the merge in place, a tint fades on what came
+in, and your words and the cursor stay. While you edit, a bar in the
+gutter marks each block you changed (Iris) and each block the agent
+changed since you began (Gold); `:w` saves both. When both changed the
+same lines, a line says so, `:w` is refused, and you take the changes one
+by one, as below.
 
 ### Docs
 

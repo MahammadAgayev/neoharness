@@ -201,6 +201,16 @@ export interface ArtifactText {
   text: string
 }
 
+// Merge is what an edit becomes when the hub merges it into the newest
+// version. Where both sides changed a block, merged keeps the edit's side and
+// conflicts say where, as line ranges [first, end) from 0.
+export interface Merge {
+  merged: string
+  clean: boolean
+  version: number
+  conflicts?: { base: [number, number]; ours: [number, number]; theirs: [number, number]; merged: [number, number] }[]
+}
+
 export function location(l: Location): string {
   return l.host ? `${l.host}:${l.dir}` : l.dir
 }

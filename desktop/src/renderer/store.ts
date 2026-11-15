@@ -66,8 +66,9 @@ export interface Doc {
   artifact: Artifact
   text: string
   // edit is the source while the person changes it; base is the version it
-  // started from.
-  edit: { text: string; base: number; baseText: string } | null
+  // merges from, baseText that version's text, and start the text the edit
+  // began on, so the page marks what an agent changed since.
+  edit: { text: string; base: number; baseText: string; start: string } | null
   // conflict says the last :w was refused: a newer version changed the
   // same lines.
   conflict?: boolean
@@ -501,10 +502,8 @@ class Store {
         this.set({ artifacts: [a, ...s.artifacts.filter((x) => x.name !== a.name)] })
         const d = this.state.docs[a.name]
         if (!d) return
-        if (d.edit && a.version !== d.edit.base) {
-          this.say(`${a.thread} wrote v${a.version} while you edit · :w merges it, :e! takes it`, 'gold')
-        }
-        void this.loadDoc(a.name)
+        if (d.edit && a.version !== d.edit.base) void this.mergeIn(a.name)
+        else void this.loadDoc(a.name)
         return
       }
       case 'deleted':
@@ -1161,7 +1160,7 @@ class Store {
     const d = this.state.docs[name]
     if (!d || d.edit) return
     this.set({
-      docs: { ...this.state.docs, [name]: { ...d, edit: { text: d.text, base: d.artifact.version, baseText: d.text } } },
+      docs: { ...this.state.docs, [name]: { ...d, edit: { text: d.text, base: d.artifact.version, baseText: d.text, start: d.text } } },
     })
   }
 
@@ -1170,7 +1169,7 @@ class Store {
   editText(name: string, text: string): void {
     const d = this.state.docs[name]
     if (!d) return
-    const edit = d.edit ?? { text: d.text, base: d.artifact.version, baseText: d.text }
+    const edit = d.edit ?? { text: d.text, base: d.artifact.version, baseText: d.text, start: d.text }
     const done = text === edit.baseText && !d.conflict
     this.set({ docs: { ...this.state.docs, [name]: { ...d, edit: done ? null : { ...edit, text } } } })
   }
@@ -1218,6 +1217,38 @@ class Store {
       'subtle',
     )
     return true
+  }
+
+  // mergeIn takes an agent's newer version into the edit at once, through
+  // the hub's merge that writes nothing: a clean merge shows in the page in
+  // place, and :w then saves it as it is.
+  private async mergeIn(name: string): Promise<void> {
+    await this.loadDoc(name)
+    for (let tries = 0; tries < 3; tries++) {
+      const d = this.state.docs[name]
+      if (!d?.edit || d.edit.base === d.artifact.version) return
+      const sent = d.edit.text
+      const m = await this.try(
+        this.call('mergeArtifact', { workspace: this.state.workspace, name, text: sent, base: d.edit.base, baseText: d.edit.baseText }),
+      )
+      if (!m) return
+      const cur = this.state.docs[name]
+      if (!cur?.edit) return
+      // You typed, or it wrote again, while it merged: merge from what is
+      // there now.
+      if (cur.edit.text !== sent || m.version !== cur.artifact.version) {
+        await this.loadDoc(name)
+        continue
+      }
+      if (!m.clean) {
+        this.say(`${cur.artifact.thread} wrote v${m.version} while you edit · :w merges it, :e! takes it`, 'gold')
+        return
+      }
+      const edit = m.merged === cur.text ? null : { ...cur.edit, text: m.merged, base: m.version, baseText: cur.text }
+      this.set({ docs: { ...this.state.docs, [name]: { ...cur, edit } } })
+      this.say(`${cur.artifact.thread} wrote v${m.version} · merged into your edit`, 'subtle')
+      return
+    }
   }
 
   // takeHunk is do: one change of the newer version comes into the edit.

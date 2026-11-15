@@ -3,7 +3,7 @@ import { Selection, EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { artifactsKey, editorPlugins, fatCursorKey, linkAt, TaskItem } from '../lib/docedit'
+import { artifactsKey, editorPlugins, fatCursorKey, freshKey, linkAt, marksKey, TaskItem } from '../lib/docedit'
 import { DocVim } from '../lib/docvim'
 import { hunks, lines, type Hunk } from '../lib/linediff'
 import { MarkdownDoc } from '../lib/mdoc'
@@ -39,6 +39,7 @@ function DocEditor(props: {
   win: number
   focused: boolean
   artifacts: Set<string>
+  marks: { base: string; start: string; theirs: string } | null
   onHunk: (i: number) => void
   onView: (v: EditorView | null) => void
 }) {
@@ -94,6 +95,9 @@ function DocEditor(props: {
         // A click opens an artifact named in the page, or a link, as in a
         // page you read; in Insert, where a click places the cursor, ⌘-click.
         mousedown: (_v, e) => {
+          // A click leaves Visual mode, as with Vim and a mouse; the click
+          // then puts the cursor where it lands.
+          if (vimMode?.mode === 'visual' || vimMode?.mode === 'vline') vimMode.setMode('normal')
           if (!e.metaKey && (!store.state.settings.vim || vimMode?.mode === 'insert')) return false
           const el = e.target as HTMLElement
           const art = el.closest<HTMLElement>('[data-artifact]')?.dataset.artifact
@@ -254,8 +258,17 @@ function DocEditor(props: {
       b += over
     }
     const tr = v.state.tr.replace(start, a, next.slice(start, b)).setMeta('remote', true).setMeta('addToHistory', false)
-    v.dispatch(tr)
+    v.dispatch(tr.setMeta(freshKey, { from: start, to: b }))
+    // The tint fades in CSS over --t-settle; then it goes.
+    const settle = parseFloat(getComputedStyle(v.dom).getPropertyValue('--t-settle')) || 1000
+    const t = setTimeout(() => viewRef.current?.dispatch(viewRef.current.state.tr.setMeta(freshKey, null).setMeta('remote', true)), settle)
+    return () => clearTimeout(t)
   }, [props.text])
+
+  const m = props.marks
+  useEffect(() => {
+    viewRef.current?.dispatch(viewRef.current.state.tr.setMeta(marksKey, m && { ...m }).setMeta('remote', true))
+  }, [m?.base, m?.start, m?.theirs, m === null])
 
   useEffect(() => {
     viewRef.current?.dispatch(viewRef.current.state.tr.setMeta(artifactsKey, props.artifacts).setMeta('remote', true))
@@ -452,6 +465,7 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
           win={win.id}
           focused={focused}
           artifacts={artifacts}
+          marks={doc.edit && { base: doc.edit.baseText, start: doc.edit.start, theirs: doc.text }}
           onHunk={setHunk}
           onView={(v) => (view.current = v)}
         />

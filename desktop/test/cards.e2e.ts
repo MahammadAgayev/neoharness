@@ -188,8 +188,8 @@ test('an artifact opens, edits, saves, and a newer version is merged or forced',
   await expect.poll(() => hub.calls.find((c) => c.method === 'PUT')?.body).toMatchObject({ base: 1, text: '# Plan\n\n- add /healthz\n- test it\n- ship it **now**\n' })
   await expect(page.locator('.statusline .sl-name', { hasText: /^plan$/ })).toBeVisible()
 
-  // The agent writes v3 while you edit: the save is refused, and you take
-  // its changes one by one, then :w saves the result.
+  // The agent writes v3 while you edit: it changed another block, so it
+  // merges into the page at once, and :w saves both.
   await page.keyboard.press('g')
   await page.keyboard.press('g')
   await page.keyboard.press('i')
@@ -198,29 +198,16 @@ test('an artifact opens, edits, saves, and a newer version is merged or forced',
   await expect(doc.locator('h1')).toHaveText('xPlan')
   const v2 = '# Plan\n\n- add /healthz\n- test it\n- ship it **now**\n'
   hub.artifact('demo', 'plan', 'Health check plan', v2 + '\n## Deploy\n', 3)
-  await expect(page.locator('.cmdline', { hasText: 'wrote v3 while you edit' })).toBeVisible()
-  await page.keyboard.press('Meta+s')
-  await expect(page.locator('.cmdline', { hasText: 'do takes a change' })).toBeVisible()
-  await expect(page.locator('.conflict', { hasText: 'changed the same lines in v3' })).toBeVisible()
-  await expect(page.locator('.hunk')).toHaveCount(2)
-  await expect(page.locator('.hunk.active .diff-line.d-del')).toHaveText('-# xPlan')
-  await page.keyboard.press(']')
-  await page.keyboard.press('c')
-  await expect(page.locator('.hunk.active .diff-line.d-add').last()).toHaveText('+## Deploy')
-  await shot('25-artifact-conflict')
-  await page.keyboard.press('d')
-  await page.keyboard.press('o')
-  await expect(page.locator('.hunk')).toHaveCount(1)
-  // The change taken shows in the page at once, rendered.
+  await expect(page.locator('.cmdline', { hasText: 'wrote v3 · merged into your edit' })).toBeVisible()
   await expect(doc.locator('h2', { hasText: 'Deploy' })).toBeVisible()
   await expect(doc.locator('h1')).toHaveText('xPlan')
+  await shot('25-artifact-merged')
   await page.keyboard.type(':')
   await page.keyboard.type('w')
   await page.keyboard.press('Enter')
   await expect
     .poll(() => hub.calls.filter((c) => c.method === 'PUT').pop()?.body)
     .toMatchObject({ base: 3, force: false, text: '# xPlan' + v2.slice('# Plan'.length) + '\n## Deploy\n' })
-  await expect(page.locator('.conflict')).toHaveCount(0)
   await page.keyboard.press('Control+o')
   await expect(page.locator('.statusline .sl-name', { hasText: /^api$/ })).toBeVisible()
 })

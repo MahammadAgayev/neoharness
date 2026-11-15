@@ -121,11 +121,6 @@ export class DocVim {
   // never leaves a selection in Normal mode.
   mouse(pointer: boolean): void {
     const sel = this.state.selection
-    if ((this.mode === 'visual' || this.mode === 'vline') && pointer && sel.empty) {
-      this.cur = sel.head
-      this.setMode('normal')
-      return
-    }
     if (!(this.mode === 'normal' || (this.mode === 'visual' && pointer)) || sel.empty || !(sel instanceof TextSelection)) return
     // The browser's selection ends after the last letter; Vim's cursor is on it.
     const back = sel.head < sel.anchor

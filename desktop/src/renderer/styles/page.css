@@ -207,3 +207,42 @@
 .doc-page .ProseMirror-selectednode {
   outline: 2px solid var(--hl-high);
 }
+
+/* While you edit, a bar in the gutter marks each block you changed (accent)
+   and each block an agent changed since you began (wait). */
+.doc-page > .doc-mark,
+.doc-page > .doc-fresh {
+  position: relative;
+}
+.doc-page > .doc-mark::before {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 0.2em;
+  bottom: 0.2em;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.doc-page > .doc-mark-agent::before {
+  background: var(--wait);
+}
+/* What just came in, a merge or a change you took, gets one tint that fades;
+   nothing moves. */
+.doc-page > .doc-fresh::after {
+  content: '';
+  position: absolute;
+  inset: -2px -8px;
+  border-radius: var(--r-1);
+  background: color-mix(in srgb, var(--wait) 14%, transparent);
+  pointer-events: none;
+  animation: doc-settle var(--t-settle) var(--ease-out) forwards;
+}
+@keyframes doc-settle {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}

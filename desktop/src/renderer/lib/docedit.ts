@@ -13,7 +13,7 @@ import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-li
 import { addRowAfter, goToNextCell, isInTable, selectedRect, tableEditing } from 'prosemirror-tables'
 import { Decoration, DecorationSet, type EditorView, type NodeView } from 'prosemirror-view'
 
-import { schema } from './mdoc'
+import { MarkdownDoc, schema } from './mdoc'
 
 const n = schema.nodes
 
@@ -161,6 +161,7 @@ export function editorPlugins(leave: () => void): Plugin[] {
     keymap(baseKeymap),
     tableEditing(),
     decorations,
+    marks,
     fatCursor,
   ]
 }
@@ -263,6 +264,72 @@ const decorations = new Plugin<{ deco: DecorationSet; artifacts: Set<string> }>(
       const arts = tr.getMeta(artifactsKey) as Set<string> | undefined
       if (arts) return { deco: build(s.doc, arts), artifacts: arts }
       return tr.docChanged ? { deco: build(s.doc, v.artifacts), artifacts: v.artifacts } : v
+    },
+  },
+  props: {
+    decorations(s) {
+      return this.getState(s)?.deco
+    },
+  },
+})
+
+// blockKey names a top-level block by what it holds, so the same block in
+// two versions has the same key. A block keeps its node while you edit
+// elsewhere, so the key is made once per node.
+const keys = new WeakMap<Node, string>()
+function blockKey(n: Node): string {
+  let k = keys.get(n)
+  if (k === undefined) keys.set(n, (k = JSON.stringify(n.toJSON())))
+  return k
+}
+
+function blockKeys(text: string): Set<string> {
+  const out = new Set<string>()
+  new MarkdownDoc(text).doc.forEach((n) => out.add(blockKey(n)))
+  return out
+}
+
+// marksKey takes the texts an edit compares with: base, the version it saves
+// over; start, the text it began on; theirs, the newest version. null ends
+// the edit and its marks.
+export const marksKey = new PluginKey('marks')
+// freshKey takes a range that just came in from outside, an agent's newer
+// version or a change you took; null clears its tint.
+export const freshKey = new PluginKey('fresh')
+
+interface Marks {
+  base: Set<string>
+  start: Set<string>
+  theirs: Set<string>
+}
+
+// marks puts a bar in the gutter of each block you changed (yours) and each
+// block an agent changed since you began (theirs), and a tint that fades on
+// what just came in, so a merge shows where it landed without moving text.
+const marks = new Plugin<{ m: Marks | null; fresh: { from: number; to: number } | null; deco: DecorationSet }>({
+  state: {
+    init: () => ({ m: null, fresh: null, deco: DecorationSet.empty }),
+    apply: (tr, v, _old, s) => {
+      const meta = tr.getMeta(marksKey) as { base: string; start: string; theirs: string } | null | undefined
+      const fm = tr.getMeta(freshKey) as { from: number; to: number } | null | undefined
+      if (meta === undefined && fm === undefined && !tr.docChanged) return v
+      let m = v.m
+      if (meta === null) m = null
+      else if (meta) m = { base: blockKeys(meta.base), start: meta.start === meta.base ? blockKeys(meta.base) : blockKeys(meta.start), theirs: blockKeys(meta.theirs) }
+      let fresh = fm !== undefined ? fm : v.fresh && { from: tr.mapping.map(v.fresh.from, -1), to: tr.mapping.map(v.fresh.to, 1) }
+      if (fresh && fresh.to <= fresh.from) fresh = null
+      const out: Decoration[] = []
+      s.doc.forEach((n, pos) => {
+        const k = m ? blockKey(n) : ''
+        const cls = [
+          m && !m.base.has(k) ? 'doc-mark doc-mark-mine' : m && m.theirs.has(k) && !m.start.has(k) ? 'doc-mark doc-mark-agent' : '',
+          fresh && pos < fresh.to && pos + n.nodeSize > fresh.from ? 'doc-fresh' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+        if (cls) out.push(Decoration.node(pos, pos + n.nodeSize, { class: cls }))
+      })
+      return { m, fresh, deco: DecorationSet.create(s.doc, out) }
     },
   },
   props: {

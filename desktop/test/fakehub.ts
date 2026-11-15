@@ -191,6 +191,10 @@ export class FakeHub {
         return json({})
       }
       if (kind === 'artifacts' && !name) return json((this.artifacts[ws] ?? []).map((a) => a.artifact))
+      if (kind === 'artifacts' && sub === 'merge' && m === 'POST') {
+        const cur = this.artifacts[ws].find((a) => a.artifact.name === name)!
+        return json({ ...blockMerge(body.baseText, body.text, cur.text), version: cur.artifact.version })
+      }
       if (kind === 'artifacts' && m === 'GET') return json(this.artifacts[ws].find((a) => a.artifact.name === name))
       if (kind === 'artifacts' && m === 'PUT') {
         const cur = (this.artifacts[ws] ?? []).find((a) => a.artifact.name === name)
@@ -207,4 +211,36 @@ export class FakeHub {
       json({ error: `fake hub: no route ${m} ${url.pathname}` }, 404)
     })
   }
+}
+
+// blockMerge is a small 3-way merge by blocks, as the hub's for the tests:
+// blocks are runs of lines between blank lines, matched by place, and blocks
+// added at the end. Where both sides changed a block it keeps ours.
+function blockMerge(base: string, ours: string, theirs: string) {
+  const blocks = (t: string) => t.replace(/\n+$/, '').split(/\n\n+/)
+  const b = blocks(base)
+  const o = blocks(ours)
+  const t = blocks(theirs)
+  const out: string[] = []
+  const conflicts: { base: number[]; ours: number[]; theirs: number[]; merged: number[] }[] = []
+  const at = (bs: string[], i: number) => bs.slice(0, i).reduce((n, x) => n + x.split('\n').length + 1, 0)
+  const len = (x: string) => x.split('\n').length
+  const n = Math.max(o.length, t.length)
+  for (let i = 0; i < n; i++) {
+    const [bb, oo, tt] = [b[i], o[i], t[i]]
+    if (oo === tt || tt === bb || tt === undefined) {
+      if (oo !== undefined) out.push(oo)
+    } else if (oo === bb || oo === undefined) out.push(tt)
+    else {
+      const m = at(out, out.length)
+      conflicts.push({
+        base: [at(b, i), at(b, i) + (bb === undefined ? 0 : len(bb))],
+        ours: [at(o, i), at(o, i) + len(oo)],
+        theirs: [at(t, i), at(t, i) + len(tt)],
+        merged: [m, m + len(oo)],
+      })
+      out.push(oo)
+    }
+  }
+  return { merged: out.join('\n\n') + '\n', clean: conflicts.length === 0, conflicts }
 }
