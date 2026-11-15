@@ -367,16 +367,47 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   }, [blocks, v?.questionId])
 
   // Follow the end as the chat grows, unless the person scrolled away or
-  // selects: new blocks would scroll the selection away.
+  // selects: new blocks would scroll the selection away. The observer pins
+  // the end after layout and before paint, only when the size changed, so
+  // an update that changes nothing in sight costs no layout.
+  const pinned = useRef(false)
+  pinned.current = win.follow && vstart === null
   useLayoutEffect(() => {
     const el = scroller.current
-    if (el && win.follow && vstart === null) el.scrollTop = el.scrollHeight
-  })
+    if (el && pinned.current) el.scrollTop = el.scrollHeight
+  }, [win.follow, vstart, thread])
+  useEffect(() => {
+    const el = scroller.current
+    const inner = el?.firstElementChild
+    if (!el || !inner) return
+    const ro = new ResizeObserver(() => {
+      if (pinned.current) el.scrollTop = el.scrollHeight
+    })
+    ro.observe(inner)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // A long chat shows its end at once, and the older chunks above it while
+  // the browser is idle, a few at a time, so it opens without a pause. A
+  // move to a block not shown yet shows them all.
+  const starts = chunkStarts(blocks.length)
+  const [shownFrom, setShownFrom] = useState(() => Math.max(0, starts.length - 2))
+  useLayoutEffect(() => setShownFrom(Math.max(0, chunkStarts(store.state.chats[thread]?.length ?? 0).length - 2)), [thread])
+  useEffect(() => {
+    if (shownFrom === 0) return
+    const id = requestIdleCallback(() => setShownFrom((n) => Math.max(0, n - 2)), { timeout: 200 })
+    return () => cancelIdleCallback(id)
+  }, [shownFrom])
+  const firstShown = starts[Math.min(shownFrom, starts.length - 1)] ?? 0
+  useEffect(() => {
+    if (cursor >= 0 && cursor < firstShown) setShownFrom(0)
+  }, [cursor, firstShown])
 
   useEffect(() => {
     if (cursor < 0) return
     scroller.current?.querySelector(`[data-i="${cursor}"]`)?.scrollIntoView({ block: 'nearest' })
-  }, [cursor])
+  }, [cursor, shownFrom === 0])
 
   const setCursor = (i: number) => {
     const c = Math.max(0, Math.min(i, total - 1))
@@ -626,7 +657,27 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           if (atEnd !== win.follow) store.updateWin(win.id, { follow: atEnd })
         }}
       >
-        <div className="transcript-inner">
+        <div
+          className="transcript-inner"
+          onMouseDown={(e) => {
+            const i = rowAt(e)
+            if (i >= 0 && e.detail === 2) {
+              store.updateWin(win.id, { cursor: i, follow: false })
+              handleRef.current('enter', 1)
+            }
+          }}
+          onClick={(e) => {
+            const i = rowAt(e)
+            if (i >= 0 && !window.getSelection()?.toString()) store.updateWin(win.id, { cursor: i, follow: false })
+          }}
+          onContextMenu={(e) => {
+            const i = rowAt(e)
+            if (i < 0 || !blocks[i]) return
+            e.preventDefault()
+            store.updateWin(win.id, { cursor: i, follow: false })
+            void blockMenu(blocks[i], (a) => handleRef.current(a, 1))
+          }}
+        >
           {blocks.length === 0 && pending.length === 0 && (
             <div className="empty">
               {thread === Coordinator
@@ -634,27 +685,25 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
                 : 'Nothing here yet.'}
             </div>
           )}
-          {blocks.map((b, i) => (
-            <div
-              key={b.key}
-              data-i={i}
-              className={`row k-${b.kind} ${focused && cursor === i ? 'cursor' : ''} ${matched.has(i) ? 'match' : ''} ${vstart !== null && i >= Math.min(vstart, cursor) && i <= Math.max(vstart, cursor) ? 'selected' : ''}`}
-              onMouseDown={(e) => {
-                if (e.detail === 2) {
-                  store.updateWin(win.id, { cursor: i, follow: false })
-                  handleRef.current('enter', 1)
-                }
-              }}
-              onClick={() => {
-                if (!window.getSelection()?.toString()) store.updateWin(win.id, { cursor: i, follow: false })
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                store.updateWin(win.id, { cursor: i, follow: false })
-                void blockMenu(b, (a) => handleRef.current(a, 1))
-              }}
-            >
-              <BlockView b={b} open={!!folds[b.key]} artifacts={artifacts} thread={thread} pendingPermission={b.key === permKey} pendingQuestion={b.key === askKey} scope={b.key === permKey ? v?.permission?.scope : undefined} />
+          {starts.slice(Math.min(shownFrom, starts.length)).map((start) => (
+            <div key={blocks[start].key} className="chunk">
+              {blocks.slice(start, start + chunkRows).map((b, j) => {
+                const i = start + j
+                return (
+                  <Row
+                    key={b.key}
+                    b={b}
+                    i={i}
+                    marks={`${focused && cursor === i ? 'cursor' : ''} ${matched.has(i) ? 'match' : ''} ${vstart !== null && i >= Math.min(vstart, cursor) && i <= Math.max(vstart, cursor) ? 'selected' : ''}`}
+                    open={!!folds[b.key]}
+                    artifacts={artifacts}
+                    thread={thread}
+                    pendingPermission={b.key === permKey}
+                    pendingQuestion={b.key === askKey}
+                    scope={b.key === permKey ? v?.permission?.scope : undefined}
+                  />
+                )
+              })}
             </div>
           ))}
           {working && (
@@ -692,6 +741,45 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
       <PromptInfo v={v} thread={thread} />
     </div>
   )
+}
+
+// Row is one block of the transcript. It is memoized, so an update renders
+// again only the rows whose block or marks changed, not the whole chat.
+const Row = memo(function Row(props: {
+  b: Block
+  i: number
+  marks: string
+  open: boolean
+  artifacts: Set<string>
+  thread: string
+  pendingPermission: boolean
+  pendingQuestion: boolean
+  scope?: string
+}) {
+  const { b } = props
+  return (
+    <div data-i={props.i} className={`row k-${b.kind} ${props.marks}`}>
+      <BlockView b={b} open={props.open} artifacts={props.artifacts} thread={props.thread} pendingPermission={props.pendingPermission} pendingQuestion={props.pendingQuestion} scope={props.scope} />
+    </div>
+  )
+})
+
+// The rows go in chunks, and a chunk out of sight is not laid out or
+// painted (styles/transcript.css). Per row, the browser would check 2000
+// rows for sight on every frame; per chunk it checks a hundred.
+const chunkRows = 24
+
+function chunkStarts(n: number): number[] {
+  const out: number[] = []
+  for (let i = 0; i < n; i += chunkRows) out.push(i)
+  return out
+}
+
+// rowAt is the index of the block row a mouse event is on, or -1. The rows
+// share these handlers, so each row stays the same between renders.
+function rowAt(e: React.MouseEvent): number {
+  const el = (e.target as HTMLElement).closest<HTMLElement>('.row[data-i]')
+  return el ? Number(el.dataset.i) : -1
 }
 
 // blockMenu is the right click on a block: the keys that act on it.

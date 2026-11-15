@@ -236,7 +236,41 @@ class Store {
 
   private set(patch: Partial<State>): void {
     this.state = { ...this.state, ...patch }
-    for (const fn of this.listeners) fn()
+    if (this.batching) this.changed = true
+    else for (const fn of this.listeners) fn()
+  }
+
+  // Each hub update comes in an IPC message of its own; applied as they come,
+  // a burst of them would render the window once each. They are applied
+  // together once a frame instead. A hidden window gets no frames, so the
+  // timer still applies them within 100 ms, for toasts and the Dock badge.
+  private queue: Update[] = []
+  private batching = false
+  private changed = false
+
+  private enqueue(u: Update): void {
+    this.queue.push(u)
+    if (this.queue.length > 1) return
+    const flush = () => {
+      if (this.queue.length) this.flush()
+    }
+    requestAnimationFrame(flush)
+    setTimeout(flush, 100)
+  }
+
+  private flush(): void {
+    const q = this.queue
+    this.queue = []
+    this.batching = true
+    try {
+      for (const u of q) this.apply(u)
+    } finally {
+      this.batching = false
+      if (this.changed) {
+        this.changed = false
+        for (const fn of this.listeners) fn()
+      }
+    }
   }
 
   private async call<N extends CallName>(name: N, args: CallArgs<N>): Promise<Result<N>> {
@@ -265,7 +299,7 @@ class Store {
       if (s === 'connected') void this.reload().then(() => this.checkVersion())
       if (s !== 'connected') this.connected = false
     })
-    nh().onUpdate((u) => this.apply(u))
+    nh().onUpdate((u) => this.enqueue(u))
     nh().onOpenTarget((t) => void this.goThread(t.workspace, t.thread))
     nh().ready()
     setInterval(() => this.prune(), 1000)

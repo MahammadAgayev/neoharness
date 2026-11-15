@@ -17,13 +17,10 @@ const events = 2000
 // known are the scenarios over budget today, with the build step that brings
 // them in. They report but do not fail; any other scenario over budget fails.
 const known: Record<string, string> = {
-  openLongThread: 'data layer',
-  kMoves: 'data layer',
-  streamBlocks: 'data layer',
-  streamSmallEvents: 'data layer',
-  bigReplies: 'data layer',
+  // A 12 KB reply lays out in one frame; the streamed reply renders it a
+  // block at a time.
+  bigReplies: 'streaming text',
   railFold: 'motion layer',
-  typePrompt: 'data layer',
 }
 
 interface Frames {

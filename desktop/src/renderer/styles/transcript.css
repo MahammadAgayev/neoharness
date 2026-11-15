@@ -20,7 +20,18 @@
   border-radius: 6px;
   transition: background-color 80ms var(--ease-std);
 }
-.row + .row {
+/* A chunk of rows out of sight is not laid out or painted; it keeps the
+   size it had when last seen, so the scroll does not jump. Its padding
+   holds the rows' negative margin, which the containment would clip. */
+.chunk {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 2400px;
+  margin: 0 -10px;
+  padding: 0 10px;
+}
+.row + .row,
+.chunk + .chunk > .row:first-child,
+.chunk + .row {
   margin-top: 14px;
 }
 .row.k-permission + .row.k-permission,

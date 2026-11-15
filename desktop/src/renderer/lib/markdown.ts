@@ -30,9 +30,34 @@ const alertTitles: Record<string, string> = {
   CAUTION: 'Caution',
 }
 
+// rendered keeps the HTML of the texts shown last, so a chat that opens
+// again, or a window that mounts again, does not parse its replies again.
+const rendered = new Map<string, string>()
+const renderedMax = 4000
+const artifactKeys = new WeakMap<Set<string>, string>()
+
 // render turns markdown into safe HTML. An inline code span that names an
 // artifact becomes a link to it, as <CR> on its name opens it in the TUI.
 export function render(md: string, artifacts?: Set<string>): string {
+  let names = ''
+  if (artifacts?.size) {
+    names = artifactKeys.get(artifacts) ?? [...artifacts].sort().join(' ')
+    artifactKeys.set(artifacts, names)
+  }
+  const key = names + '\0' + md
+  const hit = rendered.get(key)
+  if (hit !== undefined) {
+    rendered.delete(key)
+    rendered.set(key, hit)
+    return hit
+  }
+  const html = parse(md, artifacts)
+  rendered.set(key, html)
+  if (rendered.size > renderedMax) rendered.delete(rendered.keys().next().value!)
+  return html
+}
+
+function parse(md: string, artifacts?: Set<string>): string {
   let html = DOMPurify.sanitize(marked.parse(md, { async: false }) as string, {
     // Task lists are disabled checkboxes; no form can send them anywhere.
     FORBID_TAGS: ['style', 'form', 'iframe'],

@@ -811,6 +811,8 @@ test('the recap card shows above the prompt after two minutes away; Esc, q or ×
     n++
     hub.setView(view('demo', 'coordinator', { state: 'idle', recap: text, recapAt: new Date(Date.now() + n * 1000).toISOString() }))
     await expect(page.locator('.pane.focused .prompt')).toBeVisible()
+    // The page applies hub updates once a frame, or within 100 ms.
+    await page.waitForTimeout(150)
   }
   // Away: the window loses focus, and comes back three minutes later.
   const away = () =>
