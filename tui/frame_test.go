@@ -89,13 +89,19 @@ func TestOneGlobalStatusLineNamesTheWorkspaceOnce(t *testing.T) {
 	}
 }
 
-func TestThePromptTouchesTheStreamWithNoBlankRows(t *testing.T) {
+// inPane is a row of the screen within a window's columns.
+func (h *neoharness) inPane(w *Window, y int) string {
+	return strings.TrimSpace(string([]rune(h.line(y))[w.rect.X : w.rect.X+w.rect.W]))
+}
+
+func TestThePromptHasOneBlankRowAboveAndBelow(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	_, H := h.s.Size()
+	w := h.a.cur
 	prompt := h.rowOf("› write to coordinator")
-	if prompt != H-3 {
-		t.Fatalf("the empty prompt should say who you write to, on the row above the status line; row %d:\n%s", prompt, h.screen())
+	if prompt != H-4 || h.inPane(w, H-3) != "" {
+		t.Fatalf("one blank row parts the prompt from the status line; prompt row %d:\n%s", prompt, h.screen())
 	}
 	h.press("i")
 	for i := 0; i < 40; i++ {
@@ -103,8 +109,8 @@ func TestThePromptTouchesTheStreamWithNoBlankRows(t *testing.T) {
 		h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &e})
 	}
 	h.a.draw()
-	if strings.TrimSpace(h.line(H-4)) == "" {
-		t.Fatalf("no blank row between the stream and the prompt:\n%s", h.screen())
+	if h.inPane(w, H-5) != "" || h.inPane(w, H-6) == "" {
+		t.Fatalf("one blank row, not two, parts the stream from the prompt:\n%s", h.screen())
 	}
 }
 
@@ -119,6 +125,9 @@ func TestThePromptDockIsRecapThenTodoThenPrompt(t *testing.T) {
 	recap, todo, prompt := h.rowOf("recap  Cache added"), h.rowOf("0 of 2 · Write its test"), h.rowOf("› write to")
 	if recap < 0 || todo != recap+1 || prompt != todo+1 {
 		t.Fatalf("the dock should be the recap, the todo line, the prompt, one row each; rows %d %d %d:\n%s", recap, todo, prompt, h.screen())
+	}
+	if w := h.a.cur; h.inPane(w, recap-1) != "" || h.inPane(w, prompt+1) != "" {
+		t.Fatalf("one blank row above the dock and one below the prompt:\n%s", h.screen())
 	}
 	if strings.Contains(h.screen(), "╭") {
 		t.Fatalf("the recap is a line with a bar, not a box:\n%s", h.screen())

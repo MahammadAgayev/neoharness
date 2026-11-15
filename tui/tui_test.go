@@ -1083,11 +1083,11 @@ func TestStatusColorsAndPromptHeight(t *testing.T) {
 		t.Errorf("a nearly full context should be red, got %v", got)
 	}
 
-	// The prompt is one row, right above the status line, with the cursor
-	// on it.
+	// The prompt is one row, a blank row above the status line, with the
+	// cursor on it.
 	h.press("i")
 	_, H := h.s.Size()
-	if row := h.rowOf("› write to coordinator"); row != H-3 || h.a.cursorY != row {
+	if row := h.rowOf("› write to coordinator"); row != H-4 || h.a.cursorY != row {
 		t.Fatalf("prompt at %d, cursor at %d:\n%s", row, h.a.cursorY, h.screen())
 	}
 }
@@ -3698,7 +3698,7 @@ func TestTheRecapCardShowsAboveThePromptAfterAway(t *testing.T) {
 	}
 	away(model.RecapAway)
 	// It sits on the prompt, where the eyes are, not at the top of the chat.
-	if r, w := row("Cache added"), h.a.cur.rect; r != w.Y+w.H-2 {
+	if r, w := row("Cache added"), h.a.cur.rect; r != w.Y+w.H-promptGap-2 {
 		t.Fatalf("no recap card just above the prompt, row %d:\n%s", r, h.screen())
 	}
 	h.see("recap")

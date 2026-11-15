@@ -113,6 +113,10 @@ func (a *App) fill(x, y, maxX int, st tcell.Style) {
 	}
 }
 
+// promptGap is the blank row between a chat's prompt and the status line
+// under it, so the line you write is not pressed between two others.
+const promptGap = 1
+
 func (a *App) drawWindow(w *Window, focused bool) {
 	r := w.rect
 	if r.W < 4 || r.H < chromeRows+2 {
@@ -129,13 +133,18 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	promptTop, promptCur, promptFirst := bottom, -1, 0
 	if b.Prompt != nil {
 		promptLines, promptCur, promptFirst = a.promptLines(w, focused)
-		promptTop = bottom - len(promptLines)
+		promptTop = bottom - promptGap - len(promptLines)
 	}
 	textBottom := promptTop
+	// The recap is the top of the prompt dock, the end of the chat's lines.
+	b.SetRecap(a.recapText(w))
 	// The transcript ends above the card, so the card hides none of it.
 	cardBottom := textBottom
 	if title, body, _ := a.card(w); title != "" && textBottom-len(body)-1 > top {
 		textBottom -= len(body) + 1
+	} else if b.Prompt != nil && b.recap == "" && !b.hasTodo() {
+		// The dock and the card bring their own blank row above them.
+		textBottom--
 	}
 	// Notices dock in the board's foot, under its rows.
 	if b.Kind == KindThreads {
@@ -147,8 +156,6 @@ func (a *App) drawWindow(w *Window, focused bool) {
 			textBottom -= len(ts) + 1
 		}
 	}
-	// The recap is the top of the prompt dock, the end of the chat's lines.
-	b.SetRecap(a.recapText(w))
 	w.recapX = 0
 	h := max(textBottom-top, 1)
 	w.textH = h
@@ -442,7 +449,7 @@ func (a *App) drawLine(x, y, maxX int, l Line) int {
 func (a *App) promptLines(w *Window, focused bool) ([]Line, int, int) {
 	p := w.Buf.Prompt
 	writing := focused && a.mode == modeInsert
-	bottom := w.rect.Y + w.rect.H
+	bottom := w.rect.Y + w.rect.H - promptGap
 	a.fitPrompt(w)
 	rows := a.promptRows(w)
 	if len(p.Text) == 0 {
