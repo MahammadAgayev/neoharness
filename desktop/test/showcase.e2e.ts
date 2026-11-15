@@ -17,10 +17,7 @@ test('the whole app, populated', async () => {
   hub.workspace('infra', [])
   hub.workspaces[1].counts = { running: 1 }
   hub.workspaces[0].activity = [0, 0, 1, 3, 2, 4, 6, 5, 8, 7, 4, 3, 5, 9, 6, 4, 2, 3, 5, 7, 8, 6, 4, 3]
-  const t = (n: string, v: Parameters<typeof view>[2]) => {
-    const list = hub.threads.payments
-    list[list.findIndex((x) => x.name === n)] = view('payments', n, v)
-  }
+  const t = (n: string, v: Parameters<typeof view>[2]) => hub.setView(view('payments', n, v))
   t('api', { state: 'running', model: 'claude-sonnet-5-5', context: 41000, contextWindow: 200000, branch: 'health-check' })
   t('ledger-migration', { state: 'waiting', permission: { id: 'p', tool: 'Bash', detail: 'psql -f migrate.sql' } })
   t('docs', { state: 'idle' })
@@ -33,7 +30,7 @@ test('the whole app, populated', async () => {
   c({ kind: 'tool', tool: 'mcp__neoharness__open_thread', detail: 'flaky-test', id: '3' })
   c({
     kind: 'text',
-    text: 'I split this into three threads:\n\n- **api** adds `GET /healthz` and a test\n- **ledger-migration** writes and runs the migration; it will ask before it touches the database\n- **flaky-test** finds why checkout fails one run in ten\n\nThe plan is in `health-plan`.',
+    text: 'I split this into three threads:\n\n- **api** adds `GET /healthz` and a test\n- **ledger-migration** writes and runs the migration; it will ask before it touches the database\n- **flaky-test** finds why checkout fails one run in ten\n\n| Thread | Asks first |\n|---|---|\n| ledger-migration | yes |\n| api | no |\n\nThe plan is in `health-plan`.',
   })
   c({ kind: 'artifact', detail: 'health-plan', text: 'Health check and ledger plan', version: 2 })
   c({ kind: 'turn' })
@@ -65,6 +62,10 @@ test('the whole app, populated', async () => {
     await page.keyboard.press('Enter')
     await expect(page.locator('.list-row .name', { hasText: 'ledger-migration' })).toBeVisible()
     await shot('31-show-workspace')
+    // A reply's table reads as the page's: rows, no side lines, no header fill.
+    const cell = page.locator('.md td').first()
+    await expect(cell).toHaveCSS('border-left-width', '0px')
+    await expect(page.locator('.md th').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
     await page.keyboard.press('Meta+k')
     await expect(page.locator('.palette-tabs .tab')).toHaveText(['All', 'Threads', 'Artifacts', 'Text', 'Commands', 'Workspaces', 'Notifications'])
     await shot('32-show-search')
