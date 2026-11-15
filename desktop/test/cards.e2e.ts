@@ -64,6 +64,8 @@ test('a permission request toasts, shows a card, and <leader>a allows it', async
   await toast.click()
   await expect(page.locator('.card.permission button', { hasText: 'Allow' })).toBeVisible()
   await expect(page.locator('.card.permission button', { hasText: 'Always: go test' })).toBeVisible()
+  await page.locator('.card.permission').hover()
+  await shot('21-permission-card')
   // The thread is on screen now: its toast goes.
   await expect(toast).toHaveCount(0, { timeout: 3000 })
   await shot('21-permission-card')
@@ -885,7 +887,10 @@ test('the waits list: ]q and [q walk what needs you, :waits shows it, x dismisse
   await page.keyboard.press(']')
   await page.keyboard.press('q')
   await expect(line).toContainText('nothing waits for you')
+  // Back to what the window showed before the list.
+  await page.locator('.window.waits .statusline').click()
   await page.keyboard.press('Control+o')
+  await expect(page.locator('.window.waits')).toHaveCount(0)
 })
 
 test('the recap card shows above the prompt after two minutes away; Esc, q or × closes it until a new recap', async () => {
@@ -914,7 +919,9 @@ test('the recap card shows above the prompt after two minutes away; Esc, q or ×
   await expect(card).toHaveCount(0)
   await away()
   await expect(card).toContainText('Cache added; review next.')
-  // It sits on the prompt, where the eyes are, not at the top of the chat.
+  // It sits on the prompt, where the eyes are, not at the top of the chat;
+  // it is measured once it has risen in.
+  await page.waitForTimeout(250)
   const cardBox = (await card.boundingBox())!
   const promptBox = (await page.locator('.pane.focused .prompt').boundingBox())!
   expect(promptBox.y - (cardBox.y + cardBox.height)).toBeGreaterThanOrEqual(0)
@@ -1068,6 +1075,31 @@ test('the todo list shows in one line above the prompt and unfolds, as in the TU
   hub.setView(view('demo', 'api', { todos: todos.map((t) => ({ ...t, state: 'done' as const })) }))
   await expect(line).toHaveCount(0)
   hub.setView(view('demo', 'api'))
+})
+
+test('a notice waits while you type and shows when you leave Insert; what needs you shows at once, on top', async () => {
+  hub.setView(view('demo', 'ledger'))
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  const prompt = page.locator('.pane.focused .prompt .cm-content')
+  await page.keyboard.press('i')
+  await expect(prompt).toBeFocused()
+  const toast = (text: string) => page.locator('.toast:not(.leaving)', { hasText: text })
+  hub.setView(view('demo', 'notes'))
+  await page.waitForTimeout(1500)
+  await expect(toast('notes')).toHaveCount(0)
+  hub.setView(view('demo', 'ledger', { state: 'waiting', permission: { id: 'p7', tool: 'Bash', detail: 'psql' } }))
+  await expect(toast('needs permission')).toBeVisible()
+  await normal()
+  await expect(toast('opened in')).toBeVisible()
+  await expect(page.locator('.toast:not(.leaving)').first()).toContainText('needs permission')
+  await shot('50-toasts-order')
+  hub.setView(view('demo', 'ledger', { state: 'resolved' }))
+  hub.setView(view('demo', 'notes', { state: 'resolved' }))
+  await page.keyboard.press('Space')
+  await page.keyboard.press('n')
+  await page.keyboard.press('c')
 })
 
 test('a hub that stops says so and offers to start it', async () => {

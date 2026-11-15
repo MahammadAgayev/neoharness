@@ -51,7 +51,15 @@ completes the folder of `:new`, `:open` and `:folder` when it starts with
 
 A question waits as a card in the chat, as a permission request does:
 write your answer below, or Skip (`<leader>x`). Once answered it is a
-plain block.
+plain block. Every card has one shape: a bar on its left in gold for what
+waits for you, or in red for a turn that failed, and no fill. Allow is the
+filled button; the keys (`␣a`, `␣A`, `␣x`) show on the buttons on hover or
+with the card under the cursor, and in their tooltips.
+
+The recap, the todo line and the prompt are one box at the foot of the
+chat, the prompt dock. Toasts show what needs you on top. One that does
+not need you waits while you type in Insert or on the command line, and
+shows when you stop.
 
 The recap card shows as in the TUI, just above the prompt, when you come
 back after 2 minutes or more out of the window, or with no key or click

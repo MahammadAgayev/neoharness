@@ -1,25 +1,38 @@
-/* the prompt */
-.prompt {
+/* The prompt dock: the recap, the todo line and the prompt in one box,
+   with hairlines between. */
+.dock {
   flex: 0 0 auto;
   display: flex;
-  gap: 8px;
+  flex-direction: column;
   max-width: calc(var(--measure) - 16px);
   width: calc(100% - 32px);
-  margin: 4px auto 0;
-  padding: 10px 14px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 10px;
+  max-height: 50%;
+  margin: var(--s-1) auto 0;
+  border: var(--hairline-w) solid var(--hairline-strong);
+  border-radius: var(--r-2);
   background: var(--bg-raised);
-  max-height: 40%;
+  overflow: hidden;
+}
+.dock:last-child {
+  margin-bottom: var(--s-3);
+}
+.dock:has(.prompt.active:focus-within) {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.dock > :not(:last-child),
+.dock > .leave > * {
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+/* the prompt */
+.prompt {
+  flex: 1 1 auto;
+  display: flex;
+  gap: var(--s-2);
+  min-height: 0;
+  padding: 10px 14px;
   overflow-y: auto;
   cursor: text;
-}
-.prompt:last-child {
-  margin-bottom: 12px;
-}
-.prompt.active:focus-within {
-  border-color: color-mix(in srgb, var(--iris) 60%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--iris) 14%, transparent);
 }
 /* Under the box, close to it, one line. The parts come most important
    first and lay out from the right: what does not fit wraps to a hidden
@@ -28,14 +41,8 @@
    write. It rises in once, so the eye finds it. */
 .recap-card {
   flex: 0 0 auto;
-  max-width: calc(var(--measure) - 16px);
-  width: calc(100% - 32px);
-  margin: 0 auto 8px;
-  padding: 8px 14px 10px;
-  border: var(--hairline-w) solid var(--hairline-strong);
+  padding: var(--s-2) 14px var(--s-2) 11px;
   border-left: 3px solid var(--done);
-  border-radius: var(--r-2);
-  background: var(--bg-raised);
   --arrive-y: 6px;
   animation: arrive var(--t-3) var(--ease-out);
 }

@@ -58,11 +58,10 @@
   border-left: 2px solid var(--rose);
   padding-left: 12px;
 }
+/* An answered question no longer waits: no gold. */
 .b-ask {
-  border-left: 2px solid var(--gold);
-  padding: 6px 12px;
-  border-radius: 0 var(--r-2) var(--r-2) 0;
-  background: color-mix(in srgb, var(--gold) 7%, transparent);
+  border-left: 2px solid var(--hairline-strong);
+  padding-left: var(--s-3);
 }
 .b-label {
   font-size: var(--fs-small);
@@ -79,10 +78,20 @@
 .b-queued:hover {
   background: var(--bg-hover);
 }
-/* The todo list above the prompt: one quiet line until you open it. */
+/* The todo list in the prompt dock: one quiet line until you open it;
+   its items rise in from the prompt. */
 .todo-line {
   color: var(--fg-3);
   font-size: var(--fs-secondary);
+}
+.dock .todo-line {
+  margin: 0;
+  padding: var(--s-1) 14px;
+  border-radius: 0;
+}
+.dock .todo-item {
+  --arrive-y: 8px;
+  animation: arrive var(--t-3) var(--ease-out);
 }
 .todo-head {
   display: flex;

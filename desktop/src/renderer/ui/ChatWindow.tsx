@@ -163,9 +163,9 @@ const BlockView = memo(function BlockView(props: {
     }
     case 'error':
       return (
-        <div className="b-line t-love">
-          <span className="glyph">✗</span>
-          <span className="pre-wrap">{b.text}</span>
+        <div className="card alert">
+          <div className="card-head t-love">failed</div>
+          <div className="pre-wrap">{b.text}</div>
         </div>
       )
     case 'permission': {
@@ -180,22 +180,20 @@ const BlockView = memo(function BlockView(props: {
       }
       return (
         <div className="card permission">
-          <div className="card-head">
-            <span className="t-gold">◆</span> <span className="t-subtle">{shortTool(b.tool)}</span>
-          </div>
+          <div className="card-head">{shortTool(b.tool)}</div>
           {b.detail && <pre className="card-detail">{b.detail}</pre>}
           {props.pendingPermission && (
             <div className="card-actions">
-              <button className="btn primary" onClick={() => void store.answerThread(props.thread, 'allow')}>
-                Allow <kbd>space a</kbd>
+              <button className="btn primary" onClick={() => void store.answerThread(props.thread, 'allow')} data-tip="Allow" data-keys="<leader>a">
+                Allow <kbd className="hint">␣a</kbd>
               </button>
               {props.scope && (
-                <button className="btn" onClick={() => void store.answerThread(props.thread, 'always')}>
-                  Always: {props.scope} <kbd>space A</kbd>
+                <button className="btn" onClick={() => void store.answerThread(props.thread, 'always')} data-tip={`Always allow ${props.scope}`} data-keys="<leader>A">
+                  Always: {props.scope} <kbd className="hint">␣A</kbd>
                 </button>
               )}
-              <button className="btn danger" onClick={() => void store.answerThread(props.thread, 'deny')}>
-                Deny <kbd>space x</kbd>
+              <button className="btn danger" onClick={() => void store.answerThread(props.thread, 'deny')} data-tip="Deny" data-keys="<leader>x">
+                Deny <kbd className="hint">␣x</kbd>
               </button>
             </div>
           )}
@@ -214,21 +212,19 @@ const BlockView = memo(function BlockView(props: {
       if (props.pendingQuestion)
         return (
           <div className="card question">
-            <div className="card-head">
-              <span className="t-gold">◆</span> <span className="t-subtle">question</span>
-            </div>
+            <div className="card-head">question</div>
             <Markdown className="card-question" text={b.text} artifacts={props.artifacts} />
             <div className="card-actions">
               <span className="t-muted card-hint">Write your answer below</span>
-              <button className="btn" onClick={() => void store.answerThread(props.thread, 'deny')}>
-                Skip <kbd>space x</kbd>
+              <button className="btn" onClick={() => void store.answerThread(props.thread, 'deny')} data-tip="Skip the question" data-keys="<leader>x">
+                Skip <kbd className="hint">␣x</kbd>
               </button>
             </div>
           </div>
         )
       return (
         <div className="b-ask">
-          <div className="b-label t-gold">question</div>
+          <div className="b-label t-muted">question</div>
           <Markdown text={b.text} artifacts={props.artifacts} />
         </div>
       )
@@ -726,11 +722,6 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
               <Queued e={e} selected={focused && cursor === blocks.length + i} onClick={() => void store.sendQueuedNow(thread)} />
             </div>
           ))}
-          {todoAt >= 0 && (
-            <div data-i={todoAt}>
-              <TodoLine todos={todos} open={todoOpen} selected={focused && cursor === todoAt} onClick={() => store.toggleTodo(thread)} />
-            </div>
-          )}
         </div>
       </div>
       <div className="chip-slot">
@@ -742,21 +733,30 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           )}
         </Leave>
       </div>
-      <Leave>
-        {recap && (
-        <div className="recap-card">
-          <div className="recap-head">
-            <span>recap</span>
-            <button className="recap-close" data-tip="Close (Esc)" onClick={() => store.closeRecap(thread)}>
-              ×
-            </button>
+      {/* The prompt dock: the recap, the todo line and the prompt, one object
+          where the eyes go to write. */}
+      <div className="dock">
+        <Leave>
+          {recap && (
+            <div className="recap-card">
+              <div className="recap-head">
+                <span>recap</span>
+                <button className="recap-close" data-tip="Close (Esc)" onClick={() => store.closeRecap(thread)}>
+                  ×
+                </button>
+              </div>
+              <div className="recap-text">{recap}</div>
+            </div>
+          )}
+        </Leave>
+        {todoAt >= 0 && (
+          <div data-i={todoAt}>
+            <TodoLine todos={todos} open={todoOpen} selected={focused && cursor === todoAt} onClick={() => store.toggleTodo(thread)} />
           </div>
-          <div className="recap-text">{recap}</div>
+        )}
+        <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>
+          <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
         </div>
-      )}
-      </Leave>
-      <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>
-        <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
       </div>
       <PromptInfo v={v} thread={thread} />
     </div>

@@ -608,10 +608,19 @@ class Store {
     return this.state.screen === 'workspace' && this.wins().some((w) => w.buf.kind === 'chat' && w.buf.thread === thread)
   }
 
+  // heldToasts are notices that came while the person typed: they show once
+  // Insert or the command line ends, so nothing arrives under the typing.
+  private heldToasts: ToastSpec[] = []
+
   private toast(spec: ToastSpec): void {
     const s = this.state
     const shown = spec.workspace === s.workspace ? this.onScreen(spec.thread) : this.onScreen(`${spec.workspace}/${spec.thread}`)
     if ((shown && document.hasFocus()) || endHidesError(s.toasts, spec)) return
+    if (!spec.needsYou && (s.insert || s.cmdline !== null)) {
+      this.heldToasts = [...this.heldToasts.filter((o) => !(o.workspace === spec.workspace && o.thread === spec.thread)), spec]
+      return
+    }
+    this.heldToasts = this.heldToasts.filter((o) => !(o.workspace === spec.workspace && o.thread === spec.thread))
     const now = Date.now()
     const t: Toast = { ...spec, id: nextId(), at: now, until: spec.life ? now + spec.life : 0 }
     const toasts = s.toasts.filter((o) => !(o.workspace === t.workspace && o.thread === t.thread))
@@ -619,11 +628,21 @@ class Store {
     if (spec.needsYou) nh().notify(`${spec.workspace} · ${spec.thread}`, spec.body, { workspace: spec.workspace, thread: spec.thread })
   }
 
+  // visibleToasts are the toasts on screen, in the order of attention: what
+  // needs you first, then the newest.
   visibleToasts(): Toast[] {
-    return this.state.toasts.slice(-toastsShown)
+    return this.state.toasts
+      .slice()
+      .sort((a, b) => Number(!!b.needsYou) - Number(!!a.needsYou) || b.at - a.at)
+      .slice(0, toastsShown)
   }
 
   private prune(): void {
+    if (this.heldToasts.length && !this.state.insert && this.state.cmdline === null) {
+      const held = this.heldToasts
+      this.heldToasts = []
+      for (const t of held) this.toast(t)
+    }
     const s = this.state
     const now = Date.now()
     const ctx = { open: s.workspace, onScreen: (t: string) => this.onScreen(t), threads: s.threads, workspaces: s.workspaces }

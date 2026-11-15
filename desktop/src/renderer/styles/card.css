@@ -1,12 +1,36 @@
-/* permission card */
+/* One card shell for what needs you: a permission, a question, a failure.
+   The bar on the left says which role; there is no fill in that color. */
 .card {
-  border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--hairline-strong));
-  background: color-mix(in srgb, var(--gold) 6%, var(--bg-raised));
-  border-radius: 10px;
-  padding: 10px 12px;
+  --role: var(--wait);
+  position: relative;
+  border: var(--hairline-w) solid var(--hairline-strong);
+  border-left: 3px solid var(--role);
+  background: var(--bg-raised);
+  border-radius: var(--r-2);
+  padding: var(--s-2) var(--s-3);
+}
+.card.alert {
+  --role: var(--alert);
+}
+/* It arrives once with a tint in its role, which fades; no loop. */
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--role) 10%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  animation: card-tint 600ms var(--ease-std);
+}
+@keyframes card-tint {
+  from {
+    opacity: 0.6;
+  }
 }
 .card-head {
   font-size: var(--fs-secondary);
+  color: var(--fg-2);
 }
 .card-detail {
   margin: 6px 0 0;
@@ -20,8 +44,22 @@
 }
 .card-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 10px;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+/* Key hints show on hover or with the card under the cursor; they are in
+   the tooltips and :help too. */
+.card .hint {
+  color: var(--fg-3);
+  background: none;
+  border: 0;
+  padding: 0;
+  opacity: 0;
+  transition: opacity var(--t-1) var(--ease-std);
+}
+.card:hover .hint,
+.row.cursor .card .hint {
+  opacity: 1;
 }
 .card-question {
   margin-top: 6px;
@@ -39,8 +77,8 @@
   border: 1px solid var(--hairline-strong);
   background: var(--bg-raised);
   color: var(--fg);
-  padding: 4px 10px;
-  border-radius: 7px;
+  padding: var(--s-1) var(--s-3);
+  border-radius: var(--r-1);
   font-size: var(--fs-secondary);
   cursor: default;
   transition: background-color var(--t-1) var(--ease-std);
@@ -49,12 +87,18 @@
   background: var(--bg-hover);
   border-color: var(--hl-high);
 }
+/* The main action is inverted: the text's ink as its fill. */
 .btn.primary {
-  background: color-mix(in srgb, var(--iris) 22%, var(--bg-raised));
-  border-color: color-mix(in srgb, var(--iris) 45%, transparent);
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--bg);
 }
 .btn.primary:hover {
-  background: color-mix(in srgb, var(--iris) 30%, var(--bg-raised));
+  background: color-mix(in srgb, var(--fg) 85%, var(--bg));
+  border-color: color-mix(in srgb, var(--fg) 85%, var(--bg));
+}
+.btn.primary .hint {
+  color: color-mix(in srgb, var(--bg) 70%, var(--fg));
 }
 .btn.danger:hover {
   border-color: color-mix(in srgb, var(--love) 60%, transparent);

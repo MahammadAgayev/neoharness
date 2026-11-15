@@ -166,8 +166,8 @@ export function Picker() {
 }
 
 export function Toasts() {
-  const toasts = useStore((s) => s.toasts)
-  const shown = toasts.slice(-3).reverse()
+  useStore((s) => s.toasts)
+  const shown = store.visibleToasts()
   return (
     <Leave className="toasts">
       {shown.map((t) => (
