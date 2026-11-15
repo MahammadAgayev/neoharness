@@ -86,8 +86,8 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
   )
 }
 
-// CopyButton copies a whole message as its markdown. It stays under the
-// message on its left, where chat apps keep it.
+// CopyButton copies a whole message as its markdown. It shows at the end
+// of the message on hover or under the cursor, not under every reply.
 function CopyButton(props: { text: string }) {
   return (
     <button
@@ -172,7 +172,6 @@ const BlockView = memo(function BlockView(props: {
       if (b.answer) {
         return (
           <div className="b-line t-muted">
-            <span className="glyph">◇</span>
             <span>{shortTool(b.tool)}</span>
             <span className="ellipsis">{b.detail}</span>
             <span className={b.answer.startsWith('deny') ? 't-love' : ''}>· {b.answer}</span>
@@ -278,7 +277,9 @@ const BlockView = memo(function BlockView(props: {
     case 'artifact':
       return (
         <div className="b-line b-artifact" onClick={() => void store.openArtifactOf(props.thread, b.name)}>
-          <span className="glyph t-foam">◇</span>
+          <span className="glyph t-foam">
+            <Glyph g="▤" />
+          </span>
           <span className="link">{b.title}</span>
           <span className="t-muted">
             · artifact{b.version > 1 ? ` v${b.version}` : ''}
@@ -373,6 +374,11 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   // an update that changes nothing in sight costs no layout.
   const pinned = useRef(false)
   pinned.current = win.follow && vstart === null
+  // fresh: blocks came while the person reads above; a chip offers the end
+  // in place of a jump.
+  const seen = useRef({ thread, n: blocks.length })
+  if (win.follow || seen.current.thread !== thread || seen.current.n > blocks.length) seen.current = { thread, n: blocks.length }
+  const fresh = !win.follow && blocks.length > seen.current.n
   useLayoutEffect(() => {
     const el = scroller.current
     if (el && pinned.current) el.scrollTop = el.scrollHeight
@@ -651,10 +657,12 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
         className="transcript"
         ref={scroller}
         tabIndex={-1}
-        onWheel={() => {
+        onWheel={(e) => {
           const el = scroller.current
           if (!el) return
-          const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+          // The wheel event comes before the scroll it makes: judge where it
+          // goes, so one turn up already stops the follow.
+          const atEnd = el.scrollHeight - (el.scrollTop + e.deltaY) - el.clientHeight < 24
           if (atEnd !== win.follow) store.updateWin(win.id, { follow: atEnd })
         }}
       >
@@ -724,6 +732,15 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
             </div>
           )}
         </div>
+      </div>
+      <div className="chip-slot">
+        <Leave>
+          {fresh && (
+            <button className="new-chip" onClick={() => store.updateWin(win.id, { follow: true, cursor: -1 })} data-tip="Go to the end" data-keys="G">
+              ↓ new
+            </button>
+          )}
+        </Leave>
       </div>
       <Leave>
         {recap && (

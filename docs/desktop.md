@@ -103,7 +103,9 @@ What the TUI takes from `init.lua` for itself is in Settings instead.
 Motion follows one rule: what a key does happens at once, and what the
 agent or the hub brings arrives softly. A toast, the recap or a dialog
 fades in from a few pixels away and fades out when it goes; the folded
-sidebar slides in over the windows. With Reduce motion on in macOS
+sidebar slides in over the windows; tool calls you unfold fade in. A thread
+whose row changes group in the threads list slides to its new place with a
+short tint, but only when the cursor and the mouse are off the list. With Reduce motion on in macOS
 (Accessibility, Display), nothing slides; things only fade, quickly.
 
 ### Artifacts
@@ -251,9 +253,11 @@ version. Writing in the block yourself decides it too.
   artifact or a queued message, drag the line between columns, the × at
   the end of a window's status line closes it (`⌘W`). A right
   click on a thread or a block gives its actions (open in a split,
-  resolve, stop, copy, delete); hints show on hover. A reply has Copy
-  under it on the left, which copies it as markdown; a code block has its
-  own Copy on hover.
+  resolve, stop, copy, delete); hints show on hover. A reply shows Copy at
+  the end of its last line on hover or under the cursor, which copies it as
+  markdown; a code block has its own Copy on hover. When you scroll up and
+  new blocks come, the chat stays where you read and a `↓ new` chip shows
+  at its foot; a click on it, or `G`, goes to the end.
 - **Images**: paste a picture (`⌘V`) into the prompt, and it goes to the
   agent with the message, as in Claude Code. The prompt shows it as a
   small `[image 1]`; delete the token and the image does not go. Up to 5

@@ -103,13 +103,21 @@
   transition: opacity var(--t-1) var(--ease-std);
 }
 .msg-copy {
-  position: static;
-  display: block;
-  margin-top: 4px;
+  top: auto;
+  bottom: 0;
+  right: 0;
   border: 0;
-  background: none;
-  padding: 0;
+  border-radius: 0;
+  padding: 0 0 0 var(--s-2);
+  background: var(--bg);
   color: var(--fg-3);
+}
+.row.cursor .msg-copy {
+  background: var(--bg-hover);
+}
+.row:hover .msg-copy,
+.row.cursor .msg-copy,
+.msg-copy:focus-visible {
   opacity: 1;
 }
 .md pre.code:hover > .copy {

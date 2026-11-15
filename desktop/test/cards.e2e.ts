@@ -900,13 +900,17 @@ test('Copy on a message copies its markdown, and on a code block its code', asyn
     await page.keyboard.press('c')
     hub.event('demo', 'coordinator', { kind: 'text', text: 'Run **this**:\n\n```sh\n./check.sh\n```' })
     const msg = page.locator('.pane.focused .copyable').last()
-    // Copy shows without a hover, under the reply on its left, as in other chat apps.
+    // Copy waits for a hover, then shows at the end of the reply's last
+    // line, so it takes no line of its own.
     const copy = msg.locator('.msg-copy')
+    await page.mouse.move(700, 10)
+    await expect(copy).toHaveCSS('opacity', '0')
+    await msg.hover()
     await expect(copy).toHaveCSS('opacity', '1')
     const copyBox = (await copy.boundingBox())!
     const textBox = (await msg.locator('.md').boundingBox())!
-    expect(copyBox.y).toBeGreaterThanOrEqual(textBox.y + textBox.height - 1)
-    expect(Math.abs(copyBox.x - textBox.x)).toBeLessThan(12)
+    expect(copyBox.y + copyBox.height).toBeGreaterThanOrEqual(textBox.y + textBox.height - 1)
+    expect(Math.abs(copyBox.x + copyBox.width - (textBox.x + textBox.width))).toBeLessThan(12)
     await copy.click()
     await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('Run **this**:\n\n```sh\n./check.sh\n```')
     await expect(msg.locator('.msg-copy')).toHaveText('Copied')
@@ -916,6 +920,29 @@ test('Copy on a message copies its markdown, and on a code block its code', asyn
   } finally {
     await app.evaluate(({ clipboard }, t) => clipboard.writeText(t), saved)
   }
+})
+
+test('blocks that come while you read above bring a "↓ new" chip, which goes to the end', async () => {
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  for (let i = 0; i < 30; i++) hub.event('demo', 'coordinator', { kind: 'text', text: `filler ${i}\n\nmore text to fill the view` })
+  const t = page.locator('.pane.focused .transcript')
+  await expect(page.locator('.pane.focused .row', { hasText: 'filler 29' })).toBeVisible()
+  const chip = page.locator('.pane.focused .new-chip:not(.leaving)')
+  // G goes to the end and follows it: no chip.
+  await t.click()
+  await page.keyboard.press('Shift+G')
+  await expect(chip).toHaveCount(0)
+  await t.hover()
+  await page.mouse.wheel(0, -2000)
+  await expect.poll(() => t.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeGreaterThan(200)
+  hub.event('demo', 'coordinator', { kind: 'text', text: 'the newest' })
+  await expect(chip).toBeVisible()
+  await shot('48-new-chip')
+  await chip.click()
+  await expect(chip).toHaveCount(0)
+  await expect.poll(() => t.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeLessThan(24)
 })
 
 test(':todo shows the thread\'s todo list, follows it, and <C-o> goes back', async () => {

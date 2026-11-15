@@ -51,10 +51,8 @@
 .b-user {
   white-space: pre-wrap;
   word-break: break-word;
-  padding: 8px 12px;
-  border-radius: var(--r-2);
-  background: color-mix(in srgb, var(--iris) 9%, transparent);
-  border-left: 2px solid var(--iris);
+  padding-left: var(--s-3);
+  border-left: 2px solid var(--accent);
 }
 .b-from {
   border-left: 2px solid var(--rose);
@@ -171,6 +169,8 @@
   text-align: center;
 }
 .b-tool {
+  --arrive-y: -4px;
+  animation: arrive var(--t-2) var(--ease-out);
   padding-left: 22px;
   font-family: var(--font-mono);
   font-size: var(--fs-secondary);
@@ -184,6 +184,37 @@
 }
 .b-artifact {
   cursor: default;
+}
+.b-artifact .link {
+  color: var(--fg-2);
+  text-decoration-color: color-mix(in srgb, var(--run) 40%, transparent);
+}
+/* "↓ new": blocks came while you read above. It sits on the foot of the
+   stream and takes you to the end. */
+.chip-slot {
+  position: relative;
+  height: 0;
+  display: flex;
+  justify-content: center;
+}
+.new-chip {
+  position: absolute;
+  bottom: var(--s-2);
+  height: var(--row-dense);
+  padding: 0 var(--s-3);
+  border: var(--hairline-w) solid var(--hairline-strong);
+  border-radius: var(--r-1);
+  background: var(--bg-raised);
+  box-shadow: var(--e1);
+  color: var(--fg-2);
+  font-size: var(--fs-small);
+  cursor: default;
+  --arrive-y: 6px;
+  animation: arrive var(--t-3) var(--ease-out);
+  transition: color var(--t-1) var(--ease-std);
+}
+.new-chip:hover {
+  color: var(--fg);
 }
 .link {
   color: var(--foam);

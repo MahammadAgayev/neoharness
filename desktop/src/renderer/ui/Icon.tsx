@@ -22,6 +22,8 @@ const paths: Record<string, string> = {
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   hash: '<line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/>',
   'circle-help': '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  'file-text':
+    '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
   text: '<path d="M17 6.1H3"/><path d="M21 12.1H3"/><path d="M15.1 18H3"/>',
   // States: idle is a ring, running a dot, waiting a solid diamond.
   idle: '<circle cx="12" cy="12" r="6.5"/>',
@@ -55,6 +57,7 @@ const glyphs: Record<string, string> = {
   '◆': 'waiting',
   '✓': 'check',
   '◇': 'diamond',
+  '▤': 'file-text',
   '›': 'chevron-right',
   '≡': 'text',
   '▪': 'square',
