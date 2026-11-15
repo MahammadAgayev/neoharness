@@ -567,6 +567,9 @@ func (a *App) apply(u model.Update) {
 		} else if u.Event != nil && u.Event.Kind == model.EventText {
 			a.awayReply(u.Workspace, u.Thread, u.Event.Text)
 		}
+		if u.Event != nil && u.Event.Kind == model.EventTurnEnd && u.Event.Level == model.LevelNotice {
+			a.turnEnded(u.Workspace, u.Thread)
+		}
 	case model.UpdateArtifact:
 		if u.Workspace != a.workspace || u.Artifact == nil {
 			return

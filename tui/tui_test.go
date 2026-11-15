@@ -1330,9 +1330,7 @@ func TestToastsForThreadsOffScreen(t *testing.T) {
 
 	// A finished turn off screen shows the reply's first line.
 	h.a.chat("auth-refactor").AddEvent(model.Event{Kind: model.EventText, Text: "Moved the store.\nDetails follow."})
-	done := h.a.threads["auth-refactor"]
-	done.State = model.StateIdle
-	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: done.Name, View: &done})
+	h.turnEnd("demo", "auth-refactor", model.LevelNotice)
 	h.a.draw()
 	h.see("Moved the store.")
 
@@ -3277,6 +3275,7 @@ func TestThreadsOfOtherWorkspacesToast(t *testing.T) {
 		t.Fatalf("toasts = %d: a thread seen first, running, is no news", len(h.a.toasts))
 	}
 	view(model.StateIdle, "")
+	h.turnEnd("ops", "git-init", model.LevelNotice)
 	if tt := last(); tt.workspace != "ops" || tt.thread != "git-init" || tt.body != "finished a turn" {
 		t.Fatalf("finished toast = %+v", tt)
 	}
@@ -3305,6 +3304,7 @@ func TestAFinishedTurnElsewhereToastsItsReply(t *testing.T) {
 	text("Looking at it.")
 	text("Partly. Renaming makes sense.\n\nWhy rename: ...")
 	view(model.StateIdle)
+	h.turnEnd("ops", "api", model.LevelNotice)
 	tt := h.a.toasts[len(h.a.toasts)-1]
 	if tt.body != "Partly. Renaming makes sense." || tt.life < 6*time.Second {
 		t.Fatalf("toast = %q for %v, want the reply's first line for longer than in the open workspace", tt.body, tt.life)
@@ -3313,25 +3313,9 @@ func TestAFinishedTurnElsewhereToastsItsReply(t *testing.T) {
 	// A turn with no reply does not show the last turn's reply.
 	view(model.StateRunning)
 	view(model.StateIdle)
+	h.turnEnd("ops", "api", model.LevelNotice)
 	if tt := h.a.toasts[len(h.a.toasts)-1]; tt.body != "finished a turn" {
 		t.Fatalf("toast = %q, want no old reply", tt.body)
-	}
-}
-
-// The chat of a workspace that is not open is not loaded; the hub's start
-// of the reply stands in for it.
-func TestAFinishedTurnElsewhereToastsTheHubsReply(t *testing.T) {
-	h := start(t)
-	h.openDemo()
-	for _, state := range []model.State{model.StateRunning, model.StateIdle} {
-		v := model.ThreadView{Workspace: "ops", Name: "api", Role: model.RoleThread, State: state}
-		if state == model.StateIdle {
-			v.Reply = "Plan sent. **Two** steps left."
-		}
-		h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "ops", Thread: "api", View: &v})
-	}
-	if tt := h.a.toasts[len(h.a.toasts)-1]; tt.body != "Plan sent. Two steps left." {
-		t.Fatalf("toast = %q, want the reply", tt.body)
 	}
 }
 

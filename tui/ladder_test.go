@@ -342,3 +342,27 @@ func TestOpeningFromTheBoardKeepsTheBoard(t *testing.T) {
 		}
 	}
 }
+
+// turnEnd sends the end of a thread's turn at the level the hub gave it.
+func (h *neoharness) turnEnd(workspace, thread string, l model.Level) {
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: workspace, Thread: thread, Event: &model.Event{Kind: model.EventTurnEnd, Level: l}})
+}
+
+func TestATurnEndToastsAtTheHubsLevel(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.a.toasts = nil
+	h.setThread("api-tests", func(v *model.ThreadView) { v.State = model.StateRunning })
+	h.setThread("api-tests", func(v *model.ThreadView) { v.State = model.StateIdle })
+	if len(h.a.toasts) != 0 {
+		t.Fatal("a thread going idle is no toast by itself: the hub decides")
+	}
+	h.turnEnd("demo", "api-tests", model.LevelAmbient)
+	if len(h.a.toasts) != 0 {
+		t.Fatal("an ambient turn end changes in place, with no toast")
+	}
+	h.turnEnd("demo", "api-tests", model.LevelNotice)
+	if len(h.a.toasts) != 1 || h.a.toasts[0].glyph.Text != "✓" {
+		t.Fatalf("a notice-level turn end toasts: %+v", h.a.toasts)
+	}
+}

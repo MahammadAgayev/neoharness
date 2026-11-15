@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"slices"
 	"strings"
 	"time"
 
@@ -127,34 +126,27 @@ func (a *App) toastView(workspace string, old, v model.ThreadView, had bool) {
 	case old.State == model.StateResolved && v.State != model.StateResolved:
 		// The coordinator brings a thread back by writing to it.
 		toast(Span{"↺", a.th.Run}, "reopened", a.th.Run, 4*time.Second)
-	case old.State == model.StateRunning && v.State == model.StateIdle && a.showsError(workspace, v.Name):
-		// The error came just before the end of its turn, and says more.
-	case old.State == model.StateRunning && v.State == model.StateIdle:
-		var body string
-		life := 4 * time.Second
-		if workspace == a.workspace {
-			body = plain(a.chat(v.Name).lastText())
-		} else {
-			// The chat of a workspace that is not open is not loaded, and
-			// you are less likely to be looking.
-			key := workspace + "\x00" + v.Name
-			body, life = plain(a.awayText[key]), 10*time.Second
-			delete(a.awayText, key)
-			if body == "" {
-				body = plain(v.Reply)
-			}
-		}
-		if body == "" {
-			body = "finished a turn"
-		}
-		toast(Span{"✓", a.th.Done}, body, a.th.Done, life)
 	}
 }
 
-func (a *App) showsError(workspace, thread string) bool {
-	return slices.ContainsFunc(a.toasts, func(t *toast) bool {
-		return t.workspace == workspace && t.thread == thread && t.glyph.Text == "✗"
-	})
+// turnEnded toasts the end of a thread's turn when the hub gives it the
+// notice level: the hub decides the level once, and every client draws it.
+func (a *App) turnEnded(workspace, thread string) {
+	var body string
+	life := 4 * time.Second
+	if workspace == a.workspace {
+		body = plain(a.chat(thread).lastText())
+	} else {
+		// The chat of a workspace that is not open is not loaded, and you
+		// are less likely to be looking.
+		key := workspace + "\x00" + thread
+		body, life = plain(a.awayText[key]), 10*time.Second
+		delete(a.awayText, key)
+	}
+	if body == "" {
+		body = "finished a turn"
+	}
+	a.toastIn(workspace, thread, Span{"✓", a.th.Done}, body, a.th.Done, life)
 }
 
 // pruneToasts drops toasts whose time is up, and waiting ones whose thread
