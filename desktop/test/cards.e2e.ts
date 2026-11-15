@@ -1049,7 +1049,8 @@ test(':todo shows the thread\'s todo list, follows it, and <C-o> goes back', asy
       ],
     }),
   )
-  await expect(page.locator('.todo .todo-row')).toHaveText(['✓Add the /healthz route', '●Write its test', '○Document it'])
+  await expect(page.locator('.todo .todo-row')).toHaveText(['Add the /healthz route', 'Write its test', 'Document it'])
+  expect(await page.locator('.todo .todo-row .glyph').evaluateAll((es) => es.map((e) => (e as HTMLElement).dataset.state))).toEqual(['done', 'active', 'pending'])
   await expect(page.locator('.todo .todo-row.done')).toHaveCount(1)
   await expect(page.locator('.todo .todo-row.done .todo-text')).toHaveCSS('text-decoration-line', 'line-through')
   await expect(page.locator('.todo .todo-count')).toHaveText('1 of 3 done')
@@ -1080,7 +1081,8 @@ test('the todo list shows in one line above the prompt and unfolds, as in the TU
   await page.keyboard.press('Space')
   await page.keyboard.press('T')
   await expect(line.locator('.todo-head')).toHaveText('▾1 of 3')
-  await expect(line.locator('.todo-item')).toHaveText(['✓Add the /healthz route', '●Write its test', '○Document it'])
+  await expect(line.locator('.todo-item')).toHaveText(['Add the /healthz route', 'Write its test', 'Document it'])
+  await expect(line.locator('.todo-item .glyph svg')).toHaveCount(3)
   await expect(line.locator('.todo-item.done .todo-text')).toHaveCSS('text-decoration-line', 'line-through')
   await shot('43-todo-line')
   // za on the line folds it, as on a fold of tool calls; a click opens it.

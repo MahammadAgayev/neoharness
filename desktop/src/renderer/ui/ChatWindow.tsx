@@ -12,7 +12,7 @@ import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
 import { CloseWindow } from './CloseWindow'
 import { Leave } from './Leave'
-import { todoMarks } from './Panels'
+import { TodoMark } from './Panels'
 
 const shellLines = 10
 
@@ -307,7 +307,7 @@ function TodoLine(props: { todos: Todo[]; open: boolean; selected: boolean; onCl
       {props.open &&
         props.todos.map((t) => (
           <div key={t.id} className={`todo-item ${t.state}`}>
-            <span className="glyph">{todoMarks[t.state]}</span>
+            <TodoMark state={t.state} />
             <span className="todo-text">{t.text}</span>
           </div>
         ))}

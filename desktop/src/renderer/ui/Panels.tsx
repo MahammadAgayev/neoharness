@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react'
 
-import type { Wait } from '../../shared/model'
+import type { Todo, Wait } from '../../shared/model'
 import { commands } from '../commands'
 import { keyName } from '../lib/keys'
 import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
-import { Glyph } from './Icon'
+import { Glyph, Icon } from './Icon'
 import { age } from '../search'
 import { CloseWindow } from './CloseWindow'
 
@@ -329,7 +329,14 @@ export function MessagesWindow(props: { win: Win; focused: boolean }) {
   )
 }
 
-export const todoMarks = { done: '✓', active: '●', pending: '○' }
+// TodoMark is a todo item's icon; thread glyphs are for threads only.
+export function TodoMark(props: { state: Todo['state'] }) {
+  return (
+    <span className="glyph" data-state={props.state}>
+      <Icon name={`todo-${props.state}`} size={14} />
+    </span>
+  )
+}
 
 export function TodoWindow(props: { win: Win; focused: boolean; thread: string }) {
   const todos = useStore((s) => s.threads[props.thread]?.todos) ?? []
@@ -346,7 +353,7 @@ export function TodoWindow(props: { win: Win; focused: boolean; thread: string }
         {todos.length === 0 && <div className="empty">No todo list yet.</div>}
         {todos.map((t) => (
           <div key={t.id} className={`todo-row ${t.state}`}>
-            <span className="glyph">{todoMarks[t.state]}</span>
+            <TodoMark state={t.state} />
             <span className="todo-text">{t.text}</span>
           </div>
         ))}

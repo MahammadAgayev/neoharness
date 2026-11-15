@@ -111,21 +111,20 @@
 }
 .todo-item {
   display: flex;
+  align-items: center;
+  min-height: var(--row-dense);
   gap: 6px;
   padding-left: 18px;
   color: var(--fg-2);
 }
 .todo-item .glyph,
 .todo-row .glyph {
-  font-size: inherit;
-  line-height: inherit;
+  display: inline-flex;
+  align-items: center;
+  height: 1lh;
 }
 .todo-item.active {
   color: var(--fg);
-}
-.todo-item.active .glyph,
-.todo-row.active .glyph {
-  color: var(--foam);
 }
 .todo-item.done {
   color: var(--fg-3);
