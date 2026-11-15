@@ -147,6 +147,39 @@ function highlight(code: string, lang: string) {
 const alertMark = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/
 const alertTitles: Record<string, string> = { NOTE: 'Note', TIP: 'Tip', IMPORTANT: 'Important', WARNING: 'Warning', CAUTION: 'Caution' }
 
+// mentions are the artifacts a text node names, as the TUI finds them: a
+// code span or a link that is a name, or in prose a name with a - _ or a
+// digit in it, so a plain word is never a link.
+export function mentions(node: Node, artifacts: Set<string>): { from: number; to: number; name: string }[] {
+  const text = node.text ?? ''
+  const link = node.marks.find((m) => m.type === schema.marks.link)?.attrs.href as string | undefined
+  if (link && artifacts.has(link)) return [{ from: 0, to: text.length, name: link }]
+  if (node.marks.some((m) => m.type === schema.marks.code)) return artifacts.has(text) ? [{ from: 0, to: text.length, name: text }] : []
+  const out: { from: number; to: number; name: string }[] = []
+  const nameChar = (c: string | undefined) => !!c && /[a-z0-9-]/.test(c)
+  for (const name of artifacts) {
+    if (!/[-_0-9]/.test(name)) continue
+    for (let i = text.indexOf(name); i >= 0; i = text.indexOf(name, i + name.length))
+      if (!nameChar(text[i - 1]) && !nameChar(text[i + name.length])) out.push({ from: i, to: i + name.length, name })
+  }
+  return out.sort((a, b) => a.from - b.from)
+}
+
+// linkAt is the artifact or the URL at a position in the document.
+export function linkAt(doc: Node, pos: number, artifacts: Set<string>): { artifact?: string; url?: string } | null {
+  const $p = doc.resolve(pos)
+  if (!$p.parent.isTextblock) return null
+  for (const { node, offset } of [$p.parent.childAfter($p.parentOffset), $p.parent.childBefore($p.parentOffset)]) {
+    if (!node?.isText) continue
+    const at = $p.parentOffset - offset
+    const m = mentions(node, artifacts).find((x) => at >= x.from && at <= x.to)
+    if (m) return { artifact: m.name }
+    const href = node.marks.find((mk) => mk.type === schema.marks.link)?.attrs.href as string | undefined
+    if (href) return { url: href }
+  }
+  return null
+}
+
 export const artifactsKey = new PluginKey<Set<string>>('artifacts')
 
 function build(doc: Node, artifacts: Set<string>): DecorationSet {
@@ -166,8 +199,9 @@ function build(doc: Node, artifacts: Set<string>): DecorationSet {
       }
       return true
     }
-    if (node.isText && artifacts.size && node.marks.some((mk) => mk.type === schema.marks.code) && artifacts.has(node.text!))
-      out.push(Decoration.inline(pos, pos + node.nodeSize, { class: 'artifact-link', 'data-artifact': node.text! }))
+    if (node.isText && artifacts.size)
+      for (const m of mentions(node, artifacts))
+        out.push(Decoration.inline(pos + m.from, pos + m.to, { class: 'artifact-link', 'data-artifact': m.name }))
     return true
   })
   return DecorationSet.create(doc, out)

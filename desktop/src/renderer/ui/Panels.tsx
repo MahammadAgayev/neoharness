@@ -97,7 +97,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['# - 1. > ``` [ ]', 'at the start of a line: a heading, a list, a quote, code, a task'],
       ['**b** *i* `c` ~~s~~', 'bold, italic, code and struck text as you type'],
       ['<Tab>  <S-Tab>', 'in a list: indent and outdent an item; in a table: the next cell, a new row at the end'],
-      ['⌘-click', 'open an artifact named in code, or a link'],
+      ['click  gf  <CR>', 'open an artifact named in the page, or a link; <C-o> goes back; in Insert, ⌘-click'],
       [':w  ⌘S', 'save, merged with a newer version; the writer gets the diff'],
       ['<leader>  <C-w>  g  ]  [', 'what can follow shows at once, as which-key; Settings turns it off'],
       [']c [c  do dp', 'in a refused save: next / previous change, take the change of the newer version'],

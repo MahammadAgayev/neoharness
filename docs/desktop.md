@@ -118,7 +118,13 @@ heading, `- ` or `1. ` a list, `> ` a quote, ` ``` ` code, `[ ] ` a task.
 close them. `<Tab>` and `<S-Tab>` indent a list item; in a table `<Tab>`
 goes to the next cell and adds a row at the end. A click on a task box
 checks it and strikes its text through. A link pasted over selected words links them. `:w` or `⌘S`
-saves; `⌘`-click opens a link, or an artifact named in code.
+saves.
+
+An artifact named in the page is a link to it, as in the TUI: a code
+span that is its name, a link to its name, or in prose a name with a
+`-`, `_` or digit in it. A click opens it, or a web link, in Normal
+mode; in Insert, where a click places the cursor, `⌘`-click does.
+`gf` and `<CR>` on it open it too, and `<C-o>` goes back.
 
 What is saved is markdown, as agents write and read it. A block you did
 not touch is saved as the exact text it came from, with the blank lines

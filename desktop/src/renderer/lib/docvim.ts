@@ -68,7 +68,7 @@ export class DocVim {
   constructor(
     private view: EditorView,
     private scroller: () => HTMLElement | null,
-    private on: { mode: (m: Mode) => void; find: () => void; yank: (text: string) => void; say: (s: string) => void },
+    private on: { mode: (m: Mode) => void; find: () => void; yank: (text: string) => void; say: (s: string) => void; open: (pos: number) => boolean },
   ) {}
 
   busy(): boolean {
@@ -399,6 +399,11 @@ export class DocVim {
     const p = this.pending
     if (p === 'g' || p === 'dg' || p === 'yg' || p === 'cg') {
       this.pending = p.slice(0, -1)
+      // gf opens the artifact or the link under the cursor, as in the TUI.
+      if (key === 'f' && p === 'g') {
+        if (!this.on.open(this.head())) this.on.say('no artifact or link here')
+        return this.reset()
+      }
       if (key !== 'g') return this.reset()
       key = 'gg'
     }
@@ -471,9 +476,13 @@ export class DocVim {
     const h = this.state.selection.head
     const b = this.block()
     switch (key) {
+      case '<CR>':
+        // On an artifact or a link, <CR> opens it, as in the TUI.
+        if (!had && this.on.open(h)) return true
+        this.lineMove(1, n)
+        return true
       case 'j':
       case '<Down>':
-      case '<CR>':
         this.lineMove(1, n)
         return true
       case 'k':

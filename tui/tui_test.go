@@ -1739,6 +1739,18 @@ func TestGfOpensTheArtifactUnderTheCursor(t *testing.T) {
 	if h.a.cur.Buf.Artifact != "doc-notes" {
 		t.Fatal("gf should open the artifact named under the cursor")
 	}
+	h.press("<C-o>")
+	if h.a.cur.Buf.Artifact != "design" {
+		t.Fatalf("<C-o> should go back to design, in %q", h.a.cur.Buf.Artifact)
+	}
+	h.press("<CR>")
+	if h.a.cur.Buf.Artifact != "doc-notes" {
+		t.Fatal("<CR> on a name in an artifact should open it")
+	}
+	h.press("<C-o>")
+	if h.a.cur.Buf.Artifact != "design" {
+		t.Fatalf("<C-o> after <CR> should go back to design, in %q", h.a.cur.Buf.Artifact)
+	}
 }
 
 func TestMacrosRecordAndPlay(t *testing.T) {

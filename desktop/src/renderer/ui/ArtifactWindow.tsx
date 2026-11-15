@@ -3,7 +3,7 @@ import { Selection, EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { artifactsKey, editorPlugins, TaskItem } from '../lib/docedit'
+import { artifactsKey, editorPlugins, linkAt, TaskItem } from '../lib/docedit'
 import { DocVim } from '../lib/docvim'
 import { hunks, lines, type Hunk } from '../lib/linediff'
 import { MarkdownDoc } from '../lib/mdoc'
@@ -53,6 +53,8 @@ function DocEditor(props: {
   const last = useRef(props.text)
   const onHunk = useRef(props.onHunk)
   onHunk.current = props.onHunk
+  const arts = useRef(props.artifacts)
+  arts.current = props.artifacts
   const [find, setFind] = useState<string | null>(null)
 
   useEffect(() => {
@@ -85,9 +87,10 @@ function DocEditor(props: {
           store.setInsert(false)
           return false
         },
-        // ⌘-click opens a link, or an artifact named in code.
-        mousedown: (v, e) => {
-          if (!e.metaKey) return false
+        // A click opens an artifact named in the page, or a link, as in a
+        // page you read; in Insert, where a click places the cursor, ⌘-click.
+        mousedown: (_v, e) => {
+          if (!e.metaKey && (!store.state.settings.vim || vimMode?.mode === 'insert')) return false
           const el = e.target as HTMLElement
           const art = el.closest<HTMLElement>('[data-artifact]')?.dataset.artifact
           if (art) {
@@ -95,13 +98,12 @@ function DocEditor(props: {
             void store.openArtifact(art)
             return true
           }
-          const a = el.closest('a')
-          if (a?.getAttribute('href')) {
+          const href = el.closest('a')?.getAttribute('href')
+          if (href) {
             e.preventDefault()
-            void window.nh.openExternal(a.getAttribute('href')!)
+            void window.nh.openExternal(href)
             return true
           }
-          void v
           return false
         },
       },
@@ -121,6 +123,12 @@ function DocEditor(props: {
       find: () => setFind(''),
       yank: (t) => (yank.text = t),
       say: (t) => store.say(t, 'love'),
+      open: (pos) => {
+        const l = linkAt(view.state.doc, pos, arts.current)
+        if (l?.artifact) void store.openArtifact(l.artifact)
+        else if (l?.url) void window.nh.openExternal(l.url)
+        return !!l
+      },
     })
     vimMode = vim
     vimRef.current = vim
@@ -277,6 +285,9 @@ function DocEditor(props: {
             onChange={(e) => setFind(e.target.value)}
             onKeyDown={(e) => {
               e.stopPropagation()
+              // The page takes the focus back at once: Enter must not split
+              // its paragraph there.
+              if (e.key === 'Enter' || e.key === 'Escape') e.preventDefault()
               if (e.key === 'Enter') {
                 vimRef.current?.find(find, 1)
                 setFind(null)
