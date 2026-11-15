@@ -178,6 +178,11 @@ type App struct {
 	// the time of the recap they closed last in each.
 	recapOpen map[string]bool
 	recapSeen map[string]time.Time
+	// boardAt is the state each board row is grouped by: it lags the
+	// thread's while the person is on the board or the command line, so no
+	// row moves under them. settleUntil is when a moved row's tint goes.
+	boardAt     map[string]model.State
+	settleUntil map[string]time.Time
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key
@@ -289,18 +294,20 @@ func Run(c Client, hub Hub) error {
 
 func newApp(s tcell.Screen, c Client) *App {
 	a := &App{
-		s:         newCanvas(s),
-		c:         c,
-		th:        newTheme(s.Colors()),
-		openURL:   func(open, url string) error { return exec.Command(open, url).Start() },
-		bufs:      map[string]*Buffer{},
-		threads:   map[string]model.ThreadView{},
-		comps:     map[string]model.Completions{},
-		compBusy:  map[string]bool{},
-		menuShut:  -1,
-		now:       time.Now,
-		recapOpen: map[string]bool{},
-		recapSeen: map[string]time.Time{},
+		s:           newCanvas(s),
+		c:           c,
+		th:          newTheme(s.Colors()),
+		openURL:     func(open, url string) error { return exec.Command(open, url).Start() },
+		bufs:        map[string]*Buffer{},
+		threads:     map[string]model.ThreadView{},
+		comps:       map[string]model.Completions{},
+		compBusy:    map[string]bool{},
+		menuShut:    -1,
+		now:         time.Now,
+		recapOpen:   map[string]bool{},
+		recapSeen:   map[string]time.Time{},
+		boardAt:     map[string]model.State{},
+		settleUntil: map[string]time.Time{},
 	}
 	a.after = func(d time.Duration, ev tcell.Event) {
 		time.AfterFunc(d, func() { _ = a.s.PostEvent(ev) })
@@ -721,7 +728,7 @@ func (a *App) onView(v model.ThreadView) {
 		}
 	}
 	// A stopped turn sends no turn end, so its tool calls would spin forever.
-	if v.State == model.StateIdle || v.State == model.StateResolved {
+	if v.State == model.StateIdle || v.State == model.StateResolved || v.State == stateFailed {
 		a.chat(v.Name).settle(false)
 	}
 	a.refreshTodo(v)
@@ -1205,7 +1212,7 @@ func displayPin(pin string) string {
 
 func countSpans(c map[model.State]int, th *Theme) []Span {
 	var out []Span
-	for _, s := range []model.State{model.StateRunning, model.StateWaiting, model.StateResolved} {
+	for _, s := range []model.State{model.StateRunning, stateFailed, model.StateWaiting, model.StateResolved} {
 		if n := c[s]; n > 0 {
 			out = append(out, Span{fmt.Sprintf("%s %d  ", stateGlyph(s), n), th.state(s)})
 		}
@@ -1254,52 +1261,79 @@ func (a *App) renderThreads() {
 			}
 		}
 	}
-	row := func(n string) Line {
+	now := a.now()
+	tint := func(n string) bool { return now.Before(a.settleUntil[n]) }
+	rows := func(n string) []Line {
 		v := a.threads[n]
-		nameSt, info, infoSt := th.Fg2, v.Reply, th.Fg3
+		nameSt, info := th.Fg2, ""
 		if shown[n] {
 			nameSt = th.Fg.Bold(true)
 		}
-		switch v.State {
-		case model.StateResolved:
+		if v.State == model.StateResolved {
 			nameSt = th.Fg3
-		case model.StateWaiting:
-			infoSt = th.Wait
-			switch {
-			case v.Permission != nil:
-				info = "permission · " + v.Permission.Tool
-			case v.Waiting == "paused":
-				info = "paused"
-			default:
-				info = "question"
-			}
 		}
 		if v.State == model.StateRunning && !v.Since.IsZero() {
-			info = strings.TrimSuffix(elapsed(a.now().Sub(v.Since))+" · "+info, " · ")
+			info = elapsed(now.Sub(v.Since))
 		}
 		if w := wakeLabel(v); w != "" {
 			info = strings.TrimSuffix(w+" · "+info, " · ")
 		}
 		if v.Queued > 0 {
-			info = fmt.Sprintf("+%d queued  %s", v.Queued, info)
+			info = strings.TrimSpace(fmt.Sprintf("+%d queued  %s", v.Queued, info))
 		}
-		return Line{
+		out := []Line{{
 			Prefix: []Span{{" ", th.Fg}},
 			Spans: []Span{
 				{a.glyph(v.State) + " ", th.state(v.State)},
 				{pad(n, nameW+2), nameSt},
-				{plain(info), infoSt},
+				{info, th.Fg3},
 			},
 			Item: n,
+			Tint: tint(n),
+		}}
+		// What a waiting thread needs, to read without opening it.
+		var need []Span
+		if v.State == model.StateWaiting {
+			switch {
+			case v.Permission != nil:
+				need = []Span{{"permission · " + v.Permission.Tool, th.Wait}, {"  " + flatten(v.Permission.Detail), th.Fg}}
+			case v.Waiting == "paused":
+				need = []Span{{"paused", th.Wait}, {"  write to continue", th.Fg3}}
+			default:
+				first, _, _ := strings.Cut(plain(v.Waiting), "\n")
+				need = []Span{{"question", th.Wait}, {"  " + first, th.Fg}}
+			}
 		}
+		if need != nil {
+			out = append(out, Line{Prefix: []Span{{"   ", th.Fg}}, Spans: need, Item: n, Tint: tint(n)})
+		}
+		return out
+	}
+	row := func(n string) Line { return rows(n)[0] }
+	// A row changes group only when the person is not on the board or the
+	// command line; then it settles with a tint.
+	hold := a.mode == modeCommand || a.cur != nil && a.cur.Buf.Kind == KindThreads
+	group := func(s model.State) model.State {
+		if s == "" {
+			return model.StateIdle
+		}
+		return s
 	}
 	groups := map[model.State][]string{}
 	for _, n := range names {
-		state := a.threads[n].State
-		groups[state] = append(groups[state], n)
+		s := a.threads[n].State
+		was, ok := a.boardAt[n]
+		switch {
+		case !ok || group(was) == group(s):
+			a.boardAt[n] = s
+		case !hold:
+			a.boardAt[n] = s
+			a.settleUntil[n] = now.Add(settle)
+		}
+		groups[group(a.boardAt[n])] = append(groups[group(a.boardAt[n])], n)
 	}
 	var lines []Line
-	for _, s := range []model.State{model.StateWaiting, model.StateRunning, model.StateIdle} {
+	for _, s := range []model.State{model.StateWaiting, stateFailed, model.StateRunning, model.StateIdle} {
 		if len(groups[s]) == 0 {
 			continue
 		}
@@ -1308,7 +1342,7 @@ func (a *App) renderThreads() {
 		}
 		lines = append(lines, Line{Prefix: []Span{{" ", th.Fg}}, Spans: []Span{{fmt.Sprintf("%s · %d", stateLabel(s), len(groups[s])), th.Fg3}}})
 		for _, n := range groups[s] {
-			lines = append(lines, row(n))
+			lines = append(lines, rows(n)...)
 		}
 	}
 	if done := groups[model.StateResolved]; len(done) > 0 {
@@ -1334,6 +1368,24 @@ func (a *App) renderThreads() {
 		lines = []Line{{Prefix: []Span{{" ", th.Fg}}, Spans: []Span{{"no threads yet", th.Fg3}}}}
 	}
 	a.threadsBuf.SetLines(lines)
+}
+
+// settle is how long a board row that changed group keeps its tint.
+const settle = 1500 * time.Millisecond
+
+// hover shows the last reply of the thread on the cursor's board row, as
+// Vim's K shows what is under the cursor.
+func (a *App) hover() {
+	n := a.line(a.cur).Item
+	v, ok := a.threads[n]
+	if a.cur.Buf.Kind != KindThreads || !ok {
+		return
+	}
+	if v.Reply == "" {
+		a.notify(n+": no reply yet", a.th.Fg3)
+		return
+	}
+	a.notify(n+": "+flatten(v.Reply), a.th.Fg2)
 }
 
 // listOrder is the threads in display order: open ones by age, resolved last.

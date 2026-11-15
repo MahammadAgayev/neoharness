@@ -55,12 +55,18 @@ yourself:
 | idle | nothing to do |
 | running | a turn runs, or messages wait in the queue |
 | waiting | a permission request, a question to you, or the loop guard paused it |
+| failed | its turn ended in an error, and nothing came after it; the next message clears it |
 | resolved | closed; `:reopen`, or a message from you or the coordinator, brings it back |
 
 - The threads pane groups threads by state, each group with its count
-  (`waiting · 1`). Resolved threads fold into `▸ N resolved`. An idle
-  thread's row shows the start of its last reply; a waiting one shows what
-  it waits for.
+  (`waiting · 1`): what waits for you and what failed on top, then what
+  runs, then what is idle. Resolved threads fold into `▸ N resolved`. A
+  row is the state's glyph and the name; a waiting thread has a second row
+  with what it waits for, such as `permission · Bash  psql -c …`. `K` on a
+  row shows the thread's last reply on the command line.
+- A row that changes group moves only when your cursor is not in the
+  threads pane or on the command line, so nothing moves under you; then it
+  shows a light background for 1.5 s.
 - To delete a thread, press `<C-d>` on it in a picker, then `y`. This cannot
   be undone. The coordinator cannot be deleted.
 - A thread runs at most 20 turns in a row that you did not start. Then it

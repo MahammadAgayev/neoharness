@@ -111,6 +111,7 @@ func TestAnIdleWorkspaceSchedulesNothing(t *testing.T) {
 		bl.live = false
 	}
 	c.h.a.toasts = nil
+	c.h.a.settleUntil = map[string]time.Time{}
 	c.timers = nil
 	c.h.a.wakeAt = time.Time{}
 	c.now = c.now.Add(time.Second)

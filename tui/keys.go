@@ -281,6 +281,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		";":          func(n int) { a.findAgain(false, n) },
 		",":          func(n int) { a.findAgain(true, n) },
 		"<CR>":       func(int) { a.enter() },
+		"K":          func(int) { a.hover() },
 		"<C-v>":      func(int) { a.splitFromList(true) },
 		"<C-x>":      func(int) { a.splitFromList(false) },
 		"<C-w>w":     func(int) { a.cycleWindow(1) },

@@ -199,7 +199,7 @@ func (a *App) drawWindow(w *Window, focused bool) {
 		l := lines[li]
 		bg := tcell.Style{}
 		hasBG := false
-		if showCursor && li == w.Cur && w.vmode == 0 {
+		if showCursor && li == w.Cur && w.vmode == 0 || l.Tint {
 			bg, hasBG = a.th.CursorLine, true
 		}
 		x := r.X + rail
@@ -525,7 +525,7 @@ func (a *App) drawWinbar(w *Window, focused bool) {
 	v := a.threads[b.Thread]
 	glyphSt := a.th.state(v.State)
 	// What needs the person keeps its color in every pane.
-	if !focused && v.State != model.StateWaiting {
+	if !focused && v.State != model.StateWaiting && v.State != stateFailed {
 		glyphSt = dim
 	}
 	state := []Span{{a.glyph(v.State) + " ", glyphSt}, {stateLabel(v.State), dim}}

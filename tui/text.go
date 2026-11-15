@@ -31,6 +31,9 @@ type Line struct {
 	Block int
 	// Item is what <CR> on this line opens: a workspace or thread name.
 	Item string
+	// Tint draws the line on the cursor line's color: a board row that has
+	// just changed group settles with it.
+	Tint bool
 }
 
 // Text is the line's content without its prefix.

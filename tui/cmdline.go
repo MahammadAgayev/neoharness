@@ -692,6 +692,7 @@ func (a *App) helpBuf() *Buffer {
 		row("]b [b  <C-^>", "next / previous thread, alternate"),
 		row("<C-o>", "back to the buffer the window showed before"),
 		row("<CR>", "open the workspace, or switch to the thread"),
+		row("K", "the last reply of the thread on the row (threads list)"),
 		row("<C-v>  <C-x>", "thread in a split on the right / above (pickers, threads list)"),
 		row("<C-d>", "delete the thread or workspace, after y (pickers)"),
 		row("x", "delete the workspace, after y (workspaces screen)"),

@@ -93,6 +93,11 @@ func (a *App) scheduleNext(now time.Time, live bool) {
 			consider(v.Since.Add((d/time.Minute + 1) * time.Minute))
 		}
 	}
+	for _, t := range a.settleUntil {
+		if t.After(now) {
+			consider(t)
+		}
+	}
 	if !next.IsZero() {
 		a.wake(next)
 	}

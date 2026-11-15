@@ -1202,7 +1202,7 @@ func TestThreadsPaneGroupsByStateAndFoldsResolved(t *testing.T) {
 		return out
 	}
 	got := strings.Join(rows(), " | ")
-	want := "waiting · 1 | ◆ auth-refactor question | ▸ 1 resolved"
+	want := "waiting · 1 | ◆ auth-refactor | question | ▸ 1 resolved"
 	if got != want {
 		t.Fatalf("rows = %q\nwant   %q", got, want)
 	}
@@ -3325,25 +3325,6 @@ func TestAFinishedTurnElsewhereToastsTheHubsReply(t *testing.T) {
 	if tt := h.a.toasts[len(h.a.toasts)-1]; tt.body != "Plan sent. Two steps left." {
 		t.Fatalf("toast = %q, want the reply", tt.body)
 	}
-}
-
-// With no progress lines, an idle thread's row says what its last turn came
-// to: the start of its reply.
-func TestAThreadRowShowsTheStartOfItsReply(t *testing.T) {
-	h := start(t)
-	h.openDemo()
-	v := h.a.threads["auth-refactor"]
-	v.State, v.Reply = model.StateIdle, "Moved the store; tests pass."
-	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
-	h.a.toasts = nil
-	h.press("<leader>t")
-	h.a.draw()
-	for _, l := range strings.Split(h.screen(), "\n") {
-		if strings.Contains(l, "auth-refactor") && strings.Contains(l, "Moved the store") {
-			return
-		}
-	}
-	t.Fatalf("no row with the reply:\n%s", h.screen())
 }
 
 // Each group says how many threads it holds, so a look tells how the work
