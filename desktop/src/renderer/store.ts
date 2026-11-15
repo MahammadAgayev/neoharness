@@ -1368,6 +1368,15 @@ class Store {
   // newDoc starts a document the person writes, beside the window in focus.
   // The coordinator holds it and works from it.
   async newDoc(name: string): Promise<boolean> {
+    if (!(await this.makePage(name))) return false
+    this.writeDoc = name
+    this.split(true)
+    await this.openArtifact(name)
+    return true
+  }
+
+  // makePage starts an artifact with only its title, for the person to write.
+  async makePage(name: string): Promise<boolean> {
     if (!this.needWorkspace()) return false
     const bad = validName(name)
     if (bad) {
@@ -1376,12 +1385,7 @@ class Store {
     }
     const title = name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ')
     const text = `# ${title}\n\n`
-    const r = await this.try(this.call('editArtifact', { workspace: this.state.workspace, name, text, base: 0, baseText: '', force: false }))
-    if (!r) return false
-    this.writeDoc = name
-    this.split(true)
-    await this.openArtifact(name)
-    return true
+    return !!(await this.try(this.call('editArtifact', { workspace: this.state.workspace, name, text, base: 0, baseText: '', force: false })))
   }
 
   openNewWorkspace(open = true): void {
@@ -1547,6 +1551,11 @@ class Store {
       case 'table':
         if (!art || !w) return this.say(':table works in an artifact', 'muted')
         document.dispatchEvent(new CustomEvent('nh:table', { detail: { win: w.id, args: a } }))
+        return
+      case 'page':
+        if (!art || !w) return this.say(':page works in an artifact', 'muted')
+        if (!a[0]) return this.say('usage: :page <name>', 'love')
+        document.dispatchEvent(new CustomEvent('nh:page', { detail: { win: w.id, name: a[0] } }))
         return
       case 'w':
       case 'write':

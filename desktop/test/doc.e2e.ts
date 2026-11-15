@@ -561,3 +561,87 @@ test('a click on an artifact named in the page opens it, and Back returns; gf an
   await expect(name).toHaveText('linker')
   await page.keyboard.press('Control+o')
 })
+
+test('/ on an empty line in Insert opens the block menu: headings, lists, a table, a link to an artifact, a new page', async () => {
+  hub.artifact('demo', 'rollout', 'Rollout', '# Rollout\n')
+  hub.artifact('demo', 'blocks', 'Blocks', '# Blocks\n\nintro\n')
+  hub.event('demo', 'api', { kind: 'artifact', detail: 'blocks', text: 'Blocks', version: 1 })
+  await page.locator('.b-artifact', { hasText: 'Blocks' }).click()
+  const win = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'blocks' }) })
+  const doc = win.locator('.doc-page')
+  const menu = win.locator('.doc-slash')
+  await doc.locator('p', { hasText: 'intro' }).click()
+  await normal()
+
+  // Mid-line, / is a letter, as in a path or and/or.
+  await page.keyboard.press('A')
+  await page.keyboard.type(' and/or')
+  await expect(menu).toHaveCount(0)
+
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('/')
+  await expect(menu).toBeVisible()
+  await expect(menu.locator('.palette-row').first()).toHaveClass(/active/)
+  await shot('48-artifact-block-menu')
+  await page.keyboard.type('h2')
+  await expect(menu.locator('.palette-row.active')).toHaveText(/Heading 2/)
+  await page.keyboard.press('Enter')
+  await expect(menu).toHaveCount(0)
+  await page.keyboard.type('Plan')
+  await expect(doc.locator('h2', { hasText: 'Plan' })).toBeVisible()
+
+  // A line that starts as a path: nothing matches, the menu goes, the text stays.
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('/usr/bin')
+  await expect(menu).toHaveCount(0)
+  await expect(doc.locator('p', { hasText: '/usr/bin' })).toBeVisible()
+
+  // <Esc> closes the menu and keeps the / and Insert; a second <Esc> leaves Insert.
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('/')
+  await expect(menu).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+  await page.keyboard.press('Backspace')
+
+  // <C-n> and arrows move in the list; the table comes with a header row.
+  await page.keyboard.press('/')
+  await page.keyboard.type('tab')
+  await expect(menu.locator('.palette-row.active')).toHaveText(/Table/)
+  await page.keyboard.press('Enter')
+  await expect(doc.locator('table th')).toHaveCount(3)
+  await page.keyboard.type('Step')
+  await expect(doc.locator('th').first()).toHaveText('Step')
+
+  // An artifact by name: the link goes in as the TUI writes one, in code.
+  await doc.locator('h2', { hasText: 'Plan' }).click()
+  await normal()
+  await page.keyboard.press('o')
+  await page.keyboard.type('/rollout')
+  await expect(menu.locator('.palette-row.active')).toHaveText(/rollout/)
+  await page.keyboard.press('Enter')
+  await expect(doc.locator('[data-artifact="rollout"]')).toBeVisible()
+
+  // A new page: the menu makes the artifact and links it here.
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('/runbook')
+  await expect(menu.locator('.palette-row', { hasText: 'New page runbook' })).toBeVisible()
+  await page.keyboard.press('Control+p')
+  await expect(menu.locator('.palette-row.active')).toHaveText(/New page runbook/)
+  await page.keyboard.press('Enter')
+  await expect.poll(() => hub.calls.some((c) => c.method === 'PUT' && c.path.endsWith('/artifacts/runbook'))).toBe(true)
+  await expect(doc.locator('[data-artifact="runbook"]')).toBeVisible()
+  await expect(page.locator('.statusline.focused .sl-name')).toHaveText(/blocks/)
+
+  // :page does the same from Normal mode.
+  await normal()
+  await page.keyboard.type(':page notes-2')
+  await page.keyboard.press('Enter')
+  await expect(doc.locator('[data-artifact="notes-2"]')).toBeVisible()
+
+  await page.keyboard.press('Meta+s')
+  await expect
+    .poll(() => (hub.calls.filter((c) => c.method === 'PUT' && c.path.endsWith('/artifacts/blocks')).pop()?.body as { text?: string } | undefined)?.text)
+    .toBe('# Blocks\n\nintro and/or\n\n## Plan\n\n`rollout`\n\n`runbook` `notes-2`\n\n/usr/bin\n\n| Step |  |  |\n|---|---|---|\n|  |  |  |\n')
+  await page.keyboard.press('Control+o')
+})

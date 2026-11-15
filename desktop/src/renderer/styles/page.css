@@ -319,3 +319,25 @@
 .doc-theirs-body > :last-child {
   margin-bottom: 0;
 }
+
+/* The block menu: the palette's list, small, under the / that opened it. */
+.doc-editor {
+  position: relative;
+}
+.doc-slash {
+  position: absolute;
+  z-index: 5;
+  width: 260px;
+  max-height: calc(8 * 34px + 12px);
+  font-size: var(--font-size);
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-3);
+  box-shadow: var(--e1);
+}
+.doc-slash .glyph {
+  width: 24px;
+  text-align: center;
+  font-size: var(--fs-small);
+  flex: none;
+}

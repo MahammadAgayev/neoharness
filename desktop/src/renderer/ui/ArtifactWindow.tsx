@@ -8,13 +8,18 @@ import {
   editorPlugins,
   fatCursorKey,
   freshKey,
+  linkArtifact,
   linkAt,
   marksKey,
+  slashItems,
+  slashKey,
+  slashRun,
   table,
   takeKey,
   takeTr,
   TaskItem,
   type MarksMeta,
+  type Slash,
 } from '../lib/docedit'
 import { DocVim } from '../lib/docvim'
 import { MarkdownDoc } from '../lib/mdoc'
@@ -43,6 +48,39 @@ function conflictTake(v: EditorView): void {
   v.dispatch(takeTr(v.state, g.i))
 }
 
+// SlashMenu is the block menu under the / that opened it, in the look of
+// the palette. The keys stay in the page; a click takes a row too.
+function SlashMenu(props: { view: EditorView; slash: Slash; scroller: HTMLElement; newPage: (name: string) => void }) {
+  const { view, slash, scroller, newPage } = props
+  const list = useRef<HTMLDivElement>(null)
+  const items = slashItems(view.state)
+  useEffect(() => {
+    list.current?.querySelector('.active')?.scrollIntoView({ block: 'nearest' })
+  }, [slash.index])
+  const at = view.coordsAtPos(slash.from - 1)
+  const box = scroller.getBoundingClientRect()
+  return (
+    <div
+      className="doc-slash palette-list"
+      ref={list}
+      style={{ top: at.bottom - box.top + scroller.scrollTop + 4, left: at.left - box.left }}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      {items.map((it, i) => (
+        <div
+          key={it.key}
+          className={`palette-row ${i === slash.index ? 'active' : ''}`}
+          onMouseMove={() => i !== slash.index && view.dispatch(view.state.tr.setMeta(slashKey, { ...slash, index: i }))}
+          onClick={() => slashRun(view, it, newPage)}
+        >
+          <span className="glyph t-muted">{it.glyph}</span>
+          <span className="palette-label">{it.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // DocEditor is the artifact as a document you read and write in place:
 // headings, lists, tables and code stay rendered while you type, as in a
 // word processor, and what is saved is markdown. Vim's Normal mode moves
@@ -68,16 +106,25 @@ function DocEditor(props: {
   const arts = useRef(props.artifacts)
   arts.current = props.artifacts
   const [find, setFind] = useState<string | null>(null)
+  const [slash, setSlash] = useState<Slash | null>(null)
+  const newPage = useRef<(name: string) => void>(() => {})
 
   useEffect(() => {
     md.current = new MarkdownDoc(props.text)
     last.current = props.text
     let vimMode: DocVim | null = null
+    // A new page is made, then linked at the cursor; one that is there
+    // already is only linked.
+    newPage.current = async (name: string) => {
+      if (!arts.current.has(name) && !(await store.makePage(name))) return
+      const v = viewRef.current
+      if (v) v.dispatch(linkArtifact(v.state, name))
+    }
     const leave = () => {
       if (store.state.settings.vim) vimMode?.setMode('normal')
     }
     const view = new EditorView(host.current!, {
-      state: EditorState.create({ doc: md.current.doc, plugins: editorPlugins(leave) }),
+      state: EditorState.create({ doc: md.current.doc, plugins: editorPlugins(leave, (name) => newPage.current(name)) }),
       nodeViews: { list_item: (node, v, getPos) => new TaskItem(node, v, getPos) },
       // Spellcheck marks words only while you write, as names and ids in
       // a page you read are no typos.
@@ -86,6 +133,7 @@ function DocEditor(props: {
         const v = viewRef.current!
         vimMode?.group(tr)
         v.updateState(v.state.apply(tr))
+        setSlash(slashKey.getState(v.state) ?? null)
         if (tr.selectionSet && !tr.docChanged) vimMode?.mouse(!!tr.getMeta('pointer'))
         if (tr.docChanged && !tr.getMeta('remote')) {
           // Taking theirs, or writing in the block yourself, decides a conflict.
@@ -220,6 +268,11 @@ function DocEditor(props: {
       if (err) store.say(err, 'love')
     }
     document.addEventListener('nh:table', onTable)
+    const onPage = (e: Event) => {
+      const d = (e as CustomEvent<{ win: number; name: string }>).detail
+      if (d.win === props.win) newPage.current(d.name)
+    }
+    document.addEventListener('nh:page', onPage)
     // A new doc opens ready to write: the cursor at its end, in Insert.
     if (store.writeDoc === props.name) {
       store.writeDoc = ''
@@ -233,6 +286,7 @@ function DocEditor(props: {
     return () => {
       document.removeEventListener('nh:heading', onHeading)
       document.removeEventListener('nh:table', onTable)
+      document.removeEventListener('nh:page', onPage)
       docs.delete(keys)
       props.onView(null)
       view.destroy()
@@ -317,6 +371,7 @@ function DocEditor(props: {
       )}
       <div className="doc-editor" ref={scroller}>
         <div className="doc-host" ref={host} />
+        {slash && viewRef.current && scroller.current && <SlashMenu view={viewRef.current} slash={slash} scroller={scroller.current} newPage={newPage.current} />}
       </div>
     </>
   )

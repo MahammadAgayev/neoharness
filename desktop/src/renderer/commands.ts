@@ -67,6 +67,7 @@ export const commands: Command[] = [
   { id: 'edit', title: 'Edit the artifact', keys: ['i a o', ':e'], run: () => void s.ex('e') },
   { id: 'revert', title: "Take the agent's version", keys: [':e!'], run: () => void s.ex('e!') },
   { id: 'table', title: 'Table: add or take away a column, take away a row, align…', keys: [':table col+|col-|row-|align l|c|r'], run: () => s.openCmdline('table ') },
+  { id: 'page', title: 'New page, linked at the cursor…', keys: [':page <name>'], run: () => s.openCmdline('page ') },
   { id: 'scheme', title: 'Color scheme…', keys: [':colorscheme <name>'], run: () => s.openCmdline('colorscheme ') },
   { id: 'vim', title: 'Vim mode on or off', keys: [':set vim', ':set novim'], run: () => s.setSettings({ vim: !s.state.settings.vim }) },
   { id: 'sidebar', title: 'Fold or unfold the sidebar', keys: ['⌘B', ':set nosidebar'], run: () => s.setSettings({ sidebar: !s.state.settings.sidebar }) },

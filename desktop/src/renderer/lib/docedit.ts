@@ -7,12 +7,13 @@ import { baseKeymap, chainCommands, exitCode, setBlockType, lift } from 'prosemi
 import { history, redo, undo } from 'prosemirror-history'
 import { InputRule, inputRules, textblockTypeInputRule, undoInputRule, wrappingInputRule } from 'prosemirror-inputrules'
 import { keymap } from 'prosemirror-keymap'
-import { DOMSerializer, Fragment, type MarkType, type Node } from 'prosemirror-model'
+import { type Attrs, DOMSerializer, Fragment, type MarkType, type Node, type NodeType } from 'prosemirror-model'
 import { type Command, type EditorState, Plugin, PluginKey, Selection, TextSelection, type Transaction } from 'prosemirror-state'
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list'
 import { addColumnAfter, addRowAfter, deleteColumn, deleteRow, goToNextCell, isInTable, selectedRect, tableEditing } from 'prosemirror-tables'
 import { Decoration, DecorationSet, type EditorView, type NodeView } from 'prosemirror-view'
 
+import { fuzzy } from './fuzzy'
 import { MarkdownDoc, schema } from './mdoc'
 
 const n = schema.nodes
@@ -164,10 +165,188 @@ export function table(view: EditorView, args: string[]): string | null {
   return null
 }
 
-export function editorPlugins(leave: () => void): Plugin[] {
+// The block menu: / on an empty line in Insert lists what the page can
+// hold, as in Notion; the letters after it filter the list. Anywhere else
+// / is a letter, as in a path.
+export interface Slash {
+  from: number
+  query: string
+  index: number
+}
+
+export interface SlashItem {
+  key: string
+  label: string
+  glyph: string
+  // make turns the empty paragraph at pos into the block, and puts the
+  // cursor in it.
+  make?: (tr: Transaction, pos: number) => void
+  artifact?: string
+  page?: string
+}
+
+export const slashKey = new PluginKey<Slash | null>('slash')
+
+const wrapAt = (tr: Transaction, pos: number, wrappers: { type: NodeType; attrs?: Attrs }[]) => {
+  tr.wrap(tr.doc.resolve(pos + 1).blockRange()!, wrappers)
+  tr.setSelection(TextSelection.create(tr.doc, pos + 1 + wrappers.length))
+}
+
+const blocks: SlashItem[] = [
+  ...[1, 2, 3].map((level) => ({
+    key: `h${level}`,
+    label: `Heading ${level}`,
+    glyph: `H${level}`,
+    make: (tr: Transaction, pos: number) => void tr.setNodeMarkup(pos, n.heading, { level }),
+  })),
+  { key: 'bullet', label: 'Bullet list', glyph: '•', make: (tr, pos) => wrapAt(tr, pos, [{ type: n.bullet_list }, { type: n.list_item }]) },
+  { key: 'numbered', label: 'Numbered list', glyph: '1.', make: (tr, pos) => wrapAt(tr, pos, [{ type: n.ordered_list }, { type: n.list_item }]) },
+  {
+    key: 'task',
+    label: 'Task list',
+    glyph: '☐',
+    make: (tr, pos) => wrapAt(tr, pos, [{ type: n.bullet_list }, { type: n.list_item, attrs: { checked: false } }]),
+  },
+  {
+    key: 'table',
+    label: 'Table',
+    glyph: '⊞',
+    make: (tr, pos) => {
+      const row = (cell: NodeType) => n.table_row.create(null, [cell.create(), cell.create(), cell.create()])
+      tr.replaceWith(pos, pos + 2, n.table.create(null, [row(n.table_header), row(n.table_cell)]))
+      tr.setSelection(TextSelection.create(tr.doc, pos + 3))
+    },
+  },
+  {
+    key: 'code',
+    label: 'Code block',
+    glyph: '</>',
+    make: (tr, pos) => void tr.setNodeMarkup(pos, n.code_block, { fence: '```', params: '' }),
+  },
+  { key: 'quote', label: 'Quote', glyph: '❝', make: (tr, pos) => wrapAt(tr, pos, [{ type: n.blockquote }]) },
+  {
+    key: 'note',
+    label: 'Note',
+    glyph: 'ⓘ',
+    make: (tr, pos) => {
+      tr.replaceWith(pos, pos + 2, n.blockquote.create(null, n.paragraph.create(null, schema.text('[!NOTE]\n'))))
+      tr.setSelection(TextSelection.create(tr.doc, pos + 2 + '[!NOTE]\n'.length))
+    },
+  },
+  {
+    key: 'rule',
+    label: 'Rule',
+    glyph: '—',
+    make: (tr, pos) => {
+      tr.replaceWith(pos, pos + 2, [n.horizontal_rule.create(), n.paragraph.create()])
+      tr.setSelection(TextSelection.create(tr.doc, pos + 2))
+    },
+  },
+]
+
+// slashItems is what the menu lists for its query: the blocks, the
+// artifacts to link, and a new page by the name typed.
+export function slashItems(state: EditorState): SlashItem[] {
+  const s = slashKey.getState(state)
+  if (!s) return []
+  const arts = [...(decorations.getState(state)?.artifacts ?? [])].map((a) => ({ key: `a:${a}`, label: a, glyph: '↗', artifact: a }))
+  const out = fuzzy([...blocks, ...arts], s.query)
+  if (/^[a-z0-9][a-z0-9_-]*$/.test(s.query) && !arts.some((a) => a.artifact === s.query))
+    out.push({ key: 'page', label: `New page ${s.query}`, glyph: '+', page: s.query })
+  return out
+}
+
+// linkArtifact puts an artifact's name in code, as the TUI and the agents
+// write a link to one: at the caret in Insert, after the letter under the
+// cursor in Normal, as Vim's p. A space keeps it apart from a word before.
+export function linkArtifact(state: EditorState, name: string): Transaction {
+  const $h = state.selection.$head
+  const at = fatCursorKey.getState(state)?.on && $h.pos < $h.end() ? $h.pos + 1 : $h.pos
+  const before = $h.parent.textBetween(0, at - $h.start())
+  const nodes = [schema.text(name, [schema.marks.code.create()])]
+  if (before && !/\s$/.test(before)) nodes.unshift(schema.text(' '))
+  const tr = state.tr.insert(at, nodes)
+  tr.setSelection(TextSelection.create(tr.doc, at + nodes.length - 1 + name.length))
+  return tr.removeStoredMark(schema.marks.code).scrollIntoView()
+}
+
+export function slashRun(view: EditorView, it: SlashItem, newPage: (name: string) => void): void {
+  const s = slashKey.getState(view.state)!
+  const tr = view.state.tr.delete(s.from - 1, view.state.selection.head).setMeta(slashKey, null)
+  if (it.make) it.make(tr, s.from - 2)
+  view.dispatch(tr.scrollIntoView())
+  if (it.artifact) view.dispatch(linkArtifact(view.state, it.artifact))
+  if (it.page) newPage(it.page)
+}
+
+const slash = new Plugin<Slash | null>({
+  key: slashKey,
+  state: {
+    init: () => null,
+    apply: (tr, v, _old, s) => {
+      const meta = tr.getMeta(slashKey) as Slash | null | undefined
+      if (meta !== undefined) return meta
+      if (!v) return null
+      const from = tr.mapping.map(v.from, -1)
+      const $h = s.selection.$head
+      const text = $h.parent.textBetween(0, $h.parent.content.size)
+      // The menu goes when the cursor leaves the / or a space ends the word.
+      if (!s.selection.empty || $h.start() !== from - 1 || text[0] !== '/' || $h.pos < from || /\s/.test(text)) return null
+      const query = text.slice(1, $h.pos - $h.start())
+      if (query !== v.query) return { from, query, index: 0 }
+      return from === v.from ? v : { ...v, from }
+    },
+  },
+  // Nothing matches: the menu goes and the text stays, as /usr/bin.
+  appendTransaction: (_trs, _old, s) => {
+    const v = slashKey.getState(s)
+    return v && !slashItems(s).length ? s.tr.setMeta(slashKey, null) : null
+  },
+  props: {
+    handleTextInput(view, from, to, text) {
+      const { $from } = view.state.selection
+      if (text !== '/' || fatCursorKey.getState(view.state)?.on || $from.parent.type !== n.paragraph || $from.parent.content.size || isInTable(view.state)) return false
+      view.dispatch(view.state.tr.insertText('/', from, to).setMeta(slashKey, { from: from + 1, query: '', index: 0 }))
+      return true
+    },
+  },
+})
+
+// slashKeys are the menu's keys, before any other: <C-n> <C-p> and the
+// arrows move, <CR> and <Tab> take, <Esc> closes it and keeps the /.
+function slashKeys(newPage: (name: string) => void): Plugin {
+  return keymap(
+    Object.fromEntries(
+      [
+        ['ArrowDown', 1],
+        ['Ctrl-n', 1],
+        ['ArrowUp', -1],
+        ['Ctrl-p', -1],
+        ['Enter', 0],
+        ['Tab', 0],
+        ['Escape', null],
+      ].map(([key, step]) => [
+        key,
+        (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => {
+          const s = slashKey.getState(state)
+          if (!s || !dispatch || !view) return !!s
+          const items = slashItems(state)
+          if (step === null) dispatch(state.tr.setMeta(slashKey, null))
+          else if (step === 0) slashRun(view, items[s.index] ?? items[0], newPage)
+          else dispatch(state.tr.setMeta(slashKey, { ...s, index: (s.index + (step as number) + items.length) % items.length }))
+          return true
+        },
+      ]),
+    ),
+  )
+}
+
+export function editorPlugins(leave: () => void, newPage: (name: string) => void): Plugin[] {
   return [
     // DocVim.group starts each undo step, by command or by time.
     history({ newGroupDelay: Infinity }),
+    slash,
+    slashKeys(newPage),
     rules,
     keymap({
       Escape: () => {

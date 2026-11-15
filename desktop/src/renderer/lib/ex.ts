@@ -61,4 +61,5 @@ export const exCommands = [
   'settings',
   'doc',
   'table',
+  'page',
 ]

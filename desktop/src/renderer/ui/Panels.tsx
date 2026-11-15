@@ -95,6 +95,8 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['h j k l  w b e  0 $  gg G  { }', 'move in Normal mode; a block is a line'],
       ['dd yy p  cw ciw  x  u <C-r>  v V  /', 'delete, yank and put blocks and words, undo, select, find'],
       ['# - 1. > ``` [ ]', 'at the start of a line: a heading, a list, a quote, code, a task'],
+      ['/ on an empty line', 'in Insert: the block menu, filtered as you type: headings, lists, a table, code, a note, an artifact to link, a new page'],
+      [':page <name>', 'make a page and link it at the cursor; an artifact that is there is only linked'],
       ['**b** *i* `c` ~~s~~', 'bold, italic, code and struck text as you type'],
       ['<Tab>  <S-Tab>', 'in a list: indent and outdent an item; in a table: the next cell, a new row at the end'],
       [':table col+  col-  row-', "in a table: add a column after the cursor's, take its column or row away"],
