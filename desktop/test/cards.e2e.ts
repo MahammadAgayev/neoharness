@@ -1121,11 +1121,39 @@ test('a reply streams in a block at a time, open code shows plain, and the text 
   hub.delta('demo', 'coordinator', 'First I read the code.\n\nThen:\n\n```go\nfunc main() {')
   await expect(stream.locator('pre.code')).toContainText('func main() {')
   await expect(stream.locator('pre.code .hljs')).toHaveCount(0)
-  await expect(stream.locator('.md-block.settle-in')).toHaveCount(2)
-  const final = 'First I read the code.\n\nThen:\n\n```go\nfunc main() {}\n```'
+  // From now on the first paragraph must never fade or move, and the code
+  // must not fade: not when a delta finishes the code block, and not when
+  // the text event replaces the stream.
+  await page.waitForTimeout(300)
+  await page.evaluate(() => {
+    const w = window as unknown as { seen: { min: number; at: Set<number>; on: boolean } }
+    w.seen = { min: 1, at: new Set(), on: true }
+    const tick = () => {
+      const t = document.querySelector('.pane.focused .transcript')!
+      const p = [...t.querySelectorAll('.md p')].find((e) => e.textContent === 'First I read the code.')
+      for (const pre of t.querySelectorAll('.md pre.code')) w.seen.min = Math.min(w.seen.min, +getComputedStyle(pre).opacity)
+      if (p) {
+        w.seen.min = Math.min(w.seen.min, +getComputedStyle(p).opacity)
+        w.seen.at.add(Math.round(p.getBoundingClientRect().top - t.getBoundingClientRect().top + t.scrollTop))
+      }
+      if (w.seen.on) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+  hub.delta('demo', 'coordinator', 'First I read the code.\n\nThen:\n\n```go\nfunc main() {}\n```\n\nDone')
+  await expect(stream.locator('pre.code .hljs')).toContainText('func main() {}')
+  await page.waitForTimeout(200)
+  const final = 'First I read the code.\n\nThen:\n\n```go\nfunc main() {}\n```\n\nDone'
   hub.event('demo', 'coordinator', { kind: 'text', text: final })
   await expect(stream).toHaveCount(0)
   await expect(page.locator('.pane.focused .row').last().locator('pre.code .hljs')).toContainText('func main() {}')
+  await page.waitForTimeout(200)
+  const seen = await page.evaluate(() => {
+    const w = window as unknown as { seen: { min: number; at: Set<number>; on: boolean } }
+    w.seen.on = false
+    return { min: w.seen.min, at: [...w.seen.at] }
+  })
+  expect(seen).toEqual({ min: 1, at: [seen.at[0]] })
   // An empty delta drops a reply cut short.
   hub.delta('demo', 'coordinator', 'half a')
   await expect(stream).toBeVisible()

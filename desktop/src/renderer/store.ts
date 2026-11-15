@@ -519,11 +519,21 @@ class Store {
         if (!e) return
         if (e.kind === 'notice') this.toast(noticeToast(u.workspace, e))
         if (e.kind === 'error') this.toast(errorToast(u.workspace, u.thread ?? '', e))
-        if (u.thread && (e.kind === 'text' || e.kind === 'turn' || e.kind === 'error')) this.stream(u.workspace === s.workspace ? u.thread : `${u.workspace}/${u.thread}`, '')
+        const ends = e.kind === 'text' || e.kind === 'turn' || e.kind === 'error'
+        if (u.thread && ends && u.workspace !== s.workspace) this.stream(`${u.workspace}/${u.thread}`, '')
         if (u.workspace === s.workspace && u.thread) {
+          // The finished text takes the stream's place in the same frame.
+          let streams = s.streams
+          if (ends && u.thread in streams) {
+            streams = { ...streams }
+            delete streams[u.thread]
+          }
           // A held event may be in the history that loaded with it already.
-          if (replay && this.loaded[u.thread]?.some((x) => JSON.stringify(x) === JSON.stringify(e))) return
-          this.set({ chats: { ...this.state.chats, [u.thread]: addEvent(this.state.chats[u.thread] ?? [], e) } })
+          if (replay && this.loaded[u.thread]?.some((x) => JSON.stringify(x) === JSON.stringify(e))) {
+            if (streams !== s.streams) this.set({ streams })
+            return
+          }
+          this.set({ streams, chats: { ...this.state.chats, [u.thread]: addEvent(this.state.chats[u.thread] ?? [], e) } })
         } else if (u.thread) {
           const key = `${u.workspace}/${u.thread}`
           if (s.chats[key]) this.set({ chats: { ...s.chats, [key]: addEvent(s.chats[key], e) } })

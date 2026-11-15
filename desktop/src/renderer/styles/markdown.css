@@ -205,16 +205,8 @@
 .hljs-deletion { color: var(--love); }
 .hljs-addition { color: var(--pine); }
 
-/* The reply being written: each block is part of the reply's flow, and a
-   finished one fades in once, never a word at a time. */
+/* The reply being written: each block is part of the reply's flow, so the
+   reply lays out the same when the finished text takes its place. */
 .md-block {
   display: contents;
-}
-.md-block.settle-in > * {
-  animation: settle-in 120ms var(--ease-out);
-}
-@keyframes settle-in {
-  from {
-    opacity: 0;
-  }
 }

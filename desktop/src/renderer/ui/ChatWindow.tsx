@@ -5,7 +5,7 @@ import { blockText, shortTool, shortTools, type Block } from '../lib/transcript'
 import { wakeLabel } from '../lib/wake'
 import { elapsed, stateGlyph, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
-import { blocks as mdBlocks, openFence, render, renderOnce } from '../lib/markdown'
+import { escapeHTML, blocks as mdBlocks, openFence, render, renderOnce } from '../lib/markdown'
 import { copied, Markdown, mdClick } from './Markdown'
 import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
@@ -316,30 +316,35 @@ function TodoLine(props: { todos: Todo[]; open: boolean; selected: boolean; onCl
 }
 
 // StreamingText is the reply being written: its finished blocks, each
-// rendered once from the cache and faded in as it arrives, and the block
-// still being written, rendered again on each delta. Code whose fence is
-// still open shows plain, highlighted only once it closes.
+// rendered once from the cache, and the block still being written, rendered
+// again on each delta. Code whose fence is still open shows plain,
+// highlighted only once it closes.
 function StreamingText(props: { text: string; artifacts: Set<string> }) {
   const bs = mdBlocks(props.text)
-  const tail = bs.pop() ?? ''
   return (
     <div className="md b-text" onClick={mdClick}>
       {bs.map((b, i) => (
-        <DoneBlock key={i} text={b} artifacts={props.artifacts} />
+        <StreamBlock key={i} text={b} done={i < bs.length - 1} artifacts={props.artifacts} />
       ))}
-      {openFence(tail) ? (
-        <pre className="code">
-          <code>{tail.replace(/^.*\n?/, '')}</code>
-        </pre>
-      ) : (
-        <div className="md-block" dangerouslySetInnerHTML={{ __html: renderOnce(tail, props.artifacts) }} />
-      )}
     </div>
   )
 }
 
-const DoneBlock = memo(function DoneBlock(props: { text: string; artifacts: Set<string> }) {
-  return <div className="md-block settle-in" dangerouslySetInnerHTML={{ __html: render(props.text, props.artifacts) }} />
+// StreamBlock fades in once, when the block first shows. A block keeps its
+// element when it finishes, so a paragraph you read never fades again.
+const StreamBlock = memo(function StreamBlock(props: { text: string; done: boolean; artifacts: Set<string> }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    for (const c of Array.from(ref.current?.children ?? []))
+      c.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: 'cubic-bezier(.16,1,.3,1)' })
+  }, [])
+  const html = props.done
+    ? render(props.text, props.artifacts)
+    : openFence(props.text)
+      ? `<pre class="code"><code>${escapeHTML(props.text.replace(/^.*\n?/, ''))}</code></pre>`
+      : renderOnce(props.text, props.artifacts)
+  return <div ref={ref} className="md-block" dangerouslySetInnerHTML={{ __html: html }} />
 })
 
 function Queued(props: { e: Event; selected: boolean; onClick: () => void }) {
