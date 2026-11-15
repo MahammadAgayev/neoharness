@@ -11,6 +11,7 @@ import {
   linkArtifact,
   linkAt,
   marksKey,
+  openSlash,
   slashItems,
   slashKey,
   slashRun,
@@ -26,6 +27,7 @@ import { MarkdownDoc } from '../lib/mdoc'
 import { store, useStore, type Win } from '../store'
 import { docs, handlers, yank, type DocKeys, type WinAction } from './registry'
 import { CloseWindow } from './CloseWindow'
+import { Icon } from './Icon'
 import 'prosemirror-view/style/prosemirror.css'
 
 const noConflicts: MarksMeta['conflicts'] = []
@@ -48,8 +50,9 @@ function conflictTake(v: EditorView): void {
   v.dispatch(takeTr(v.state, g.i))
 }
 
-// SlashMenu is the block menu under the / that opened it, in the look of
-// the palette. The keys stay in the page; a click takes a row too.
+// SlashMenu is the block menu, as Vim's Insert completion menu: under the
+// cursor line, or above it where there is no room below. The caret stays
+// in the text and the keys stay in the page; a click takes a row too.
 function SlashMenu(props: { view: EditorView; slash: Slash; scroller: HTMLElement; newPage: (name: string) => void }) {
   const { view, slash, scroller, newPage } = props
   const list = useRef<HTMLDivElement>(null)
@@ -59,22 +62,21 @@ function SlashMenu(props: { view: EditorView; slash: Slash; scroller: HTMLElemen
   }, [slash.index])
   const at = view.coordsAtPos(slash.from - 1)
   const box = scroller.getBoundingClientRect()
+  const row = 28
+  const height = Math.min(items.length, 8) * row + 10
+  const below = at.bottom + 4 + height <= box.bottom || at.top - box.top < height + 4
+  const top = (below ? at.bottom + 4 : at.top - 4 - height) - box.top + scroller.scrollTop
   return (
-    <div
-      className="doc-slash palette-list"
-      ref={list}
-      style={{ top: at.bottom - box.top + scroller.scrollTop + 4, left: at.left - box.left }}
-      onMouseDown={(e) => e.preventDefault()}
-    >
+    <div className="doc-slash" ref={list} style={{ top, left: at.left - box.left }} onMouseDown={(e) => e.preventDefault()}>
       {items.map((it, i) => (
         <div
           key={it.key}
-          className={`palette-row ${i === slash.index ? 'active' : ''}`}
+          className={`doc-slash-row ${i === slash.index ? 'active' : ''}`}
           onMouseMove={() => i !== slash.index && view.dispatch(view.state.tr.setMeta(slashKey, { ...slash, index: i }))}
           onClick={() => slashRun(view, it, newPage)}
         >
-          <span className="glyph t-muted">{it.glyph}</span>
-          <span className="palette-label">{it.label}</span>
+          <Icon name={it.icon} size={14} />
+          <span className="doc-slash-label">{it.label}</span>
         </div>
       ))}
     </div>
@@ -273,6 +275,12 @@ function DocEditor(props: {
       if (d.win === props.win) newPage.current(d.name)
     }
     document.addEventListener('nh:page', onPage)
+    const onSlash = (e: Event) => {
+      if ((e as CustomEvent<{ win: number }>).detail.win !== props.win) return
+      vim.setMode('insert')
+      view.dispatch(openSlash(view.state))
+    }
+    document.addEventListener('nh:slash', onSlash)
     // A new doc opens ready to write: the cursor at its end, in Insert.
     if (store.writeDoc === props.name) {
       store.writeDoc = ''
@@ -287,6 +295,7 @@ function DocEditor(props: {
       document.removeEventListener('nh:heading', onHeading)
       document.removeEventListener('nh:table', onTable)
       document.removeEventListener('nh:page', onPage)
+      document.removeEventListener('nh:slash', onSlash)
       docs.delete(keys)
       props.onView(null)
       view.destroy()

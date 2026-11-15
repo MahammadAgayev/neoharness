@@ -320,24 +320,45 @@
   margin-bottom: 0;
 }
 
-/* The block menu: the palette's list, small, under the / that opened it. */
+/* The block menu, as Vim's Insert completion menu: it shows and goes at
+   once, as a key opened it. */
 .doc-editor {
   position: relative;
 }
 .doc-slash {
   position: absolute;
   z-index: 5;
-  width: 260px;
-  max-height: calc(8 * 34px + 12px);
+  min-width: 260px;
+  max-width: 360px;
+  max-height: calc(8 * 28px + 10px);
+  overflow-y: auto;
+  padding: 4px;
   font-size: var(--font-size);
   background: var(--bg-raised);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-2);
   box-shadow: var(--e1);
+  transition: none;
 }
-.doc-slash .glyph {
-  width: 24px;
-  text-align: center;
-  font-size: var(--fs-small);
+.doc-slash-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: 28px;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-1);
+  color: var(--fg-3);
+  cursor: default;
+}
+.doc-slash-row.active {
+  background: var(--bg-select);
+}
+.doc-slash-row .icon {
   flex: none;
+}
+.doc-slash-label {
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

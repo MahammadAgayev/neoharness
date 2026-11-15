@@ -133,11 +133,14 @@ heading, `- ` or `1. ` a list, `> ` a quote, ` ``` ` code, `[ ] ` a task,
 `---` a rule; `<BS>` right after gives back what you typed. `/` on an
 empty line opens the block menu, as in Notion: headings, lists, a task
 list, a table, code, a quote, a note, a rule, the artifacts to link, and a
-new page by the name you type. The letters after `/` filter it, `<C-n>`
-`<C-p>` or the arrows move, `<CR>` takes, `<Esc>` closes it and keeps the
-`/`. Where nothing matches, as in `/usr/bin`, it closes and the text stays;
-elsewhere in a line `/` is a letter. `:page <name>` makes a page and links
-it at the cursor, in code, as the agents write a link.
+new page. The letters after `/` filter it, as Vim's Insert completion
+menu: `<C-n>` `<C-p>` or the arrows move, `<CR>` takes, `<Esc>` closes it
+and keeps the `/`. New page takes the name you type after the `/`, and
+there `<Esc>` steps back to the list. Where nothing matches, as in
+`/usr/bin`, it closes and the text stays; elsewhere in a line `/` is a
+letter. "Insert a block…" in the palette opens it on a new line.
+`:page <name>` makes a page and links it at the cursor, in code, as the
+agents write a link.
 `**bold**`, `*italic*`, `` `code` `` and `~~struck~~` turn rich as you
 close them. `<Tab>` and `<S-Tab>` indent a list item, and `<CR>` on an empty
 one takes it out a level; in a table `<Tab>`

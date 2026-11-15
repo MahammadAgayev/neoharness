@@ -172,17 +172,22 @@ export interface Slash {
   from: number
   query: string
   index: number
+  // naming is true while the letters after / name a new page.
+  naming?: boolean
 }
 
 export interface SlashItem {
   key: string
   label: string
-  glyph: string
+  // icon is the name of a Lucide icon in Icon.tsx.
+  icon: string
   // make turns the empty paragraph at pos into the block, and puts the
   // cursor in it.
   make?: (tr: Transaction, pos: number) => void
   artifact?: string
   page?: string
+  // naming asks for the new page's name, in the text after the /.
+  naming?: boolean
 }
 
 export const slashKey = new PluginKey<Slash | null>('slash')
@@ -196,21 +201,21 @@ const blocks: SlashItem[] = [
   ...[1, 2, 3].map((level) => ({
     key: `h${level}`,
     label: `Heading ${level}`,
-    glyph: `H${level}`,
+    icon: `heading-${level}`,
     make: (tr: Transaction, pos: number) => void tr.setNodeMarkup(pos, n.heading, { level }),
   })),
-  { key: 'bullet', label: 'Bullet list', glyph: '•', make: (tr, pos) => wrapAt(tr, pos, [{ type: n.bullet_list }, { type: n.list_item }]) },
-  { key: 'numbered', label: 'Numbered list', glyph: '1.', make: (tr, pos) => wrapAt(tr, pos, [{ type: n.ordered_list }, { type: n.list_item }]) },
+  { key: 'bullet', label: 'Bullet list', icon: 'list', make: (tr, pos) => wrapAt(tr, pos, [{ type: n.bullet_list }, { type: n.list_item }]) },
+  { key: 'numbered', label: 'Numbered list', icon: 'list-ordered', make: (tr, pos) => wrapAt(tr, pos, [{ type: n.ordered_list }, { type: n.list_item }]) },
   {
     key: 'task',
     label: 'Task list',
-    glyph: '☐',
+    icon: 'list-todo',
     make: (tr, pos) => wrapAt(tr, pos, [{ type: n.bullet_list }, { type: n.list_item, attrs: { checked: false } }]),
   },
   {
     key: 'table',
     label: 'Table',
-    glyph: '⊞',
+    icon: 'table',
     make: (tr, pos) => {
       const row = (cell: NodeType) => n.table_row.create(null, [cell.create(), cell.create(), cell.create()])
       tr.replaceWith(pos, pos + 2, n.table.create(null, [row(n.table_header), row(n.table_cell)]))
@@ -220,14 +225,14 @@ const blocks: SlashItem[] = [
   {
     key: 'code',
     label: 'Code block',
-    glyph: '</>',
+    icon: 'code',
     make: (tr, pos) => void tr.setNodeMarkup(pos, n.code_block, { fence: '```', params: '' }),
   },
-  { key: 'quote', label: 'Quote', glyph: '❝', make: (tr, pos) => wrapAt(tr, pos, [{ type: n.blockquote }]) },
+  { key: 'quote', label: 'Quote', icon: 'quote', make: (tr, pos) => wrapAt(tr, pos, [{ type: n.blockquote }]) },
   {
     key: 'note',
     label: 'Note',
-    glyph: 'ⓘ',
+    icon: 'info',
     make: (tr, pos) => {
       tr.replaceWith(pos, pos + 2, n.blockquote.create(null, n.paragraph.create(null, schema.text('[!NOTE]\n'))))
       tr.setSelection(TextSelection.create(tr.doc, pos + 2 + '[!NOTE]\n'.length))
@@ -236,7 +241,7 @@ const blocks: SlashItem[] = [
   {
     key: 'rule',
     label: 'Rule',
-    glyph: '—',
+    icon: 'minus',
     make: (tr, pos) => {
       tr.replaceWith(pos, pos + 2, [n.horizontal_rule.create(), n.paragraph.create()])
       tr.setSelection(TextSelection.create(tr.doc, pos + 2))
@@ -249,10 +254,14 @@ const blocks: SlashItem[] = [
 export function slashItems(state: EditorState): SlashItem[] {
   const s = slashKey.getState(state)
   if (!s) return []
-  const arts = [...(decorations.getState(state)?.artifacts ?? [])].map((a) => ({ key: `a:${a}`, label: a, glyph: '↗', artifact: a }))
+  const arts = [...(decorations.getState(state)?.artifacts ?? [])].map((a) => ({ key: `a:${a}`, label: a, icon: 'file-text', artifact: a }))
+  const named = /^[a-z0-9][a-z0-9_-]*$/.test(s.query) && !arts.some((a) => a.artifact === s.query)
+  const page = named
+    ? { key: 'page', label: `New page ${s.query}`, icon: 'file-plus', page: s.query }
+    : { key: 'page', label: s.naming ? 'New page: type its name' : 'New page', icon: 'file-plus', naming: true }
+  if (s.naming) return [page]
   const out = fuzzy([...blocks, ...arts], s.query)
-  if (/^[a-z0-9][a-z0-9_-]*$/.test(s.query) && !arts.some((a) => a.artifact === s.query))
-    out.push({ key: 'page', label: `New page ${s.query}`, glyph: '+', page: s.query })
+  if (named || !s.query) out.push(page)
   return out
 }
 
@@ -272,6 +281,10 @@ export function linkArtifact(state: EditorState, name: string): Transaction {
 
 export function slashRun(view: EditorView, it: SlashItem, newPage: (name: string) => void): void {
   const s = slashKey.getState(view.state)!
+  if (it.naming) {
+    if (!s.naming) view.dispatch(view.state.tr.delete(s.from, view.state.selection.head).setMeta(slashKey, { from: s.from, query: '', index: 0, naming: true }))
+    return
+  }
   const tr = view.state.tr.delete(s.from - 1, view.state.selection.head).setMeta(slashKey, null)
   if (it.make) it.make(tr, s.from - 2)
   view.dispatch(tr.scrollIntoView())
@@ -293,7 +306,7 @@ const slash = new Plugin<Slash | null>({
       // The menu goes when the cursor leaves the / or a space ends the word.
       if (!s.selection.empty || $h.start() !== from - 1 || text[0] !== '/' || $h.pos < from || /\s/.test(text)) return null
       const query = text.slice(1, $h.pos - $h.start())
-      if (query !== v.query) return { from, query, index: 0 }
+      if (query !== v.query) return { from, query, index: 0, naming: v.naming }
       return from === v.from ? v : { ...v, from }
     },
   },
@@ -311,6 +324,21 @@ const slash = new Plugin<Slash | null>({
     },
   },
 })
+
+// openSlash opens the block menu from the palette: on the empty line under
+// the cursor, or on a new one after its block.
+export function openSlash(state: EditorState): Transaction {
+  const { $head } = state.selection
+  const tr = state.tr
+  let at = $head.pos
+  if ($head.parent.type !== n.paragraph || $head.parent.content.size || isInTable(state)) {
+    const end = $head.depth ? $head.after(1) : state.doc.content.size
+    tr.insert(end, n.paragraph.create())
+    at = end + 1
+  }
+  tr.insertText('/', at).setSelection(TextSelection.create(tr.doc, at + 1))
+  return tr.setMeta(slashKey, { from: at + 1, query: '', index: 0 }).scrollIntoView()
+}
 
 // slashKeys are the menu's keys, before any other: <C-n> <C-p> and the
 // arrows move, <CR> and <Tab> take, <Esc> closes it and keeps the /.
@@ -331,7 +359,8 @@ function slashKeys(newPage: (name: string) => void): Plugin {
           const s = slashKey.getState(state)
           if (!s || !dispatch || !view) return !!s
           const items = slashItems(state)
-          if (step === null) dispatch(state.tr.setMeta(slashKey, null))
+          // In a new page's name <Esc> goes back to the list.
+          if (step === null) dispatch(state.tr.setMeta(slashKey, s.naming ? { ...s, naming: false, index: 0 } : null))
           else if (step === 0) slashRun(view, items[s.index] ?? items[0], newPage)
           else dispatch(state.tr.setMeta(slashKey, { ...s, index: (s.index + (step as number) + items.length) % items.length }))
           return true
