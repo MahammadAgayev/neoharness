@@ -20,6 +20,7 @@ test('the whole app, populated', async () => {
   const t = (n: string, v: Parameters<typeof view>[2]) => hub.setView(view('payments', n, v))
   t('api', { state: 'running', model: 'claude-sonnet-5-5', context: 41000, contextWindow: 200000, branch: 'health-check' })
   t('ledger-migration', { state: 'waiting', permission: { id: 'p', tool: 'Bash', detail: 'psql -f migrate.sql' } })
+  hub.setWaits([{ workspace: 'payments', thread: 'ledger-migration', kind: 'permission', id: 'p', text: 'Bash: psql -f migrate.sql', since: new Date().toISOString() }])
   t('docs', { state: 'idle' })
   t('flaky-test', { state: 'resolved' })
   t('coordinator', { state: 'idle', model: 'claude-opus-5-5', context: 12000, contextWindow: 200000 })
@@ -61,6 +62,7 @@ test('the whole app, populated', async () => {
     await page.keyboard.press('Escape')
     await page.keyboard.press('Enter')
     await expect(page.locator('.list-row .name', { hasText: 'ledger-migration' })).toBeVisible()
+    await expect(page.locator('.titlebar .bar-waits')).toHaveText('◆ 1 waiting')
     await shot('31-show-workspace')
     // A reply's table reads as the page's: rows, no side lines, no header fill.
     const cell = page.locator('.md td').first()
