@@ -178,6 +178,11 @@ type thread struct {
 	// clock stops a turn that runs past Config.TurnTimeout, not counting
 	// the time it waits for the person.
 	clock *turnClock
+	// stream is the reply so far, which streamTimer sends; streamed says
+	// clients show some of it.
+	stream      string
+	streamTimer *time.Timer
+	streamed    bool
 }
 
 // asking is a question a turn waits on: its answer comes on done, empty
@@ -1889,6 +1894,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	h.denyAll(th, "the turn ended")
 	th.ask = nil
 	th.clock.stop()
+	h.endStream(ws, th, true)
 	if th.started {
 		t.Started = true
 	}
@@ -2012,7 +2018,10 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 			h.news(ws, th, func(n *workspace.News) { n.Done = append(n.Done, th.t.Todos[i].Text) })
 		}
 		h.changed(ws, th)
+	case agent.KindTextDelta:
+		h.streamText(ws, th, e.Text)
 	case agent.KindAssistantText:
+		h.endStream(ws, th, false)
 		h.event(ws, th, model.Event{Kind: model.EventText, Text: e.Text})
 	case agent.KindError:
 		h.event(ws, th, model.Event{Kind: model.EventError, Text: e.Text})

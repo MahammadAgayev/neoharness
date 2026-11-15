@@ -31,7 +31,8 @@ type Agent struct {
 	Dir  string
 
 	pool *pool
-	// oldCLI is a claude from before --system-prompt-snapshot.
+	// oldCLI is a claude from before --system-prompt-snapshot or
+	// --include-partial-messages.
 	oldCLI bool
 }
 
@@ -97,7 +98,8 @@ func (a *Agent) Run(ctx context.Context, req agent.Request) (agent.Result, error
 		req.Resume = true
 		return a.run(ctx, req)
 	}
-	if err == nil && res.ExitCode != 0 && !a.oldCLI && strings.Contains(res.Stderr, "unknown option '--system-prompt-snapshot'") {
+	if err == nil && res.ExitCode != 0 && !a.oldCLI && (strings.Contains(res.Stderr, "unknown option '--system-prompt-snapshot'") ||
+		strings.Contains(res.Stderr, "unknown option '--include-partial-messages'")) {
 		old := *a
 		old.oldCLI = true
 		return old.Run(ctx, req)
@@ -225,6 +227,10 @@ func (a *Agent) args(req agent.Request) []string {
 	// --verbose is required for stream-json to emit anything per-event; without
 	// it the stream carries only the final result.
 	args = append(args, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose")
+	if !a.oldCLI {
+		// The reply as it is written, for the person to read as it comes.
+		args = append(args, "--include-partial-messages")
+	}
 	if h := req.Harness; h.URL != "" {
 		cfg, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"neoharness": map[string]any{
 			"type":    "http",
@@ -287,6 +293,8 @@ type accumulator struct {
 	// creates holds the TaskCreate calls waiting for the id their result
 	// gives the new item.
 	creates map[string]bool
+	// partial is the text so far of the message the model writes now.
+	partial string
 }
 
 type wire struct {
@@ -317,6 +325,16 @@ type wire struct {
 	Result  string `json:"result"`
 	IsError bool   `json:"is_error"`
 	Usage   *usage `json:"usage"`
+	// A partial message, with --include-partial-messages. A subagent's
+	// has the tool call that runs it as its parent.
+	Event *struct {
+		Type  string `json:"type"`
+		Delta *struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"delta"`
+	} `json:"event"`
+	Parent *string `json:"parent_tool_use_id"`
 	// Init record.
 	Model            string   `json:"model"`
 	SlashCommands    []string `json:"slash_commands"`
@@ -364,6 +382,18 @@ func (a *accumulator) consume(line []byte) {
 			})
 		}
 
+	case "stream_event":
+		if e.Event == nil || e.Parent != nil {
+			return
+		}
+		switch d := e.Event.Delta; {
+		case e.Event.Type == "message_start":
+			a.partial = ""
+		case e.Event.Type == "content_block_delta" && d != nil && d.Type == "text_delta" && d.Text != "":
+			a.partial += d.Text
+			a.emit(agent.Event{Kind: agent.KindTextDelta, Text: a.partial, Tokens: a.tokens})
+		}
+
 	case "assistant":
 		if e.Message == nil {
 			return
@@ -396,6 +426,7 @@ func (a *accumulator) consume(line []byte) {
 		}
 		if len(prose) > 0 {
 			a.said = true
+			a.partial = ""
 			a.text = strings.TrimSpace(strings.Join(prose, " "))
 			a.emit(agent.Event{Kind: agent.KindAssistantText, Text: a.text, Tokens: a.tokens})
 		}

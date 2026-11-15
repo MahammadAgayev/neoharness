@@ -865,3 +865,66 @@ func TestTodoToolsAreOn(t *testing.T) {
 		t.Fatalf("env = %v: under --print Claude keeps no todo list without it", env)
 	}
 }
+
+// TestTheReplyStreamsAsTextSoFar: with partial messages on, each text delta
+// becomes the reply so far, and the whole message still comes as the text.
+// A subagent's deltas and a tool call's input are not the reply.
+func TestTheReplyStreamsAsTextSoFar(t *testing.T) {
+	delta := func(text string, parent string) string {
+		p := "null"
+		if parent != "" {
+			p = `"` + parent + `"`
+		}
+		return `{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"` + text + `"}},"parent_tool_use_id":` + p + `}`
+	}
+	_, got := feed(t, []string{
+		`{"type":"stream_event","event":{"type":"message_start","message":{"role":"assistant","content":[]}},"parent_tool_use_id":null}`,
+		`{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}},"parent_tool_use_id":null}`,
+		delta("Tea is", ""),
+		delta(" one", ""),
+		delta("a subagent says", "toolu_1"),
+		`{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"pa"}},"parent_tool_use_id":null}`,
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"Tea is one."}]}}`,
+		`{"type":"stream_event","event":{"type":"content_block_stop","index":0},"parent_tool_use_id":null}`,
+		`{"type":"stream_event","event":{"type":"message_start","message":{"role":"assistant","content":[]}},"parent_tool_use_id":null}`,
+		delta("Next", ""),
+	})
+	var kinds []string
+	for _, e := range got {
+		kinds = append(kinds, e.Kind.String()+":"+e.Text)
+	}
+	want := []string{"text delta:Tea is", "text delta:Tea is one", "text:Tea is one.", "text delta:Next"}
+	if !slices.Equal(kinds, want) {
+		t.Fatalf("events = %q, want %q", kinds, want)
+	}
+}
+
+func TestArgsAskForPartialMessages(t *testing.T) {
+	if got := strings.Join(New().args(agent.Request{Prompt: "hi"}), " "); !strings.Contains(got, "--include-partial-messages") {
+		t.Errorf("args = %q, want --include-partial-messages", got)
+	}
+}
+
+// An older claude without partial messages still runs, without the stream.
+func TestAnOlderClaudeRunsWithoutThePartialMessagesFlag(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake claude is a shell script")
+	}
+	script := filepath.Join(t.TempDir(), "claude")
+	body := `#!/bin/sh
+case "$*" in
+*--include-partial-messages*) echo "error: unknown option '--include-partial-messages'" >&2; exit 1 ;;
+*) echo '{"type":"result","result":"ok","is_error":false}' ;;
+esac
+`
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, err := New(script).Run(context.Background(), agent.Request{Prompt: "hi", Conversation: "abc", Resume: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ExitCode != 0 || res.Text != "ok" {
+		t.Fatalf("result = %+v, want the turn run without the flag", res)
+	}
+}

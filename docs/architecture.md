@@ -32,8 +32,9 @@
 ## Turns
 
 A conversation runs in one `claude -p` process with `--input-format
-stream-json` and `--output-format stream-json`, `--session-id` on the first
-start and `--resume` after, `--mcp-config`, `--permission-prompt-tool
+stream-json`, `--output-format stream-json`, `--include-partial-messages`,
+`--session-id` on the first start and `--resume` after, `--mcp-config`,
+`--permission-prompt-tool
 mcp__neoharness__permission_prompt`, `--permission-mode auto` and
 `--append-system-prompt`. Each turn is one line on its stdin, and ends with
 the `result` record. Claude keeps the conversation, and the hub keeps the
@@ -54,6 +55,12 @@ UUID.
   neoharness tools. It manages and cannot do a thread's work, and its context
   stays small.
 
+- The reply streams as the model writes it. The adapter sends the text so
+  far of the message it writes now; the hub sends the newest of it at most
+  every 50 ms as a `delta` update, with `text`. A delta is never in the
+  transcript: the `text` event that follows replaces it, and a turn that
+  ends without one sends an empty delta, which drops it. An agent that
+  cannot stream sends none, and the reply comes whole.
 - Messages that arrive while a thread is busy wait in a queue. All of them
   go into the next turn as one prompt.
 - `ask_user` works as a permission request: the hub holds the call open,

@@ -23,9 +23,8 @@ type Kind int
 const (
 	// KindToolStart is one tool invocation beginning. The bulk of the stream.
 	KindToolStart Kind = iota
-	// KindAssistantText is prose the model emitted — a completed message, not a
-	// token delta. Adapters drop the per-token events; they are 90% of the bytes
-	// and nobody reads a reply one token at a time.
+	// KindAssistantText is prose the model emitted: a completed message. It
+	// replaces the KindTextDelta events that led to it.
 	KindAssistantText
 	// KindTurnEnd is one model turn finished (a response plus its tool calls).
 	KindTurnEnd
@@ -38,6 +37,10 @@ const (
 	// KindTodo changes one item of the session's todo list: ID names it,
 	// Text is its new text and State its new state. Empty ones are unchanged.
 	KindTodo
+	// KindTextDelta is the reply as it is written: Text is the text so far
+	// of the message the model writes now. An adapter that cannot stream
+	// sends none.
+	KindTextDelta
 )
 
 // The states of a todo item, for KindTodo.
@@ -62,6 +65,8 @@ func (k Kind) String() string {
 		return "tool failed"
 	case KindTodo:
 		return "todo"
+	case KindTextDelta:
+		return "text delta"
 	}
 	return "unknown"
 }

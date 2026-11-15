@@ -408,6 +408,10 @@ const (
 	UpdateStopped UpdateKind = "stopped"
 	// UpdateWaits is the whole waits list, after it changed.
 	UpdateWaits UpdateKind = "waits"
+	// UpdateDelta is the reply a thread writes now: Text is the text so far.
+	// It is never in the transcript; the text event that follows replaces
+	// it, and an empty Text drops it.
+	UpdateDelta UpdateKind = "delta"
 )
 
 // Update is one change pushed to subscribers.
@@ -420,6 +424,7 @@ type Update struct {
 	Summary   *WorkspaceView `json:"summary,omitempty"`
 	Artifact  *Artifact      `json:"artifact,omitempty"`
 	Waits     []Wait         `json:"waits,omitempty"`
+	Text      string         `json:"text,omitempty"`
 }
 
 // Decision is the user's answer to a permission request.
