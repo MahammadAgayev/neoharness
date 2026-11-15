@@ -141,14 +141,17 @@ func spawnHub(c *hubapi.Client) error {
 }
 
 func stopHub(c *hubapi.Client) error {
-	if c.Ping() != nil {
+	info, err := c.Info()
+	if err != nil {
 		return errors.New("no hub is running")
 	}
 	if err := c.StopHub(); err != nil {
 		return fmt.Errorf("%w; a hub of an older neoharness stops when the neoharness that runs it closes", err)
 	}
+	// The socket goes before the MCP port is free, so a hub started right
+	// away would find the port taken. Wait for the process to go.
 	for end := time.Now().Add(stopWait); time.Now().Before(end); time.Sleep(50 * time.Millisecond) {
-		if c.Ping() != nil {
+		if c.Ping() != nil && gone(info.PID) {
 			return nil
 		}
 	}

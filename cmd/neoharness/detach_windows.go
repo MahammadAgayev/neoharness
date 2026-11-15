@@ -15,3 +15,14 @@ const (
 func detach(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: detachedProcess | createNewProcessGroup}
 }
+
+// gone tells if the process has exited.
+func gone(pid int) bool {
+	h, err := syscall.OpenProcess(syscall.SYNCHRONIZE, false, uint32(pid))
+	if err != nil {
+		return true
+	}
+	defer syscall.CloseHandle(h)
+	ev, _ := syscall.WaitForSingleObject(h, 0)
+	return ev != syscall.WAIT_TIMEOUT
+}

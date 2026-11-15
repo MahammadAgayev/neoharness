@@ -92,6 +92,12 @@ func TestHubRunsApartFromItsClients(t *testing.T) {
 	if c.Ping() == nil {
 		t.Fatal("the hub still answers after stop")
 	}
+	// A restart binds the port as soon as stop returns.
+	ln, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		t.Fatalf("the MCP port is still taken after stop: %v", err)
+	}
+	ln.Close()
 	if _, err := os.Stat(hubapi.SocketPath()); !os.IsNotExist(err) {
 		t.Fatalf("the socket is still there: %v", err)
 	}
