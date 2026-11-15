@@ -487,6 +487,8 @@ test('a mouse drag selects in Visual mode, so d takes the words away, as with Vi
   await page.keyboard.press('v')
   await page.keyboard.press('e')
   await page.mouse.click(box.x + 1, box.y + box.height / 2)
+  // The page reads the click's selection a moment later; x waits for it.
+  await expect(doc.locator('.doc-fat-cursor')).toHaveText('f')
   await page.keyboard.press('x')
   await expect(p).toHaveText('irst second third')
   await page.keyboard.press('u')
