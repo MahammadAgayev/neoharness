@@ -1582,6 +1582,18 @@ func TestFramesSendOnlyWhatChangedAndTheCursorIsDrawn(t *testing.T) {
 	}
 }
 
+// A braille spinner reads as alive at about 10 turns a second; at 4 it looked
+// stuck. It turns on every frame the budget allows, and no faster.
+func TestTheLiveToolSpinnerTurnsOnEveryFrame(t *testing.T) {
+	start := time.Unix(0, 0)
+	if phase(start.Add(frameEvery), spinEvery) == phase(start, spinEvery) {
+		t.Fatalf("the spinner turns every %v, want every frame (%v)", spinEvery, frameEvery)
+	}
+	if spinEvery < frameEvery {
+		t.Fatalf("the spinner turns every %v, faster than a frame (%v), so frames would skip glyphs", spinEvery, frameEvery)
+	}
+}
+
 func TestOnlyTheNewestToolBlockSpins(t *testing.T) {
 	b := newChat("demo", "api")
 	for _, e := range []model.Event{

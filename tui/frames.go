@@ -15,7 +15,7 @@ import (
 // row's time that turns its unit.
 const (
 	frameEvery = time.Second / 8
-	spinEvery  = 250 * time.Millisecond
+	spinEvery  = frameEvery
 	pulseEvery = 800 * time.Millisecond
 )
 
