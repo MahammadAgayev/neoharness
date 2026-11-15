@@ -12,7 +12,7 @@ import type { Event, ThreadView } from '../src/shared/model'
 import { parseEx, words } from '../src/renderer/lib/ex'
 import { fuzzy, fuzzyScore, grep } from '../src/renderer/lib/fuzzy'
 import { keyName, Sequencer, split } from '../src/renderer/lib/keys'
-import { age } from '../src/renderer/search'
+import { age, threadDetail } from '../src/renderer/search'
 import { imageToken, nextImage, used, withImages } from '../src/renderer/lib/images'
 import { wakeLabel } from '../src/renderer/lib/wake'
 import { Away } from '../src/renderer/lib/away'
@@ -324,6 +324,11 @@ describe('age', () => {
     expect(age('2026-11-14T09:00:00Z', now)).toBe('3h')
     expect(age('2026-11-08T12:00:00Z', now)).toBe('6d')
     expect(age('2026-11-01T12:00:00Z', now)).toBe(new Date('2026-11-01T12:00:00Z').toLocaleDateString([], { day: 'numeric', month: 'short' }))
+  })
+  it('in search, a live thread says its time as the board does: now, then minutes', () => {
+    const v = { workspace: 'w', name: 'api', state: 'running' } as ThreadView
+    expect(threadDetail({ ...v, since: new Date(Date.now() - 2000).toISOString() })).toBe('running · now')
+    expect(threadDetail({ ...v, since: new Date(Date.now() - 5 * 60000).toISOString() })).toBe('running · 5m')
   })
 })
 

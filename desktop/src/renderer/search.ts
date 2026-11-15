@@ -49,16 +49,6 @@ export function inState(w: WorkspaceView, s: State): number {
   return (w.counts[s] ?? 0) + (w.coordinator === s ? 1 : 0)
 }
 
-export function elapsed(since: string): string {
-  const ms = Date.now() - Date.parse(since)
-  if (!(ms > 0)) return ''
-  const m = Math.floor(ms / 60000)
-  if (m < 1) return `${Math.floor(ms / 1000)}s`
-  if (m < 60) return `${m}m`
-  const h = Math.floor(m / 60)
-  return h < 24 ? `${h}h${m % 60 ? ` ${m % 60}m` : ''}` : `${Math.floor(h / 24)}d`
-}
-
 // age says how long ago a thread last changed: 5m, 3h or 6d within a week,
 // then the date, as an older one is found by its day.
 export function age(at: string, now = Date.now()): string {
@@ -85,7 +75,7 @@ export function threadDetail(v: ThreadView): string {
   if (v.permission) d += ` · permission · ${v.permission.tool}`
   else if (v.waiting === 'paused') d += ' · paused'
   else if (v.state === 'waiting') d += ' · question'
-  if ((v.state === 'running' || v.state === 'waiting') && v.since) d += ` · ${elapsed(v.since)}`
+  if ((v.state === 'running' || v.state === 'waiting') && v.since) d += ` · ${boardTime(v.since)}`
   return d
 }
 
