@@ -781,7 +781,7 @@ test('<leader>$ shows what the workspace cost, Tab every workspace, and a turn o
       return 'cost'
     })
   })
-  await page.locator('.sb-btn', { hasText: '⋯' }).click()
+  await page.locator('.sb-more').click()
   await expect(d).toBeVisible()
   const labels = await app.evaluate(() => (globalThis as { menuItems?: string[] }).menuItems)
   expect(labels).toEqual(expect.arrayContaining(['Artifacts', 'New doc', 'Cost', 'Settings', 'Help']))
@@ -827,6 +827,8 @@ test('a row that changes group waits while you are on the board, then settles; a
   expect((await names())[0]).toBe('api')
   await expect(api).toHaveClass(/settle/)
   await expect(page.locator('.board .list-need')).toHaveText('permission · Bash go test ./...')
+  // The open workspace shows on the rail what it holds, as the others do.
+  await expect(page.locator('.sidebar .sb-item.active .sb-state')).toHaveClass(/t-gold/)
   await shot('47-board-settle')
 
   // A thread resolved while you are on the board does not stay under waiting.
@@ -851,7 +853,7 @@ test('the waits list: ]q and [q walk what needs you, :waits shows it, x dismisse
     { workspace: 'demo', thread: 'api', kind: 'permission', id: 'p1', text: 'Bash: go test ./...', since },
     { workspace: 'demo', thread: 'coordinator', kind: 'failed', id: 'failed', text: 'the model is overloaded', since },
   ])
-  const pill = page.locator('.titlebar .pill')
+  const pill = page.locator('.titlebar .bar-waits')
   await expect(pill).toHaveText('◆ 2 waiting')
   const line = page.locator('.cmdline')
   const name = page.locator('.statusline.focused .sl-name')

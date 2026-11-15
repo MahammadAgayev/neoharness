@@ -84,15 +84,15 @@
   padding-top: var(--s-2);
 }
 .sb-btn {
+  display: grid;
+  place-items: center;
+  width: var(--row);
   height: var(--row);
-  min-width: var(--row);
-  padding: 0 var(--s-2);
+  padding: 0;
   border: 0;
   border-radius: var(--r-1);
   background: none;
   color: var(--fg-3);
-  font-size: var(--fs-small);
-  font-family: var(--font-mono);
   cursor: default;
   transition: background-color var(--t-1) var(--ease-std), color var(--t-1) var(--ease-std);
 }

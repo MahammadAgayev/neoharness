@@ -222,8 +222,8 @@ version. Writing in the block yourself decides it too.
 
 ## What the window adds
 
-- **Search everywhere**: `⌘K`, `<leader><leader>`, or the box in the title
-  bar. It searches
+- **Search everywhere**: `⌘K`, `<leader><leader>`, or the search icon at
+  the foot of the sidebar. It searches
   threads of every workspace, artifacts, workspaces, commands, notifications
   and the text of every transcript at once. `<Tab>` goes to one kind. The
   pickers (`<leader>pt`, `<leader>pa`, `<leader>ps`, …) open it on one kind.
@@ -262,7 +262,8 @@ version. Writing in the block yourself decides it too.
   Vim's one Normal command, and `:w` saves from Visual mode too.
 - **A sidebar** of workspaces only, each with a glyph on the right when
   something in it waits (`◆`), failed (`✗`) or runs (`●`). At its foot,
-  `⌘K` searches and `⋯` opens Artifacts, New doc, Cost, Settings and Help.
+  the search icon searches and `⋯` opens Artifacts, New doc, Cost, Settings
+  and Help. The title bar holds only back and forward.
   `⌘B`, `:set nosidebar` or the button at the top left folds it to a 48 px
   rail of letters with a state dot: the mouse resting on the rail shows it
   whole, over the windows, until a moment after it leaves. Drag its edge to

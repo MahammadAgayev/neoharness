@@ -67,6 +67,13 @@ export class FakeHub {
     if (i < 0) list.push(v)
     else list[i] = v
     this.push({ kind: 'thread', workspace: v.workspace, thread: v.name, view: v })
+    // As the hub does, a thread's change also sends its workspace's counts.
+    const w = this.workspaces.find((x) => x.name === v.workspace)
+    if (!w) return
+    w.counts = {}
+    for (const t of list) if (t.name !== 'coordinator') w.counts[t.state] = (w.counts[t.state] ?? 0) + 1
+    w.coordinator = list.find((t) => t.name === 'coordinator')?.state
+    this.push({ kind: 'workspace', workspace: w.name, summary: { ...w } })
   }
 
   // delta is the reply a thread writes now, as the hub sends it: the whole

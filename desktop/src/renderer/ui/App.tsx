@@ -96,7 +96,6 @@ function Layout() {
 }
 
 function TitleBar() {
-  const workspace = useStore((s) => s.workspace)
   const screen = useStore((s) => s.screen)
   const waiting = useStore((s) => s.waits.length)
   const sidebar = useStore((s) => s.settings.sidebar)
@@ -135,32 +134,12 @@ function TitleBar() {
         >
           <Icon name="arrow-right" size={15} />
         </button>
-        <button className="crumb" onClick={() => store.showWorkspaces()}>
-          neoharness
+      </div>
+      {waiting > 0 && (
+        <button className="bar-waits" onClick={() => void store.ex('waits')} data-tip="What waits for you" data-keys="]q  :waits">
+          ◆ {waiting} waiting
         </button>
-        {workspace && screen === 'workspace' && (
-          <>
-            <span className="t-muted">/</span>
-            <button className="crumb strong" onClick={() => store.openPicker('workspaces', true)}>
-              {workspace}
-            </button>
-          </>
-        )}
-      </div>
-      <button className="search-pill" onClick={() => store.openPicker('all')}>
-        <span>
-          <Icon name="search" size={13} />
-          Search everywhere
-        </span>
-        <kbd>⌘K</kbd>
-      </button>
-      <div className="titlebar-right">
-        {waiting > 0 && (
-          <button className="pill t-gold" onClick={() => void store.ex('waits')} data-tip="What waits for you" data-keys="]q  :waits">
-            ◆ {waiting} waiting
-          </button>
-        )}
-      </div>
+      )}
     </div>
   )
 }

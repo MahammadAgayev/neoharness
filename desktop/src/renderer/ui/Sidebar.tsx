@@ -95,11 +95,11 @@ export function Sidebar(props: { folded: boolean }) {
         </button>
       </div>
       <div className="sb-foot">
-        <button className="sb-btn" onClick={() => store.openPicker('all')} data-tip="Search everything" data-keys="⌘K">
-          ⌘K
+        <button className="sb-btn" onClick={() => store.openPicker('all')} data-tip="Search" data-keys="⌘K">
+          <Icon name="search" size={15} />
         </button>
-        <button className="sb-btn" onClick={() => void more()} data-tip="Artifacts, new doc, cost, settings, help">
-          ⋯
+        <button className="sb-btn sb-more" onClick={() => void more()} data-tip="Artifacts, new doc, cost, settings, help">
+          <Icon name="ellipsis" size={15} />
         </button>
       </div>
     </nav>
