@@ -1216,6 +1216,9 @@ const queuedRow = "\x00queued"
 // todoRow is the Item of the rows of the todo list above the prompt.
 const todoRow = "\x00todo"
 
+// recapRow is the Item of the recap's rows in the prompt dock.
+const recapRow = "\x00recap"
+
 func (a *App) renderThreads() {
 	if a.threadsBuf == nil {
 		return

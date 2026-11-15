@@ -71,16 +71,17 @@ func (a *App) click(w *Window, x, y int, when time.Time) {
 	a.normal()
 	a.cur = w
 	r := w.rect
-	row := y - r.Y
+	row := y - r.Y - chromeRows
 	switch {
-	case y == r.Y+r.H-1:
-		// The statusline only focuses.
+	case row < 0:
+		// The winbar only focuses.
 	case row < w.textH:
-		if w.Top+row >= w.linesN {
+		li := w.lineAt(row)
+		if li < 0 {
 			return
 		}
 		a.leavePrompt(w)
-		a.moveTo(w, w.Top+row)
+		a.moveTo(w, li)
 		w.Col = x - r.X - railWidth(w)
 		a.clampCol(w)
 		if double {

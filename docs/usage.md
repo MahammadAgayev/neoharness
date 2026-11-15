@@ -18,6 +18,12 @@
   the right. `<CR>` on a thread shows it there. `<leader>t` brings the list
   back in a column of its own, so the thread stays, or goes to the list when
   it is on screen.
+- Each pane has a winbar on top: its name, and its state on the right. The
+  pane with focus has its name in bold and a row of `▔` in the accent color
+  under it. One status line at the foot of the screen, as Vim's
+  `laststatus=3`, names the workspace, shows the focused chat's model and
+  context, and counts the threads that wait and run. The command line is
+  under it.
 - The folder picker lists "not pinned", the folder you started in, and every
   folder up to 6 levels below it. Dot folders, `Library` and `node_modules`
   are skipped.
@@ -76,12 +82,12 @@ yourself:
   messages. Your next message answers it, first in a new turn, with them;
   `<CR>` on one sends them without an answer, and the question closes.
 - When you come back after 2 minutes or more away, a chat shows its recap
-  in a card just above the prompt: where the session's work stands, in its own words,
+  in one line behind a bar just above the todo line and the prompt: where the session's work stands, in its own words,
   as in Claude Code. Away is the terminal without focus, or no key for that
   long when the terminal sends no focus events. `<Esc>`, `q` or a click on
-  `×` closes the card, and so does a message to the session; it comes back
+  `×` closes it, and so does a message to the session; it comes back
   only with a newer recap. A running turn hides it. `:recap` shows the
-  card of the chat in the window again, even after you closed it.
+  recap of the chat in the window again, even after you closed it.
 - While the thread's todo list has open items, one line above the prompt
   shows it: `▸ 3 of 7 · ` and the item in hand. `za` or `<CR>` on the line,
   or `<leader>T`, unfolds it into every item: done ones checked and struck
@@ -139,7 +145,7 @@ workspace.
   what reaches you instead. A thread that ends a turn wakes it; it sends
   corrections on its own, and notifies you when the work you asked for is
   done or needs you. Tell it how often you want to hear from it.
-- When a session's context passes 80%, its status line shows
+- When the focused session's context passes 80%, the status line shows
   `ctx 82% · /compact` in red: every turn sends the whole context again, so
   `/compact` then saves tokens. `neoharness.o.compactwarn` changes the
   percentage. Past 90%, the session compacts by itself before its next

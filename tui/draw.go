@@ -18,15 +18,15 @@ import (
 const scrollOff = 8
 
 // margin keeps the windows off the terminal's edges: this many columns at
-// the left and right, and a row at the top.
+// the left and right.
 const margin = 2
 
-// The prompt is at least minPromptLines tall, so it reads as a place to
-// write, and grows to maxPromptLines before it scrolls.
-const (
-	minPromptLines = 3
-	maxPromptLines = 12
-)
+// chromeRows are the rows on top of each pane: the winbar, and under it the
+// focus row, in accent in the pane with focus.
+const chromeRows = 2
+
+// The prompt grows to maxPromptLines before it scrolls.
+const maxPromptLines = 12
 
 func (a *App) draw() {
 	s := a.s
@@ -48,7 +48,8 @@ func (a *App) draw() {
 		}
 	}
 	live := false
-	area := Rect{margin, 1, W - 2*margin, H - 2}
+	// The last two rows are the global status line and the command line.
+	area := Rect{margin, 0, W - 2*margin, H - 2}
 	a.root.layout(area, sep)
 	a.bindDiff()
 	for _, w := range a.root.windows() {
@@ -63,6 +64,7 @@ func (a *App) draw() {
 	if a.picker != nil {
 		a.drawPicker(W, H)
 	}
+	a.drawStatusLine(W, H)
 	a.drawGlobal(W, H)
 
 	if a.cursorX >= 0 {
@@ -106,45 +108,31 @@ func (a *App) fill(x, y, maxX int, st tcell.Style) {
 
 func (a *App) drawWindow(w *Window, focused bool) {
 	r := w.rect
-	if r.W < 4 || r.H < 2 {
+	if r.W < 4 || r.H < chromeRows+2 {
 		return
 	}
 	b := w.Buf
 	right := r.X + r.W
-	top := r.Y
-	status := r.Y + r.H - 1
+	top := r.Y + chromeRows
+	bottom := r.Y + r.H
+	a.drawWinbar(w, focused)
 
-	// The prompt sits at the bottom of a chat window, above the statusline.
+	// The prompt is the last rows of a chat window, under the stream.
 	var promptLines []Line
-	promptTop, promptCur, promptFirst := status, -1, 0
+	promptTop, promptCur, promptFirst := bottom, -1, 0
 	if b.Prompt != nil {
 		promptLines, promptCur, promptFirst = a.promptLines(w, focused)
-		promptTop = status - len(promptLines)
+		promptTop = bottom - len(promptLines)
 	}
 	textBottom := promptTop
-	if b.Prompt != nil {
-		textBottom-- // a blank line between transcript and prompt
-	}
 	// The transcript ends above the card, so the card hides none of it.
 	cardBottom := textBottom
 	if title, body, _ := a.card(w); title != "" && textBottom-len(body)-2 > top {
 		textBottom -= len(body) + 2
 	}
-	// The recap card sits on the prompt, where the eyes go to write, and the
-	// transcript ends above it, so the card hides none of it.
-	bw := min(r.W-1, a.textWidth(w))
-	recap := a.recapBody(w, bw-4)
+	// The recap is the top of the prompt dock, the end of the chat's lines.
+	b.SetRecap(a.recapText(w))
 	w.recapX = 0
-	if len(recap) > 0 && textBottom-top > len(recap)+3+minTranscript {
-		y := textBottom - len(recap) - 2
-		a.box(r.X, y, bw, len(recap)+2, "recap", a.th.Done)
-		w.recapX, w.recapY = r.X+bw-3, y
-		a.put(w.recapX-1, y, r.X+bw-1, " × ", a.th.Fg2)
-		for i, l := range recap {
-			a.drawLine(r.X+2, y+1+i, r.X+bw-2, l)
-		}
-		textBottom = y - 1
-	}
 	h := max(textBottom-top, 1)
 	w.textH = h
 
@@ -176,6 +164,15 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	if follow {
 		w.Top = max(n-h, 0)
 	}
+	// The recap and the todo line stay on the prompt, as one dock, when the
+	// chat is too short to fill the window.
+	w.dockFrom, w.dockGap = n, 0
+	for i := n - 1; i >= 0 && (lines[i].Item == recapRow || lines[i].Item == todoRow); i-- {
+		w.dockFrom = i
+	}
+	if rows := n - w.Top; rows < h && w.dockFrom < n {
+		w.dockGap = h - rows
+	}
 
 	editing := b.Edit != nil && focused && a.mode == modeInsert
 	showCursor := focused && !w.inPrompt && (a.mode == modeNormal || a.mode == modeVisual) || editing
@@ -186,6 +183,9 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	for i := 0; i < h && w.Top+i < n; i++ {
 		li := w.Top + i
 		y := top + i
+		if li >= w.dockFrom {
+			y += w.dockGap
+		}
 		l := lines[li]
 		bg := tcell.Style{}
 		hasBG := false
@@ -246,6 +246,11 @@ func (a *App) drawWindow(w *Window, focused bool) {
 			}
 			a.put(right-1, y, right, "…", st)
 		}
+		if l.Item == recapRow && (li == 0 || lines[li-1].Item != recapRow) {
+			// Its × closes it, as q and Esc do.
+			w.recapX, w.recapY = min(right, r.X+a.textWidth(w))-2, y
+			a.put(w.recapX, y, right, "×", overlay(a.th.Fg3, bg))
+		}
 		if showCursor && li == w.Cur {
 			a.cursorX, a.cursorY = r.X+rail+min(w.Col, r.W-rail-1), y
 			// The caret of the prompt: you type here.
@@ -289,25 +294,15 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	if focused && a.menu != nil {
 		a.drawMenu(w, top, promptTop)
 	}
-	a.drawStatus(w, status, focused)
 }
 
-// minTranscript is the fewest transcript rows the recap card leaves.
-const minTranscript = 3
-
-// recapBody is the text of a chat's recap card, w cells wide; nil when the
-// card does not show. A long recap is cut at 4 rows.
-func (a *App) recapBody(w *Window, width int) []Line {
+// recapText is the recap a chat's dock shows; "" when it does not show.
+func (a *App) recapText(w *Window) string {
 	v, ok := a.threads[w.Buf.Thread]
-	if w.Buf.Kind != KindChat || !ok || !a.recapOpen[a.recapKey(v.Name)] || v.Recap == "" || v.State == model.StateRunning || width < 10 {
-		return nil
+	if w.Buf.Kind != KindChat || !ok || !a.recapOpen[a.recapKey(v.Name)] || v.State == model.StateRunning {
+		return ""
 	}
-	l := wrap([]Span{{v.Recap, a.th.Fg}}, width, nil, nil)
-	if len(l) > 4 {
-		l = l[:4]
-		l[3].Spans = append(clone(l[3].Spans), Span{"…", a.th.Fg3})
-	}
-	return l
+	return v.Recap
 }
 
 // railWidth is the left gutter of an artifact window, where the outline rail
@@ -430,20 +425,12 @@ func (a *App) drawLine(x, y, maxX int, l Line) int {
 func (a *App) promptLines(w *Window, focused bool) ([]Line, int, int) {
 	p := w.Buf.Prompt
 	writing := focused && a.mode == modeInsert
-	rest := []Span{{"   ", a.th.Fg}}
-	statusY := w.rect.Y + w.rect.H - 1
-	pad := func(lines []Line) []Line {
-		for len(lines) < minPromptLines {
-			lines = append(lines, Line{Prefix: rest})
-		}
-		return lines
-	}
+	bottom := w.rect.Y + w.rect.H
 	a.fitPrompt(w)
 	rows := a.promptRows(w)
-	if len(p.Text) == 0 && writing {
-		a.cursorX, a.cursorY = w.rect.X+3, statusY-minPromptLines
-		rows[0].Spans = []Span{{"Message " + w.Buf.Thread + "…", a.th.Fg3}}
-		return pad(rows), -1, 0
+	if len(p.Text) == 0 {
+		// An empty prompt says who you write to.
+		rows[0].Spans = []Span{{"write to " + w.Buf.Thread, a.th.Fg3}}
 	}
 	// The cursor's row: where you type, or the Normal cursor in the prompt.
 	row, col := -1, 0
@@ -458,12 +445,12 @@ func (a *App) promptLines(w *Window, focused bool) ([]Line, int, int) {
 	if row >= 0 && row < hidden {
 		hidden = row
 	}
-	lines := pad(rows[hidden:min(hidden+maxPromptLines, len(rows))])
+	lines := rows[hidden:min(hidden+maxPromptLines, len(rows))]
 	if row < 0 {
 		return lines, -1, hidden
 	}
 	a.cursorX = w.rect.X + min(col, w.rect.W-1)
-	a.cursorY = statusY - len(lines) + row - hidden
+	a.cursorY = bottom - len(lines) + row - hidden
 	if a.mode != modeNormal {
 		return lines, -1, hidden
 	}
@@ -496,118 +483,160 @@ func (a *App) drawCells(x, y, maxX int, l Line, sel func(col int) bool) {
 	}
 }
 
-func (a *App) drawStatus(w *Window, y int, focused bool) {
+// drawWinbar draws the row on top of a pane: its name, then its state on
+// the right. The pane with focus has its name in fg and a row of ▔ in accent
+// under it; the others are in fg-3, so the eye finds focus where it reads.
+func (a *App) drawWinbar(w *Window, focused bool) {
 	r := w.rect
 	right := r.X + r.W
+	y := r.Y
 	b := w.Buf
-	x := r.X + 1
 	dim := a.th.Fg3
-	// Other modes show themselves: the colored caret in Insert, the
-	// command line, the picker box. Visual needs a word to tell v from V.
-	if focused && a.mode == modeVisual {
-		label := "visual"
-		if w.vmode == 'V' {
-			label = "v-line"
-		}
-		x = a.put(x, y, right, label, dim) + 2
+	x := r.X + 1
+	// The workspace shows only for a pane of another one; the global status
+	// line names this one.
+	if b.Workspace != "" && b.Workspace != a.workspace {
+		x = a.put(x, y, right, b.Workspace+" · ", a.th.Run)
 	}
-	name, nameSt := bufTitle(b), a.th.Fg2
+	name, nameSt := bufTitle(b), dim
 	if e := b.Edit; e != nil && e.Dirty {
 		name += " [+]"
 	}
 	if focused {
-		nameSt = a.th.Fg
-	}
-	ws := b.Workspace
-	if b.Kind == KindThreads {
-		ws = a.workspace
-	}
-	if ws != "" {
-		x = a.put(x, y, right, ws+" · ", a.th.Fg2)
+		nameSt = a.th.Fg.Bold(true)
+		for i := r.X; i < right; i++ {
+			a.s.SetContent(i, y+1, '▔', nil, a.th.Accent)
+		}
 	}
 	x = a.put(x, y, right, name, nameSt) + 2
+	if b.Kind != KindChat {
+		return
+	}
+	v := a.threads[b.Thread]
+	glyphSt := a.th.state(v.State)
+	// What needs the person keeps its color in every pane.
+	if !focused && v.State != model.StateWaiting {
+		glyphSt = dim
+	}
+	state := []Span{{stateGlyph(v.State) + " ", glyphSt}, {stateLabel(v.State), dim}}
+	if !v.Since.IsZero() && v.State != model.StateIdle {
+		state = append(state, Span{" " + elapsed(time.Since(v.Since)), dim})
+	}
+	if wl := wakeLabel(v); wl != "" {
+		state = append(state, Span{"  " + wl, dim})
+	}
+	n := 0
+	for _, sp := range state {
+		n += width(sp.Text)
+	}
+	if rx := right - 1 - n; rx > x {
+		for _, sp := range state {
+			rx = a.put(rx, y, right, sp.Text, sp.Style)
+		}
+	}
+}
 
-	// Right side, in muted color. When it does not fit, the first parts of
-	// drop go first: context matters most, it says when to start fresh.
+// drawStatusLine draws the one status line of the shell, as Vim's
+// laststatus=3: the workspace, then the focused chat's model and context,
+// then what runs and waits.
+func (a *App) drawStatusLine(W, H int) {
+	y := H - 2
+	th := a.th
+	dim := th.Fg3
+	x := margin + 1
+	if a.offline {
+		x = a.put(x, y, W, "● offline  ", th.Alert)
+	}
+	if a.workspace != "" {
+		x = a.put(x, y, W, a.workspace, th.Fg2) + 3
+	}
+	n := map[model.State]int{}
+	for _, v := range a.threads {
+		n[v.State]++
+	}
+	var right []Span
+	if n[model.StateWaiting] > 0 {
+		right = append(right, Span{fmt.Sprintf("◆ %d waiting", n[model.StateWaiting]), th.Wait})
+	}
+	if n[model.StateRunning] > 0 {
+		right = append(right, Span{fmt.Sprintf("● %d running", n[model.StateRunning]), th.Run})
+	}
+	rx := W - margin
+	for i, sp := range right {
+		rx -= width(sp.Text)
+		if i > 0 {
+			rx -= 2
+		}
+	}
+	for i, k := rx, 0; k < len(right); k++ {
+		if k > 0 {
+			i += 2
+		}
+		i = a.put(i, y, W, right[k].Text, right[k].Style)
+	}
+
+	// The middle: the focused chat. When it does not fit, the parts with the
+	// highest rank go first: context matters most, it says when to start
+	// fresh.
+	w := a.cur
+	if w == nil || w.Buf.Kind != KindChat {
+		return
+	}
+	v := a.threads[w.Buf.Thread]
 	type part struct {
 		Span
 		rank int // 0 stays
 	}
-	var rightText []part
-	if b.Kind == KindChat {
-		v := a.threads[b.Thread]
-		st := a.th.state(v.State)
-		if !focused {
-			st = dim
+	var mid []part
+	add := func(text string, st tcell.Style, rank int) {
+		if text != "" {
+			mid = append(mid, part{Span{text, st}, rank})
 		}
-		x = a.put(x, y, right, stateGlyph(v.State)+" "+stateLabel(v.State), st)
-		if !v.Since.IsZero() && v.State != model.StateIdle {
-			x = a.put(x+2, y, right, elapsed(time.Since(v.Since)), dim)
+	}
+	if v.Queued > 0 {
+		add(fmt.Sprintf("+%d queued", v.Queued), dim, 0)
+	}
+	add(v.Branch, dim, 1)
+	add(shortModel(v.Model), dim, 2)
+	if v.ContextWindow > 0 {
+		pct := v.Context * 100 / v.ContextWindow
+		label, ctxSt := fmt.Sprintf("ctx %d%%", pct), dim
+		if limit, _ := a.opt("compactwarn").(lua.LNumber); limit > 0 && pct >= int(limit) {
+			// Every turn sends the whole context again: time to /compact.
+			label, ctxSt = label+" · /compact", th.Alert
 		}
-		if w := wakeLabel(v); w != "" {
-			x = a.put(x+2, y, right, w, dim)
-		}
-		add := func(text string, st tcell.Style, rank int) {
-			if text != "" {
-				rightText = append(rightText, part{Span{text, st}, rank})
-			}
-		}
-		if v.Queued > 0 {
-			add(fmt.Sprintf("+%d queued", v.Queued), dim, 0)
-		}
-		// Colored in the window with focus, like Claude Code's status line;
-		// muted in the others.
-		color := func(st tcell.Style) tcell.Style {
-			if focused {
-				return st
-			}
-			return dim
-		}
-		add(v.Branch, color(a.th.Run), 1)
-		add(shortModel(v.Model), color(a.th.Peer), 2)
-		if v.ContextWindow > 0 {
-			pct := v.Context * 100 / v.ContextWindow
-			label, ctxSt := fmt.Sprintf("ctx %d%%", pct), color(a.th.Wait)
-			if limit, _ := a.opt("compactwarn").(lua.LNumber); limit > 0 && pct >= int(limit) {
-				// Every turn sends the whole context again: time to /compact.
-				label, ctxSt = label+" · /compact", a.th.Alert
-			}
-			add(label, ctxSt, 4)
-		}
-		if v.Location.Remote() {
-			add("ssh:"+v.Location.Host, dim, 0)
-		}
+		add(label, ctxSt, 4)
+	}
+	if v.Location.Remote() {
+		add("ssh:"+v.Location.Host, dim, 0)
 	}
 	const sep = " · "
-	fits := func() bool {
-		total := 0
-		for i, sp := range rightText {
-			total += width(sp.Text)
+	total := func() int {
+		t := 0
+		for i, sp := range mid {
+			t += width(sp.Text)
 			if i > 0 {
-				total += width(sep)
+				t += width(sep)
 			}
 		}
-		return right-1-total > x+2
+		return t
 	}
-	for rank := 1; !fits() && rank <= 4; rank++ {
-		rightText = slices.DeleteFunc(rightText, func(p part) bool { return p.rank == rank })
+	for rank := 1; x+total()+2 > rx && rank <= 4; rank++ {
+		mid = slices.DeleteFunc(mid, func(p part) bool { return p.rank == rank })
 	}
-	if !fits() {
+	if x+total()+2 > rx {
 		return
 	}
-	total := 0
-	for i, sp := range rightText {
-		total += width(sp.Text)
-		if i > 0 {
-			total += width(sep)
-		}
+	// Centered when it can be, as in the app's prompt info.
+	mx := max(x, (W-total())/2)
+	if mx+total()+2 > rx {
+		mx = x
 	}
-	rx := right - 1 - total
-	for i, sp := range rightText {
+	for i, sp := range mid {
 		if i > 0 {
-			rx = a.put(rx, y, right, sep, dim)
+			mx = a.put(mx, y, W, sep, dim)
 		}
-		rx = a.put(rx, y, right, sp.Text, sp.Style)
+		mx = a.put(mx, y, W, sp.Text, sp.Style)
 	}
 }
 
@@ -810,8 +839,7 @@ func (a *App) drawGlobal(W, H int) {
 		}
 		return
 	}
-	// Right side: how many threads of the workspace run or wait for you, then
-	// keys typed so far, as Vim's showcmd.
+	// Right side: keys typed so far, as Vim's showcmd.
 	var right []Span
 	if a.recordInto != 0 {
 		right = append(right, Span{"recording @" + string(a.recordInto) + "  ", th.Fg3})
@@ -823,15 +851,6 @@ func (a *App) drawGlobal(W, H int) {
 		}
 		right = append(right, Span{show + "  ", th.Fg3})
 	}
-	n := map[model.State]int{}
-	for _, v := range a.threads {
-		n[v.State]++
-	}
-	for _, s := range []model.State{model.StateRunning, model.StateWaiting} {
-		if n[s] > 0 {
-			right = append(right, Span{fmt.Sprintf(" %s %d", stateGlyph(s), n[s]), th.state(s)})
-		}
-	}
 	rx := W - margin
 	for _, sp := range right {
 		rx -= width(sp.Text)
@@ -841,8 +860,14 @@ func (a *App) drawGlobal(W, H int) {
 	}
 
 	x := margin + 1
-	if a.offline {
-		x = a.put(x, y, W, "● offline  ", th.Alert)
+	// Other modes show themselves: the colored caret in Insert, the
+	// command line, the picker box. Visual needs a word to tell v from V.
+	if a.mode == modeVisual {
+		label := "visual"
+		if a.cur.vmode == 'V' {
+			label = "v-line"
+		}
+		x = a.put(x, y, W, label, th.Fg3) + 2
 	}
 	a.put(x, y, rx-1, truncate(a.notice, rx-x-2), a.noticeSt)
 }

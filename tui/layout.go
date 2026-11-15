@@ -23,6 +23,9 @@ type Window struct {
 	vLine, vCol   int
 	rect          Rect
 	textH, linesN int
+	// dockFrom is the first line of the prompt dock, and dockGap the rows
+	// drawn between it and the stream above, to keep it on the prompt.
+	dockFrom, dockGap int
 	// jumps are the buffers the window showed before, the newest last, for
 	// <C-o>; views are where the window was in each.
 	jumps []*Buffer
@@ -34,6 +37,20 @@ type Window struct {
 	promptW int
 	// recapX and recapY are where the recap card's × is, when the card shows.
 	recapX, recapY int
+}
+
+// lineAt is the line on a row of the window's text; -1 for none.
+func (w *Window) lineAt(row int) int {
+	li := w.Top + row
+	if li >= w.dockFrom {
+		if li -= w.dockGap; li < w.dockFrom {
+			return -1
+		}
+	}
+	if row < 0 || row >= w.textH || li >= w.linesN {
+		return -1
+	}
+	return li
 }
 
 // outOfPrompt puts Cur and Col back on the transcript.
@@ -291,7 +308,7 @@ func neighbor(wins []*Window, w *Window, dir rune) *Window {
 	r := w.rect
 	// In the prompt, Cur is a prompt row and not a transcript row: the
 	// cursor's row is then out of the window, and it stays in it.
-	cx, cy := r.X+min(w.Col, r.W-1), r.Y+max(min(w.Cur-w.Top, r.H-1), 0)
+	cx, cy := r.X+min(w.Col, r.W-1), r.Y+chromeRows+max(min(w.Cur-w.Top, r.H-1-chromeRows), 0)
 	var best *Window
 	bestD := 1 << 30
 	for _, o := range wins {

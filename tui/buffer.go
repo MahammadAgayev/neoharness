@@ -125,9 +125,11 @@ type Buffer struct {
 	// open items; todoOpen unfolds it.
 	todos    []model.Todo
 	todoOpen bool
-	lines    []Line
-	linesW   int
-	dirty    bool
+	// recap is the recap the dock shows above the todo line; "" when closed.
+	recap  string
+	lines  []Line
+	linesW int
+	dirty  bool
 }
 
 func newBuffer(name string, kind BufKind) *Buffer {
@@ -245,7 +247,11 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 			out = append(out, l)
 		}
 	}
-	out = append(out, b.todoLines(w, th)...)
+	dock := append(b.recapLines(w, th), b.todoLines(w, th)...)
+	if len(dock) > 0 {
+		out = append(out, Line{Block: len(b.blocks)})
+		out = append(out, dock...)
+	}
 	b.lines, b.linesW, b.dirty = out, w, false
 	return out
 }
@@ -273,7 +279,7 @@ func (b *Buffer) todoLines(w int, th *Theme) []Line {
 	} else {
 		head = append(head, Span{" · ", th.Fg3}, Span{cur, th.Fg})
 	}
-	rows := append([]Line{{}}, wrap(append([]Span{{fold, th.Fg3}}, head...), w, in, append(clone(in), Span{"  ", th.Fg}))...)
+	rows := wrap(append([]Span{{fold, th.Fg3}}, head...), w, in, append(clone(in), Span{"  ", th.Fg}))
 	if b.todoOpen {
 		for _, t := range b.todos {
 			mark, ms, ts := "○ ", th.Fg2, th.Fg2
@@ -289,11 +295,35 @@ func (b *Buffer) todoLines(w int, th *Theme) []Line {
 	}
 	for i := range rows {
 		rows[i].Block = len(b.blocks)
-		if i > 0 {
-			rows[i].Item = todoRow
-		}
+		rows[i].Item = todoRow
 	}
 	return rows
+}
+
+// recapLines are the recap at the top of the prompt dock, behind a bar in
+// done, cut at 4 rows.
+func (b *Buffer) recapLines(w int, th *Theme) []Line {
+	if b.recap == "" {
+		return nil
+	}
+	bar := []Span{{"▍", th.Done}}
+	rows := wrap([]Span{{"recap  ", th.Fg3}, {b.recap, th.Fg}}, w-1, bar, append(clone(bar), Span{"       ", th.Fg}))
+	if len(rows) > 4 {
+		rows = rows[:4]
+		rows[3].Spans = append(clone(rows[3].Spans), Span{"…", th.Fg3})
+	}
+	for i := range rows {
+		rows[i].Block, rows[i].Item = len(b.blocks), recapRow
+	}
+	return rows
+}
+
+// SetRecap shows a recap at the top of the prompt dock; "" hides it.
+func (b *Buffer) SetRecap(text string) {
+	if b.recap != text {
+		b.recap = text
+		b.dirty = true
+	}
 }
 
 // lastMessage is the block of the last message to the thread, from anyone;

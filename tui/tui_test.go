@@ -998,8 +998,8 @@ func TestStatusLineShowsUsage(t *testing.T) {
 	h.a.draw()
 	h.see("neoharness-hub-tui · opus-5 1m · ctx 8%")
 
-	// Narrow windows drop the branch and model first; context stays.
-	h.press("<C-w>", "v", "<C-w>", "v", "<C-w>", "h", "<C-w>", "h")
+	// A narrow terminal drops the branch and model first; context stays.
+	h.s.SetSize(44, 36)
 	h.a.draw()
 	scr := h.screen()
 	if !strings.Contains(scr, "ctx 8%") || strings.Contains(scr, "neoharness-hub-tui ·") {
@@ -1056,13 +1056,6 @@ func TestChatShowsWorkingUntilSomethingSpins(t *testing.T) {
 	}
 }
 
-func TestStatusLineNamesTheWorkspace(t *testing.T) {
-	h := start(t)
-	h.openDemo()
-	h.see("demo · coordinator")
-	h.see("demo · threads")
-}
-
 func TestStatusColorsAndPromptHeight(t *testing.T) {
 	h := start(t)
 	h.openDemo()
@@ -1071,9 +1064,10 @@ func TestStatusColorsAndPromptHeight(t *testing.T) {
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.s.SetSize(160, 36)
 	h.a.draw()
-	for want, color := range map[string]tcell.Color{"trunk": rpFoam.in(false), "opus-5 1m": rpRose.in(false), "ctx 10%": rpGold.in(false)} {
-		if got := h.fgAt(want); got != color {
-			t.Errorf("%s: color %v, want %v", want, got, color)
+	// Meta, all in fg-3: wait and alert keep their meaning.
+	for _, want := range []string{"trunk", "opus-5 1m", "ctx 10%"} {
+		if got := h.fgAt(want); got != fgOf(h.a.th.Fg3) {
+			t.Errorf("%s: color %v, want fg-3", want, got)
 		}
 	}
 	v.Context = 850
@@ -1083,18 +1077,12 @@ func TestStatusColorsAndPromptHeight(t *testing.T) {
 		t.Errorf("a nearly full context should be red, got %v", got)
 	}
 
-	// The prompt takes three lines above the status line; the cursor is on
-	// the first.
+	// The prompt is one row, right above the status line, with the cursor
+	// on it.
 	h.press("i")
-	lines := strings.Split(h.screen(), "\n")
-	status := 0
-	for i, l := range lines {
-		if strings.Contains(l, "coordinator  ○ idle") {
-			status = i
-		}
-	}
-	if !strings.Contains(lines[status-3], "Message coordinator…") || h.a.cursorY != status-3 {
-		t.Fatalf("prompt at %d, cursor at %d, status at %d:\n%s", status-3, h.a.cursorY, status, strings.Join(lines[status-5:status+1], "\n"))
+	_, H := h.s.Size()
+	if row := h.rowOf("› write to coordinator"); row != H-3 || h.a.cursorY != row {
+		t.Fatalf("prompt at %d, cursor at %d:\n%s", row, h.a.cursorY, h.screen())
 	}
 }
 
@@ -3249,7 +3237,7 @@ func TestMouseClickFocusesAWindow(t *testing.T) {
 	if h.a.cur != chat || h.a.cur.inPrompt || !strings.Contains(h.a.line(h.a.cur).Text(), "Opened auth-refactor") {
 		t.Fatal("a click on the chat should focus it, with the cursor on the clicked line")
 	}
-	h.click(chat.rect.X+5, chat.rect.Y+chat.rect.H-1-minPromptLines)
+	h.click(chat.rect.X+5, chat.rect.Y+chat.rect.H-1)
 	if h.a.mode != modeInsert {
 		t.Fatal("a click on the prompt should start Insert")
 	}
@@ -3549,7 +3537,10 @@ func TestAnIdleThreadSaysWhenItWakes(t *testing.T) {
 	h.a.draw()
 	h.see("wakes at " + at)
 	h.press("<Esc>", ":b api-tests", "<CR>")
-	h.see("demo · api-tests  ○ idle  wakes at " + at)
+	h.see("○ idle  wakes at " + at)
+	if row := h.rowOf("○ idle  wakes at " + at); row != 0 {
+		t.Fatalf("the wake time should be in the winbar, row %d", row)
+	}
 	for _, it := range h.a.threadItems() {
 		if it.label == "api-tests" && it.detail != "idle · wakes at "+at {
 			t.Errorf("picker: %q", it.detail)
@@ -3700,7 +3691,7 @@ func TestTheRecapCardShowsAboveThePromptAfterAway(t *testing.T) {
 	}
 	away(model.RecapAway)
 	// It sits on the prompt, where the eyes are, not at the top of the chat.
-	if r, w := row("Cache added"), h.a.cur.rect; r < w.Y+w.H-1-minPromptLines-4 || r >= w.Y+w.H-1-minPromptLines {
+	if r, w := row("Cache added"), h.a.cur.rect; r != w.Y+w.H-2 {
 		t.Fatalf("no recap card just above the prompt, row %d:\n%s", r, h.screen())
 	}
 	h.see("recap")
