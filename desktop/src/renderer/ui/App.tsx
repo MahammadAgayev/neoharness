@@ -10,7 +10,7 @@ import { KeyHints } from './KeyHints'
 import { NewDoc } from './NewDoc'
 import { NewWorkspace } from './NewWorkspace'
 import { Tooltip } from './Tooltip'
-import { Help, MessagesWindow, TodoWindow } from './Panels'
+import { Help, MessagesWindow, TodoWindow, WaitsWindow } from './Panels'
 import { Icon } from './Icon'
 import { Choice } from './Choice'
 import { Cost } from './Cost'
@@ -30,6 +30,8 @@ function WindowView(props: { win: Win; focused: boolean }) {
       return <ArtifactWindow key={win.buf.name} {...props} />
     case 'messages':
       return <MessagesWindow {...props} />
+    case 'waits':
+      return <WaitsWindow {...props} />
     case 'todo':
       return <TodoWindow key={win.buf.thread} {...props} thread={win.buf.thread} />
   }
@@ -96,8 +98,7 @@ function Layout() {
 function TitleBar() {
   const workspace = useStore((s) => s.workspace)
   const screen = useStore((s) => s.screen)
-  const workspaces = useStore((s) => s.workspaces)
-  const waiting = workspaces.reduce((n, w) => n + (w.counts.waiting ?? 0) + (w.coordinator === 'waiting' ? 1 : 0), 0)
+  const waiting = useStore((s) => s.waits.length)
   const sidebar = useStore((s) => s.settings.sidebar)
   const win = useStore((s) => s.layout.cols.flatMap((c) => c.wins).find((w) => w.id === s.layout.focus))
   // The buttons keep the focus where it is, as the keys do.
@@ -155,8 +156,8 @@ function TitleBar() {
       </button>
       <div className="titlebar-right">
         {waiting > 0 && (
-          <button className="pill t-gold" onClick={() => store.openPicker('threads', true)} data-tip="Threads that wait for you" data-keys="⌘P">
-            ◆ {waiting}
+          <button className="pill t-gold" onClick={() => void store.ex('waits')} data-tip="What waits for you" data-keys="]q  :waits">
+            ◆ {waiting} waiting
           </button>
         )}
       </div>

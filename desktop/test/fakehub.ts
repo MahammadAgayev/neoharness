@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import http from 'node:http'
 
-import type { Artifact, Event, ThreadView, Update, WorkspaceView } from '../src/shared/model'
+import type { Artifact, Event, ThreadView, Update, Wait, WorkspaceView } from '../src/shared/model'
 
 export interface Call {
   method: string
@@ -36,6 +36,7 @@ export class FakeHub {
   events: Record<string, Event[]> = {}
   artifacts: Record<string, { artifact: Artifact; text: string }[]> = {}
   calls: Call[] = []
+  waits: Wait[] = []
   // version is the commit the hub says it runs.
   version = ''
   private streams = new Set<http.ServerResponse>()
@@ -66,6 +67,11 @@ export class FakeHub {
     if (i < 0) list.push(v)
     else list[i] = v
     this.push({ kind: 'thread', workspace: v.workspace, thread: v.name, view: v })
+  }
+
+  setWaits(waits: Wait[]): void {
+    this.waits = waits
+    this.push({ kind: 'waits', workspace: '', waits })
   }
 
   event(workspace: string, thread: string, e: Partial<Event>): void {
@@ -122,6 +128,7 @@ export class FakeHub {
         return json({})
       }
       if (url.pathname === '/deleted') return json([])
+      if (url.pathname === '/waits') return json(this.waits)
       if (url.pathname === '/cost') {
         const all = !url.searchParams.get('workspace')
         const day = (back: number) => {
@@ -152,6 +159,11 @@ export class FakeHub {
       if (kind === 'threads' && !name && m === 'POST') {
         const v = view(ws, body.name)
         this.setView(v)
+        return json({})
+      }
+      if (kind === 'threads' && sub === 'seen') return json({})
+      if (kind === 'threads' && sub === 'waits' && m === 'DELETE') {
+        this.setWaits(this.waits.filter((w) => !(w.workspace === ws && w.thread === name && w.id === parts[5])))
         return json({})
       }
       if (kind === 'threads' && sub === 'events') return json(this.events[`${ws}/${name}`] ?? [])

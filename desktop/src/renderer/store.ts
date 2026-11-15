@@ -14,7 +14,9 @@ import {
   type Event,
   type ThreadView,
   type Update,
+  type Wait,
   type WorkspaceView,
+  SeenDwellMs,
 } from '../shared/model'
 import { Away } from './lib/away'
 import { parseEx } from './lib/ex'
@@ -36,6 +38,7 @@ export type BufRef =
   | { kind: 'threads' }
   | { kind: 'artifact'; name: string }
   | { kind: 'messages' }
+  | { kind: 'waits' }
   | { kind: 'todo'; thread: string }
 
 export interface Win {
@@ -125,6 +128,9 @@ export interface State {
   status: HubStatus
   statusDetail: string
   workspaces: WorkspaceView[]
+  // waits is the hub's waits list: what needs the person in every
+  // workspace, oldest first.
+  waits: Wait[]
   screen: 'workspaces' | 'workspace'
   workspace: string
   threads: Record<string, ThreadView>
@@ -190,6 +196,7 @@ class Store {
     workspaces: [],
     screen: 'workspaces',
     workspace: '',
+    waits: [],
     threads: {},
     order: [],
     chats: {},
@@ -316,6 +323,7 @@ class Store {
     nh().onOpenTarget((t) => void this.goThread(t.workspace, t.thread))
     nh().ready()
     setInterval(() => this.prune(), 1000)
+    setInterval(() => this.see(Date.now()), 500)
     const away = new Away()
     const back = (yes: boolean) => yes && this.cameBack()
     window.addEventListener('blur', () => away.blur(Date.now()))
@@ -382,11 +390,10 @@ class Store {
   }
 
   async loadWorkspaces(): Promise<void> {
-    const ws = await this.try(this.call('workspaces', undefined))
-    if (ws) {
-      this.set({ workspaces: ws })
-      this.badge()
-    }
+    const [ws, waits] = await Promise.all([this.try(this.call('workspaces', undefined)), this.try(this.call('waits', undefined))])
+    if (ws) this.set({ workspaces: ws })
+    if (waits) this.set({ waits })
+    this.badge()
   }
 
   // resync loads the open workspace again: its threads, their transcripts
@@ -467,12 +474,16 @@ class Store {
   // --- updates ---
 
   private apply(u: Update, replay = false): void {
-    if (this.held && u.workspace === this.state.workspace && u.kind !== 'workspace') {
+    if (this.held && u.workspace === this.state.workspace && u.kind !== 'workspace' && u.kind !== 'waits') {
       this.held.push(u)
       return
     }
     const s = this.state
     switch (u.kind) {
+      case 'waits':
+        this.set({ waits: u.waits ?? [] })
+        this.badge()
+        return
       case 'workspace': {
         if (!u.summary) return
         const i = s.workspaces.findIndex((w) => w.name === u.workspace)
@@ -625,9 +636,83 @@ class Store {
   }
 
   private badge(): void {
-    let n = 0
-    for (const w of this.state.workspaces) n += (w.counts.waiting ?? 0) + (w.counts.failed ?? 0) + (w.coordinator === 'waiting' || w.coordinator === 'failed' ? 1 : 0)
-    nh().setBadge(n)
+    nh().setBadge(this.state.waits.length)
+  }
+
+  // --- the waits list ---
+  // Vim's quickfix list for the person's attention, as in the TUI: ]q and
+  // [q, :cn and :cp walk it; :waits and :copen show it.
+
+  // waitAt is the wait ]q went to last.
+  private waitAt = ''
+
+  // nextWait goes n waits on from the last one ]q went to, and opens it.
+  nextWait(n: number): void {
+    const ws = this.state.waits
+    if (!ws.length) return this.say('nothing waits for you', 'muted')
+    let i = ws.findIndex((w) => waitKey(w) === this.waitAt)
+    i = i < 0 ? (n > 0 ? n - 1 : ws.length + n) : i + n
+    if (i < 0 || i >= ws.length) return this.say('no more waits', 'muted')
+    void this.jumpWait(i)
+  }
+
+  // jumpWait opens the thread of a wait, at its end, where its card is.
+  async jumpWait(i: number): Promise<void> {
+    const ws = this.state.waits
+    const w = ws[i]
+    if (!w) return
+    this.waitAt = waitKey(w)
+    await this.goThread(w.workspace, w.thread)
+    const cur = this.cur()
+    if (this.state.workspace !== w.workspace || cur?.buf.kind !== 'chat' || cur.buf.thread !== w.thread) return
+    this.updateWin(cur.id, { follow: true, cursor: -1 })
+    this.say(`(${i + 1} of ${ws.length}) ${w.kind} · ${w.text.replace(/\s+/g, ' ').trim()}`, 'muted')
+  }
+
+  // dismissWait drops a notice or a failure from the list; a permission or
+  // a question is answered in its thread.
+  async dismissWait(i: number): Promise<void> {
+    const w = this.state.waits[i]
+    if (!w) return
+    if (w.kind !== 'notice' && w.kind !== 'failed') return this.say('answer it in its thread: <CR> goes there', 'muted')
+    await this.try(this.call('dismiss', { workspace: w.workspace, thread: w.thread, id: w.id }))
+  }
+
+  // seenFrom is when each chat on screen began to show, for the seen dwell;
+  // seenSent the chats said seen since.
+  private seenFrom: Record<string, number> = {}
+  private seenSent: Record<string, boolean> = {}
+
+  // see tells the hub which chats the person saw: on screen, in a window in
+  // front, for SeenDwellMs without a break. It quiets what came since at
+  // levels 1 and 2; what needs the person stays until resolved.
+  private see(now: number): void {
+    const s = this.state
+    const on = new Set<string>()
+    if (document.hasFocus() && s.screen === 'workspace')
+      for (const w of this.wins()) if (w.buf.kind === 'chat' && !w.buf.thread.includes('/')) on.add(w.buf.thread)
+    for (const k of Object.keys(this.seenFrom))
+      if (!on.has(k)) {
+        delete this.seenFrom[k]
+        delete this.seenSent[k]
+      }
+    for (const t of on) {
+      const level = s.threads[t]?.level ?? 0
+      if (level !== 1 && level !== 2) {
+        delete this.seenSent[t]
+        if (level === 0) this.seenFrom[t] = now
+        continue
+      }
+      const since = this.seenFrom[t]
+      if (since === undefined) {
+        this.seenFrom[t] = now
+        continue
+      }
+      if (!this.seenSent[t] && now - since >= SeenDwellMs) {
+        this.seenSent[t] = true
+        void this.try(this.call('seen', { workspace: s.workspace, thread: t, at: new Date(now).toISOString() }))
+      }
+    }
   }
 
   // --- screens and workspaces ---
@@ -1507,6 +1592,21 @@ class Store {
       case 'mes':
         if (w) this.show(w.id, { kind: 'messages' })
         return
+      case 'waits':
+      case 'copen':
+      case 'cope':
+      case 'cw':
+      case 'cwindow':
+        if (w) this.show(w.id, { kind: 'waits' })
+        return
+      case 'cn':
+      case 'cnext':
+        return this.nextWait(1)
+      case 'cp':
+      case 'cN':
+      case 'cprevious':
+      case 'cNext':
+        return this.nextWait(-1)
       case 'recap':
         return this.openRecap()
       case 'todo': {
@@ -1646,9 +1746,14 @@ class Store {
     if (this.state.artifacts.some((a) => a.name === name)) return { kind: 'artifact', name }
     if (name === 'threads') return { kind: 'threads' }
     if (name === 'messages') return { kind: 'messages' }
+    if (name === 'waits') return { kind: 'waits' }
     const ms = this.state.order.filter((n) => n.includes(name))
     return ms.length === 1 ? { kind: 'chat', thread: ms[0] } : null
   }
+}
+
+function waitKey(w: Wait): string {
+  return `${w.workspace}\0${w.thread}\0${w.id}`
 }
 
 export function sameBuf(a: BufRef, b: BufRef): boolean {

@@ -135,3 +135,16 @@
     opacity: 1;
   }
 }
+
+.waits .wait-text {
+  flex: none;
+  white-space: pre;
+  margin-right: calc(-1 * var(--s-2));
+}
+.waits .wait-body {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg);
+}

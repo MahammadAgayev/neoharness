@@ -13,6 +13,7 @@ import type {
   HubInfo,
   CostReport,
   ThreadView,
+  Wait,
   WorkspaceView,
 } from './model'
 
@@ -73,6 +74,16 @@ export const calls = {
     body: { text: a.text, base: a.base, baseText: a.baseText },
   }),
   threads: (a: { workspace: string }): Req => ({ method: 'GET', path: `${ws(a.workspace)}/threads` }),
+  waits: (): Req => ({ method: 'GET', path: '/waits' }),
+  seen: (a: { workspace: string; thread: string; at: string }): Req => ({
+    method: 'POST',
+    path: `${th(a.workspace, a.thread)}/seen`,
+    body: { at: a.at },
+  }),
+  dismiss: (a: { workspace: string; thread: string; id: string }): Req => ({
+    method: 'DELETE',
+    path: `${th(a.workspace, a.thread)}/waits/${e(a.id)}`,
+  }),
   openThread: (a: { workspace: string; name: string; brief?: string; location?: string }): Req => ({
     method: 'POST',
     path: `${ws(a.workspace)}/threads`,
@@ -143,6 +154,7 @@ export interface Results {
   editArtifact: ArtifactText
   mergeArtifact: Merge
   threads: ThreadView[]
+  waits: Wait[]
   events: Event[]
   completions: Completions
   choices: Choices

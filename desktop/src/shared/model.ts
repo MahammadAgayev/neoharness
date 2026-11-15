@@ -44,6 +44,28 @@ export interface Event {
   exit?: number
   version?: number
   needsYou?: boolean
+  // level is how much of the person's attention the event asks for, on the
+  // attention ladder (Level); the hub sets it.
+  level?: Level
+}
+
+// Level is a step of the attention ladder: 0 quiet, 1 ambient, 2 notice,
+// 3 needs you.
+export type Level = 0 | 1 | 2 | 3
+
+// SeenDwellMs is how long a chat is on screen, in a window in front, before
+// the app tells the hub it was seen (model.SeenDwell).
+export const SeenDwellMs = 2000
+
+// Wait is one item of the waits list: what needs the person, in any
+// workspace. id names it to answer or dismiss.
+export interface Wait {
+  workspace: string
+  thread: string
+  kind: 'permission' | 'question' | 'failed' | 'notice'
+  id: string
+  text: string
+  since: string
 }
 
 export interface Artifact {
@@ -91,6 +113,10 @@ export interface ThreadView {
   // the items.
   todos?: Todo[]
   quiet?: boolean
+  // level is the highest attention level still open on the thread: what
+  // waits on the person, or what came since seenAt.
+  level?: Level
+  seenAt?: string
   model?: string
   context?: number
   contextWindow?: number
@@ -179,7 +205,7 @@ export interface WorkspaceView {
   autoCompact?: number
 }
 
-export type UpdateKind = 'event' | 'thread' | 'workspace' | 'deleted' | 'artifact' | 'stopped'
+export type UpdateKind = 'event' | 'thread' | 'workspace' | 'deleted' | 'artifact' | 'stopped' | 'waits' | 'delta'
 
 export interface Update {
   kind: UpdateKind
@@ -189,6 +215,10 @@ export interface Update {
   view?: ThreadView
   summary?: WorkspaceView
   artifact?: Artifact
+  // waits is the whole waits list, oldest first, on a "waits" update.
+  waits?: Wait[]
+  // text is the reply so far on a "delta" update; empty drops it.
+  text?: string
 }
 
 export interface HubInfo {

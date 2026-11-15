@@ -5,6 +5,7 @@ import { keyName } from '../lib/keys'
 import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
 import { Glyph } from './Icon'
+import { age } from '../search'
 import { CloseWindow } from './CloseWindow'
 
 function useScrollKeys(win: Win, el: React.RefObject<HTMLDivElement | null>) {
@@ -63,6 +64,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['v V  then j k  y', 'select blocks, then yank them; <Esc> ends it'],
       ['x', 'stop the running turn'],
       ["m{a-z}  '{a-z}  ''", 'mark a block or a thread row, go to the mark, go back'],
+      ['K', "on a thread row: the thread's last reply, on the command line"],
     ],
   },
   {
@@ -73,6 +75,8 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['<C-w>v  <C-w>s', 'split right / above'],
       ['<C-w>c  <C-w>o  <C-w>=', 'close, only, equal sizes'],
       [']b [b  <C-^>', 'next / previous thread, alternate'],
+      [']q [q  :cn :cp', 'next / previous thing that waits for you, in any workspace: its thread opens at the card'],
+      [':waits  :copen', 'the waits list: <CR> goes there, x dismisses a notice or a failure'],
       ['<C-o>  <C-i>  ⌘[  ⌘]', 'back and forward through what the window showed, from Insert too; or the arrows at the top'],
       ['<C-v>  <C-x>', 'thread in a split on the right / above (threads list, search)'],
       ['<C-d>', 'delete the thread or workspace, after y (search)'],
@@ -128,7 +132,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       [':restore [name]', 'bring back a deleted workspace; no name lists them'],
       [':colorscheme <name>', 'system, rose-pine-moon, rose-pine, rose-pine-dawn'],
       [':set vim  :set novim', 'Vim keys in editors, or keys as in Claude Code'],
-      [':set nosidebar  ⌘B', 'fold the sidebar to a rail of icons; the mouse on it shows it whole'],
+      [':set nosidebar  ⌘B', 'fold the sidebar to a rail of letters; the mouse resting on it shows it whole'],
       [':set fontsize=15  compactwarn=80', 'text size; the context % that says /compact'],
       [':settings  <leader>s  ⌘,', 'theme, text size, Vim keys, the leader and your own keys'],
       [':todo [name]', 'the todo list this thread, or another, keeps while it works; it follows the work, <C-o> goes back'],
@@ -200,6 +204,76 @@ export function Help() {
             ))}
           </section>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// WaitsWindow is :waits, Vim's quickfix window for what needs you: <CR>
+// goes there, x dismisses a notice or a failure.
+export function WaitsWindow(props: { win: Win; focused: boolean }) {
+  const { win, focused } = props
+  const waits = useStore((s) => s.waits)
+  const open = useStore((s) => s.workspace)
+  const cursor = Math.min(Math.max(win.cursor, 0), Math.max(waits.length - 1, 0))
+  const el = useRef<HTMLDivElement>(null)
+  const handle = (a: WinAction, count: number): boolean => {
+    const set = (i: number) => store.updateWin(win.id, { cursor: Math.max(0, Math.min(i, waits.length - 1)) })
+    switch (a) {
+      case 'down':
+        set(cursor + count)
+        return true
+      case 'up':
+        set(cursor - count)
+        return true
+      case 'top':
+        set(0)
+        return true
+      case 'bottom':
+        set(waits.length - 1)
+        return true
+      case 'enter':
+        void store.jumpWait(cursor)
+        return true
+      case 'stopHere':
+        void store.dismissWait(cursor)
+        return true
+    }
+    return false
+  }
+  const ref = useRef(handle)
+  ref.current = handle
+  useEffect(() => {
+    handlers.set(win.id, (a, n) => ref.current(a, n))
+    return () => void handlers.delete(win.id)
+  }, [win.id])
+  const now = Date.now()
+  return (
+    <div className="window waits" onMouseDown={() => store.focus(win.id)}>
+      <div className={`statusline ${focused ? 'focused' : ''}`}>
+        <span className="sl-name">waits</span>
+        <CloseWindow id={win.id} />
+      </div>
+      <div className="list board" ref={el} tabIndex={-1}>
+        {waits.length === 0 && <div className="empty">nothing waits for you</div>}
+        {waits.map((w, i) => (
+          <div
+            key={`${w.workspace}/${w.thread}/${w.id}`}
+            className={`list-row ${focused && i === cursor ? 'cursor' : ''}`}
+            onClick={() => {
+              store.updateWin(win.id, { cursor: i })
+              void store.jumpWait(i)
+            }}
+          >
+            <span className={`glyph ${w.kind === 'failed' ? 't-love' : 't-gold'}`}>
+              <Glyph g={w.kind === 'failed' ? '✗' : w.kind === 'notice' ? '↗' : '◆'} />
+            </span>
+            <span className="name">{w.workspace === open ? w.thread : `${w.workspace} · ${w.thread}`}</span>
+            <span className={`wait-text ${w.kind === 'failed' ? 't-love' : 't-gold'}`}>{`${w.kind} · `}</span>
+            <span className="wait-body">{w.text.replace(/\s+/g, ' ')}</span>
+            <span className="time">{age(w.since, now) || 'now'}</span>
+          </div>
+        ))}
       </div>
     </div>
   )

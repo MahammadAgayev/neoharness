@@ -67,6 +67,8 @@ const appMaps: Record<string, Action> = {
   '<C-6>': c('alternate'),
   ']b': c('next-thread'),
   '[b': c('prev-thread'),
+  ']q': c('next-wait'),
+  '[q': c('prev-wait'),
 }
 
 // window maps act on what the window in focus shows.

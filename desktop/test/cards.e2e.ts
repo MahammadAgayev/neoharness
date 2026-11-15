@@ -809,6 +809,8 @@ test("an idle thread's row is its name, and K shows its last reply", async () =>
 test('a row that changes group waits while you are on the board, then settles; a failed thread has its own group', async () => {
   const names = () => page.locator('.board [data-name]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.name))
   const api = page.locator('.board .list-row', { hasText: 'api' })
+  // The mouse rests on the sidebar, away from the list.
+  await page.mouse.move(100, 500)
   // The cursor is on the board: api stays where it is.
   hub.setView(view('demo', 'api', { state: 'waiting', permission: { id: 'p9', tool: 'Bash', detail: 'go test ./...' } }))
   await expect(api.locator('.glyph')).toHaveClass(/t-gold/)
@@ -817,7 +819,7 @@ test('a row that changes group waits while you are on the board, then settles; a
   // Off the board, it moves to the top with what it needs, and a tint.
   await page.keyboard.press('Control+w')
   await page.keyboard.press('h')
-  await page.mouse.move(400, 400)
+  await page.mouse.move(100, 500)
   await expect(page.locator('.group-head').first()).toHaveText('waiting · 1')
   await expect.poll(names).toEqual(expect.arrayContaining(['api']))
   expect((await names())[0]).toBe('api')
@@ -830,6 +832,60 @@ test('a row that changes group waits while you are on the board, then settles; a
   await expect(api.locator('.glyph')).toHaveClass(/t-love/)
   hub.setView(view('demo', 'api', { state: 'idle', reply: 'Added /healthz and a test.' }))
   await expect(page.locator('.group-head', { hasText: 'failed' })).toHaveCount(0)
+})
+
+test('the waits list: ]q and [q walk what needs you, :waits shows it, x dismisses a failure', async () => {
+  const since = new Date(Date.now() - 4 * 60000).toISOString()
+  hub.setWaits([
+    { workspace: 'demo', thread: 'api', kind: 'permission', id: 'p1', text: 'Bash: go test ./...', since },
+    { workspace: 'demo', thread: 'coordinator', kind: 'failed', id: 'failed', text: 'the model is overloaded', since },
+  ])
+  const pill = page.locator('.titlebar .pill')
+  await expect(pill).toHaveText('◆ 2 waiting')
+  const line = page.locator('.cmdline')
+  const name = page.locator('.statusline.focused .sl-name')
+  await normal()
+  await page.keyboard.press(']')
+  await page.keyboard.press('q')
+  await expect(name).toHaveText('api')
+  await expect(line).toContainText('(1 of 2) permission · Bash: go test ./...')
+  await normal()
+  await page.keyboard.press(']')
+  await page.keyboard.press('q')
+  await expect(name).toHaveText('coordinator')
+  await expect(line).toContainText('(2 of 2) failed · the model is overloaded')
+  await normal()
+  await page.keyboard.press(']')
+  await page.keyboard.press('q')
+  await expect(line).toContainText('no more waits')
+  await page.keyboard.press('[')
+  await page.keyboard.press('q')
+  await expect(line).toContainText('(1 of 2)')
+
+  await normal()
+  await page.keyboard.type(':waits')
+  await page.keyboard.press('Enter')
+  const rows = page.locator('.window.waits .list-row')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(1)).toContainText('failed · the model is overloaded')
+  await shot('49-waits')
+  await page.keyboard.press('j')
+  await page.keyboard.press('x')
+  await expect.poll(() => hub.calls.some((c) => c.method === 'DELETE' && c.path.endsWith('/coordinator/waits/failed'))).toBe(true)
+  await expect(rows).toHaveCount(1)
+  await expect(pill).toHaveText('◆ 1 waiting')
+  await page.keyboard.press('x')
+  await expect(line).toContainText('answer it in its thread')
+  await page.keyboard.press('Enter')
+  await expect(name).toHaveText('api')
+
+  hub.setWaits([])
+  await expect(pill).toHaveCount(0)
+  await normal()
+  await page.keyboard.press(']')
+  await page.keyboard.press('q')
+  await expect(line).toContainText('nothing waits for you')
+  await page.keyboard.press('Control+o')
 })
 
 test('the recap card shows above the prompt after two minutes away; Esc, q or × closes it until a new recap', async () => {

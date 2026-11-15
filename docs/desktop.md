@@ -74,6 +74,15 @@ command line. While the cursor or the mouse is on the list, a thread that
 changes state keeps its place; it moves to its new group when you leave,
 with a short tint.
 
+The waits list is what needs you in every workspace, oldest first, as in
+the TUI: permissions, questions, failed turns and notices that ask for
+you. `]q` and `[q`, or `:cn` and `:cp`, open the next or the previous one
+at its card, and the command line says `(2 of 5) permission · …`.
+`:waits` or `:copen` shows the list in the window: `<CR>` goes there, `x`
+dismisses a notice or a failure. The title bar shows `◆ N waiting` while it
+is not empty; a click opens the list. A chat that shows for 2 seconds in a
+window in front counts as seen, so the hub quiets what came in it since.
+
 The app does not read `init.lua`; the hub settings in it apply to both.
 What the TUI takes from `init.lua` for itself is in Settings instead.
 
