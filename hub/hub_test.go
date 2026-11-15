@@ -2258,7 +2258,11 @@ func TestCostAddsUpTurnsByThreadModelDayAndWorkspace(t *testing.T) {
 		if err := h.Send(s.ws, model.User, model.Coordinator, s.prompt); err != nil {
 			t.Fatal(err)
 		}
-		stateIs(t, h, s.ws, model.Coordinator, model.StateIdle)
+		want := model.StateIdle
+		if s.prompt == "fails" {
+			want = model.StateFailed
+		}
+		stateIs(t, h, s.ws, model.Coordinator, want)
 	}
 	sp, err := h.Cost("demo")
 	if err != nil {
@@ -2354,7 +2358,7 @@ func TestAFailedTurnShowsOnTheBoardUntilTheThreadRunsAgain(t *testing.T) {
 	if err := h.OpenThread("demo", model.Coordinator, "flaky", "try", ""); err != nil {
 		t.Fatal(err)
 	}
-	stateIs(t, h, "demo", "flaky", model.StateIdle)
+	stateIs(t, h, "demo", "flaky", model.StateFailed)
 	for _, msg := range []string{"one", "two"} {
 		_ = h.Send("demo", model.User, model.Coordinator, msg)
 		stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
@@ -2365,7 +2369,7 @@ func TestAFailedTurnShowsOnTheBoardUntilTheThreadRunsAgain(t *testing.T) {
 			coord = append(coord, r.Prompt)
 		}
 	}
-	failed := "- flaky: idle. Last turn failed: the agent failed: fake: crashed on purpose.\n"
+	failed := "- flaky: failed. Last turn failed: the agent failed: fake: crashed on purpose.\n"
 	if len(coord) != 2 || !strings.Contains(coord[0], failed) || !strings.Contains(coord[1], failed) {
 		t.Fatalf("coordinator turns = %q, want the failure on both", coord)
 	}
@@ -2733,7 +2737,7 @@ func TestOnlyNewsWakesTheCoordinator(t *testing.T) {
 		{"rec", "please recap as rec", "- rec: idle. Recap: Cache added.\n  New: recap."},
 		{"todo", "please finish as todo", "- todo: idle. Tasks: 1/1 done.\n  New: done: Add the route."},
 		{"art", "please write as art", "- art: idle.\n  New: wrote plan."},
-		{"bad", "please fail as bad", "- bad: idle. Last turn failed: the agent failed: fake: crashed."},
+		{"bad", "please fail as bad", "- bad: failed. Last turn failed: the agent failed: fake: crashed."},
 	} {
 		n := len(reportTurns(f))
 		if err := h.OpenThread("demo", model.Coordinator, c.name, c.brief, ""); err != nil {

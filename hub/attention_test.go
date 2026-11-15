@@ -251,3 +251,36 @@ func TestFailuresAndNoticesWaitAcrossARestart(t *testing.T) {
 	_ = h2.Send("demo", model.User, "flaky", "now work")
 	eventually(t, "the failure to clear", func() bool { return len(h2.Waits()) == 1 })
 }
+
+// TestAFailedTurnLeavesTheThreadFailed: a thread whose last turn failed
+// shows so, the coordinator too, until the person dismisses it or the
+// thread runs again.
+func TestAFailedTurnLeavesTheThreadFailed(t *testing.T) {
+	f := &fake{script: func(ctx context.Context, req agent.Request) agent.Result {
+		if strings.Contains(req.Prompt, "crash") {
+			return agent.Result{ExitCode: 1, Stderr: "fake: crashed on purpose"}
+		}
+		return agent.Result{Text: "ok"}
+	}}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "flaky", "crash", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "flaky", model.StateFailed)
+	if err := h.Dismiss("demo", "flaky", "failed"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "flaky", model.StateIdle)
+
+	_ = h.Send("demo", model.User, "flaky", "crash again")
+	stateIs(t, h, "demo", "flaky", model.StateFailed)
+	if c := workspaceView(t, h, "demo").Counts[model.StateFailed]; c != 1 {
+		t.Fatalf("failed count = %d", c)
+	}
+	_ = h.Send("demo", model.User, "flaky", "now work")
+	stateIs(t, h, "demo", "flaky", model.StateIdle)
+
+	_ = h.Send("demo", model.User, model.Coordinator, "crash")
+	stateIs(t, h, "demo", model.Coordinator, model.StateFailed)
+}

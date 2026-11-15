@@ -236,4 +236,6 @@ it conflicts, and each conflict gives its line ranges, `[first, end)` from
 `merged`. A client maps the ranges to its own blocks.
 
 A thread's state is not stored. The hub calculates it from the stored
-fields each time, so it cannot drift.
+fields each time, so it cannot drift. `failed` comes after resolved,
+waiting and running: the last turn failed and nothing came after it. It
+stays until the thread runs again or the person dismisses the failure.

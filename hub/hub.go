@@ -2316,6 +2316,8 @@ func (th *thread) derive() model.State {
 		return model.StateWaiting
 	case len(t.Queue) > 0:
 		return model.StateRunning
+	case failed(th):
+		return model.StateFailed
 	}
 	return model.StateIdle
 }

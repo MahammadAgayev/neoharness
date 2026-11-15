@@ -24,6 +24,9 @@ const (
 	StateRunning  State = "running"
 	StateWaiting  State = "waiting"
 	StateResolved State = "resolved"
+	// StateFailed is a thread whose last turn failed, until the person
+	// dismisses it or the thread runs again.
+	StateFailed State = "failed"
 )
 
 // Role separates the one coordinator per workspace from its threads. The
