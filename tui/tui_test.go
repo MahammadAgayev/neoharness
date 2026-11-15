@@ -382,8 +382,12 @@ func TestThreadsPaneGoesBackToTheRight(t *testing.T) {
 	h.press("<Space>", "t", ":q", "<CR>")
 	h.press("<Space>", "t")
 	onRight("after the pane was closed")
-	h.press("<C-w>s", "<C-w>j", ":b auth-refactor", "<CR>")
-	h.press("<C-w>k", ":b api-tests", "<CR>")
+	h.press("<C-w>s")
+	for i, w := range h.a.root.windows() {
+		if w.Buf.Kind == KindThreads {
+			w.show(h.a.chat([]string{"auth-refactor", "api-tests"}[i%2]))
+		}
+	}
 	h.press("<Space>", "t")
 	onRight("after the pane's windows show threads")
 }
@@ -397,26 +401,15 @@ func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
 		t.Fatalf("<leader>t should focus the threads pane on the right; got %d windows", len(wins))
 	}
 	coord, pane := wins[0], wins[1]
-	// Rows: running, auth-refactor, blank, idle, api-tests.
+	// Rows: running, auth-refactor, blank, idle, api-tests. As Vim's
+	// quickfix, <CR> opens in the chat window, and the list stays.
 	h.press("G", "<CR>")
-	if len(h.a.root.windows()) != 2 || h.a.cur != pane || pane.Buf.Thread != "api-tests" {
-		t.Fatalf("<CR> should show api-tests in the pane; got %q", pane.Buf.Name)
+	if len(h.a.root.windows()) != 2 || h.a.cur != coord || coord.Buf.Thread != "api-tests" || pane.Buf.Kind != KindThreads {
+		t.Fatalf("<CR> should show api-tests in the chat window; got %q", coord.Buf.Name)
 	}
-	// The list comes back in a column of its own, as a file tree does: the
-	// thread you read stays.
 	h.press("<Space>", "t")
-	wins = h.a.root.windows()
-	if len(wins) != 3 || wins[1] != pane || pane.Buf.Thread != "api-tests" || wins[2] != h.a.cur || h.a.cur.Buf.Kind != KindThreads {
-		t.Fatalf("<leader>t should open the list beside the thread; got %d windows", len(wins))
-	}
-	list := wins[2]
-	h.press("<C-w>h", "<Space>", "t")
-	if len(h.a.root.windows()) != 3 || h.a.cur != list {
+	if h.a.cur != pane {
 		t.Fatal("<leader>t with the list on screen should go to it")
-	}
-	h.press("<C-w>c", "<C-w>l", "<C-^>")
-	if pane.Buf.Kind != KindThreads {
-		t.Fatal("<C-^> should go back to the list")
 	}
 	h.press("<Space>", "<Space>", "api", "<C-v>")
 	wins = h.a.root.windows()
@@ -433,15 +426,9 @@ func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
 	if len(h.a.root.windows()) != 2 || h.a.cur != pane {
 		t.Fatalf("closing the splits should leave the pane; got %d windows", len(h.a.root.windows()))
 	}
-	h.press("G", "<CR>")
-
 	h.press("<Space>", "c")
-	if h.a.cur != coord || pane.Buf.Thread != "api-tests" {
-		t.Fatal("<leader>c should focus the coordinator and leave the pane")
-	}
-	h.press(":b auth-refactor", "<CR>", "<C-l>", "<Space>", "c")
-	if h.a.cur != coord || coord.Buf.Thread != model.Coordinator || pane.Buf.Thread != "api-tests" {
-		t.Fatalf("<leader>c from the pane should show the coordinator on the left; cur %q", h.a.cur.Buf.Name)
+	if h.a.cur != coord || coord.Buf.Thread != model.Coordinator || pane.Buf.Kind != KindThreads {
+		t.Fatalf("<leader>c should show the coordinator on the left and leave the list; cur %q", h.a.cur.Buf.Name)
 	}
 }
 

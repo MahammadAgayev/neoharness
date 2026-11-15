@@ -15,9 +15,9 @@
 ```
 
 - A workspace opens with the coordinator on the left and the threads pane on
-  the right. `<CR>` on a thread shows it there. `<leader>t` brings the list
-  back in a column of its own, so the thread stays, or goes to the list when
-  it is on screen.
+  the right. `<CR>`, `:b` or `:open` from the list opens the thread in the
+  chat window you used last, as Vim's quickfix does, so the list stays.
+  `<leader>t` goes to the list, or brings it back in a column of its own.
 - Each pane has a winbar on top: its name, and its state on the right. The
   pane with focus has its name in bold and a row of `▔` in the accent color
   under it. One status line at the foot of the screen, as Vim's

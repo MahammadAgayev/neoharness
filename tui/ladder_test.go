@@ -316,3 +316,29 @@ func TestALongBriefFromTheCoordinatorFoldsToOneRow(t *testing.T) {
 		t.Fatalf("an open brief shows all of it:\n%s", got)
 	}
 }
+
+func TestOpeningFromTheBoardKeepsTheBoard(t *testing.T) {
+	for _, keys := range [][]string{
+		{":b api-tests", "<CR>"},
+		{"<CR>"},
+		{":open fresh", "<CR>", "<Esc>"},
+	} {
+		h := start(t)
+		h.openDemo()
+		h.press("<C-w>l")
+		for keys[0] == "<CR>" && h.a.line(h.a.cur).Item != "api-tests" {
+			h.press("j")
+		}
+		h.press(keys...)
+		want := "api-tests"
+		if keys[0] == ":open fresh" {
+			want = "fresh"
+		}
+		if h.board() == nil {
+			t.Fatalf("%q from the board closed it:\n%s", keys, h.screen())
+		}
+		if h.a.cur.Buf.Kind != KindChat || h.a.cur.Buf.Thread != want {
+			t.Fatalf("%q should open %s in the chat pane, got %q", keys, want, h.a.cur.Buf.Thread)
+		}
+	}
+}

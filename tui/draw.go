@@ -38,6 +38,9 @@ func (a *App) draw() {
 		return
 	}
 	a.cursorX, a.cursorY = -1, -1
+	if a.cur.Buf.Kind == KindChat {
+		a.lastChat = a.cur
+	}
 	now := a.now()
 	a.spin = phase(now, spinEvery)
 	sep := func(x, y, h int) {

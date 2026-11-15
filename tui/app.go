@@ -124,6 +124,9 @@ type App struct {
 	// threads list, and the threads opened from it.
 	pane         *Window
 	showResolved bool
+	// lastChat is the chat window that had focus last: what the board opens
+	// a thread in, as Vim's quickfix opens in the previous window.
+	lastChat *Window
 	// layouts are the windows of the workspaces left this session, so
 	// opening one again shows its splits as they were.
 	layouts     map[string]layout
@@ -960,7 +963,29 @@ func (a *App) showThread(name string) {
 		a.cur = w
 		return
 	}
+	a.leaveList()
 	a.cur.show(a.chat(name))
+}
+
+// leaveList moves the focus from the board or the waits list to the chat
+// window that had it last, so what opens from a list keeps the list. It
+// reports whether it moved.
+func (a *App) leaveList() bool {
+	if k := a.cur.Buf.Kind; k != KindThreads && k != KindWaits {
+		return false
+	}
+	wins := a.root.windows()
+	if slices.Contains(wins, a.lastChat) {
+		a.cur = a.lastChat
+		return true
+	}
+	for _, w := range wins {
+		if k := w.Buf.Kind; k != KindThreads && k != KindWaits {
+			a.cur = w
+			return true
+		}
+	}
+	return false
 }
 
 // openArtifact shows an artifact in the current window, as gf opens a file;

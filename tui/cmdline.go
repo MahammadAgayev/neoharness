@@ -427,7 +427,11 @@ func (a *App) exec(line string) {
 			a.order = append(a.order, arg(0))
 			a.renderThreads()
 		}
-		a.paneThread(arg(0))
+		if a.leaveList() {
+			a.showThread(arg(0))
+		} else {
+			a.paneThread(arg(0))
+		}
 		a.insert('i')
 	case "resolve":
 		if !needWorkspace() {
@@ -449,6 +453,7 @@ func (a *App) exec(line string) {
 			return
 		}
 		if b := a.findBuffer(arg(0)); b != nil {
+			a.leaveList()
 			a.showBuf(a.cur, b)
 		} else {
 			a.notify("no buffer "+arg(0), a.th.Alert)
@@ -715,7 +720,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<leader>ps", "search every transcript"),
 		row("<leader>pm", "pick a notification; it opens its thread, in any workspace"),
 		row("<leader>pv", "workspaces screen"),
-		row("<leader>t", "threads list: goes to it, or opens it in a new column on the right; <CR> opens a thread in its place"),
+		row("<leader>t", "threads list: goes to it, or opens it in a new column on the right; <CR> opens a thread in the last chat window"),
 		row("<leader>c", "coordinator"),
 		row("<leader>nc  <leader>nh", "dismiss notifications, their history"),
 		row("<leader>a A x", "allow, allow always (what the card names), deny a permission; x also skips a question"),
