@@ -126,14 +126,10 @@ func overlay(st, bg tcell.Style) tcell.Style {
 	return st.Background(b)
 }
 
-// stateFailed is a thread whose turn ended in an error, with nothing after
-// it. The hub lands it as a State once every client draws it.
-const stateFailed model.State = "failed"
-
 // stateGlyph is the one-character state marker used everywhere.
 func stateGlyph(s model.State) string {
 	switch s {
-	case stateFailed:
+	case model.StateFailed:
 		return "✗"
 	case model.StateRunning:
 		return "●"
@@ -147,7 +143,7 @@ func stateGlyph(s model.State) string {
 
 func (t *Theme) state(s model.State) tcell.Style {
 	switch s {
-	case stateFailed:
+	case model.StateFailed:
 		return t.Alert
 	case model.StateRunning:
 		return t.Run

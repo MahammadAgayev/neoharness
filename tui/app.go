@@ -757,7 +757,7 @@ func (a *App) onView(v model.ThreadView) {
 		}
 	}
 	// A stopped turn sends no turn end, so its tool calls would spin forever.
-	if v.State == model.StateIdle || v.State == model.StateResolved || v.State == stateFailed {
+	if v.State == model.StateIdle || v.State == model.StateResolved || v.State == model.StateFailed {
 		a.chat(v.Name).settle(false)
 	}
 	a.refreshTodo(v)
@@ -1263,7 +1263,7 @@ func displayPin(pin string) string {
 
 func countSpans(c map[model.State]int, th *Theme) []Span {
 	var out []Span
-	for _, s := range []model.State{model.StateRunning, stateFailed, model.StateWaiting, model.StateResolved} {
+	for _, s := range []model.State{model.StateRunning, model.StateFailed, model.StateWaiting, model.StateResolved} {
 		if n := c[s]; n > 0 {
 			out = append(out, Span{fmt.Sprintf("%s %d  ", stateGlyph(s), n), th.state(s)})
 		}
@@ -1394,7 +1394,7 @@ func (a *App) renderThreads() {
 		groups[group(a.boardAt[n])] = append(groups[group(a.boardAt[n])], n)
 	}
 	var lines []Line
-	for _, s := range []model.State{model.StateWaiting, stateFailed, model.StateRunning, model.StateIdle} {
+	for _, s := range []model.State{model.StateWaiting, model.StateFailed, model.StateRunning, model.StateIdle} {
 		if len(groups[s]) == 0 {
 			continue
 		}

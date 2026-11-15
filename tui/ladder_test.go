@@ -110,7 +110,7 @@ func TestNeedsYouRowsArePinnedOnTopWithWhatTheyNeed(t *testing.T) {
 func TestAFailedThreadShowsFailedNotIdle(t *testing.T) {
 	h := start(t)
 	h.openDemo()
-	h.setThread("api-tests", func(v *model.ThreadView) { v.State = stateFailed })
+	h.setThread("api-tests", func(v *model.ThreadView) { v.State = model.StateFailed })
 	head, row := h.rowOf("failed · 1"), h.rowOf("✗ api-tests")
 	if head < 0 || row != head+1 || row > h.rowOf("running · 1") {
 		t.Fatalf("a failed thread should be on top, in its own group:\n%s", h.screen())

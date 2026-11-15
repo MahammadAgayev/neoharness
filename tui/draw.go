@@ -532,7 +532,7 @@ func (a *App) drawWinbar(w *Window, focused bool) {
 	v := a.threads[b.Thread]
 	glyphSt := a.th.state(v.State)
 	// What needs the person keeps its color in every pane.
-	if !focused && v.State != model.StateWaiting && v.State != stateFailed {
+	if !focused && v.State != model.StateWaiting && v.State != model.StateFailed {
 		glyphSt = dim
 	}
 	state := []Span{{a.glyph(v.State) + " ", glyphSt}, {stateLabel(v.State), dim}}

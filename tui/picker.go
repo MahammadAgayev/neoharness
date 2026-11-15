@@ -316,7 +316,7 @@ func (a *App) pickWorkspaces() {
 		name := p.Name
 		detail := displayPin(p.Pin)
 		glyph := Span{"▪", a.th.Accent}
-		for _, s := range []model.State{model.StateRunning, stateFailed, model.StateWaiting} {
+		for _, s := range []model.State{model.StateRunning, model.StateFailed, model.StateWaiting} {
 			n := p.Counts[s]
 			if p.Coordinator == s {
 				n++
