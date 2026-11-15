@@ -4,6 +4,7 @@ import { exCommands } from '../lib/ex'
 import { items as searchItems, tabs, type Item } from '../search'
 import { store, useStore } from '../store'
 import { Glyph } from './Icon'
+import { Leave } from './Leave'
 
 export function Picker() {
   const p = useStore((s) => s.picker)
@@ -168,7 +169,7 @@ export function Toasts() {
   const toasts = useStore((s) => s.toasts)
   const shown = toasts.slice(-3).reverse()
   return (
-    <div className="toasts">
+    <Leave className="toasts">
       {shown.map((t) => (
         <div key={t.id} className={`toast b-${t.tone}`} onClick={() => void store.goThread(t.workspace, t.thread)}>
           <div className="toast-head">
@@ -181,7 +182,7 @@ export function Toasts() {
           <div className="toast-body">{t.body}</div>
         </div>
       ))}
-    </div>
+    </Leave>
   )
 }
 

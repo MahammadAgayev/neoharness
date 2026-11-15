@@ -95,6 +95,12 @@ What the TUI takes from `init.lua` for itself is in Settings instead.
   (`:colorscheme rose-pine-dawn`), or Nothing, which turns a default off.
   Your keys win over the defaults.
 
+Motion follows one rule: what a key does happens at once, and what the
+agent or the hub brings arrives softly. A toast, the recap or a dialog
+fades in from a few pixels away and fades out when it goes; the folded
+sidebar slides in over the windows. With Reduce motion on in macOS
+(Accessibility, Display), nothing slides; things only fade, quickly.
+
 ### Artifacts
 
 An artifact opens as a page: one centered column, about 90 characters

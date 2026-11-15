@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 
 import { store, useStore } from '../store'
 import { Icon } from './Icon'
+import { Leave } from './Leave'
 
 const minWidth = 160
 const maxWidth = 400
@@ -50,13 +51,10 @@ export function Sidebar(props: { folded: boolean }) {
     wait.current = on ? setTimeout(() => setOver(true), 150) : null
     if (!on) setOver(false)
   }
-  const nav = (
-    <nav
-      className={`sidebar ${props.folded ? (over ? 'peek' : 'rail') : ''}`}
-      style={props.folded ? { width: over ? width : railWidth } : { flexBasis: width }}
-      onMouseEnter={props.folded ? () => hover(true) : undefined}
-      onMouseLeave={props.folded ? () => hover(false) : undefined}
-    >
+  // Folded, the rail keeps its width in the layout, and the whole sidebar
+  // arrives over the windows: a slide, not a resize, so nothing reflows.
+  const nav = (mode: '' | 'rail' | 'peek') => (
+    <nav className={`sidebar ${mode}`} style={mode === '' ? { flexBasis: width } : { width: mode === 'peek' ? width : railWidth }}>
       {!props.folded && (
         <div
           className="sb-resizer"
@@ -140,5 +138,11 @@ export function Sidebar(props: { folded: boolean }) {
       </div>
     </nav>
   )
-  return props.folded ? <div className="sb-slot">{nav}</div> : nav
+  if (!props.folded) return nav('')
+  return (
+    <div className="sb-slot" onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)}>
+      {nav('rail')}
+      <Leave>{over && nav('peek')}</Leave>
+    </div>
+  )
 }

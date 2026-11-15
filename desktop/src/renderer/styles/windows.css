@@ -87,7 +87,7 @@
   color: var(--fg-3);
   opacity: 0;
   cursor: default;
-  transition: opacity 100ms var(--ease-std);
+  transition: opacity var(--t-1) var(--ease-std);
 }
 .pane:hover .sl-close,
 .sl-close:focus-visible {

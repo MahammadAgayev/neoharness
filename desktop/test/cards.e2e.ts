@@ -651,7 +651,7 @@ test('the sidebar resizes by its edge, keeps the width, and a double-click reset
 
 test('⌘B folds the sidebar to a rail; the mouse on the rail shows it whole over the windows', async () => {
   await normal()
-  const bar = page.locator('.sidebar')
+  const bar = page.locator('.sidebar').first()
   const layout = page.locator('.layout')
   const x0 = (await layout.boundingBox())!.x
   await page.keyboard.press('Meta+b')
@@ -661,13 +661,16 @@ test('⌘B folds the sidebar to a rail; the mouse on the rail shows it whole ove
   const x1 = (await layout.boundingBox())!.x
   expect(x1).toBeLessThan(x0)
   await bar.hover({ position: { x: 20, y: 200 } })
-  await expect(bar).toHaveClass(/peek/)
-  await expect.poll(async () => Math.round((await bar.boundingBox())!.width)).toBe(216)
-  await expect(bar.locator('.sb-label', { hasText: 'demo' })).toBeVisible()
+  // The whole sidebar slides in over the rail, which keeps its place.
+  const peek = page.locator('.sidebar.peek:not(.leaving)')
+  await expect(peek).toBeVisible()
+  await expect.poll(async () => Math.round((await peek.boundingBox())!.width)).toBe(216)
+  await expect(peek.locator('.sb-label', { hasText: 'demo' })).toBeVisible()
   // Over the windows: they do not move.
   expect((await layout.boundingBox())!.x).toBe(x1)
   await shot('44-sidebar-peek')
   await page.mouse.move(700, 400)
+  await expect(page.locator('.sidebar.peek')).toHaveCount(0)
   await expect(bar).toHaveClass(/rail/)
   await page.locator('.titlebar .nav-btn').first().click()
   await expect(bar).not.toHaveClass(/rail|peek/)

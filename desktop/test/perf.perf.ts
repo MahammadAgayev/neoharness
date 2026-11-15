@@ -20,7 +20,6 @@ const known: Record<string, string> = {
   // A 12 KB reply lays out in one frame; the streamed reply renders it a
   // block at a time.
   bigReplies: 'streaming text',
-  railFold: 'motion layer',
 }
 
 interface Frames {
@@ -250,14 +249,22 @@ test('events into a thread not on screen', async () => {
   budget('streamOtherThread', f, frameMisses(f))
 })
 
+// A fold is a key, so the width changes at once: the windows are laid out
+// again at their new width, with no animation. At full speed that drops no
+// frame; on the slowed CPU the text of the windows wraps again in up to two
+// frames, but never in a long task.
 test('the rail folds and opens', async () => {
+  const folds = 6
   const f = await frames(async () => {
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < folds; i++) {
       await page.keyboard.press('Meta+b')
       await page.waitForTimeout(250)
     }
   })
-  budget('railFold', f, frameMisses(f))
+  const misses: string[] = []
+  if (f.over17 > 2 * folds) misses.push(`${f.over17} frames over 17 ms for ${folds} folds`)
+  if (f.longTasks > 0) misses.push(`${f.longTasks} long tasks, up to ${f.longTaskMax} ms`)
+  budget('railFold', f, misses)
 })
 
 test('type in the prompt', async () => {

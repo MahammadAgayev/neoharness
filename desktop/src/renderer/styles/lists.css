@@ -19,7 +19,7 @@
   padding: 6px 10px;
   border-radius: 7px;
   cursor: default;
-  transition: background-color 80ms var(--ease-std);
+  transition: background-color var(--t-1) var(--ease-std);
 }
 .list-row .glyph {
   margin-top: 1px;

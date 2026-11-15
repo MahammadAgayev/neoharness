@@ -17,6 +17,7 @@ import { Cost } from './Cost'
 import { Sidebar } from './Sidebar'
 import { ThreadsList } from './ThreadsList'
 import { Workspaces } from './Workspaces'
+import { Leave } from './Leave'
 
 function WindowView(props: { win: Win; focused: boolean }) {
   const { win } = props
@@ -180,6 +181,17 @@ export function App() {
   useEffect(() => {
     document.documentElement.style.setProperty('--font-size', `${fontSize}px`)
   }, [fontSize])
+  useEffect(() => {
+    const root = document.documentElement.classList
+    const blur = () => root.add('blurred')
+    const focus = () => root.remove('blurred')
+    window.addEventListener('blur', blur)
+    window.addEventListener('focus', focus)
+    return () => {
+      window.removeEventListener('blur', blur)
+      window.removeEventListener('focus', focus)
+    }
+  }, [])
 
   return (
     <div className="app">
@@ -191,15 +203,17 @@ export function App() {
       </main>
       <CommandLine />
       <Toasts />
-      <Picker />
-      <Settings />
-      <Help />
-      <Cost />
-      <Choice />
+      <Leave>
+        <Picker />
+        <Settings />
+        <Help />
+        <Cost />
+        <Choice />
+        <NewWorkspace />
+        <NewDoc />
+      </Leave>
       <Tooltip />
       <KeyHints />
-      <NewWorkspace />
-      <NewDoc />
     </div>
   )
 }

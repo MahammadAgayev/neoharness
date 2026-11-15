@@ -20,13 +20,8 @@
   padding: 9px 12px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
   cursor: default;
-  animation: slide 160ms var(--ease-std);
-}
-@keyframes slide {
-  from {
-    transform: translateX(12px);
-    opacity: 0;
-  }
+  --arrive-x: 8px;
+  animation: arrive var(--t-3) var(--ease-out);
 }
 .toast.b-gold { border-left-color: var(--gold); }
 .toast.b-pine { border-left-color: var(--pine); }

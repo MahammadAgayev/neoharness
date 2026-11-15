@@ -13,7 +13,6 @@
   max-height: 40%;
   overflow-y: auto;
   cursor: text;
-  transition: border-color 120ms var(--ease-std), box-shadow 120ms var(--ease-std);
 }
 .prompt:last-child {
   margin-bottom: 12px;
@@ -37,13 +36,8 @@
   border-radius: 10px;
   background: var(--bg-raised);
   box-shadow: 0 4px 16px color-mix(in srgb, var(--pine) 18%, transparent);
-  animation: recap-in 260ms var(--ease-std);
-}
-@keyframes recap-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
+  --arrive-y: 6px;
+  animation: arrive var(--t-3) var(--ease-out);
 }
 .recap-head {
   display: flex;
@@ -107,7 +101,7 @@
   background: var(--bg-hover);
   color: var(--fg-3);
   cursor: default;
-  transition: background-color 120ms var(--ease-std), color 120ms var(--ease-std);
+  transition: background-color var(--t-1) var(--ease-std), color var(--t-1) var(--ease-std);
 }
 .prompt-send.ready {
   background: var(--iris);

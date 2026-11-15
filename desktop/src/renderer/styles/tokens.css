@@ -49,6 +49,8 @@
   --t-2: 140ms;
   --t-3: 180ms;
   --t-4: 220ms;
+  /* Leaving takes 0.7 of arriving, with --ease-in. */
+  --t-leave: 126ms;
 
   /* Roles: what a color means, over the scheme's hues. */
   --accent: var(--iris);

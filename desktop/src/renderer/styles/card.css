@@ -43,7 +43,7 @@
   border-radius: 7px;
   font-size: var(--fs-secondary);
   cursor: default;
-  transition: background-color 100ms var(--ease-std), border-color 100ms var(--ease-std);
+  transition: background-color var(--t-1) var(--ease-std);
 }
 .btn:hover {
   background: var(--bg-hover);

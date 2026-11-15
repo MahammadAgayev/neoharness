@@ -10,6 +10,7 @@ import { Prompt, prompts } from './Prompt'
 import { handlers, yank, type WinAction } from './registry'
 import { Glyph } from './Icon'
 import { CloseWindow } from './CloseWindow'
+import { Leave } from './Leave'
 import { todoMarks } from './Panels'
 
 const shellLines = 10
@@ -724,7 +725,8 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           )}
         </div>
       </div>
-      {recap && (
+      <Leave>
+        {recap && (
         <div className="recap-card">
           <div className="recap-head">
             <span>recap</span>
@@ -735,6 +737,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
           <div className="recap-text">{recap}</div>
         </div>
       )}
+      </Leave>
       <div className={`prompt ${focused && cursor < 0 ? 'active' : ''}`} onClick={() => toPrompt(true)}>
         <Prompt win={win.id} thread={thread} resolved={v?.state === 'resolved'} onLeave={leavePrompt} />
       </div>

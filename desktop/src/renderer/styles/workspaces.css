@@ -38,7 +38,7 @@
   padding: 12px 16px;
   cursor: default;
   border-top: 1px solid var(--hairline);
-  transition: background-color 80ms var(--ease-std);
+  transition: background-color var(--t-1) var(--ease-std);
 }
 .ws-row:first-child {
   border-top: 0;
@@ -72,7 +72,7 @@
 }
 .ws-kbd {
   opacity: 0;
-  transition: opacity 100ms var(--ease-std);
+  transition: opacity var(--t-1) var(--ease-std);
 }
 .ws-row.cursor .ws-kbd {
   opacity: 1;

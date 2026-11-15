@@ -3,18 +3,12 @@
   position: fixed;
   inset: 0;
   background: color-mix(in srgb, var(--base) 55%, transparent);
-  backdrop-filter: blur(2px);
   display: flex;
   justify-content: center;
   align-items: flex-start;
   padding-top: 12vh;
   z-index: 50;
-  animation: fade 90ms var(--ease-std);
-}
-@keyframes fade {
-  from {
-    opacity: 0;
-  }
+  animation: arrive var(--t-4) var(--ease-out);
 }
 .palette {
   width: min(720px, 92vw);
@@ -28,13 +22,8 @@
     0 24px 60px rgba(0, 0, 0, 0.35),
     0 2px 8px rgba(0, 0, 0, 0.2);
   overflow: hidden;
-  animation: rise 120ms var(--ease-std);
-}
-@keyframes rise {
-  from {
-    transform: translateY(-6px) scale(0.99);
-    opacity: 0;
-  }
+  --arrive-scale: 0.98;
+  animation: arrive var(--t-4) var(--ease-out);
 }
 .palette-input {
   display: flex;

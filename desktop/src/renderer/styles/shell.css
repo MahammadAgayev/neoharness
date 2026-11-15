@@ -39,7 +39,7 @@
   background: none;
   color: var(--fg-2);
   cursor: default;
-  transition: background-color 80ms var(--ease-std), color 80ms var(--ease-std);
+  transition: background-color var(--t-1) var(--ease-std), color var(--t-1) var(--ease-std);
 }
 .nav-btn:hover:not(:disabled) {
   background: var(--bg-hover);
@@ -80,7 +80,7 @@
   color: var(--fg-3);
   font-size: var(--fs-secondary);
   cursor: default;
-  transition: border-color 120ms var(--ease-std), color 120ms var(--ease-std);
+  transition: color var(--t-1) var(--ease-std);
 }
 .search-pill > span {
   display: flex;

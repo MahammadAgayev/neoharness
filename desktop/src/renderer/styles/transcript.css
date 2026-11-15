@@ -18,7 +18,7 @@
   padding: 3px 10px;
   margin: 0 -10px;
   border-radius: 6px;
-  transition: background-color 80ms var(--ease-std);
+  transition: background-color var(--t-1) var(--ease-std);
 }
 /* A chunk of rows out of sight is not laid out or painted; it keeps the
    size it had when last seen, so the scroll does not jump. Its padding
