@@ -16,7 +16,9 @@ const events = 2000
 
 // known are the scenarios over budget today, with the build step that brings
 // them in. They report but do not fail; any other scenario over budget fails.
-const known: Record<string, string> = {}
+const known: Record<string, string> = {
+  pageOpen: 'page lays out only the blocks on screen (artifact-editor)',
+}
 
 interface Frames {
   frames: number
@@ -33,6 +35,7 @@ let hub: FakeHub
 let app: ElectronApplication
 let page: Page
 let cdp: CDPSession
+let startup = { dcl: 0, fcp: 0 }
 const results: Record<string, unknown> = { throttle, events }
 
 const reply = (i: number) =>
@@ -140,6 +143,12 @@ test.beforeAll(async () => {
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
   await expect(page.locator('.ws-row', { hasText: 'demo' })).toBeVisible({ timeout: 20_000 })
+  // Startup runs before the throttle: the page's own clock, from the start
+  // of the load to its scripts having run, and to its first paint.
+  startup = await page.evaluate(() => {
+    const n = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming
+    return { dcl: Math.round(n.domContentLoadedEventEnd), fcp: Math.round(performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? 0) }
+  })
   await page.keyboard.press('Enter')
   await expect(page.locator('.statusline .sl-name', { hasText: 'coordinator' })).toBeVisible()
   cdp = await page.context().newCDPSession(page)
@@ -164,6 +173,10 @@ test.afterAll(async () => {
   fs.writeFileSync(path.join(__dirname, '..', 'test-results', 'perf.json'), JSON.stringify(results, null, 2))
   await app?.close()
   await hub?.close()
+})
+
+test('startup', async () => {
+  budget('startup', startup, startup.dcl > 400 ? [`scripts ran at ${startup.dcl} ms, budget 400`] : [])
 })
 
 test('idle', async () => {
@@ -294,9 +307,14 @@ test('the artifact page: open, scroll, move and type', async () => {
   const doc = (fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'desktop.md'), 'utf8') + '\n\n').repeat(4)
   hub.artifact('demo', 'big', 'Big doc', doc)
   hub.event('demo', 'long', { kind: 'artifact', detail: 'big', text: 'Big doc', version: 1 })
-  await page.locator('.b-artifact', { hasText: 'Big doc' }).last().click()
   const pg = page.locator('.window.artifact .doc-page')
-  await expect(pg.locator('h1').first()).toBeVisible({ timeout: 30_000 })
+  const t0 = Date.now()
+  const open = await frames(async () => {
+    await page.locator('.b-artifact', { hasText: 'Big doc' }).last().click()
+    await expect(pg.locator('h1').first()).toBeVisible({ timeout: 30_000 })
+  })
+  const openMs = Date.now() - t0
+  budget('pageOpen', { ms: openMs, kb: Math.round(doc.length / 1024), longTaskMax: open.longTaskMax, ms4x: open.ms }, openMs > 300 ? [`${openMs} ms, budget 300`] : [])
   const box = await pg.boundingBox()
   await page.mouse.move(box!.x + box!.width / 2, box!.y + Math.min(box!.height, 600) / 2)
   const scroll = await frames(async () => {

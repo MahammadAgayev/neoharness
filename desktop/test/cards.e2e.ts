@@ -1194,6 +1194,18 @@ test('a reply streams in a block at a time, open code shows plain, and the text 
   await expect(stream).toHaveCount(0)
 })
 
+test('a name in a reply becomes a link once an artifact has it, even an artifact made later', async () => {
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  hub.event('demo', 'coordinator', { kind: 'text', text: 'The steps are in `rollout-plan`.' })
+  const code = page.locator('.pane.focused .md code', { hasText: 'rollout-plan' })
+  await expect(code).toBeVisible()
+  await expect(code).not.toHaveAttribute('data-artifact')
+  hub.artifact('demo', 'rollout-plan', 'Rollout plan', '# Rollout\n')
+  await expect(code).toHaveAttribute('data-artifact', 'rollout-plan')
+})
+
 test('a hub that stops says so and offers to start it', async () => {
   hub.stop()
   await expect(page.locator('.banner', { hasText: 'neoharness hub start' })).toBeVisible()

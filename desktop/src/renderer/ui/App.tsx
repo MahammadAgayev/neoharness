@@ -1,11 +1,9 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 
 import { applyScheme, resolveScheme } from '../lib/themes'
 import { store, useStore, type Win } from '../store'
-import { ArtifactWindow } from './ArtifactWindow'
 import { ChatWindow } from './ChatWindow'
 import { CommandLine, HubBanner, Picker, Toasts } from './Overlays'
-import { Settings } from './Settings'
 import { KeyHints } from './KeyHints'
 import { NewDoc } from './NewDoc'
 import { NewWorkspace } from './NewWorkspace'
@@ -13,11 +11,20 @@ import { Tooltip } from './Tooltip'
 import { Help, MessagesWindow, TodoWindow, WaitsWindow } from './Panels'
 import { Icon } from './Icon'
 import { Choice } from './Choice'
-import { Cost } from './Cost'
 import { Sidebar } from './Sidebar'
 import { ThreadsList } from './ThreadsList'
 import { Workspaces } from './Workspaces'
 import { Leave } from './Leave'
+
+// The page editor, the settings and the cost dialog load after the first
+// paint, each in a chunk of its own, so the app opens on the chat at once.
+const loadArtifactWindow = () => import('./ArtifactWindow')
+const ArtifactWindow = lazy(() => loadArtifactWindow().then((m) => ({ default: m.ArtifactWindow })))
+const Settings = lazy(() => import('./Settings').then((m) => ({ default: m.Settings })))
+const Cost = lazy(() => import('./Cost').then((m) => ({ default: m.Cost })))
+// The page editor is fetched once the app is idle, so the first page opens
+// without a wait.
+requestIdleCallback(() => void loadArtifactWindow())
 
 function WindowView(props: { win: Win; focused: boolean }) {
   const { win } = props
@@ -27,7 +34,11 @@ function WindowView(props: { win: Win; focused: boolean }) {
     case 'threads':
       return <ThreadsList {...props} />
     case 'artifact':
-      return <ArtifactWindow key={win.buf.name} {...props} />
+      return (
+        <Suspense key={win.buf.name} fallback={null}>
+          <ArtifactWindow {...props} />
+        </Suspense>
+      )
     case 'messages':
       return <MessagesWindow {...props} />
     case 'waits':
@@ -185,9 +196,13 @@ export function App() {
       <Toasts />
       <Leave>
         <Picker />
-        <Settings />
+        <Suspense fallback={null}>
+          <Settings />
+        </Suspense>
         <Help />
-        <Cost />
+        <Suspense fallback={null}>
+          <Cost />
+        </Suspense>
         <Choice />
         <NewWorkspace />
         <NewDoc />

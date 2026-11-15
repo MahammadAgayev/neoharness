@@ -32,29 +32,23 @@ const alertTitles: Record<string, string> = {
 
 // rendered keeps the HTML of the texts shown last, so a chat that opens
 // again, or a window that mounts again, does not parse its replies again.
+// It holds the HTML before the artifact links, so a new artifact does not
+// parse every reply on screen again.
 const rendered = new Map<string, string>()
 const renderedMax = 4000
-const artifactKeys = new WeakMap<Set<string>, string>()
 
 // render turns markdown into safe HTML. An inline code span that names an
 // artifact becomes a link to it, as <CR> on its name opens it in the TUI.
 export function render(md: string, artifacts?: Set<string>): string {
-  let names = ''
-  if (artifacts?.size) {
-    names = artifactKeys.get(artifacts) ?? [...artifacts].sort().join(' ')
-    artifactKeys.set(artifacts, names)
+  let html = rendered.get(md)
+  if (html !== undefined) {
+    rendered.delete(md)
+  } else {
+    html = parse(md)
+    if (rendered.size >= renderedMax) rendered.delete(rendered.keys().next().value!)
   }
-  const key = names + '\0' + md
-  const hit = rendered.get(key)
-  if (hit !== undefined) {
-    rendered.delete(key)
-    rendered.set(key, hit)
-    return hit
-  }
-  const html = parse(md, artifacts)
-  rendered.set(key, html)
-  if (rendered.size > renderedMax) rendered.delete(rendered.keys().next().value!)
-  return html
+  rendered.set(md, html)
+  return links(html, artifacts)
 }
 
 // renderBlocks renders markdown a block at a time, each from the cache, so a
@@ -109,10 +103,10 @@ export function openFence(block: string): boolean {
 // renderOnce renders markdown that changes as it is written, without the
 // cache: the cache would fill with every step of it.
 export function renderOnce(md: string, artifacts?: Set<string>): string {
-  return parse(md, artifacts)
+  return links(parse(md), artifacts)
 }
 
-function parse(md: string, artifacts?: Set<string>): string {
+function parse(md: string): string {
   let html = DOMPurify.sanitize(marked.parse(md, { async: false }) as string, {
     // Task lists are disabled checkboxes; no form can send them anywhere.
     FORBID_TAGS: ['style', 'form', 'iframe'],
@@ -123,12 +117,14 @@ function parse(md: string, artifacts?: Set<string>): string {
     /<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/g,
     (_m, kind: string) => `<blockquote class="alert alert-${kind.toLowerCase()}"><p class="alert-title">${alertTitles[kind]}</p><p>`,
   )
-  if (artifacts && artifacts.size > 0) {
-    html = html.replace(/<code>([a-z0-9][a-z0-9-]{0,39})<\/code>/g, (m, name: string) =>
-      artifacts.has(name) ? `<code class="artifact-link" data-artifact="${name}">${name}</code>` : m,
-    )
-  }
   return html
+}
+
+function links(html: string, artifacts?: Set<string>): string {
+  if (!artifacts?.size || !html.includes('<code>')) return html
+  return html.replace(/<code>([a-z0-9][a-z0-9-]{0,39})<\/code>/g, (m, name: string) =>
+    artifacts.has(name) ? `<code class="artifact-link" data-artifact="${name}">${name}</code>` : m,
+  )
 }
 
 // asJSON shows a reply that is one JSON value as a highlighted block.
