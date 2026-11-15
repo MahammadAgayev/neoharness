@@ -120,6 +120,14 @@
 .sl-echo ~ .sl-close {
   margin-left: 0;
 }
+/* The kind of block at the page's cursor: the echo is cut before it. */
+.sl-block {
+  flex-shrink: 0;
+  margin-left: 8px;
+  white-space: nowrap;
+  color: var(--fg-3);
+  font-weight: 400;
+}
 .sl-state {
   margin-left: 4px;
   display: inline-flex;

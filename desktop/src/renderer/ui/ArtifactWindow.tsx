@@ -23,7 +23,7 @@ import {
   type Slash,
 } from '../lib/docedit'
 import { DocVim } from '../lib/docvim'
-import { MarkdownDoc } from '../lib/mdoc'
+import { blockKind, MarkdownDoc } from '../lib/mdoc'
 import { store, useStore, type Win } from '../store'
 import { docs, handlers, yank, type DocKeys, type WinAction } from './registry'
 import { Caret, type CaretAt } from './Caret'
@@ -97,6 +97,7 @@ function DocEditor(props: {
   artifacts: Set<string>
   marks: MarksMeta | null
   onView: (v: EditorView | null) => void
+  onBlock: (kind: string) => void
 }) {
   const host = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
@@ -109,6 +110,8 @@ function DocEditor(props: {
   const last = useRef(props.text)
   const arts = useRef(props.artifacts)
   arts.current = props.artifacts
+  const onBlock = useRef(props.onBlock)
+  onBlock.current = props.onBlock
   const [find, setFind] = useState<string | null>(null)
   const [slash, setSlash] = useState<Slash | null>(null)
   const [caret, setCaret] = useState<CaretAt | null>(null)
@@ -151,6 +154,7 @@ function DocEditor(props: {
         vimMode?.group(tr)
         v.updateState(v.state.apply(tr))
         setSlash(slashKey.getState(v.state) ?? null)
+        onBlock.current(blockKind(v.state.doc, v.state.selection.head))
         placeCaret.current()
         if (tr.selectionSet && !tr.docChanged) vimMode?.mouse(!!tr.getMeta('pointer'))
         if (tr.docChanged && !tr.getMeta('remote')) {
@@ -216,6 +220,7 @@ function DocEditor(props: {
     })
     viewRef.current = view
     props.onView(view)
+    onBlock.current(blockKind(view.state.doc, view.state.selection.head))
     const vim = new DocVim(view, () => scroller.current, {
       mode: (m) => store.setInsert(view.hasFocus() && m === 'insert'),
       find: () => setFind(''),
@@ -422,6 +427,7 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
   const artifactList = useStore((s) => s.artifacts)
   const artifacts = useMemo(() => new Set(artifactList.map((a) => a.name)), [artifactList])
   const view = useRef<EditorView | null>(null)
+  const [block, setBlock] = useState('')
   const dirty = store.dirty(name)
 
   const handle = (a: WinAction, count: number): boolean => {
@@ -468,6 +474,7 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
             Save
           </button>
         )}
+        {focused && block && <span className="sl-block">{block}</span>}
         <CloseWindow id={win.id} />
       </div>
       {a && !!doc?.conflicts?.length && (
@@ -503,6 +510,7 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
             }
           }
           onView={(v) => (view.current = v)}
+          onBlock={setBlock}
         />
       )}
     </div>

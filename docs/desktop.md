@@ -154,6 +154,9 @@ from the edge and scroll the text under it, as Vim's `scrolloff`. `i`,
 Normal mode types nothing. The cursor is a block in Normal and Visual mode and a
 line in Insert, as in Vim and in the prompt. Without Vim (`:set novim`) the page is always
 in Insert, as a text editor is.
+The right of the focused page's status line names the block at the cursor,
+muted: `heading 2`, `quote`, `bullet list`, `table · row 2, col 3`,
+`code · go`; a plain paragraph shows nothing.
 
 In Insert, markdown at the start of a line makes the block: `# ` a
 heading, `- ` or `1. ` a list, `> ` a quote, ` ``` ` code, `[ ] ` a task,

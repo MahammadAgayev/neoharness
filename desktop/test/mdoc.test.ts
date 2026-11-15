@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { Fragment, Slice } from 'prosemirror-model'
 
-import { html, MarkdownDoc, normalize, parse, schema, toMarkdown } from '../src/renderer/lib/mdoc'
+import { blockKind, html, MarkdownDoc, normalize, parse, schema, toMarkdown } from '../src/renderer/lib/mdoc'
 
 const all = `# Plan
 
@@ -133,5 +133,26 @@ describe('markdown documents', () => {
       table_row.create(null, [table_cell.create(null, [schema.text('x'), hard_break.create(), schema.text('z')]), table_cell.create(null, schema.text('y'))]),
     ])
     expect(toMarkdown(t)).toBe('| a | b |\n|---|---|\n| x z | y |')
+  })
+})
+
+describe('blockKind', () => {
+  it('names the innermost block at a position, and nothing for a paragraph', () => {
+    const doc = parse('# One\n\n### Three\n\npara\n\n> quoted\n\n> [!NOTE]\n> careful\n\n- item\n\n1. first\n\n- [ ] task\n\n```go\nx\n```\n\n| h1 | h2 |\n| - | - |\n| c1 | c2 |\n\n---\n\nend\n')
+    const at = (text: string) => {
+      let p = -1
+      doc.descendants((n, pos) => {
+        if (p < 0 && n.isText && n.text!.includes(text)) p = pos
+        return p < 0
+      })
+      return p
+    }
+    const kinds = ['One', 'Three', 'para', 'quoted', 'careful', 'item', 'first', 'task', 'x', 'h2', 'c2'].map((t) => blockKind(doc, at(t)))
+    expect(kinds).toEqual(['heading 1', 'heading 3', '', 'quote', 'note', 'bullet list', 'numbered list', 'task list', 'code · go', 'table · row 1, col 2', 'table · row 2, col 2'])
+    let rule = -1
+    doc.forEach((n, off) => {
+      if (n.type.name === 'horizontal_rule') rule = off
+    })
+    expect(blockKind(doc, rule)).toBe('rule')
   })
 })

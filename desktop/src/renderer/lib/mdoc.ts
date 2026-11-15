@@ -436,3 +436,30 @@ export function normalize(text: string): string {
 export function html(text: string): string {
   return md.render(text)
 }
+
+// blockKind names the innermost block at pos, as the page's status line
+// shows it; a plain paragraph has no name, as it is the default.
+export function blockKind(doc: Node, pos: number): string {
+  const $p = doc.resolve(pos)
+  const at = doc.nodeAt(pos)
+  if (at?.type.name === 'horizontal_rule') return 'rule'
+  for (let d = $p.depth; d > 0; d--) {
+    const n = $p.node(d)
+    switch (n.type.name) {
+      case 'heading':
+        return `heading ${n.attrs.level}`
+      case 'code_block':
+        return n.attrs.params ? `code · ${String(n.attrs.params).split(/\s/)[0]}` : 'code'
+      case 'table_cell':
+      case 'table_header':
+        return `table · row ${$p.index(d - 2) + 1}, col ${$p.index(d - 1) + 1}`
+      case 'list_item':
+        return n.attrs.checked != null ? 'task list' : $p.node(d - 1).type.name === 'ordered_list' ? 'numbered list' : 'bullet list'
+      case 'blockquote': {
+        const m = alertMark.exec(n.firstChild?.textContent ?? '')
+        return m ? m[1].toLowerCase() : 'quote'
+      }
+    }
+  }
+  return ''
+}

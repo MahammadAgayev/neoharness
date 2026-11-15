@@ -812,3 +812,36 @@ test('j and k from the first letter go into and out of quotes, lists, code and t
   }
   await page.keyboard.press('Control+o')
 })
+
+test("the status line names the kind of block at the cursor, nothing for a paragraph, and the page does not move", async () => {
+  hub.artifact('demo', 'kinds', 'Kinds', '# Kinds\n\n> quoted\n\n- item\n\n| h1 | h2 |\n| - | - |\n| c1 | c2 |\n\n```go\nx := 1\n```\n\nplain\n')
+  hub.event('demo', 'api', { kind: 'artifact', detail: 'kinds', text: 'Kinds', version: 1 })
+  await page.locator('.b-artifact', { hasText: 'Kinds' }).click()
+  const win = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'kinds' }) })
+  const doc = win.locator('.doc-page')
+  await doc.locator('h1', { hasText: 'Kinds' }).click()
+  await normal()
+  await page.keyboard.press('g')
+  await page.keyboard.press('g')
+  const label = win.locator('.statusline .sl-block')
+  const layout = () =>
+    win.evaluate((w) => {
+      const sc = w.querySelector('.doc-editor')!
+      return [sc.scrollTop, ...Array.from(w.querySelectorAll('.doc-page > *'), (e) => Math.round(e.getBoundingClientRect().top))]
+    })
+  await expect(label).toHaveText('heading 1')
+  const still = await layout()
+  for (const want of ['quote', 'bullet list', 'table · row 1, col 1', 'table · row 2, col 1', 'code · go', '']) {
+    await page.keyboard.press('j')
+    if (want) await expect(label).toHaveText(want)
+    else await expect(label).toHaveCount(0)
+    expect(await layout()).toEqual(still)
+  }
+  // In Insert it shows too.
+  await page.keyboard.press('i')
+  await expect(label).toHaveCount(0)
+  await page.keyboard.press('ArrowUp')
+  await expect(label).toHaveText('code · go')
+  await normal()
+  await page.keyboard.press('Control+o')
+})
