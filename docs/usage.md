@@ -81,6 +81,9 @@ yourself:
   `<C-j>` makes a new line, `<Esc>` goes to Normal mode.
 - The prompt is a part of the chat buffer. Vim motions, changes, undo and
   Visual mode work in it.
+- A message from the coordinator longer than 3 rows, such as a thread's
+  brief, folds to one row, `▎ from coordinator · brief ▸`. `za` on it
+  opens it.
 - Messages sent while a thread is busy wait in a queue and show dim at the
   end of the chat. `<CR>` on one sends it now: the running turn stops, and
   the queue goes in the next turn at once.
@@ -218,7 +221,7 @@ reports. They belong to the workspace, and every session can read them.
 | `<leader>c` | coordinator |
 | `]m` `[m` / `]b` `[b` / `<C-^>` | next/previous message (heading in an artifact) / thread / alternate buffer |
 | `gO` | outline: messages, or headings in an artifact |
-| `za` `<leader>e` | open or close a turn's tool calls |
+| `za` `<leader>e` | open or close a turn's tool calls, or a brief from the coordinator |
 | `v V y yy` `<leader>y` | select and yank; every yank also goes to the system clipboard |
 | `<C-h/j/k/l>` `<Tab>` | move between windows |
 | `<leader>nc` / `<leader>nh` | dismiss notifications / their history |

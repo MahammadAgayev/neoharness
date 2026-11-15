@@ -686,7 +686,7 @@ func (a *App) helpBuf() *Buffer {
 		row("gO", "outline: pick a heading, or a message in a chat"),
 		row("ma  'a  `a  ''", "set a mark, go to its line, its place, back"),
 		row("/ ? n N", "search down, up, again, back; matches light up as you type, <Esc> goes back"),
-		row("za  <leader>e", "open or close a turn's tool calls, or the todo list above the prompt"),
+		row("za  <leader>e", "open or close a turn's tool calls, a brief from the coordinator, or the todo list above the prompt"),
 		row("<leader>T", "open or close the todo list above the prompt: what is done, what is in hand, what is next"),
 		row("v V  y  yy  <leader>y", "select and yank to the clipboard"),
 		row("v then iw a( i\" ip", "select a word, brackets, quotes, a paragraph"),

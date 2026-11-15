@@ -77,9 +77,12 @@ type block struct {
 	tools    []toolCall
 	live     bool
 	open     bool
-	raw      []Line
-	cacheW   int
-	cache    []Line
+	// brief is a coordinator's message long enough to fold, as of the last
+	// render.
+	brief  bool
+	raw    []Line
+	cacheW int
+	cache  []Line
 }
 
 // Prompt is the editable region at the end of a chat buffer.
@@ -442,7 +445,10 @@ func (b *Buffer) Live() bool {
 
 // Toggle opens or closes the fold at a block.
 func (b *Buffer) Toggle(i int) bool {
-	if i < 0 || i >= len(b.blocks) || b.blocks[i].kind != bTools && b.blocks[i].kind != bShell {
+	if i < 0 || i >= len(b.blocks) {
+		return false
+	}
+	if bl := b.blocks[i]; bl.kind != bTools && bl.kind != bShell && !bl.brief {
 		return false
 	}
 	b.blocks[i].open = !b.blocks[i].open
@@ -450,6 +456,9 @@ func (b *Buffer) Toggle(i int) bool {
 	b.dirty = true
 	return true
 }
+
+// briefRows is the most rows of a coordinator's message that show unfolded.
+const briefRows = 3
 
 func (b *Buffer) push(bl *block) {
 	b.blocks = append(b.blocks, bl)
@@ -609,7 +618,17 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 		}
 		bar := []Span{{"▎ ", th.Peer}}
 		label := Line{Prefix: bar, Spans: []Span{{"from " + bl.from, th.Peer.Italic(true)}}}
-		return append([]Line{label}, renderMarkdown(bl.text, w, th, bar)...)
+		body := renderMarkdown(bl.text, w, th, bar)
+		// A long brief would push the thread's own work below the fold.
+		bl.brief = bl.from == model.Coordinator && len(body) > briefRows
+		if bl.brief {
+			if !bl.open {
+				label.Spans = append(label.Spans, Span{" · brief ▸", th.Fg3})
+				return []Line{label}
+			}
+			label.Spans = append(label.Spans, Span{" · brief ▾", th.Fg3})
+		}
+		return append([]Line{label}, body...)
 	case bText:
 		if lines, ok := renderJSON(bl.text, w, th, pad); ok {
 			return lines

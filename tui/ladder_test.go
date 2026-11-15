@@ -284,3 +284,35 @@ func TestAPendingPermissionLineShowsItsCommandInFg(t *testing.T) {
 		}
 	}
 }
+
+func TestALongBriefFromTheCoordinatorFoldsToOneRow(t *testing.T) {
+	b := newChat("demo", "api")
+	brief := "Write health.go.\n\n- add GET /healthz\n- return 200 with the build\n- test it with go test\n\nTell me when gofmt and go vet pass."
+	b.AddEvent(model.Event{Kind: model.EventMessage, From: model.Coordinator, Text: brief})
+	b.AddEvent(model.Event{Kind: model.EventMessage, From: model.Coordinator, Text: "and keep it short"})
+	th := newTheme(256)
+	text := func() string {
+		var out []string
+		for _, l := range b.Lines(80, th, 0) {
+			pre := ""
+			for _, p := range l.Prefix {
+				pre += p.Text
+			}
+			out = append(out, strings.TrimSpace(pre+l.Text()))
+		}
+		return strings.Join(out, "\n")
+	}
+	got := text()
+	if !strings.Contains(got, "▎ from coordinator · brief ▸") || strings.Contains(got, "healthz") {
+		t.Fatalf("a long brief should fold to one row:\n%s", got)
+	}
+	if !strings.Contains(got, "and keep it short") {
+		t.Fatalf("a short message stays open:\n%s", got)
+	}
+	if !b.Toggle(0) {
+		t.Fatal("za should open the brief")
+	}
+	if got := text(); !strings.Contains(got, "from coordinator · brief ▾") || !strings.Contains(got, "add GET /healthz") {
+		t.Fatalf("an open brief shows all of it:\n%s", got)
+	}
+}
