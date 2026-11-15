@@ -180,6 +180,36 @@ test('in Visual mode h j k l move the cursor and the selection follows, as in Vi
   await page.keyboard.press('Control+o')
 })
 
+test('j scrolls the page under a still cursor, kept a few lines from the edge, as Vim with scrolloff', async () => {
+  const blocks = Array.from({ length: 80 }, (_, i) => (i % 9 === 0 ? `## Part ${i}` : `line ${i} ${'word '.repeat(i % 5)}`))
+  hub.artifact('demo', 'long', 'Long', '# Long\n\n' + blocks.join('\n\n') + '\n')
+  hub.event('demo', 'api', { kind: 'artifact', detail: 'long', text: 'Long', version: 1 })
+  await page.locator('.b-artifact', { hasText: 'Long' }).click()
+  const win = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'long' }) })
+  const doc = win.locator('.doc-page')
+  await doc.locator('h1', { hasText: 'Long' }).click()
+  await normal()
+  const edge = await win.locator('.doc-editor').evaluate((e) => e.getBoundingClientRect().bottom)
+  const ys: number[] = []
+  for (let i = 0; i < 50; i++) {
+    await page.keyboard.press('j')
+    ys.push(await doc.locator('.doc-fat-cursor').evaluate((e) => e.getBoundingClientRect().bottom))
+  }
+  const still = ys.slice(30)
+  expect(Math.max(...still) - Math.min(...still)).toBeLessThan(4)
+  expect(edge - still[0]).toBeGreaterThan(60)
+  const top = await win.locator('.doc-editor').evaluate((e) => e.getBoundingClientRect().top)
+  const up: number[] = []
+  for (let i = 0; i < 45; i++) {
+    await page.keyboard.press('k')
+    up.push(await doc.locator('.doc-fat-cursor').evaluate((e) => e.getBoundingClientRect().top))
+  }
+  const stillUp = up.slice(30)
+  expect(Math.max(...stillUp) - Math.min(...stillUp)).toBeLessThan(4)
+  expect(stillUp[0] - top).toBeGreaterThan(60)
+  await page.keyboard.press('Control+o')
+})
+
 test('a click on an artifact named in the page opens it, and Back returns; gf and <CR> open it too', async () => {
   hub.artifact('demo', 'target-doc', 'Target', '# Target\n\nThe other page.\n')
   hub.artifact('demo', 'linker', 'Linker', '# Linker\n\nRead `target-doc` first.\n\nThen target-doc again, in prose.\n')

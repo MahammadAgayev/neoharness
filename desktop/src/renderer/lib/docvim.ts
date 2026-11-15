@@ -111,7 +111,7 @@ export class DocVim {
     this.view.dispatch(scroll ? tr.scrollIntoView() : tr)
   }
 
-  private moveTo(pos: number): void {
+  private moveTo(pos: number, scroll = true): void {
     const doc = this.state.doc
     pos = Math.max(0, Math.min(pos, doc.content.size))
     if (this.mode === 'visual') {
@@ -120,16 +120,31 @@ export class DocVim {
       const $c = doc.resolve(pos)
       const after = ($p: typeof $a) => ($p.parent.isTextblock ? Math.min($p.pos + 1, $p.end()) : $p.pos)
       const [anchor, head] = pos >= this.anchor ? [this.anchor, after($c)] : [after($a), pos]
-      const tr = this.state.tr.setSelection(TextSelection.between(doc.resolve(anchor), doc.resolve(head)))
-      this.view.dispatch(tr.setMeta(cursorAtKey, pos).scrollIntoView())
+      const tr = this.state.tr.setSelection(TextSelection.between(doc.resolve(anchor), doc.resolve(head))).setMeta(cursorAtKey, pos)
+      this.view.dispatch(scroll ? tr.scrollIntoView() : tr)
     } else if (this.mode === 'vline') {
       const a = this.block(doc.resolve(this.anchor))
       const b = this.block(doc.resolve(pos))
-      if (!a || !b) return this.collapse(pos)
+      if (!a || !b) return this.collapse(pos, scroll)
       this.cur = pos
       const [from, to] = a.from <= b.from ? [a.from, b.to] : [a.to, b.from]
-      this.view.dispatch(this.state.tr.setSelection(TextSelection.create(doc, from, to)).setMeta(cursorAtKey, pos).scrollIntoView())
-    } else this.collapse(pos)
+      const tr = this.state.tr.setSelection(TextSelection.create(doc, from, to)).setMeta(cursorAtKey, pos)
+      this.view.dispatch(scroll ? tr.scrollIntoView() : tr)
+    } else this.collapse(pos, scroll)
+  }
+
+  // scrolloff keeps the cursor line a few lines from the top and bottom
+  // edges, as Vim's 'scrolloff'. One rule after the move, measured in the
+  // page's line height, so the cursor stays still while the text scrolls.
+  private scrolloff(): void {
+    const s = this.scroller()
+    if (!s) return
+    const fs = parseFloat(getComputedStyle(this.view.dom).fontSize) || 16
+    const box = s.getBoundingClientRect()
+    const margin = Math.min(fs * 1.6 * 4, box.height / 3)
+    const c = this.view.coordsAtPos(this.head())
+    if (c.bottom > box.bottom - margin) s.scrollTop += c.bottom - (box.bottom - margin)
+    else if (c.top < box.top + margin) s.scrollTop -= box.top + margin - c.top
   }
 
   private head(): number {
@@ -203,12 +218,13 @@ export class DocVim {
     const s = this.scroller()
     let c = v.coordsAtPos(pos)
     const lh = Math.max(12, c.bottom - c.top)
-    // The line it goes to must be on screen to be found.
+    // The line it goes to must be on screen to be found; scrolloff keeps it
+    // there, except past a block taller than its margin.
     if (s) {
       const box = s.getBoundingClientRect()
       const room = dir > 0 ? box.bottom - c.bottom : c.top - box.top
-      if (room < lh * 4) {
-        s.scrollTop += dir * (lh * 4 - room)
+      if (room < lh * 2) {
+        s.scrollTop += dir * (lh * 2 - room)
         c = v.coordsAtPos(pos)
       }
     }
@@ -232,7 +248,8 @@ export class DocVim {
       // Normal mode stays on a letter, as l and $ do.
       if (b && p >= b.to && b.to > b.from) p = b.to - 1
     }
-    this.moveTo(p)
+    this.moveTo(p, false)
+    this.scrolloff()
     this.goal = goal ?? this.goal
   }
 
