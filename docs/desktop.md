@@ -113,7 +113,8 @@ line in Insert, as in Vim and in the prompt. Without Vim (`:set novim`) the page
 in Insert, as a text editor is.
 
 In Insert, markdown at the start of a line makes the block: `# ` a
-heading, `- ` or `1. ` a list, `> ` a quote, ` ``` ` code, `[ ] ` a task.
+heading, `- ` or `1. ` a list, `> ` a quote, ` ``` ` code, `[ ] ` a task,
+`---` a rule; `<BS>` right after gives back what you typed.
 `**bold**`, `*italic*`, `` `code` `` and `~~struck~~` turn rich as you
 close them. `<Tab>` and `<S-Tab>` indent a list item, and `<CR>` on an empty
 one takes it out a level; in a table `<Tab>`

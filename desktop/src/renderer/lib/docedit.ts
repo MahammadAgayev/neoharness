@@ -5,7 +5,7 @@
 import hljs from 'highlight.js/lib/common'
 import { baseKeymap, chainCommands, exitCode, setBlockType, lift } from 'prosemirror-commands'
 import { history, redo, undo } from 'prosemirror-history'
-import { InputRule, inputRules, textblockTypeInputRule, wrappingInputRule } from 'prosemirror-inputrules'
+import { InputRule, inputRules, textblockTypeInputRule, undoInputRule, wrappingInputRule } from 'prosemirror-inputrules'
 import { keymap } from 'prosemirror-keymap'
 import type { MarkType, Node } from 'prosemirror-model'
 import { type Command, Plugin, PluginKey, TextSelection } from 'prosemirror-state'
@@ -55,7 +55,7 @@ const rules = inputRules({
     textblockTypeInputRule(/^(```|~~~)([\w+-]*)\s$/, n.code_block, (m) => ({ fence: m[1], params: m[2] })),
     new InputRule(/^(?:---|\*\*\*|___)$/, (state, _m, start, end) => {
       const $s = state.doc.resolve(start)
-      if ($s.parent.type !== n.paragraph || $s.parent.content.size !== end - start - 1) return null
+      if ($s.parent.type !== n.paragraph || $s.parent.content.size !== end - start) return null
       const tr = state.tr.replaceWith($s.before(), $s.after(), [n.horizontal_rule.create(), n.paragraph.create()])
       return tr.setSelection(TextSelection.create(tr.doc, $s.before() + 2))
     }),
@@ -155,7 +155,8 @@ export function editorPlugins(leave: () => void): Plugin[] {
         return goToNextCell(1)(view.state, dispatch)
       }, sinkListItem(n.list_item), () => true),
       'Shift-Tab': chainCommands(goToNextCell(-1), liftListItem(n.list_item), () => true),
-      Backspace: backspace,
+      // Backspace right after a shortcut fired gives back what you typed.
+      Backspace: chainCommands(undoInputRule, backspace),
     }),
     keymap(baseKeymap),
     tableEditing(),
