@@ -362,8 +362,8 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
         )}
         <span className="sl-fill" />
         {dirty && (
-          <button className="btn small primary" onClick={() => void store.save(name)}>
-            Save <kbd>⌘S</kbd>
+          <button className="btn small ghost" title=":w  ⌘S" onClick={() => void store.save(name)}>
+            Save
           </button>
         )}
         <CloseWindow id={win.id} />

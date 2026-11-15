@@ -38,8 +38,8 @@
   caret-color: transparent;
 }
 .doc-page:focus .doc-fat-cursor {
-  background: var(--iris);
-  color: var(--base);
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--fg);
 }
 .doc-fat-cursor.eol {
   display: inline-block;
@@ -236,7 +236,7 @@
   border-radius: var(--r-1);
   background: color-mix(in srgb, var(--wait) 14%, transparent);
   pointer-events: none;
-  animation: doc-settle var(--t-settle) var(--ease-out) forwards;
+  animation: doc-settle var(--t-settle, 1000ms) var(--ease-std) forwards;
 }
 @keyframes doc-settle {
   from {

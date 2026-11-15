@@ -1251,7 +1251,7 @@ class Store {
       const edit = m.merged === cur.text ? null : { ...cur.edit, text: m.merged, base: m.version, baseText: cur.text }
       this.set({ docs: { ...this.state.docs, [name]: { ...cur, edit, conflicts } } })
       const n = conflicts.length
-      if (n) this.say(`${cur.artifact.thread} changed the same blocks in v${m.version} · do takes theirs, :w keeps yours`, 'gold')
+      if (n) this.say(`${cur.artifact.thread} changed the same blocks in v${m.version}`, 'gold')
       else this.say(`${cur.artifact.thread} wrote v${m.version} · merged into your edit`, 'subtle')
       return
     }

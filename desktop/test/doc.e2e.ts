@@ -117,6 +117,10 @@ test('the page cursor is a block in Normal and Visual mode and a line in Insert,
   await expect(doc).toHaveCSS('caret-color', 'rgba(0, 0, 0, 0)')
   await page.keyboard.press('w')
   await expect(fat).toHaveText('b')
+  // A soft block, so the letter under it stays readable.
+  const ink = await doc.evaluate((e) => getComputedStyle(e).color)
+  await expect(fat).toHaveCSS('color', ink)
+  expect(await fat.evaluate((e) => getComputedStyle(e).backgroundColor)).toMatch(/^(rgba|color)\(/)
   await shot('41-artifact-normal-cursor')
   await page.keyboard.press('v')
   await page.keyboard.press('l')
@@ -355,6 +359,8 @@ test('where both changed a block, the page shows theirs under yours to take, blo
   }
   hub.artifact('demo', 'clash', 'Clash', '# Clash\n\nalpha theirs\n\nbeta theirs\n\nother theirs\n\ngamma theirs\n', 2)
   await expect(page.locator('.cmdline', { hasText: 'changed the same blocks in v2' })).toBeVisible()
+  await expect(page.locator('.cmdline')).not.toContainText('do takes')
+  await expect(win.locator('.statusline button', { hasText: 'Save' }).locator('kbd')).toHaveCount(0)
   // What merged shows at once; where both changed, theirs waits under yours.
   await expect(doc.locator('p', { hasText: 'other theirs' })).toBeVisible()
   const theirs = doc.locator('.doc-theirs')
