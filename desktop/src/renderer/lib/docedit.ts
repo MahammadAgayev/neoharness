@@ -189,21 +189,30 @@ const decorations = new Plugin<{ deco: DecorationSet; artifacts: Set<string> }>(
   },
 })
 
-export const fatCursorKey = new PluginKey<boolean>('fatCursor')
+export const fatCursorKey = new PluginKey<{ on: boolean; at: number | null }>('fatCursor')
+// cursorAtKey sets where the block cursor is when it is not the head of the
+// selection: in Visual mode the selection takes the letter under the cursor.
+export const cursorAtKey = new PluginKey('cursorAt')
 
 // fatCursor draws Vim's block cursor on the letter at the head, in Normal
 // and Visual mode; a browser caret is always a line. At the end of a block,
 // where there is no letter, it is a space wide.
-const fatCursor = new Plugin<boolean>({
+const fatCursor = new Plugin<{ on: boolean; at: number | null }>({
   key: fatCursorKey,
   state: {
-    init: () => true,
-    apply: (tr, on) => (tr.getMeta(fatCursorKey) as boolean | undefined) ?? on,
+    init: () => ({ on: true, at: null }),
+    apply: (tr, v) => {
+      const on = (tr.getMeta(fatCursorKey) as boolean | undefined) ?? v.on
+      const at = tr.getMeta(cursorAtKey) as number | null | undefined
+      if (at !== undefined) return { on, at }
+      return { on, at: v.at === null ? null : tr.mapping.map(v.at) }
+    },
   },
   props: {
     decorations(s) {
-      if (!fatCursorKey.getState(s)) return null
-      const $h = s.selection.$head
+      const st = fatCursorKey.getState(s)
+      if (!st?.on) return null
+      const $h = st.at === null ? s.selection.$head : s.doc.resolve(Math.min(st.at, s.doc.content.size))
       if (!$h.parent.isTextblock) return null
       const h = $h.pos
       const deco =

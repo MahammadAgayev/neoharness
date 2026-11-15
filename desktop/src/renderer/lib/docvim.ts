@@ -9,7 +9,7 @@ import { Selection, TextSelection } from 'prosemirror-state'
 import { deleteRow, isInTable } from 'prosemirror-tables'
 import type { EditorView } from 'prosemirror-view'
 
-import { fatCursorKey } from './docedit'
+import { cursorAtKey, fatCursorKey } from './docedit'
 
 export type Mode = 'normal' | 'insert' | 'visual' | 'vline'
 
@@ -58,6 +58,11 @@ export class DocVim {
   private count = ''
   private pending = ''
   private anchor = 0
+  // cur is the cursor in Visual mode: the selection runs from anchor to
+  // it and takes the letters under both, as in Vim.
+  private cur = 0
+  // goal is the column j and k keep, as Vim's curswant.
+  private goal: number | null = null
   private register: { slice: Slice; lines: boolean; text: string } | null = null
 
   constructor(
@@ -72,12 +77,12 @@ export class DocVim {
 
   setMode(m: Mode): void {
     if (m === this.mode) return
-    if (m === 'normal' && this.mode !== 'insert') this.collapse(this.view.state.selection.head)
+    if (m === 'normal' && this.mode !== 'insert') this.collapse(this.head())
     this.mode = m
     this.pending = ''
     this.count = ''
     this.view.dom.classList.toggle('vim-normal', m !== 'insert')
-    this.view.dispatch(this.view.state.tr.setMeta(fatCursorKey, m !== 'insert'))
+    this.view.dispatch(this.view.state.tr.setMeta(fatCursorKey, m !== 'insert').setMeta(cursorAtKey, null))
     this.on.mode(m)
   }
 
@@ -107,22 +112,28 @@ export class DocVim {
   }
 
   private moveTo(pos: number): void {
+    const doc = this.state.doc
+    pos = Math.max(0, Math.min(pos, doc.content.size))
     if (this.mode === 'visual') {
-      const doc = this.state.doc
-      const head = Math.max(0, Math.min(pos, doc.content.size))
-      this.view.dispatch(this.state.tr.setSelection(TextSelection.between(doc.resolve(this.anchor), doc.resolve(head))).scrollIntoView())
+      this.cur = pos
+      const $a = doc.resolve(this.anchor)
+      const $c = doc.resolve(pos)
+      const after = ($p: typeof $a) => ($p.parent.isTextblock ? Math.min($p.pos + 1, $p.end()) : $p.pos)
+      const [anchor, head] = pos >= this.anchor ? [this.anchor, after($c)] : [after($a), pos]
+      const tr = this.state.tr.setSelection(TextSelection.between(doc.resolve(anchor), doc.resolve(head)))
+      this.view.dispatch(tr.setMeta(cursorAtKey, pos).scrollIntoView())
     } else if (this.mode === 'vline') {
-      const a = this.block(this.state.doc.resolve(this.anchor))
-      const b = this.block(this.state.doc.resolve(pos))
+      const a = this.block(doc.resolve(this.anchor))
+      const b = this.block(doc.resolve(pos))
       if (!a || !b) return this.collapse(pos)
+      this.cur = pos
       const [from, to] = a.from <= b.from ? [a.from, b.to] : [a.to, b.from]
-      this.view.dispatch(this.state.tr.setSelection(TextSelection.create(this.state.doc, from, to)).scrollIntoView())
+      this.view.dispatch(this.state.tr.setSelection(TextSelection.create(doc, from, to)).setMeta(cursorAtKey, pos).scrollIntoView())
     } else this.collapse(pos)
   }
 
   private head(): number {
-    const sel = this.state.selection
-    return this.mode === 'vline' ? (sel.head === sel.to ? sel.to : sel.from) : sel.head
+    return this.mode === 'visual' || this.mode === 'vline' ? this.cur : this.state.selection.head
   }
 
   // motion is where a motion key goes from pos, or null for no motion.
@@ -136,14 +147,14 @@ export class DocVim {
         return b ? Math.max(b.from, pos - n) : pos
       case 'l':
       case '<Right>':
-        return b ? Math.min(this.mode === 'normal' ? last(b) : b.to, pos + n) : pos
+        return b ? Math.min(last(b), pos + n) : pos
       case '0':
       case '^':
       case '<Home>':
         return b ? b.from + (key === '^' ? (textOf(b.node).match(/^\s*/)?.[0].length ?? 0) : 0) : pos
       case '$':
       case '<End>':
-        return b ? (this.mode === 'normal' ? last(b) : b.to) : pos
+        return b ? last(b) : pos
       case 'w':
       case 'e':
       case 'b': {
@@ -185,12 +196,44 @@ export class DocVim {
     }
   }
 
-  // lineMove moves by screen lines, as gj gk: the browser keeps the column.
-  private lineMove(dir: 'forward' | 'backward', n: number): void {
-    const sel = window.getSelection() as unknown as { modify?: (a: string, d: string, g: string) => void } | null
-    if (!sel?.modify) return
-    for (let k = 0; k < n; k++) sel.modify(this.mode === 'normal' ? 'move' : 'extend', dir, 'line')
-    requestAnimationFrame(() => this.view.dispatch(this.state.tr.scrollIntoView()))
+  // vertical is the position a screen line below or above pos, in the
+  // column j and k keep; pos when there is no line there.
+  private vertical(pos: number, dir: 1 | -1): number {
+    const v = this.view
+    const s = this.scroller()
+    let c = v.coordsAtPos(pos)
+    const lh = Math.max(12, c.bottom - c.top)
+    // The line it goes to must be on screen to be found.
+    if (s) {
+      const box = s.getBoundingClientRect()
+      const room = dir > 0 ? box.bottom - c.bottom : c.top - box.top
+      if (room < lh * 4) {
+        s.scrollTop += dir * (lh * 4 - room)
+        c = v.coordsAtPos(pos)
+      }
+    }
+    if (this.goal === null) this.goal = c.left
+    for (let dy = lh / 2; dy < 400; dy += 3) {
+      const at = v.posAtCoords({ left: this.goal, top: dir > 0 ? c.bottom + dy : c.top - dy })
+      // Between blocks is no place for a cursor.
+      if (!at || !v.state.doc.resolve(at.pos).parent.isTextblock) continue
+      const r = v.coordsAtPos(at.pos)
+      if (dir > 0 ? r.top >= c.bottom - 2 : r.bottom <= c.top + 2) return at.pos
+    }
+    return pos
+  }
+
+  private lineMove(dir: 1 | -1, n: number): void {
+    const goal = this.goal
+    let p = this.head()
+    for (let k = 0; k < n; k++) p = this.vertical(p, dir)
+    if (this.mode === 'normal') {
+      const b = this.block(this.state.doc.resolve(p))
+      // Normal mode stays on a letter, as l and $ do.
+      if (b && p >= b.to && b.to > b.from) p = b.to - 1
+    }
+    this.moveTo(p)
+    this.goal = goal ?? this.goal
   }
 
   private scroll(f: number): void {
@@ -339,6 +382,7 @@ export class DocVim {
     // The keys never reach ProseMirror in Normal mode, so it has not yet
     // read a selection a click or j k made in the page.
     ;(this.view as unknown as { domObserver: { flush(): void } }).domObserver.flush()
+    if (!/^(j|k|<Down>|<Up>|<CR>|[0-9])$/.test(key)) this.goal = null
     if (this.mode === 'insert') {
       if (key === '<Esc>') {
         this.setMode('normal')
@@ -430,11 +474,11 @@ export class DocVim {
       case 'j':
       case '<Down>':
       case '<CR>':
-        this.lineMove('forward', n)
+        this.lineMove(1, n)
         return true
       case 'k':
       case '<Up>':
-        this.lineMove('backward', n)
+        this.lineMove(-1, n)
         return true
       case 'g':
       case 'd':
@@ -576,11 +620,11 @@ export class DocVim {
       }
       case 'j':
       case '<Down>':
-        this.lineMove('forward', n)
+        this.lineMove(1, n)
         return true
       case 'k':
       case '<Up>':
-        this.lineMove('backward', n)
+        this.lineMove(-1, n)
         return true
       case 'g':
         this.pending = 'g'
