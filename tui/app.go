@@ -124,8 +124,8 @@ type App struct {
 	// threads list, and the threads opened from it.
 	pane         *Window
 	showResolved bool
-	// lastChat is the chat window that had focus last: what the board opens
-	// a thread in, as Vim's quickfix opens in the previous window.
+	// lastChat is the chat window that had focus last: when it shows a
+	// thread, the board opens a thread there.
 	lastChat *Window
 	// layouts are the windows of the workspaces left this session, so
 	// opening one again shows its splits as they were.
@@ -966,18 +966,38 @@ func (a *App) showThread(name string) {
 		a.cur = w
 		return
 	}
-	a.leaveList()
+	a.leaveList(a.chat(name))
 	a.cur.show(a.chat(name))
 }
 
-// leaveList moves the focus from the board or the waits list to the chat
-// window that had it last, so what opens from a list keeps the list. It
-// reports whether it moved.
-func (a *App) leaveList() bool {
+// minSplit is the narrowest thread window a list opens beside the
+// coordinator; on a narrower screen the thread takes the coordinator's place.
+const minSplit = 40
+
+// leaveList moves the focus from the board or the waits list to the thread
+// window, so what opens from a list keeps the list and the coordinator: the
+// thread window used last, else a new split right of the coordinator that
+// shows b. It reports whether it moved.
+func (a *App) leaveList(b *Buffer) bool {
 	if k := a.cur.Buf.Kind; k != KindThreads && k != KindWaits {
 		return false
 	}
 	wins := a.root.windows()
+	isThread := func(w *Window) bool { return w.Buf.Kind == KindChat && w.Buf.Thread != model.Coordinator }
+	if slices.Contains(wins, a.lastChat) && isThread(a.lastChat) {
+		a.cur = a.lastChat
+		return true
+	}
+	if i := slices.IndexFunc(wins, isThread); i >= 0 {
+		a.cur = wins[i]
+		return true
+	}
+	if i := slices.IndexFunc(wins, func(w *Window) bool { return w.Buf.Kind == KindChat }); i >= 0 && wins[i].rect.W/2 >= minSplit {
+		nw := newWindow(b)
+		a.root.splitWindow(wins[i], nw, true)
+		a.cur = nw
+		return true
+	}
 	if slices.Contains(wins, a.lastChat) {
 		a.cur = a.lastChat
 		return true
