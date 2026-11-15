@@ -406,13 +406,13 @@ func TestThreadsPaneShowsTheListThenThreads(t *testing.T) {
 		t.Fatalf("<leader>t should focus the threads pane on the right; got %d windows", len(wins))
 	}
 	coord, pane := wins[0], wins[1]
-	// Rows: running, auth-refactor, blank, idle, api-tests. As Vim's
-	// quickfix, <CR> opens in the chat window, and the list stays.
+	// Rows: running, auth-refactor, blank, idle, api-tests. <CR> opens the
+	// thread in the list's place; <C-o> brings the list back.
 	h.press("G", "<CR>")
-	if len(h.a.root.windows()) != 2 || h.a.cur != coord || coord.Buf.Thread != "api-tests" || pane.Buf.Kind != KindThreads {
-		t.Fatalf("<CR> should show api-tests in the chat window; got %q", coord.Buf.Name)
+	if len(h.a.root.windows()) != 2 || h.a.cur != pane || pane.Buf.Thread != "api-tests" || coord.Buf.Thread != model.Coordinator {
+		t.Fatalf("<CR> should show api-tests in the list's place; got %q", pane.Buf.Name)
 	}
-	h.press("<Space>", "t")
+	h.press("<C-o>", "<C-w>h", "<Space>", "t")
 	if h.a.cur != pane {
 		t.Fatal("<leader>t with the list on screen should go to it")
 	}

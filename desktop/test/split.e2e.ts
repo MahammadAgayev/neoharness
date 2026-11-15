@@ -1,5 +1,5 @@
-// Enter on a thread in the list opens it in one thread window beside the
-// coordinator, so the coordinator and the list stay, on the fake hub.
+// Enter on a thread in the list opens it in the list's place, half and half
+// with the coordinator, and <C-o> brings the list back, on the fake hub.
 
 import fs from 'node:fs'
 import os from 'node:os'
@@ -51,18 +51,18 @@ async function enterOn(name: string) {
   await page.keyboard.press('Enter')
 }
 
-test('Enter on a thread opens one thread window between the coordinator and the list, and a narrow window reuses the coordinator', async () => {
+const widths = () => page.locator('.layout > .column').evaluateAll((cs) => cs.map((c) => Math.round(c.getBoundingClientRect().width)))
+
+test('Enter on a thread opens it in the list\'s place, half and half with the coordinator, and <C-o> brings the list back', async () => {
   await enterOn('api')
-  await expect.poll(columns).toEqual(['coordinator', 'api', 'threads'])
+  await expect.poll(columns).toEqual(['coordinator', 'api'])
   await expect(page.locator('.statusline.focused .sl-name')).toHaveText('api')
-  await enterOn('web')
-  await expect.poll(columns).toEqual(['coordinator', 'web', 'threads'])
+  const [a, b] = await widths()
+  expect(Math.abs(a - b)).toBeLessThan(4)
   await page.keyboard.press('Escape')
   await page.keyboard.press('Escape')
-  await page.keyboard.type(':q')
-  await page.keyboard.press('Enter')
+  await page.keyboard.press('Control+o')
   await expect.poll(columns).toEqual(['coordinator', 'threads'])
-  await page.setViewportSize({ width: 760, height: 860 })
-  await enterOn('api')
-  await expect.poll(columns).toEqual(['api', 'threads'])
+  await enterOn('web')
+  await expect.poll(columns).toEqual(['coordinator', 'web'])
 })

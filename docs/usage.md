@@ -16,10 +16,8 @@
 
 - A workspace opens with the coordinator on the left and the threads pane on
   the right. `<CR>`, `:b` or `:open` from the list opens the thread in the
-  thread window: the one you used last, else a new split right of the
-  coordinator, which gives it half its width. The coordinator and the list
-  stay. Where that split would be under 40 columns, the thread opens in the
-  coordinator's window.
+  list's place, so the coordinator and the thread share the screen half and
+  half. `<C-o>` there brings the list back.
   `<leader>t` goes to the list, or brings it back in a column of its own.
 - Each pane has a winbar on top: its name, and its state on the right. The
   pane with focus has its name in bold and a row of `▔` in the accent color

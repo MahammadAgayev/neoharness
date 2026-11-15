@@ -28,9 +28,6 @@ import { typeahead } from './ui/registry'
 // historyTail is how much of each transcript loads, as in the TUI.
 const historyTail = 2000
 const toastsShown = 3
-// minSplit is the narrowest thread window, in px, a list opens beside the
-// coordinator, as the TUI's 40 columns.
-const minSplit = 360
 
 export type MsgTone = Tone | 'text' | 'subtle'
 
@@ -252,8 +249,8 @@ class Store {
   // settled is when each row that moved took its new group.
   private boardAt: Record<string, string> = {}
   private boardHold = false
-  // lastChat is the chat window that had focus last: when it shows a
-  // thread, the board and the waits list open a thread there.
+  // lastChat is the chat window that had focus last: what the waits list
+  // opens a thread in, as Vim's quickfix opens in the previous window.
   private lastChat = 0
   settled: Record<string, number> = {}
   // held are the updates of the workspace that loads: they come after the
@@ -1080,8 +1077,8 @@ class Store {
 
   // --- threads ---
 
-  // showThread shows a thread: where it is on screen already, else in this
-  // window, or from a list in the thread window, so the list stays.
+  // showThread shows a thread: where it is on screen already, else as
+  // showFromList does.
   showThread(name: string): void {
     const there = this.wins().find((w) => w.buf.kind === 'chat' && w.buf.thread === name)
     if (there) {
@@ -1091,32 +1088,12 @@ class Store {
     this.showFromList({ kind: 'chat', thread: name })
   }
 
-  // showFromList shows buf in the window in focus or, from the board or the
-  // waits list, in the thread window: the one used last, else a new column
-  // right of the coordinator, which gives it half its width. On a screen
-  // too narrow for that, the coordinator's window takes it.
+  // showFromList shows buf in the window in focus. From the board that is
+  // the board's own window, beside the coordinator, and <C-o> brings the
+  // board back; from the waits list, the window listWin gives.
   private showFromList(buf: BufRef): void {
     const cur = this.cur()
-    const list = (w: Win) => w.buf.kind === 'threads' || w.buf.kind === 'waits'
-    if (!cur || !list(cur)) {
-      if (cur) this.show(cur.id, buf)
-      return
-    }
-    const wins = this.wins()
-    const thread = (w: Win) => w.buf.kind === 'chat' && w.buf.thread !== Coordinator
-    const target = wins.find((w) => w.id === this.lastChat && thread(w)) ?? wins.find(thread)
-    if (target) return this.show(target.id, buf)
-    const coord = wins.find((w) => w.buf.kind === 'chat')
-    const ci = this.state.layout.cols.findIndex((c) => c.wins.some((w) => w.id === coord?.id))
-    const width = document.getElementById(`col-${this.state.layout.cols[ci]?.id}`)?.getBoundingClientRect().width ?? 0
-    if (coord && width / 2 >= minSplit) {
-      const nw = this.win(buf)
-      const cols = this.state.layout.cols.slice()
-      cols.splice(ci + 1, 0, { id: nextId(), wins: [nw] })
-      this.set({ layout: { cols, focus: nw.id } })
-      return
-    }
-    const w = this.listWin()
+    const w = cur?.buf.kind === 'threads' ? cur : this.listWin()
     if (w) this.show(w.id, buf)
   }
 

@@ -80,7 +80,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       [']q [q  :cn :cp', 'next / previous thing that waits for you, in any workspace: its thread opens at the card'],
       [':waits  :copen', 'the waits list, in a window under the threads list: <CR> goes there and the list stays, x dismisses a notice or a failure'],
       ['<C-o>  <C-i>  ⌘[  ⌘]', 'back and forward through what the window showed, from Insert too; or the arrows at the top'],
-      ['<CR>  :b  :open', 'on the threads list or the waits list: the thread opens beside the coordinator, in one thread window, and the list stays'],
+      ['<CR>  :b  :open', 'on the threads list: the thread opens in its place, and <C-o> brings the list back; on the waits list: in the chat window that had the focus last'],
       ['<C-v>  <C-x>', 'thread in a split on the right / above (threads list, search)'],
       ['<C-d>', 'delete the thread or workspace, after y (search)'],
     ],

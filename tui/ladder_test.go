@@ -317,7 +317,7 @@ func TestALongBriefFromTheCoordinatorFoldsToOneRow(t *testing.T) {
 	}
 }
 
-func TestOpeningFromTheBoardKeepsTheBoard(t *testing.T) {
+func TestOpeningFromTheBoardTakesItsPlaceBesideTheCoordinator(t *testing.T) {
 	for _, keys := range [][]string{
 		{":b api-tests", "<CR>"},
 		{"<CR>"},
@@ -334,11 +334,12 @@ func TestOpeningFromTheBoardKeepsTheBoard(t *testing.T) {
 		if keys[0] == ":open fresh" {
 			want = "fresh"
 		}
-		if h.board() == nil {
-			t.Fatalf("%q from the board closed it:\n%s", keys, h.screen())
+		wins := h.a.root.windows()
+		if len(wins) != 2 || wins[0].Buf.Thread != model.Coordinator || wins[1] != h.a.cur {
+			t.Fatalf("%q from the board should keep the coordinator beside it:\n%s", keys, h.screen())
 		}
 		if h.a.cur.Buf.Kind != KindChat || h.a.cur.Buf.Thread != want {
-			t.Fatalf("%q should open %s in the chat pane, got %q", keys, want, h.a.cur.Buf.Thread)
+			t.Fatalf("%q should open %s in the board's place, got %q", keys, want, h.a.cur.Buf.Thread)
 		}
 	}
 }
@@ -385,37 +386,30 @@ func TestAnAnsweredPermissionHasNoGlyphSinceArtifactsUseTheDiamond(t *testing.T)
 	t.Fatal("the answered permission is not in the chat")
 }
 
-func TestEnterFromTheBoardOpensOneThreadWindowBesideTheCoordinator(t *testing.T) {
+func TestEnterFromTheBoardOpensTheThreadInItsPlaceAndCtrlOBringsItBack(t *testing.T) {
 	h := start(t)
-	h.s.SetSize(200, 40)
 	h.openDemo()
 	coord := h.a.root.windows()[0]
-	h.press("<C-w>l", "gg", "j", "<CR>")
+	h.press("<C-w>l", "gg", "j")
+	pane := h.a.cur
+	h.press("<CR>")
 	wins := h.a.root.windows()
-	if len(wins) != 3 || wins[0] != coord || coord.Buf.Thread != model.Coordinator || wins[1] != h.a.cur || h.a.cur.Buf.Thread != "auth-refactor" || wins[2].Buf.Kind != KindThreads {
-		t.Fatalf("<CR> should split the thread between the coordinator and the list; got %d windows:\n%s", len(wins), h.screen())
+	if len(wins) != 2 || wins[0] != coord || coord.Buf.Thread != model.Coordinator || wins[1] != pane || h.a.cur != pane || pane.Buf.Thread != "auth-refactor" {
+		t.Fatalf("<CR> should open the thread in the list's place, beside the coordinator; got %d windows:\n%s", len(wins), h.screen())
 	}
-	if wins[1].rect.W < minSplit || coord.rect.W < wins[1].rect.W-2 {
-		t.Fatalf("the coordinator gives the thread half its width; widths %d %d %d", coord.rect.W, wins[1].rect.W, wins[2].rect.W)
+	if d := coord.rect.W - pane.rect.W; d < -2 || d > 2 {
+		t.Fatalf("the coordinator and the thread should be half and half; widths %d %d", coord.rect.W, pane.rect.W)
 	}
-	h.press("<C-w>l", "G", "<CR>")
-	wins = h.a.root.windows()
-	if len(wins) != 3 || wins[1] != h.a.cur || h.a.cur.Buf.Thread != "api-tests" || coord.Buf.Thread != model.Coordinator {
-		t.Fatalf("a second <CR> should reuse the thread window; got %d windows:\n%s", len(wins), h.screen())
+	h.press("<C-o>")
+	if pane.Buf.Kind != KindThreads || h.a.cur != pane {
+		t.Fatalf("<C-o> should bring the list back; got %q", pane.Buf.Name)
 	}
-	h.press("<C-w>l", ":b auth-refactor", "<CR>")
-	if len(h.a.root.windows()) != 3 || h.a.cur != wins[1] || h.a.cur.Buf.Thread != "auth-refactor" {
+	h.press("G", "<CR>")
+	if len(h.a.root.windows()) != 2 || pane.Buf.Thread != "api-tests" || coord.Buf.Thread != model.Coordinator {
+		t.Fatalf("a second <CR> should open in the same place; got %d windows", len(h.a.root.windows()))
+	}
+	h.press("<C-o>", ":b auth-refactor", "<CR>")
+	if len(h.a.root.windows()) != 2 || h.a.cur != pane || pane.Buf.Thread != "auth-refactor" {
 		t.Fatalf(":b from the list should follow <CR>; got %d windows", len(h.a.root.windows()))
-	}
-}
-
-func TestEnterFromTheBoardOnANarrowScreenUsesTheCoordinatorWindow(t *testing.T) {
-	h := start(t)
-	h.s.SetSize(80, 30)
-	h.openDemo()
-	coord := h.a.root.windows()[0]
-	h.press("<C-w>l", "G", "<CR>")
-	if len(h.a.root.windows()) != 2 || h.a.cur != coord || coord.Buf.Thread != "api-tests" {
-		t.Fatalf("on 80 columns <CR> should open in the coordinator's window; got %d windows", len(h.a.root.windows()))
 	}
 }

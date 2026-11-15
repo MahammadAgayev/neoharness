@@ -85,11 +85,10 @@ start of its last reply shows on hover, and `K` on the row shows it on the
 command line. While the cursor or the mouse is on the list, a thread that
 changes state keeps its place; it moves to its new group when you leave,
 with a short tint. A resolved thread leaves at once. `<CR>`, `:b` and
-`:open` on the list open the thread in the thread window: the one you used
-last, else a new column right of the coordinator, which gives it half its
-width. The coordinator and the list stay. Where that column would be under
-360px, the thread opens in the coordinator's window. `:open` from a chat
-opens the new thread in a window beside it.
+`:open` on the list open the thread in the list's place, so the
+coordinator and the thread share the window half and half; `<C-o>` there
+brings the list back. `:open` from a chat opens the new thread in a window
+beside it.
 
 The waits list is what needs you in every workspace, oldest first, as in
 the TUI: permissions, questions, failed turns and notices that ask for
