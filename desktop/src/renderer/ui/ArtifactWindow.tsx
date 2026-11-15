@@ -62,7 +62,7 @@ function SlashMenu(props: { view: EditorView; slash: Slash; scroller: HTMLElemen
   }, [slash.index])
   const at = view.coordsAtPos(slash.from - 1)
   const box = scroller.getBoundingClientRect()
-  const row = 28
+  const row = parseFloat(getComputedStyle(scroller).getPropertyValue('--row')) || 28
   const height = Math.min(items.length, 8) * row + 10
   const below = at.bottom + 4 + height <= box.bottom || at.top - box.top < height + 4
   const top = (below ? at.bottom + 4 : at.top - 4 - height) - box.top + scroller.scrollTop

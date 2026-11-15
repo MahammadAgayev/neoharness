@@ -687,3 +687,32 @@ test('/ on an empty line in Insert opens the block menu: headings, lists, a tabl
     .toBe('# Blocks\n\nintro and/or\n\n## Plan\n\n`rollout`\n\n`runbook` `notes-2`\n\n> wise\n\n/usr/bin\n\n| Step |  |  |\n|---|---|---|\n|  |  |  |\n')
   await page.keyboard.press('Control+o')
 })
+
+test('the block menu opens above the line where there is no room below, and never covers the line', async () => {
+  hub.artifact('demo', 'short', 'Short', '# Short\n\n' + Array.from({ length: 30 }, (_, i) => `line ${i}`).join('\n\n') + '\n')
+  hub.event('demo', 'api', { kind: 'artifact', detail: 'short', text: 'Short', version: 1 })
+  await page.locator('.b-artifact', { hasText: 'Short' }).click()
+  const win = page.locator('.window.artifact', { has: page.locator('.sl-name', { hasText: 'short' }) })
+  const doc = win.locator('.doc-page')
+  await doc.locator('p', { hasText: 'line 15' }).click()
+  await normal()
+  await page.keyboard.press('o')
+  // The new line goes to the foot of the pane.
+  await win.locator('.doc-editor').evaluate((el) => {
+    const p = [...el.querySelectorAll('p')].find((x) => x.textContent === '')!
+    el.scrollTop += p.getBoundingClientRect().bottom - (el.getBoundingClientRect().bottom - 30)
+  })
+  await page.keyboard.press('/')
+  const menu = win.locator('.doc-slash')
+  await expect(menu).toBeVisible()
+  const line = (await doc.locator('p', { hasText: /^\/$/ }).boundingBox())!
+  const box = (await menu.boundingBox())!
+  const pane = (await win.locator('.doc-editor').boundingBox())!
+  expect(box.y + box.height).toBeLessThanOrEqual(line.y)
+  expect(box.y).toBeGreaterThanOrEqual(pane.y)
+  await shot('50-artifact-block-menu-above')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Backspace')
+  await normal()
+  await page.keyboard.press('Control+o')
+})
