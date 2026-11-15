@@ -29,5 +29,5 @@
 .keyhint-key {
   flex: 0 0 auto;
   color: var(--fg-3);
-  min-width: 4em;
+  min-width: 7ch;
 }

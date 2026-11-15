@@ -373,6 +373,16 @@ test('<leader> shows what can follow at once, as which-key, and <leader>s opens 
   await expect(panel.locator('.keyhint', { hasText: /^p\+pick · \d+$/ })).toBeVisible()
   // A group's label is quieter than a command's, and nothing is in the accent.
   await expect(panel.locator('.keyhint', { hasText: /^p\+pick/ }).locator('span').nth(1)).toHaveClass(/t-subtle/)
+  // In each column the labels line up, also after a long key such as <Space>.
+  const cols = await panel.locator('.keyhint').evaluateAll((els) => {
+    const by = new Map<number, Set<number>>()
+    for (const e of els) {
+      const k = Math.round(e.getBoundingClientRect().left)
+      by.set(k, (by.get(k) ?? new Set()).add(Math.round(e.children[1].getBoundingClientRect().left)))
+    }
+    return [...by.values()].map((v) => v.size)
+  })
+  expect(cols.every((n) => n === 1)).toBe(true)
   await shot('36-keyhints')
   await page.keyboard.press('c')
   await expect(panel).toHaveCount(0)
