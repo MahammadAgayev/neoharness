@@ -1117,6 +1117,26 @@ test('the todo list shows in one line above the prompt and unfolds, as in the TU
   hub.setView(view('demo', 'api'))
 })
 
+test('reading text uses the full width, and textwidth limits it', async () => {
+  // Wide enough that the coordinator's half is wider than the old 90ch.
+  await page.setViewportSize({ width: 2600, height: 860 })
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  const win = page.locator('.window', { has: page.locator('.statusline.focused') })
+  const width = (sel: string) => win.locator(sel).first().evaluate((e) => e.getBoundingClientRect().width)
+  // The scroll bar is not text.
+  const full = await win.locator('.transcript').first().evaluate((e) => e.clientWidth)
+  await expect.poll(() => width('.transcript-inner')).toBeGreaterThan(full - 2)
+  const w = hub.workspaces.find((x) => x.name === 'demo')!
+  hub.push({ kind: 'workspace', workspace: 'demo', summary: { ...w, textWidth: 40 } })
+  await expect.poll(() => width('.transcript-inner')).toBeLessThan(full / 2)
+  hub.push({ kind: 'workspace', workspace: 'demo', summary: { ...w, textWidth: 0 } })
+  await expect.poll(() => width('.transcript-inner')).toBeGreaterThan(full - 2)
+  expect(full).toBeGreaterThan(1000)
+  await page.setViewportSize({ width: 1400, height: 860 })
+})
+
 test('a notice waits while you type and shows when you leave Insert; what needs you shows at once, on top', async () => {
   hub.setView(view('demo', 'ledger'))
   await normal()

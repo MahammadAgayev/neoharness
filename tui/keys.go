@@ -468,10 +468,13 @@ func (a *App) line(w *Window) Line {
 
 func (a *App) textWidth(w *Window) int {
 	tw := max(w.rect.W-1-railWidth(w), 8)
-	// A chat wraps at chatWidth, its gutter included: long lines are hard
-	// to read.
-	if w.Buf.Kind == KindChat {
-		tw = min(tw, chatWidth+2)
+	// textwidth counts the text, not the 2-column gutter of a chat or the
+	// margin of an artifact.
+	if k := w.Buf.Kind; k == KindChat || k == KindArtifact {
+		i := slices.IndexFunc(a.workspaces, func(p model.WorkspaceView) bool { return p.Name == a.workspace })
+		if i >= 0 && a.workspaces[i].TextWidth > 0 {
+			tw = min(tw, a.workspaces[i].TextWidth+2)
+		}
 	}
 	return tw
 }

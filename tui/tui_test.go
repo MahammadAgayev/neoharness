@@ -802,13 +802,42 @@ func TestHeadingsTakeTheInkOfTheText(t *testing.T) {
 	}
 }
 
-func TestChatWrapsAt120Columns(t *testing.T) {
+func TestChatUsesTheFullWidthUnlessTextwidthIsSet(t *testing.T) {
 	h := start(t)
 	h.s.SetSize(300, 40)
 	h.openDemo()
 	h.press("<C-w>o")
-	if w := h.a.cur; w.rect.W <= 122 || h.a.textWidth(w) != 122 {
-		t.Fatalf("a %d-column chat should wrap at 120 columns and its gutter, got %d", w.rect.W, h.a.textWidth(w))
+	w := h.a.cur
+	if full := w.rect.W - 1 - railWidth(w); h.a.textWidth(w) != full {
+		t.Fatalf("a %d-column chat should use its full width %d, got %d", w.rect.W, full, h.a.textWidth(w))
+	}
+	h.a.workspaces[slices.IndexFunc(h.a.workspaces, func(p model.WorkspaceView) bool { return p.Name == "demo" })].TextWidth = 80
+	if h.a.textWidth(w) != 82 {
+		t.Fatalf("textwidth=80 should wrap at 80 columns and the gutter, got %d", h.a.textWidth(w))
+	}
+}
+
+func TestArtifactUsesTheFullWidthUnlessTextwidthIsSet(t *testing.T) {
+	h := editDemo(t, "# D\n\n"+strings.Repeat("word ", 50)+"\n")
+	h.s.SetSize(300, 40)
+	h.press("<C-w>o")
+	h.a.draw()
+	widest := func() int {
+		n := 0
+		for _, l := range strings.Split(h.screen(), "\n") {
+			if strings.Contains(l, "word word") {
+				n = max(n, len(strings.TrimSpace(l)))
+			}
+		}
+		return n
+	}
+	if n := widest(); n < 200 {
+		t.Fatalf("an artifact should use the full width, its widest row is %d", n)
+	}
+	h.a.workspaces[slices.IndexFunc(h.a.workspaces, func(p model.WorkspaceView) bool { return p.Name == "demo" })].TextWidth = 80
+	h.a.draw()
+	if n := widest(); n > 80 {
+		t.Fatalf("textwidth=80 should wrap an artifact at 80 columns, its widest row is %d", n)
 	}
 }
 
@@ -1112,7 +1141,7 @@ func TestSetlocalChoosesTheWorkspacesAgents(t *testing.T) {
 		t.Fatalf("locals = %q, want %q", h.hub.locals, want)
 	}
 	h.press(":setlocal", "<CR>")
-	if h.a.notice != "coordinator=big  threads=small  reopen_compact=ask  auto_compact=0" {
+	if h.a.notice != "coordinator=big  threads=small  reopen_compact=ask  auto_compact=0  textwidth=0" {
 		t.Fatalf("notice = %q", h.a.notice)
 	}
 	h.press(":setlocal threads?", "<CR>")

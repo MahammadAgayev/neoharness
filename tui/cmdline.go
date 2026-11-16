@@ -219,6 +219,8 @@ func (a *App) complete(forward bool) {
 					values := []string{"compact", "ask", "off"}
 					if o == "auto_compact" {
 						values = []string{"90", "0"}
+					} else if o == "textwidth" {
+						values = []string{"0", "90"}
 					} else if o != "reopen_compact" {
 						values = nil
 						for _, v := range a.workspaces {
@@ -738,6 +740,7 @@ func (a *App) helpBuf() *Buffer {
 		row(":setlocal coordinator=<agent>", "this workspace's coordinator runs that agent; threads= for its threads"),
 		row(":setlocal reopen_compact=ask", "when the coordinator reopens a thread past compactwarn: compact first, ask you, or off"),
 		row(":setlocal auto_compact=90", "past this context %, a session compacts before its next turn; 0 never"),
+		row(":setlocal textwidth=90", "the widest column of chats and artifacts, in characters; 0 the full width"),
 		row(":setlocal threads& / threads?", "back to the config / show; no argument shows all"),
 		row(":open <name> [where]", "open a thread: folder or host:dir"),
 		row(":resolve  :reopen", "close or bring back a thread; your message or the coordinator's brings it back too"),

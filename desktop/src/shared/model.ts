@@ -208,6 +208,9 @@ export interface WorkspaceView {
   // The context percent at which a session compacts before its next turn;
   // 0 never.
   autoCompact?: number
+  // The widest column of reading text, chats and artifacts; 0 is the full
+  // width.
+  textWidth?: number
 }
 
 export type UpdateKind = 'event' | 'thread' | 'workspace' | 'deleted' | 'artifact' | 'stopped' | 'waits' | 'delta'

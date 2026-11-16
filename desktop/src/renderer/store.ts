@@ -868,12 +868,13 @@ class Store {
     if (!this.needWorkspace()) return
     const v = this.state.workspaces.find((w) => w.name === this.state.workspace)
     if (!v) return
-    const options = ['coordinator', 'threads', 'reopen_compact', 'auto_compact']
+    const options = ['coordinator', 'threads', 'reopen_compact', 'auto_compact', 'textwidth']
     const values: Record<string, string> = {
       coordinator: v.coordinatorAgent ?? '',
       threads: v.threadsAgent ?? '',
       reopen_compact: v.reopenCompact ?? '',
       auto_compact: String(v.autoCompact ?? 0),
+      textwidth: String(v.textWidth ?? 0),
     }
     const shown: string[] = []
     const set: string[] = []

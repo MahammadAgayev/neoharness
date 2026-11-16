@@ -172,6 +172,10 @@ export function App() {
   useEffect(() => {
     document.documentElement.style.setProperty('--font-size', `${fontSize}px`)
   }, [fontSize])
+  const textWidth = useStore((s) => s.workspaces.find((w) => w.name === s.workspace)?.textWidth ?? 0)
+  useEffect(() => {
+    document.documentElement.style.setProperty('--textwidth', textWidth > 0 ? `${textWidth}ch` : 'none')
+  }, [textWidth])
   useEffect(() => {
     const root = document.documentElement.classList
     const blur = () => root.add('blurred')

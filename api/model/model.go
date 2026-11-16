@@ -424,6 +424,9 @@ type WorkspaceView struct {
 	// AutoCompact is the context percent at which a session compacts
 	// before its next turn; 0 never.
 	AutoCompact int `json:"autoCompact"`
+	// TextWidth is the widest column of reading text, chats and artifacts;
+	// 0 is the full width.
+	TextWidth int `json:"textWidth"`
 }
 
 // UpdateKind classifies a hub update.

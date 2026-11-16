@@ -31,6 +31,8 @@ type HubSettings struct {
 	AutoCompact int
 	// NoTodos is todos = false: threads keep no todo list.
 	NoTodos bool
+	// TextWidth is the widest column of reading text; 0 is the full width.
+	TextWidth int
 }
 
 // AgentSettings configure one agent.
@@ -141,6 +143,10 @@ func ReadHubSettings(path string) (HubSettings, error) {
 			s.Threads = text(v)
 		case "neoharness.reopen_compact":
 			s.ReopenCompact = text(v)
+		case "neoharness.textwidth":
+			if n, ok := v.(lua.LNumber); ok {
+				s.TextWidth = int(n)
+			}
 		case "neoharness.todos":
 			s.NoTodos = v == lua.LFalse
 		case "neoharness.auto_compact":
@@ -202,6 +208,9 @@ func (s HubSettings) Check() error {
 	case "", "compact", "ask", "off":
 	default:
 		return fmt.Errorf("reopen_compact is compact, ask or off, not %q", s.ReopenCompact)
+	}
+	if s.TextWidth < 0 {
+		return fmt.Errorf("textwidth is a column count, 0 for the full width, not %d", s.TextWidth)
 	}
 	if s.AutoCompact < 0 || s.AutoCompact > 100 {
 		return fmt.Errorf("auto_compact is a context percent, 0 to 100, not %d", s.AutoCompact)

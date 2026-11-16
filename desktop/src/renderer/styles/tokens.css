@@ -12,10 +12,10 @@
   /* Three sizes, all from the text size: body, secondary and small. */
   --fs-secondary: calc(var(--font-size) - 1px);
   --fs-small: calc(var(--font-size) - 2px);
-  /* The width of a column of prose: about 90 characters of reading text.
-     With the line height and the paragraph gaps the eye still finds the
-     next line, and a long reply wraps less. */
-  --measure: 90ch;
+  /* The widest column of reading text, from the hub's textwidth: none, the
+     full width, or a ch count. none makes each calc() that uses it invalid,
+     and so its max-width none. */
+  --textwidth: none;
 
   /* Sizes: rows, dense rows (group heads, todo items), the bar on top, the
      rail folded and open, and the board. */

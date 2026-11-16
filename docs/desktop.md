@@ -103,6 +103,9 @@ is not empty; a click opens the list. A chat that shows for 2 seconds in a
 window in front counts as seen, so the hub quiets what came in it since.
 
 The app does not read `init.lua`; the hub settings in it apply to both.
+`textwidth` is one: chats and artifact pages use the full width of their
+window unless it, or the workspace's `:setlocal textwidth`, sets a limit in
+characters.
 What the TUI takes from `init.lua` for itself is in Settings instead.
 
 ## Settings
@@ -139,8 +142,8 @@ short tint, but only when the cursor and the mouse are off the list. With Reduce
 
 ### Artifacts
 
-An artifact opens as a page: one centered column, about 90 characters
-wide, with the chat's type a size up. Headings, lists, task boxes,
+An artifact opens as a page: one centered column, as wide as the window
+or `textwidth`, with the chat's type a size up. Headings, lists, task boxes,
 tables, quotes, alerts and highlighted code show rendered, and they stay
 rendered while you write, as in a word processor. No markdown shows in
 Insert mode.
@@ -290,8 +293,8 @@ version. Writing in the block yourself decides it too.
   6.5:1, muted text and accents 4.5:1 (`lib/themes.ts`, tested). The TUI
   uses the same night values. The paper and the hues stay Rosé Pine's.
   A reply reads in one ink: headings show their level by size, and inline
-  code is the text's color on a plain chip. Prose is about 90 characters
-  wide, the chat text two sizes up from the labels, paragraphs a line
+  code is the text's color on a plain chip. Prose is as wide as the
+  window, or `textwidth` characters, the chat text two sizes up from the labels, paragraphs a line
   apart, and every size follows the text size. A reply streams in as it is
   written: each paragraph, list or code block shows once it is done, and
   only the open one changes.

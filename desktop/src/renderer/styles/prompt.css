@@ -4,7 +4,7 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  max-width: calc(var(--measure) - 16px);
+  max-width: calc(var(--textwidth) + 32px);
   width: calc(100% - 32px);
   max-height: 50%;
   margin: var(--s-1) auto 0;
@@ -78,7 +78,7 @@
   justify-content: flex-start;
   height: calc(1.4em + 3px);
   gap: 0 10px;
-  max-width: calc(var(--measure) - 16px);
+  max-width: calc(var(--textwidth) + 32px);
   width: calc(100% - 32px);
   margin: 0 auto 6px;
   padding: 3px 4px 0;

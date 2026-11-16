@@ -7,7 +7,7 @@
   scroll-behavior: auto;
 }
 .transcript-inner {
-  max-width: var(--measure);
+  max-width: calc(var(--textwidth) + 48px);
   margin: 0 auto;
   padding: 20px 24px 12px;
   font-size: calc(var(--font-size) + 2px);

@@ -26,7 +26,7 @@
   font-size: calc(var(--font-size) + 2px);
 }
 .doc-page {
-  max-width: 90ch;
+  max-width: calc(var(--textwidth) + 2 * var(--s-7));
   margin: 0 auto;
   padding: var(--s-7) var(--s-7) 40vh;
   line-height: 1.6;

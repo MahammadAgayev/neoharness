@@ -8,6 +8,7 @@
 :setlocal coordinator=<agent>   this workspace's coordinator runs that agent; threads=<agent> for its threads
 :setlocal reopen_compact=ask    a thread the coordinator reopens past compactwarn: compact first, ask you, or off
 :setlocal auto_compact=90       past this context %, a session compacts before its next turn; 0 never
+:setlocal textwidth=90          the widest column of chats and artifacts; 0, the default, is the full width
 :setlocal threads&      back to the config; threads? shows it; no argument shows all
 :workspace [name]       switch; no name opens the picker (also <leader>w)
 :workspaces             the workspaces screen (also <leader>pv)

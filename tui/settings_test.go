@@ -16,7 +16,7 @@ func TestHubSettingsDefaultToOpus(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := s.Agents[s.Coordinator]
-	if s.MCPPort != 47821 || s.Notify != "threads" || s.ReopenCompact != "ask" || s.CompactWarn != 80 || s.AutoCompact != 90 || s.Coordinator != "claude" || s.Threads != "" || s.Kind("claude") != "claude" || a.Model != "claude-opus-5-5[1m]" || a.Effort != "" || a.ContextWindow != 400000 || s.NoTodos ||
+	if s.MCPPort != 47821 || s.Notify != "threads" || s.ReopenCompact != "ask" || s.CompactWarn != 80 || s.AutoCompact != 90 || s.Coordinator != "claude" || s.Threads != "" || s.Kind("claude") != "claude" || a.Model != "claude-opus-5-5[1m]" || a.Effort != "" || a.ContextWindow != 400000 || s.NoTodos || s.TextWidth != 0 ||
 		!slices.Equal(a.Command, []string{"claude"}) || !slices.Equal(a.RemoteCommand, []string{"claude"}) {
 		t.Fatalf("settings = %+v", s)
 	}
@@ -50,7 +50,7 @@ func TestInitLuaSetsReopenCompact(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "init.lua")
 	src := `
 neoharness.o.compactwarn = 70
-require("neoharness").setup({ reopen_compact = "compact", auto_compact = 0, todos = false })
+require("neoharness").setup({ reopen_compact = "compact", auto_compact = 0, todos = false, textwidth = 100 })
 `
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
@@ -59,7 +59,7 @@ require("neoharness").setup({ reopen_compact = "compact", auto_compact = 0, todo
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.ReopenCompact != "compact" || s.CompactWarn != 70 || s.AutoCompact != 0 || !s.NoTodos {
+	if s.ReopenCompact != "compact" || s.CompactWarn != 70 || s.AutoCompact != 0 || !s.NoTodos || s.TextWidth != 100 {
 		t.Fatalf("settings = %+v", s)
 	}
 	s.ReopenCompact = "sometimes"

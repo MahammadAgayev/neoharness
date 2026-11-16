@@ -2642,6 +2642,32 @@ func TestAutoCompactBeforeTheNextTurn(t *testing.T) {
 	}
 }
 
+func TestTextwidthComesFromTheConfigAndSetlocal(t *testing.T) {
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return &fake{} }, TextWidth: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	pinned(t, h, "demo")
+	tw := func() int { return h.Workspaces()[0].TextWidth }
+	if tw() != 100 {
+		t.Fatalf("textwidth = %d, want the config's 100", tw())
+	}
+	if err := h.SetLocal("demo", "textwidth", "0"); err != nil {
+		t.Fatal(err)
+	}
+	if tw() != 0 {
+		t.Fatalf("textwidth = %d, want 0 after :setlocal textwidth=0", tw())
+	}
+	if err := h.SetLocal("demo", "textwidth", "-1"); err == nil {
+		t.Error("a negative textwidth should fail")
+	}
+	if err := h.SetLocal("demo", "textwidth", ""); err != nil || tw() != 100 {
+		t.Fatalf("textwidth& = %d, %v; want the config's 100", tw(), err)
+	}
+}
+
 // TestARecapStaysWithTheThread: a session's recap shows in its view and
 // a restart keeps it, so the person reads it when they come back.
 func TestARecapStaysWithTheThread(t *testing.T) {

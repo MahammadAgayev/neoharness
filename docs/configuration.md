@@ -69,6 +69,7 @@ require("neoharness").setup({
   notify = "threads",                   -- every thread notifies you; "coordinator": the coordinator decides
   reopen_compact = "ask",               -- the coordinator reopens a thread past compactwarn: "compact", "ask" or "off"
   auto_compact = 90,                    -- past this context %, a session compacts before its next turn; 0 never
+  textwidth = 0,                        -- the widest column of chats and artifacts; 0: the full width
   todos = true,                         -- threads keep a task list; false: none, and no todo line or progress
   coordinator = "claude",               -- the agent coordinators run
   threads = "quick",                    -- the agent threads run; left out: the coordinator's
@@ -119,6 +120,14 @@ as it is and does not try again until a `/compact` works. Keep
 `compactwarn` below `auto_compact` to see the warning first; `0` turns auto
 compact off, and the warning still shows. `:setlocal auto_compact=<n>` sets
 it for one workspace.
+
+`textwidth` is the widest column of reading text, in characters: a
+chat's stream and an artifact's page, in the TUI and in the app. `0`, the
+default, uses the full width of the pane or window. Set it, for example
+to `90`, if long lines are hard to read for you. `:setlocal textwidth=<n>`
+changes it for one workspace at once, in both clients, and
+`:setlocal textwidth&` goes back to the config. The name is Vim's
+`'textwidth'`: the most columns of text, where `0` means no limit.
 
 With `todos = true` (the default) the thread prompt asks each thread to
 keep a task list for work of more than a few steps. It shows above the

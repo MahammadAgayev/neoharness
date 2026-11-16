@@ -41,6 +41,8 @@ type Workspace struct {
 	// AutoCompact is the :setlocal auto_compact here, a percent; empty is
 	// the config's.
 	AutoCompact string `json:"autoCompact,omitempty"`
+	// TextWidth is the :setlocal textwidth here; empty is the config's.
+	TextWidth string `json:"textWidth,omitempty"`
 }
 
 // Message is one queued input for a thread.

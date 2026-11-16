@@ -106,6 +106,9 @@ type Config struct {
 	AutoCompact int
 	// NoTodos keeps no todo lists, and the thread prompt does not ask for one.
 	NoTodos bool
+	// TextWidth is the widest column of reading text in the clients; 0 is
+	// the full width. A workspace can choose another with SetLocal.
+	TextWidth int
 }
 
 // What a reopened thread with a full context does before the coordinator's
@@ -446,6 +449,18 @@ func (h *Hub) SetLocal(name, option, value string) error {
 		return err
 	}
 	p := ws.p
+	if option == "textwidth" {
+		if n, err := strconv.Atoi(value); value != "" && (err != nil || n < 0) {
+			return errors.New("textwidth is a column count; 0 is the full width")
+		}
+		p.TextWidth = value
+		if err := workspace.Save(p); err != nil {
+			return err
+		}
+		ws.p = p
+		h.publishWorkspace(ws)
+		return nil
+	}
 	if option == "auto_compact" {
 		if n, err := strconv.Atoi(value); value != "" && (err != nil || n < 0 || n > 100) {
 			return errors.New("auto_compact is a context percent, 0 to 100; 0 never")
@@ -481,7 +496,7 @@ func (h *Hub) SetLocal(name, option, value string) error {
 	case "threads":
 		p.Threads, who = agentName, "Threads run"
 	default:
-		return fmt.Errorf("no option %q; the options are coordinator, threads, reopen_compact and auto_compact", option)
+		return fmt.Errorf("no option %q; the options are coordinator, threads, reopen_compact, auto_compact and textwidth", option)
 	}
 	if err := workspace.Save(p); err != nil {
 		return err
@@ -1203,6 +1218,14 @@ func (h *Hub) autoCompact(ws *space) int {
 		return n
 	}
 	return h.cfg.AutoCompact
+}
+
+// textWidth is the workspace's TextWidth, else the config's.
+func (h *Hub) textWidth(ws *space) int {
+	if n, err := strconv.Atoi(ws.p.TextWidth); err == nil {
+		return n
+	}
+	return h.cfg.TextWidth
 }
 
 // autoCompactDue says whether a thread's next turn is to be a /compact
@@ -2587,6 +2610,7 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 		AgentNames:       slices.Sorted(maps.Keys(h.cfg.Agents)),
 		ReopenCompact:    h.reopenMode(ws),
 		AutoCompact:      h.autoCompact(ws),
+		TextWidth:        h.textWidth(ws),
 	}
 	now := time.Now()
 	for _, th := range ws.threads {

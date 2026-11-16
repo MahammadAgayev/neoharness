@@ -699,12 +699,11 @@ func (e *Editor) find(re *regexp.Regexp, d int) (pos, bool) {
 	return pos{}, false
 }
 
-// render shows the lines soft-wrapped to w cells, at most docWidth wide:
-// rendered, or raw with headings in their colors. Headings are marked for
+// render shows the lines soft-wrapped to w cells: rendered, or raw with
+// headings in their colors. Headings are marked for
 // the outline rail. A meta line about the artifact is on top.
 func (e *Editor) render(w int, th *Theme) []Line {
 	margin := []Span{{"  ", th.Fg}}
-	w = min(w, docWidth+width(spansText(margin)))
 	if e.cacheW == w && e.cacheR == e.rev && e.cacheShown == [2]int{e.shown, e.shownTo} {
 		return e.cache
 	}
