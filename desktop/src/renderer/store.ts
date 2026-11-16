@@ -129,8 +129,10 @@ export interface State {
   statusDetail: string
   workspaces: WorkspaceView[]
   // waits is the hub's waits list: what needs the person in every
-  // workspace, oldest first.
+  // workspace, in the order ]q walks it. waitsByAge shows it oldest first,
+  // for :waits!.
   waits: Wait[]
+  waitsByAge: boolean
   screen: 'workspaces' | 'workspace'
   workspace: string
   threads: Record<string, ThreadView>
@@ -202,6 +204,7 @@ class Store {
     screen: 'workspaces',
     workspace: '',
     waits: [],
+    waitsByAge: false,
     threads: {},
     order: [],
     chats: {},
@@ -714,12 +717,13 @@ class Store {
   }
 
   private badge(): void {
-    nh().setBadge(this.state.waits.length)
+    nh().setBadge(waiting(this.state.waits))
   }
 
   // --- the waits list ---
   // Vim's quickfix list for the person's attention, as in the TUI: ]q and
-  // [q, :cn and :cp walk it; :waits and :copen show it.
+  // [q, :cn and :cp walk it; :waits and :copen show it, :waits! oldest
+  // first.
 
   // waitAt is the wait ]q went to last.
   private waitAt = ''
@@ -747,12 +751,12 @@ class Store {
     this.say(`(${i + 1} of ${ws.length}) ${w.kind} · ${w.text.replace(/\s+/g, ' ').trim()}`, 'muted')
   }
 
-  // dismissWait drops a notice or a failure from the list; a permission or
-  // a question is answered in its thread.
+  // dismissWait drops a notice or a failure from the list, and reads a
+  // review; a permission or a question is answered in its thread.
   async dismissWait(i: number): Promise<void> {
     const w = this.state.waits[i]
     if (!w) return
-    if (w.kind !== 'notice' && w.kind !== 'failed') return this.say('answer it in its thread: <CR> goes there', 'muted')
+    if (w.kind !== 'notice' && w.kind !== 'failed' && w.kind !== 'review') return this.say('answer it in its thread: <CR> goes there', 'muted')
     await this.try(this.call('dismiss', { workspace: w.workspace, thread: w.thread, id: w.id }))
   }
 
@@ -1133,8 +1137,9 @@ class Store {
 
   // waitsPane is :waits: the list in a window of its own under the board,
   // or in a column of its own on the right, so what is on screen stays.
-  waitsPane(): void {
+  waitsPane(byAge = false): void {
     const s = this.state
+    if (s.waitsByAge !== byAge) this.set({ waitsByAge: byAge })
     const there = this.wins().find((x) => x.buf.kind === 'waits')
     if (there) return this.focus(there.id)
     const nw = { ...this.win({ kind: 'waits' }), cursor: 0, follow: false }
@@ -1712,7 +1717,7 @@ class Store {
       case 'cope':
       case 'cw':
       case 'cwindow':
-        return this.waitsPane()
+        return this.waitsPane(e.bang && e.cmd === 'waits')
       case 'cn':
       case 'cnext':
         return this.nextWait(1)
@@ -1864,6 +1869,11 @@ class Store {
     const ms = this.state.order.filter((n) => n.includes(name))
     return ms.length === 1 ? { kind: 'chat', thread: ms[0] } : null
   }
+}
+
+// waiting counts what blocks on the person: a review only waits to be read.
+export function waiting(ws: Wait[]): number {
+  return ws.filter((w) => w.kind !== 'review').length
 }
 
 function waitKey(w: Wait): string {

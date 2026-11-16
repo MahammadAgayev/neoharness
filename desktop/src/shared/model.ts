@@ -61,11 +61,14 @@ export type Level = 0 | 1 | 2 | 3
 export const SeenDwellMs = 2000
 
 // Wait is one item of the waits list: what needs the person, in any
-// workspace. id names it to answer or dismiss.
+// workspace, in the order to go through it: what blocks a turn, then
+// failures and notices, then reviews, each oldest first. id names it to
+// answer or dismiss. A review is news not yet read; it blocks nothing, so it
+// is not counted as waiting.
 export interface Wait {
   workspace: string
   thread: string
-  kind: 'permission' | 'question' | 'failed' | 'notice'
+  kind: 'permission' | 'question' | 'failed' | 'notice' | 'review'
   id: string
   text: string
   since: string

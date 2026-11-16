@@ -192,15 +192,17 @@ type App struct {
 	// row moves under them. settleUntil is when a moved row's tint goes.
 	boardAt     map[string]model.State
 	settleUntil map[string]time.Time
-	// waits is the hub's waits list, every workspace, oldest first (waits.go).
-	// waitAt is the key of the wait ]q went to last. seenFrom is when each
-	// chat on screen began to show, for the seen dwell; seenSent the chats
-	// said seen since.
-	waits    []model.Wait
-	waitAt   string
-	waitsBuf *Buffer
-	seenFrom map[string]time.Time
-	seenSent map[string]bool
+	// waits is the hub's waits list, every workspace, in the order ]q walks
+	// it (waits.go); waitsByAge shows it oldest first, for :waits!. waitAt
+	// is the key of the wait ]q went to last. seenFrom is when each chat on
+	// screen began to show, for the seen dwell; seenSent the chats said seen
+	// since.
+	waits      []model.Wait
+	waitsByAge bool
+	waitAt     string
+	waitsBuf   *Buffer
+	seenFrom   map[string]time.Time
+	seenSent   map[string]bool
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key

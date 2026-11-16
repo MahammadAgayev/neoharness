@@ -63,6 +63,33 @@ func waitsOf(ws *space, th *thread) []model.Wait {
 	return out
 }
 
+// rank is where a kind of wait goes in the list: what blocks a turn first,
+// news that blocks nothing last.
+func rank(k model.WaitKind) int {
+	switch k {
+	case model.WaitPermission, model.WaitQuestion:
+		return 0
+	case model.WaitReview:
+		return 2
+	}
+	return 1
+}
+
+// review is a thread's news the person has not read, when it rests: a turn
+// end or a notice. Under notify = "coordinator" a thread's turn end is only
+// ambient, so the coordinator's word is the review instead.
+func review(ws *space, th *thread) (model.Wait, bool) {
+	t := th.t
+	if t.Unseen != model.LevelNotice || th.state != model.StateIdle {
+		return model.Wait{}, false
+	}
+	text := t.Reply
+	if text == "" {
+		text = "finished a turn"
+	}
+	return model.Wait{Workspace: ws.p.Name, Thread: t.Name, Kind: model.WaitReview, ID: model.ReviewID, Text: text, Since: t.UnseenAt}, true
+}
+
 // failedID names a thread's failure in the waits list; a thread has at
 // most one.
 const failedID = "failed"
@@ -92,12 +119,20 @@ func (h *Hub) waits() []model.Wait {
 	out := []model.Wait{}
 	for _, ws := range h.workspaces {
 		for _, th := range ws.threads {
-			if !th.deleted {
-				out = append(out, waitsOf(ws, th)...)
+			if th.deleted {
+				continue
 			}
+			w := waitsOf(ws, th)
+			if r, ok := review(ws, th); ok && len(w) == 0 {
+				w = append(w, r)
+			}
+			out = append(out, w...)
 		}
 	}
 	slices.SortStableFunc(out, func(a, b model.Wait) int {
+		if c := rank(a.Kind) - rank(b.Kind); c != 0 {
+			return c
+		}
 		if c := a.Since.Compare(b.Since); c != 0 {
 			return c
 		}
@@ -143,7 +178,7 @@ func (h *Hub) Seen(workspaceName, name string, at time.Time) error {
 	return nil
 }
 
-// Dismiss takes a notice or a failure off the waits list. A permission or
+// Dismiss takes a notice, a failure or a review off the waits list. A permission or
 // a question is answered instead.
 func (h *Hub) Dismiss(workspaceName, name, id string) error {
 	h.mu.Lock()
@@ -156,6 +191,10 @@ func (h *Hub) Dismiss(workspaceName, name, id string) error {
 	switch {
 	case id == failedID && failed(th):
 		t.FailedAt = time.Time{}
+	case id == model.ReviewID && t.Unseen > 0:
+		// x on a review reads it.
+		t.SeenAt = time.Now().UTC()
+		t.Unseen = 0
 	case slices.ContainsFunc(t.Notices, func(n workspace.Notice) bool { return n.ID == id }):
 		t.Notices = slices.DeleteFunc(t.Notices, func(n workspace.Notice) bool { return n.ID == id })
 	case slices.ContainsFunc(th.perms, func(p *pending) bool { return p.ID == id }), th.ask != nil && th.ask.id == id:

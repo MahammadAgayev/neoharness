@@ -844,8 +844,8 @@ func (a *App) drawGlobal(W, H int) {
 			running++
 		}
 	}
-	if len(a.waits) > 0 {
-		right = append(right, Span{fmt.Sprintf("  ◆ %d waiting", len(a.waits)), th.Wait})
+	if n := a.waiting(); n > 0 {
+		right = append(right, Span{fmt.Sprintf("  ◆ %d waiting", n), th.Wait})
 	}
 	if running > 0 {
 		right = append(right, Span{fmt.Sprintf("  ● %d running", running), th.Run})

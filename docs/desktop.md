@@ -92,14 +92,17 @@ coordinator and the thread share the window half and half; `<C-o>` there
 brings the list back. `:open` from a chat opens the new thread in a window
 beside it.
 
-The waits list is what needs you in every workspace, oldest first, as in
-the TUI: permissions, questions, failed turns and notices that ask for
-you. `]q` and `[q`, or `:cn` and `:cp`, open the next or the previous one
-at its card, and the command line says `(2 of 5) permission · …`.
-`:waits` or `:copen` opens the list in a window of its own under the
-threads list: `<CR>` goes there and the list stays, `x` dismisses a notice
-or a failure, and `:q` or `<C-o>` closes it. The title bar shows `◆ N waiting` while it
-is not empty; a click opens the list. A chat that shows for 2 seconds in a
+The waits list is what needs you in every workspace, as in the TUI: first
+permissions and questions, which block a turn, then failed turns and
+notices that ask for you, then reviews, threads whose news you have not
+read, each oldest first. `]q` and `[q`, or `:cn` and `:cp`, open the next
+or the previous one at its card, and the command line says
+`(2 of 5) permission · …`. `:waits` or `:copen` opens the list in a window
+of its own under the threads list: `<CR>` goes there and the list stays,
+`x` dismisses a notice or a failure or reads a review, and `:q` or `<C-o>`
+closes it. `:waits!` shows it oldest first. The title bar shows
+`◆ N waiting` while something blocks on you, reviews not counted; a click
+opens the list. A chat that shows for 2 seconds in a
 window in front counts as seen, so the hub quiets what came in it since.
 
 The app does not read `init.lua`; the hub settings in it apply to both.

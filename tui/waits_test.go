@@ -153,3 +153,54 @@ func TestTheWaitsListReadsAsTheBoard(t *testing.T) {
 		t.Fatalf("the time is right-aligned one column before the edge, got %q:\n%s", got, string(row))
 	}
 }
+
+// A review is news, not a wait: it is on the ]q path after what blocks,
+// but the command line does not count it, and x reads it.
+func TestReviewsAreOnTheWaitsPathButNotCounted(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	_, H := h.s.Size()
+	review := model.Wait{Workspace: "demo", Thread: model.Coordinator, Kind: model.WaitReview, ID: model.ReviewID, Text: "setup page drafted", Since: time.Now().Add(-time.Hour)}
+	h.setWaits(append(demoWaits(), review)...)
+	if !strings.Contains(h.line(H-1), "◆ 2 waiting") {
+		t.Fatalf("a review is not counted as waiting:\n%s", h.line(H-1))
+	}
+	h.press("]q", "]q", "]q")
+	if h.a.cur.Buf.Thread != model.Coordinator {
+		t.Fatalf("]q should reach the review after the blockers, got %q", h.a.cur.Buf.Thread)
+	}
+	h.press(":waits", "<CR>")
+	h.see("✓ coordinator  review · setup page drafted")
+	if h.fgAt("✓ coordinator") != fgOf(h.a.th.Done) {
+		t.Fatal("a review is in done ink")
+	}
+	h.press("G", "x")
+	if !slices.Equal(h.hub.dismissed, []string{"demo/coordinator/review"}) {
+		t.Fatalf("x should read the review, got %v", h.hub.dismissed)
+	}
+	h.setWaits(review)
+	if strings.Contains(h.line(H-1), "waiting") {
+		t.Fatal("only reviews: nothing waits")
+	}
+}
+
+// :waits shows the list in the hub's order, the order ]q walks; :waits!
+// shows it oldest first.
+func TestWaitsBangShowsTheListOldestFirst(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	review := model.Wait{Workspace: "demo", Thread: model.Coordinator, Kind: model.WaitReview, ID: model.ReviewID, Text: "setup page drafted", Since: time.Now().Add(-time.Hour)}
+	h.setWaits(append(demoWaits(), review)...)
+	h.press(":waits", "<CR>")
+	if h.rowOf("permission · ") > h.rowOf("review · ") {
+		t.Fatal(":waits keeps the hub's order")
+	}
+	h.press(":waits!", "<CR>")
+	if h.rowOf("review · ") > h.rowOf("permission · ") {
+		t.Fatal(":waits! is oldest first")
+	}
+	h.press("gg", "<CR>")
+	if h.a.cur.Buf.Thread != model.Coordinator {
+		t.Fatalf("<CR> goes to the row's wait, got %q", h.a.cur.Buf.Thread)
+	}
+}

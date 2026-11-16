@@ -210,10 +210,20 @@ const (
 	// WaitNotice is a notice that needs the person; it goes when they write
 	// to the session or dismiss it.
 	WaitNotice WaitKind = "notice"
+	// WaitReview is news the person has not read: a turn that ended or a
+	// notice. It blocks nothing, so it is not counted as waiting; it goes
+	// when they read the thread or dismiss it.
+	WaitReview WaitKind = "review"
 )
 
+// ReviewID names a thread's review in the waits list; a thread has at most
+// one.
+const ReviewID = "review"
+
 // Wait is one item of the waits list: something that needs the person, in
-// any workspace. ID names it to Answer or Dismiss.
+// any workspace. ID names it to Answer or Dismiss. The list is in the order
+// to go through it: what blocks a turn, then failures and notices, then
+// reviews, each oldest first.
 type Wait struct {
 	Workspace string    `json:"workspace"`
 	Thread    string    `json:"thread"`

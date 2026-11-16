@@ -77,8 +77,9 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['<C-w>v  <C-w>s', 'split right / above'],
       ['<C-w>c  <C-w>o  <C-w>=', 'close, only, equal sizes'],
       [']b [b  <C-^>', 'next / previous thread, alternate'],
-      [']q [q  :cn :cp', 'next / previous thing that waits for you, in any workspace: its thread opens at the card'],
-      [':waits  :copen', 'the waits list, in a window under the threads list: <CR> goes there and the list stays, x dismisses a notice or a failure'],
+      [']q [q  :cn :cp', 'next / previous thing that waits for you, in any workspace: what blocks a turn first, then failures and notices, then reviews; its thread opens at the card'],
+      [':waits  :copen', 'the waits list, in a window under the threads list: <CR> goes there and the list stays, x dismisses a notice or a failure, or reads a review'],
+      [':waits!', 'the waits list, oldest first'],
       ['<C-o>  <C-i>  ⌘[  ⌘]', 'back and forward through what the window showed, from Insert too; or the arrows at the top'],
       ['<CR>  :b  :open', 'on the threads list: the thread opens in its place, and <C-o> brings the list back; on the waits list: in the chat window that had the focus last'],
       ['<C-v>  <C-x>', 'thread in a split on the right / above (threads list, search)'],
@@ -215,7 +216,8 @@ export function Help() {
 }
 
 // WaitsWindow is :waits, Vim's quickfix window for what needs you: <CR>
-// goes there, x dismisses a notice or a failure.
+// goes there, x dismisses a notice or a failure and reads a review. :waits!
+// shows it oldest first.
 // WaitBody reads as the board's detail row: a permission's tool in fg-2,
 // then its command. The hub joins them as "Tool: command".
 function WaitBody(props: { w: Wait }) {
@@ -229,9 +231,19 @@ function WaitBody(props: { w: Wait }) {
   )
 }
 
+// waitInk is love for a failure, pine for a review, which blocks nothing,
+// and gold for the rest, which waits for you.
+function waitInk(k: Wait['kind']): string {
+  return k === 'failed' ? 't-love' : k === 'review' ? 't-pine' : 't-gold'
+}
+
 export function WaitsWindow(props: { win: Win; focused: boolean }) {
   const { win, focused } = props
-  const waits = useStore((s) => s.waits)
+  const all = useStore((s) => s.waits)
+  const byAge = useStore((s) => s.waitsByAge)
+  // at is each row's place in the hub's list, which ]q, <CR> and x use.
+  const waits = all.map((w, at) => ({ ...w, at }))
+  if (byAge) waits.sort((x, y) => Date.parse(x.since) - Date.parse(y.since))
   const open = useStore((s) => s.workspace)
   const cursor = Math.min(Math.max(win.cursor, 0), Math.max(waits.length - 1, 0))
   const el = useRef<HTMLDivElement>(null)
@@ -251,10 +263,10 @@ export function WaitsWindow(props: { win: Win; focused: boolean }) {
         set(waits.length - 1)
         return true
       case 'enter':
-        void store.jumpWait(cursor)
+        if (waits[cursor]) void store.jumpWait(waits[cursor].at)
         return true
       case 'stopHere':
-        void store.dismissWait(cursor)
+        if (waits[cursor]) void store.dismissWait(waits[cursor].at)
         return true
     }
     return false
@@ -281,14 +293,14 @@ export function WaitsWindow(props: { win: Win; focused: boolean }) {
             className={`list-row ${focused && i === cursor ? 'cursor' : ''}`}
             onClick={() => {
               store.updateWin(win.id, { cursor: i })
-              void store.jumpWait(i)
+              void store.jumpWait(w.at)
             }}
           >
-            <span className={`glyph ${w.kind === 'failed' ? 't-love' : 't-gold'}`}>
-              <Glyph g={w.kind === 'failed' ? '✗' : w.kind === 'notice' ? '↗' : '◆'} />
+            <span className={`glyph ${waitInk(w.kind)}`}>
+              <Glyph g={w.kind === 'failed' ? '✗' : w.kind === 'notice' ? '↗' : w.kind === 'review' ? '✓' : '◆'} />
             </span>
             <span className="name">{w.workspace === open ? w.thread : `${w.workspace} · ${w.thread}`}</span>
-            <span className={`wait-text ${w.kind === 'failed' ? 't-love' : 't-gold'}`}>{`${w.kind} · `}</span>
+            <span className={`wait-text ${waitInk(w.kind)}`}>{`${w.kind} · `}</span>
             <WaitBody w={w} />
             <span className="time">{age(w.since, now) || 'now'}</span>
           </div>

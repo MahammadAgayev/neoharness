@@ -174,15 +174,20 @@ draw a level, never which level an event has.
   thread. A client sends it after the thread was on screen, in a window in
   front, for `model.SeenDwell` (2 s) without a break. It quiets levels 1 and
   2 that came before `at`, in every client. It never clears level 3.
-- The waits list is what needs the person in every workspace, oldest first:
-  pending permissions, questions, failed turns, and notices that need the
-  person. `GET /waits` returns it, and a `waits` update carries the whole
+- The waits list is what needs the person in every workspace, in the order
+  to go through it: pending permissions and questions, which block a turn;
+  then failed turns and notices that need the person; then reviews; each
+  oldest first. A review (`kind: review`, `id: review`) is a resting thread
+  with unseen news at level 2, a turn end or a notice, and nothing else
+  waiting on it. It does not raise the thread to level 3, clients do not
+  count it as waiting, and seen or a dismiss takes it off. `GET /waits` returns it, and a `waits` update carries the whole
   list each time it changes (no `waits` field is an empty list). An item
   leaves only when it is resolved: a permission is answered, a question
   answered or skipped, a turn stopped, a thread resolved or deleted, a
   failed thread runs again, the person writes to the coordinator that sent
   the notice. `DELETE /workspaces/{w}/threads/{t}/waits/{id}` dismisses a
-  notice or a failure; a permission or a question is answered instead.
+  notice or a failure, or reads a review; a permission or a question is
+  answered instead.
 - Failures, notices, questions and seen times are kept in `thread.json`, so
   the list survives a restart. A pending permission does not: its turn
   ends with the hub.

@@ -10,8 +10,9 @@ import (
 )
 
 // The waits list is Vim's quickfix list for the person's attention: what
-// needs them in every workspace, oldest first, kept by the hub. ]q and [q,
-// :cn and :cp walk it; :waits and :copen show it.
+// needs them in every workspace, in the hub's order, then reviews of news
+// they have not read. ]q and [q, :cn and :cp walk it; :waits and :copen show
+// it, :waits! oldest first.
 
 func waitKey(w model.Wait) string { return w.Workspace + "\x00" + w.Thread + "\x00" + w.ID }
 
@@ -27,6 +28,17 @@ func (a *App) loadWaits() {
 func (a *App) setWaits(ws []model.Wait) {
 	a.waits = ws
 	a.renderWaits()
+}
+
+// waiting counts what blocks on the person: a review only waits to be read.
+func (a *App) waiting() int {
+	n := 0
+	for _, w := range a.waits {
+		if w.Kind != model.WaitReview {
+			n++
+		}
+	}
+	return n
 }
 
 func (a *App) waitIndex(key string) int {
@@ -74,15 +86,15 @@ func fmtWait(i, n int, w model.Wait) string {
 	return fmt.Sprintf("(%d of %d) %s · %s", i+1, n, w.Kind, flatten(w.Text))
 }
 
-// dismissWait drops a notice or a failure from the list; a permission or a
-// question is answered.
+// dismissWait drops a notice or a failure from the list, and reads a
+// review; a permission or a question is answered.
 func (a *App) dismissWait(key string) {
 	i := a.waitIndex(key)
 	if i < 0 {
 		return
 	}
 	w := a.waits[i]
-	if w.Kind != model.WaitNotice && w.Kind != model.WaitFailed {
+	if w.Kind != model.WaitNotice && w.Kind != model.WaitFailed && w.Kind != model.WaitReview {
 		a.notify("answer it in its thread: <CR> goes there", a.th.Fg3)
 		return
 	}
@@ -105,14 +117,21 @@ func (a *App) renderWaits() {
 			}
 		}
 	}
+	ws := a.waits
+	if a.waitsByAge {
+		ws = slices.Clone(ws)
+		slices.SortStableFunc(ws, func(x, y model.Wait) int { return x.Since.Compare(y.Since) })
+	}
 	var lines []Line
-	for _, w := range a.waits {
+	for _, w := range ws {
 		glyph, ink := Span{"◆ ", th.Wait}, th.Wait
 		switch w.Kind {
 		case model.WaitFailed:
 			glyph, ink = Span{"✗ ", th.Alert}, th.Alert
 		case model.WaitNotice:
 			glyph = Span{"↗ ", th.Wait}
+		case model.WaitReview:
+			glyph, ink = Span{"✓ ", th.Done}, th.Done
 		}
 		name := w.Thread
 		if w.Workspace != a.workspace {

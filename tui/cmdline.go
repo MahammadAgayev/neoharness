@@ -472,7 +472,8 @@ func (a *App) exec(line string) {
 		a.nextWait(1)
 	case "cp", "cprevious", "cN", "cNext":
 		a.nextWait(-1)
-	case "waits", "copen", "cope", "cw", "cwindow":
+	case "waits", "copen", "cope", "cw", "cwindow", "waits!":
+		a.waitsByAge = cmd == "waits!"
 		a.renderWaits()
 		a.cur.show(a.waitsBuf)
 		a.cur.Follow = false
@@ -712,8 +713,9 @@ func (a *App) helpBuf() *Buffer {
 		row("<C-w>v  <C-w>s", "split vertically / horizontally"),
 		row("<C-w>c  <C-w>o  <C-w>=", "close, only, equal sizes"),
 		row("]b [b  <C-^>", "next / previous thread, alternate"),
-		row("]q [q  :cn :cp", "next / previous wait, oldest first, in any workspace"),
-		row(":waits  :copen", "the waits list; <CR> goes to one, x dismisses a notice or a failure"),
+		row("]q [q  :cn :cp", "next / previous wait, in any workspace: what blocks a turn first, then failures and notices, then reviews"),
+		row(":waits  :copen", "the waits list; <CR> goes to one, x dismisses a notice or a failure, or reads a review"),
+		row(":waits!", "the waits list, oldest first"),
 		row("<C-o>", "back to the buffer the window showed before"),
 		row("<CR>", "open the workspace, or switch to the thread"),
 		row("K", "the last reply of the thread on the row (threads list)"),

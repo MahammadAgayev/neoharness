@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 
 import { applyScheme, resolveScheme } from '../lib/themes'
-import { store, useStore, type Win } from '../store'
+import { store, useStore, waiting as waitingCount, type Win } from '../store'
 import { ChatWindow } from './ChatWindow'
 import { CommandLine, HubBanner, Picker, Toasts } from './Overlays'
 import { KeyHints } from './KeyHints'
@@ -108,7 +108,7 @@ function Layout() {
 
 function TitleBar() {
   const screen = useStore((s) => s.screen)
-  const waiting = useStore((s) => s.waits.length)
+  const waiting = useStore((s) => waitingCount(s.waits))
   const sidebar = useStore((s) => s.settings.sidebar)
   const win = useStore((s) => s.layout.cols.flatMap((c) => c.wins).find((w) => w.id === s.layout.focus))
   // The buttons keep the focus where it is, as the keys do.

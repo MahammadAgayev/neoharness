@@ -185,15 +185,19 @@ A toast that does not need you waits while you are in Insert or on the
 command line, and shows when you leave it. What needs you shows at once,
 except a thread of the open workspace while the threads pane is open: its
 row already says it.
-What needs you, in every workspace, is also in one list, oldest first, as
-Vim's quickfix list: permission requests, questions, failed turns and
-notices that need you. The command line counts it as `◆ N waiting`. `]q` and
-`[q`, or `:cn` and `:cp`, go to the next or previous one and open its
+What needs you, in every workspace, is also in one list, as Vim's
+quickfix list, in the order to go through it: permission requests and
+questions, which block a turn, then failed turns and notices that need
+you, then reviews, each oldest first. A review (`✓`) is a thread whose
+news you have not read: a turn that ended or a notice. The command line
+counts what blocks on you as `◆ N waiting`; reviews are not counted. `]q`
+and `[q`, or `:cn` and `:cp`, go to the next or previous one and open its
 thread at its card, in any workspace. `:waits` or `:copen` shows the list:
-`<CR>` goes to a wait, `x` dismisses a notice or a failure. An item leaves
-the list only when it is done: answered, skipped, stopped, or the thread
-runs again. A thread on screen for 2 seconds tells the hub you saw it; that
-quiets what it said since, but never what needs you.
+`<CR>` goes to a wait, `x` dismisses a notice or a failure, or reads a
+review. `:waits!` shows it oldest first. An item leaves the list only when
+it is done: answered, skipped, stopped, or the thread runs again; a review
+when you read the thread. A thread on screen for 2 seconds tells the hub
+you saw it; that quiets what it said since, but never what needs you.
 
 `<leader>nc` dismisses them and `<leader>nh` shows their history.
 `<leader>pm` picks one, newest first, and opens its thread, in any

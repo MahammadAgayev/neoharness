@@ -928,6 +928,37 @@ test('the waits list: ]q and [q walk what needs you, :waits shows it, x dismisse
   await expect(page.locator('.window.waits')).toHaveCount(0)
 })
 
+test('a review is on the ]q path after what blocks, not counted; x reads it; :waits! is oldest first', async () => {
+  const old = new Date(Date.now() - 60 * 60000).toISOString()
+  const since = new Date(Date.now() - 4 * 60000).toISOString()
+  hub.setWaits([
+    { workspace: 'demo', thread: 'api', kind: 'permission', id: 'p1', text: 'Bash: go test ./...', since },
+    { workspace: 'demo', thread: 'coordinator', kind: 'review', id: 'review', text: 'setup page drafted', since: old },
+  ])
+  const pill = page.locator('.titlebar .bar-waits')
+  await expect(pill).toHaveText('◆ 1 waiting')
+  await normal()
+  await page.keyboard.type(':waits')
+  await page.keyboard.press('Enter')
+  const rows = page.locator('.window.waits .list-row')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0)).toContainText('permission · ')
+  await expect(rows.nth(1)).toContainText('review · setup page drafted')
+  await expect(rows.nth(1).locator('.glyph')).toHaveClass(/t-pine/)
+  await normal()
+  await page.keyboard.type(':waits!')
+  await page.keyboard.press('Enter')
+  await expect(rows.nth(0)).toContainText('review · setup page drafted')
+  await page.keyboard.press('x')
+  await expect.poll(() => hub.calls.some((c) => c.method === 'DELETE' && c.path.endsWith('/coordinator/waits/review'))).toBe(true)
+  await expect(rows).toHaveCount(1)
+  await expect(pill).toHaveText('◆ 1 waiting')
+  hub.setWaits([])
+  await page.locator('.window.waits .statusline').click()
+  await page.keyboard.press('Control+o')
+  await expect(page.locator('.window.waits')).toHaveCount(0)
+})
+
 test('the recap card shows above the prompt after two minutes away; Esc, q or × closes it until a new recap', async () => {
   await page.keyboard.press('Escape')
   await page.keyboard.press('Space')

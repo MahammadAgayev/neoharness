@@ -184,6 +184,9 @@ func TestTheWaitsListHoldsWhatNeedsYouAcrossWorkspaces(t *testing.T) {
 	if got := waitsUpdate(t, ch, 1); got[0].Kind != model.WaitNotice {
 		t.Fatalf("after the answer = %+v", got)
 	}
+	// Its turn ended: reading it takes its review off.
+	stateIs(t, h, "alpha", model.Coordinator, model.StateIdle)
+	_ = h.Seen("alpha", model.Coordinator, time.Now())
 	if err := h.Dismiss("beta", model.Coordinator, ws[1].ID); err != nil {
 		t.Fatal(err)
 	}
@@ -283,4 +286,70 @@ func TestAFailedTurnLeavesTheThreadFailed(t *testing.T) {
 
 	_ = h.Send("demo", model.User, model.Coordinator, "crash")
 	stateIs(t, h, "demo", model.Coordinator, model.StateFailed)
+}
+
+// TestTheWaitsListPutsBlockersFirstThenReviews: what blocks a turn comes
+// first, then failures and notices, then threads whose news the person has
+// not read, each oldest first. Reading a thread, or x on its review, takes
+// the review off.
+func TestTheWaitsListPutsBlockersFirstThenReviews(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	pinned(t, h, "alpha")
+	pinned(t, h, "beta")
+	pinned(t, h, "gamma")
+	_ = h.Send("alpha", model.User, model.Coordinator, "hi")
+	stateIs(t, h, "alpha", model.Coordinator, model.StateIdle)
+	if err := h.Notify("beta", model.Coordinator, "pick a database", true); err != nil {
+		t.Fatal(err)
+	}
+	answered := make(chan bool, 1)
+	f.mu.Lock()
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		ok, _ := h.Permission(ctx, "gamma", model.Coordinator, agent.Permission{Tool: "Bash", Detail: "go test ./..."})
+		answered <- ok
+		return agent.Result{Text: "tests pass"}
+	}
+	f.mu.Unlock()
+	_ = h.Send("gamma", model.User, model.Coordinator, "test")
+	stateIs(t, h, "gamma", model.Coordinator, model.StateWaiting)
+
+	ws := h.Waits()
+	got := []string{}
+	for _, w := range ws {
+		got = append(got, w.Workspace+":"+string(w.Kind))
+	}
+	if want := "gamma:permission beta:notice alpha:review"; strings.Join(got, " ") != want {
+		t.Fatalf("order = %v, want %s", got, want)
+	}
+	if ws[2].ID != model.ReviewID || ws[2].Thread != model.Coordinator || ws[2].Text == "" {
+		t.Fatalf("review = %+v", ws[2])
+	}
+
+	// A review is the news since the person last read the thread.
+	if err := h.Seen("alpha", model.Coordinator, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if ws := h.Waits(); len(ws) != 2 {
+		t.Fatalf("seen left a review: %+v", ws)
+	}
+
+	// The answered permission's turn ends: its news is a review now.
+	_ = h.Answer("gamma", model.Coordinator, ws[0].ID, model.Allow, "")
+	<-answered
+	stateIs(t, h, "gamma", model.Coordinator, model.StateIdle)
+	ws = h.Waits()
+	if len(ws) != 2 || ws[1].Workspace != "gamma" || ws[1].Kind != model.WaitReview || ws[1].Text == "" {
+		t.Fatalf("after the answer = %+v", ws)
+	}
+	if v := view(t, h, "gamma", model.Coordinator); v.Level != model.LevelNotice {
+		t.Fatalf("a review made the thread need you: level %d", v.Level)
+	}
+	// x on a review reads it.
+	if err := h.Dismiss("gamma", model.Coordinator, model.ReviewID); err != nil {
+		t.Fatal(err)
+	}
+	if ws := h.Waits(); len(ws) != 1 || ws[0].Kind != model.WaitNotice {
+		t.Fatalf("after x on the review = %+v", ws)
+	}
 }
