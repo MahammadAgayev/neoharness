@@ -27,6 +27,9 @@ const (
 	// StateFailed is a thread whose last turn failed, until the person
 	// dismisses it or the thread runs again.
 	StateFailed State = "failed"
+	// StateBackground is a thread whose turn ended while its agent still
+	// runs work in the background, such as a shell or a subagent.
+	StateBackground State = "background"
 )
 
 // Role separates the one coordinator per workspace from its threads. The
@@ -161,6 +164,8 @@ type Event struct {
 	Tools  int       `json:"tools,omitempty"`
 	Tokens int       `json:"tokens,omitempty"`
 	Exit   int       `json:"exit,omitempty"`
+	// Background is how many background tasks a turn end left running.
+	Background int `json:"background,omitempty"`
 	// Version is an artifact's version.
 	Version  int  `json:"version,omitempty"`
 	NeedsYou bool `json:"needsYou,omitempty"`
@@ -273,6 +278,8 @@ type ThreadView struct {
 	Location  Location `json:"location"`
 	State     State    `json:"state"`
 	Queued    int      `json:"queued"`
+	// Background is how many tasks the agent runs in the background.
+	Background int `json:"background,omitempty"`
 	// WakeAt is when the thread asked to be woken; zero is never.
 	WakeAt  time.Time `json:"wakeAt,omitzero"`
 	Waiting string    `json:"waiting,omitempty"`

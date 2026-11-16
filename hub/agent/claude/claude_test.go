@@ -928,3 +928,122 @@ esac
 		t.Fatalf("result = %+v, want the turn run without the flag", res)
 	}
 }
+
+// --- background work ---
+
+// bgSession writes a claude that starts a background task on each prompt,
+// ends the turn, and after the task ends starts a turn of its own, as
+// claude 2.1 does.
+func bgSession(t *testing.T, after string) (provider *fakeProvider, starts func() int) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake claude is a shell script")
+	}
+	dir := t.TempDir()
+	count := filepath.Join(dir, "starts")
+	body := fmt.Sprintf(`#!/bin/sh
+echo x >> %q
+while IFS= read -r line; do
+  case "$line" in
+  *control_request*) echo '{"type":"result","is_error":true}' ;;
+  *)
+    echo '{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"b1","task_type":"local_bash"}]}'
+    echo '{"type":"result","result":"started"}'
+    ( sleep %s
+      echo '{"type":"system","subtype":"task_notification","task_id":"b1","status":"completed"}'
+      echo '{"type":"system","subtype":"background_tasks_changed","tasks":[]}'
+      echo '{"type":"system","subtype":"init","model":"m"}'
+      echo '{"type":"assistant","message":{"content":[{"type":"text","text":"the tests passed"}]}}'
+      echo '{"type":"result","result":"the tests passed"}' ) &
+    ;;
+  esac
+done
+`, count, after)
+	script := filepath.Join(dir, "claude")
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	provider = &fakeProvider{Provider: NewProvider(), script: script}
+	t.Cleanup(provider.Close)
+	return provider, func() int {
+		b, _ := os.ReadFile(count)
+		return strings.Count(string(b), "x")
+	}
+}
+
+func TestATurnSaysWhatRunsInTheBackground(t *testing.T) {
+	p, _ := bgSession(t, "5")
+	var counts []int
+	res := turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1", OnEvent: func(e agent.Event) {
+		if e.Kind == agent.KindBackground {
+			counts = append(counts, e.Background)
+		}
+	}})
+	if res.Text != "started" || res.Background != 1 || !slices.Equal(counts, []int{1}) {
+		t.Fatalf("result %q, background %d, events %v; want 1 task in the background", res.Text, res.Background, counts)
+	}
+}
+
+// TestFollowGetsClaudesOwnTurn: when the background work ends, claude starts
+// a turn by itself. Its reply belongs to that turn, not to the next prompt.
+func TestFollowGetsClaudesOwnTurn(t *testing.T) {
+	p, starts := bgSession(t, "0.3")
+	req := agent.Request{Prompt: "hi", Conversation: "c1"}
+	turn(t, p, context.Background(), req)
+	var counts []int
+	follow := agent.Request{Follow: true, Conversation: "c1", Resume: true, OnEvent: func(e agent.Event) {
+		if e.Kind == agent.KindBackground {
+			counts = append(counts, e.Background)
+		}
+	}}
+	res := turn(t, p, context.Background(), follow)
+	if res.Text != "the tests passed" || res.Background != 0 || !slices.Equal(counts, []int{0}) {
+		t.Fatalf("follow %q, background %d, events %v", res.Text, res.Background, counts)
+	}
+	req.Resume = true
+	if res := turn(t, p, context.Background(), req); res.Text != "started" || starts() != 1 {
+		t.Fatalf("next turn %q after %d starts, want its own reply from the same process", res.Text, starts())
+	}
+}
+
+// TestAStoppedFollowLeavesTheWork: a message from the person stops the wait,
+// not claude or its background work.
+func TestAStoppedFollowLeavesTheWork(t *testing.T) {
+	p, starts := bgSession(t, "5")
+	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1"})
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	begin := time.Now()
+	res := turn(t, p, ctx, agent.Request{Follow: true, Conversation: "c1", Resume: true})
+	if d := time.Since(begin); d > time.Second || res.ExitCode != 0 || res.Background != 1 {
+		t.Fatalf("stopped follow after %v: %+v", d, res)
+	}
+	if res := turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1", Resume: true}); res.Text != "started" || starts() != 1 {
+		t.Fatalf("next turn %q after %d starts, want the same process", res.Text, starts())
+	}
+}
+
+func TestFollowWithoutASessionReturns(t *testing.T) {
+	p, starts := bgSession(t, "5")
+	res := turn(t, p, context.Background(), agent.Request{Follow: true, Conversation: "c1", Resume: true})
+	if res.ExitCode != 0 || res.Text != "" || res.Background != 0 || starts() != 0 {
+		t.Fatalf("follow with no session: %+v after %d starts", res, starts())
+	}
+}
+
+// TestAnIdleProcessWithBackgroundWorkStays: ending the process would end
+// the work.
+func TestAnIdleProcessWithBackgroundWorkStays(t *testing.T) {
+	old := idleFor
+	idleFor = 50 * time.Millisecond
+	t.Cleanup(func() { idleFor = old })
+	p, _ := bgSession(t, "5")
+	turn(t, p, context.Background(), agent.Request{Prompt: "hi", Conversation: "c1"})
+	time.Sleep(200 * time.Millisecond)
+	p.pool.mu.Lock()
+	n := len(p.pool.sessions)
+	p.pool.mu.Unlock()
+	if n != 1 {
+		t.Fatalf("%d idle sessions, want the one with background work kept", n)
+	}
+}

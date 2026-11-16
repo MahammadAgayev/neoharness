@@ -37,6 +37,9 @@ type session struct {
 	// cost is what claude reported so far: it counts from the process start.
 	cost float64
 	idle *time.Timer
+	// background is how many background tasks claude ran when its last
+	// turn ended.
+	background int
 }
 
 // start starts a session. It outlives the turn that started it, so no
@@ -129,7 +132,7 @@ func newPool() *pool { return &pool{sessions: map[string]*session{}} }
 
 // take returns the idle session of the conversation if it was started with
 // key, and ends one that was not: a new model, for example, needs a new
-// process.
+// process. An empty key takes any.
 func (p *pool) take(conversation, key string) *session {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -139,7 +142,7 @@ func (p *pool) take(conversation, key string) *session {
 	}
 	delete(p.sessions, conversation)
 	s.idle.Stop()
-	if s.key != key {
+	if key != "" && s.key != key {
 		s.kill()
 		return nil
 	}
@@ -158,6 +161,11 @@ func (p *pool) put(conversation string, s *session) {
 	s.idle = time.AfterFunc(idleFor, func() {
 		p.mu.Lock()
 		defer p.mu.Unlock()
+		// Ending the process would end its background work too.
+		if s.background > 0 {
+			s.idle.Reset(idleFor)
+			return
+		}
 		if p.sessions[conversation] == s {
 			delete(p.sessions, conversation)
 			s.kill()

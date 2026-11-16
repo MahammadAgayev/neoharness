@@ -23,6 +23,10 @@ func level(e model.Event, role model.Role, quiet bool) model.Level {
 		}
 		return model.LevelNotice
 	case model.EventTurnEnd:
+		// The work goes on; the turn that ends it notifies.
+		if e.Background > 0 {
+			return model.LevelQuiet
+		}
 		if quiet && role == model.RoleThread {
 			return model.LevelAmbient
 		}

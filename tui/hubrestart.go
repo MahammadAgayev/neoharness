@@ -29,7 +29,7 @@ func (a *App) checkVersion() {
 func (a *App) running() int {
 	n := 0
 	for _, w := range a.workspaces {
-		n += w.Counts[model.StateRunning]
+		n += w.Counts[model.StateRunning] + w.Counts[model.StateBackground]
 		if w.Coordinator == model.StateRunning {
 			n++
 		}

@@ -76,7 +76,8 @@ The todo list shows above the prompt as in the TUI: one line,
 through, there, in `:todo`, and as tasks in replies and artifacts.
 
 The threads list groups threads by state with a count, as in the TUI:
-waiting and failed (`✗`) on top, then running and idle. A row shows the
+waiting and failed (`✗`) on top, then running, background (`◌`, with
+`2 in background` on the row and the status line) and idle. A row shows the
 thread's name, in full ink when a window shows it, and on the right how
 long it has run or waited, or when it last changed (`now`, `5m`, `6d`,
 then the date); the time changes at most once a minute. Under the name, a
@@ -274,7 +275,8 @@ version. Writing in the block yourself decides it too.
   `<C-o>` and `<C-i>` are the app's back and forward in Insert too, over
   Vim's one Normal command, and `:w` saves from Visual mode too.
 - **A sidebar** of workspaces only, each with a glyph on the right when
-  something in it waits (`◆`), failed (`✗`) or runs (`●`). At its foot,
+  something in it waits (`◆`), failed (`✗`), runs (`●`) or runs only in
+  the background (`◌`). At its foot,
   the search icon searches and `⋯` opens Artifacts, New doc, Cost, Settings
   and Help. The title bar holds only back and forward.
   `⌘B`, `:set nosidebar` or the button at the top left folds it to a 48 px

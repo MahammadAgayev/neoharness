@@ -119,12 +119,17 @@ function wsState(w: WorkspaceView): { glyph: string; tone: string; parts: string
   const waiting = inState(w, 'waiting')
   const failed = inState(w, 'failed')
   const running = inState(w, 'running')
-  const parts = [waiting && `${waiting} waiting`, failed && `${failed} failed`, running && `${running} running`].filter(
-    (p): p is string => !!p,
-  )
+  const background = inState(w, 'background')
+  const parts = [
+    waiting && `${waiting} waiting`,
+    failed && `${failed} failed`,
+    running && `${running} running`,
+    background && `${background} in background`,
+  ].filter((p): p is string => !!p)
   if (waiting) return { glyph: '◆', tone: 'gold', parts }
   if (failed) return { glyph: '✗', tone: 'love', parts }
   if (running) return { glyph: '●', tone: 'foam', parts }
+  if (background) return { glyph: '◌', tone: 'foam', parts }
   return { glyph: '', tone: 'muted', parts }
 }
 

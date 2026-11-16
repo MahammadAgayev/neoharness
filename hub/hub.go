@@ -156,6 +156,10 @@ type thread struct {
 	busy    bool
 	started bool // the current turn produced output, so its session exists
 	cancel  context.CancelFunc
+	// following says the hub waits on the agent's background work, of
+	// which background counts the tasks. cancel stops the wait.
+	following  bool
+	background int
 	// interrupted marks a turn that SendNow or Stop stopped; dropped says
 	// Stop did, so the messages of the turn do not go again.
 	interrupted, dropped bool
@@ -1813,6 +1817,12 @@ func (h *Hub) kick(ws *space, th *thread) {
 	if th.busy || t.Resolved || t.Paused || t.Asking != "" || len(t.Queue) == 0 {
 		return
 	}
+	// The agent takes a message while its work runs. The follow ends and
+	// kicks again.
+	if th.following {
+		th.cancel()
+		return
+	}
 	fromUser := slices.ContainsFunc(t.Queue, func(m workspace.Message) bool { return m.From == model.User })
 	// Reports to the coordinator do not count: threads can loop only by
 	// messages, and those count on both sides.
@@ -1981,7 +1991,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	default:
 		ended = true
 		t.Started = true
-		h.event(ws, th, model.Event{Kind: model.EventTurnEnd, Tools: res.Tools, Tokens: res.Tokens})
+		h.event(ws, th, model.Event{Kind: model.EventTurnEnd, Tools: res.Tools, Tokens: res.Tokens, Background: res.Background})
 		switch {
 		case compact && strings.TrimSpace(res.Text) == "":
 			h.event(ws, th, model.Event{Kind: model.EventError, Text: "/compact got no summary; the conversation is unchanged"})
@@ -2013,6 +2023,13 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		}
 	}
 	th.quiet = false
+	th.background = 0
+	if err == nil {
+		th.background = res.Background
+	}
+	if h.ctx.Err() == nil && th.background > 0 && !t.Resolved {
+		h.follow(ws, th)
+	}
 	h.changed(ws, th)
 	if h.ctx.Err() == nil {
 		h.kick(ws, th)
@@ -2020,6 +2037,65 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 			h.report(ws)
 		}
 	}
+}
+
+// follow waits on the background work a turn left. When the work ends, the
+// agent starts a turn by itself, and that is a turn of the thread as one the
+// hub starts: it shows, ends and notifies the same way. A queued message
+// stops the wait in kick. Callers hold h.mu and send the change.
+func (h *Hub) follow(ws *space, th *thread) {
+	t := th.t
+	ctx, cancelCause := context.WithCancelCause(h.ctx)
+	cancel := func() { cancelCause(context.Canceled) }
+	th.following = true
+	th.cancel = cancel
+	req := agent.Request{
+		Follow:       true,
+		Model:        cmp.Or(t.ModelChoice, h.defaults(ws, t).Model),
+		Effort:       cmp.Or(t.Effort, h.defaults(ws, t).Effort),
+		SystemPrompt: h.systemPrompt(ws, th),
+		Conversation: t.SessionID,
+		Resume:       t.Started,
+		Harness:      agent.Harness{URL: fmt.Sprintf("http://127.0.0.1:%d/mcp", h.cfg.MCPPort), Token: t.Token},
+		HarnessOnly:  t.Role == model.RoleCoordinator,
+	}
+	if !t.Location.Remote() {
+		req.Cwd = t.Location.Dir
+	}
+	req.OnEvent = func(e agent.Event) {
+		h.mu.Lock()
+		if e.Kind != agent.KindBackground && th.following {
+			th.following = false
+			th.busy = true
+			th.started, th.interrupted, th.dropped, th.recapped, th.todoTurn = false, false, false, false, false
+			th.clock = newTurnClock(h.cfg.TurnTimeout, func() { cancelCause(errTurnTimeout) })
+			now := time.Now().UTC()
+			t.Turns = append(slices.DeleteFunc(t.Turns, func(at time.Time) bool { return now.Sub(at) > 24*time.Hour }), now)
+			h.changed(ws, th)
+		}
+		h.mu.Unlock()
+		h.onAgentEvent(ws, th, e)
+	}
+	ag := h.cfg.Factory(h.agentOf(ws, t), ws.p, *t)
+
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		defer cancel()
+		res, err := ag.Run(ctx, req)
+		h.mu.Lock()
+		if th.busy {
+			h.mu.Unlock()
+			h.endTurn(ws, th, ctx, res, err)
+			return
+		}
+		defer h.mu.Unlock()
+		th.following, th.cancel, th.background = false, nil, 0
+		h.changed(ws, th)
+		if h.ctx.Err() == nil {
+			h.kick(ws, th)
+		}
+	}()
 }
 
 func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
@@ -2048,6 +2124,9 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 		if i := slices.IndexFunc(th.t.Todos, func(t model.Todo) bool { return t.ID == e.ID }); i >= 0 && was < 0 && th.t.Todos[i].State == model.TodoDone {
 			h.news(ws, th, func(n *workspace.News) { n.Done = append(n.Done, th.t.Todos[i].Text) })
 		}
+		h.changed(ws, th)
+	case agent.KindBackground:
+		th.background = e.Background
 		h.changed(ws, th)
 	case agent.KindTextDelta:
 		h.streamText(ws, th, e.Text)
@@ -2319,8 +2398,7 @@ func (th *thread) derive() model.State {
 	switch {
 	case t.Resolved:
 		return model.StateResolved
-	// A question waits for the person even while its turn still runs: claude
-	// -p stays up until its background tasks end.
+	// A question waits for the person even while its turn still runs.
 	case len(th.perms) > 0 || t.Asking != "":
 		return model.StateWaiting
 	case th.busy:
@@ -2331,6 +2409,10 @@ func (th *thread) derive() model.State {
 		return model.StateRunning
 	case failed(th):
 		return model.StateFailed
+	// When the work ends, the agent starts a turn to read it: until then
+	// the thread is not done.
+	case th.following:
+		return model.StateBackground
 	}
 	return model.StateIdle
 }
@@ -2442,6 +2524,7 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		Location:      t.Location,
 		State:         th.state,
 		Queued:        len(t.Queue),
+		Background:    th.background,
 		Pending:       unshown(t.Queue),
 		Reply:         t.Reply,
 		Recap:         t.Recap,

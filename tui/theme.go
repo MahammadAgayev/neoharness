@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/gdamore/tcell/v2"
@@ -143,6 +144,8 @@ func stateGlyph(s model.State) string {
 		return "◆"
 	case model.StateResolved:
 		return "✓"
+	case model.StateBackground:
+		return "◌"
 	}
 	return "○"
 }
@@ -151,7 +154,7 @@ func (t *Theme) state(s model.State) tcell.Style {
 	switch s {
 	case model.StateFailed:
 		return t.Alert
-	case model.StateRunning:
+	case model.StateRunning, model.StateBackground:
 		return t.Run
 	case model.StateWaiting:
 		return t.Wait
@@ -169,6 +172,15 @@ func stateLabel(s model.State) string {
 		return "idle"
 	}
 	return string(s)
+}
+
+// viewLabel is a thread's state in words; background work says how much
+// runs.
+func viewLabel(v model.ThreadView) string {
+	if v.State == model.StateBackground && v.Background > 0 {
+		return fmt.Sprintf("%d in background", v.Background)
+	}
+	return stateLabel(v.State)
 }
 
 var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}

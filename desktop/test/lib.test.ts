@@ -12,7 +12,7 @@ import type { Event, ThreadView } from '../src/shared/model'
 import { parseEx, words } from '../src/renderer/lib/ex'
 import { fuzzy, fuzzyScore, grep } from '../src/renderer/lib/fuzzy'
 import { keyName, Sequencer, split } from '../src/renderer/lib/keys'
-import { age, threadDetail } from '../src/renderer/search'
+import { age, stateGlyph, threadDetail } from '../src/renderer/search'
 import { imageToken, nextImage, used, withImages } from '../src/renderer/lib/images'
 import { wakeLabel } from '../src/renderer/lib/wake'
 import { Away } from '../src/renderer/lib/away'
@@ -127,6 +127,12 @@ describe('toasts', () => {
   it('keeps a quiet thread quiet unless it waits', () => {
     expect(viewToast('w', view({ state: 'running' }), view({ state: 'idle', quiet: true }), opts)).toBeNull()
     expect(viewToast('w', view({}), view({ state: 'waiting', quiet: true, waiting: 'which db?' }), opts)?.body).toBe('asks: which db?')
+  })
+
+  it('says nothing when a turn ends with work in the background, and says the turn that ends the work', () => {
+    expect(viewToast('w', view({ state: 'running' }), view({ state: 'background', background: 1 }), opts)).toBeNull()
+    expect(viewToast('w', view({ state: 'background', background: 1 }), view({ state: 'running' }), opts)).toBeNull()
+    expect(viewToast('w', view({ state: 'running' }), view({ state: 'idle' }), { ...opts, reply: 'the tests passed' })?.body).toBe('the tests passed')
   })
 
   it('keeps the error of a failed turn over its turn end', () => {
@@ -314,6 +320,13 @@ describe('wakeLabel', () => {
   })
   it('says nothing once the time passed, as after the computer slept', () => {
     expect(wakeLabel(v, Date.parse('2026-11-14T12:23:00Z'))).toBe('')
+  })
+})
+
+describe('background', () => {
+  it('has a glyph of its own and says how much runs', () => {
+    expect(stateGlyph('background')).toBe('◌')
+    expect(threadDetail({ workspace: 'w', name: 'api', state: 'background', background: 2 } as ThreadView)).toBe('2 in background')
   })
 })
 

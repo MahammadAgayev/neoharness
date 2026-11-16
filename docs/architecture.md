@@ -107,6 +107,14 @@ UUID.
   to interrupt the turn, keeps the conversation, and returns once the turn
   stopped. Claude gets an `interrupt` control request on its stdin, so a
   remote turn stops through ssh too.
+- A turn can leave work running in the background: Claude's background
+  shells and subagents. The adapter counts it from claude's
+  `background_tasks_changed` records and gives the count with the turn's
+  result. The thread is then `background`, not idle, and the hub keeps
+  reading the session: when the work ends, claude starts a turn by itself
+  to read its result. That turn shows and ends as any other, and the
+  process is not ended for idleness while work runs. A message goes in at
+  once, as claude takes one while its work runs.
 - From each turn the adapter reads the slash commands, the model, the
   context size and the cost. The status line shows the model and the
   context; the cost shows only in the cost view.
@@ -156,7 +164,7 @@ draw a level, never which level an event has.
 |---|---|
 | 0 quiet | text, tool calls, progress, messages, notes |
 | 1 ambient | a new artifact; a thread's turn end when `notify = "coordinator"` |
-| 2 notice | a turn end; a notice from the coordinator |
+| 2 notice | a turn end, unless it left work running in the background (then 0); a notice from the coordinator |
 | 3 needs you | a permission, a question, an error, a notice that needs the person |
 
 - Each event carries its `level`. A thread's view carries the highest level

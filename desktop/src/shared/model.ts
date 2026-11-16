@@ -2,7 +2,8 @@
 // sees only these neutral fields, never an agent's own.
 
 // failed: the last turn ended in an error and nothing came after it.
-export type State = 'idle' | 'running' | 'waiting' | 'failed' | 'resolved'
+// background: the turn ended, but work the agent started runs on.
+export type State = 'idle' | 'running' | 'waiting' | 'failed' | 'resolved' | 'background'
 export type Role = 'coordinator' | 'thread'
 export type Decision = 'allow' | 'always' | 'deny'
 
@@ -42,6 +43,8 @@ export interface Event {
   tools?: number
   tokens?: number
   exit?: number
+  // background is how many background tasks a turn end left running.
+  background?: number
   version?: number
   needsYou?: boolean
   // level is how much of the person's attention the event asks for, on the
@@ -96,6 +99,8 @@ export interface ThreadView {
   location: Location
   state: State
   queued: number
+  // background is how many tasks the agent runs in the background.
+  background?: number
   wakeAt?: string
   waiting?: string
   // The question the running turn waits on, when waiting is one: writing

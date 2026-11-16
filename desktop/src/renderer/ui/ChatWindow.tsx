@@ -3,7 +3,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'rea
 import { Coordinator, User, type Event, type ThreadView, type Todo } from '../../shared/model'
 import { blockText, shortTool, shortTools, type Block } from '../lib/transcript'
 import { wakeLabel } from '../lib/wake'
-import { boardTime, stateGlyph, stateTone } from '../search'
+import { boardTime, stateGlyph, stateLabel, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { escapeHTML, blocks as mdBlocks, openFence, render, renderOnce } from '../lib/markdown'
 import { copied, Markdown, mdClick } from './Markdown'
@@ -78,7 +78,7 @@ function StatusLine(props: { v: ThreadView | undefined; focused: boolean; worksp
       <span className="sl-name">{props.name}</span>
       {v && (
         <span className={`sl-state t-${stateTone(v.state)}`}>
-          <Glyph g={stateGlyph(v.state)} size={12} /> {v.state}
+          <Glyph g={stateGlyph(v.state)} size={12} /> {stateLabel(v)}
         </span>
       )}
       {v && v.state !== 'idle' && v.since && <span className="sl-dim">{boardTime(v.since)}</span>}

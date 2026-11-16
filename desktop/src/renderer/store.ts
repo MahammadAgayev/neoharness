@@ -592,7 +592,7 @@ class Store {
     const order = old ? s.order : [...s.order, v.name]
     let chat = s.chats[v.name] ?? []
     // A stopped turn sends no turn end, so its tool calls would spin forever.
-    if (v.state === 'idle' || v.state === 'failed' || v.state === 'resolved' || v.waiting === 'paused') chat = settle(chat, false)
+    if (v.state === 'idle' || v.state === 'background' || v.state === 'failed' || v.state === 'resolved' || v.waiting === 'paused') chat = settle(chat, false)
     // A turn makes the recap old news; its next one waits for the next return.
     const recapOpen = { ...s.recapOpen }
     if (v.state === 'running') delete recapOpen[`${s.workspace}/${v.name}`]
@@ -607,7 +607,7 @@ class Store {
     const s = this.state
     if (!s.threads[key]) return
     let chat = s.chats[key] ?? []
-    if (v.state === 'idle' || v.state === 'failed' || v.state === 'resolved' || v.waiting === 'paused') chat = settle(chat, false)
+    if (v.state === 'idle' || v.state === 'background' || v.state === 'failed' || v.state === 'resolved' || v.waiting === 'paused') chat = settle(chat, false)
     this.set({ threads: { ...s.threads, [key]: v }, chats: { ...s.chats, [key]: chat } })
   }
 
@@ -1167,12 +1167,12 @@ class Store {
   // listOrder is the threads of the list, as it groups them: waiting first,
   // then failed, running, idle and resolved.
   listOrder(): string[] {
-    const rank: Record<string, number> = { waiting: 0, failed: 1, running: 2, idle: 3, resolved: 4 }
+    const rank: Record<string, number> = { waiting: 0, failed: 1, running: 2, background: 3, idle: 4, resolved: 5 }
     return this.state.order
       .filter((n) => n !== Coordinator)
       .map((n) => this.state.threads[n])
       .filter(Boolean)
-      .sort((a, b) => (rank[this.boardGroup(a.name)] ?? 3) - (rank[this.boardGroup(b.name)] ?? 3) || b.updatedAt.localeCompare(a.updatedAt))
+      .sort((a, b) => (rank[this.boardGroup(a.name)] ?? 4) - (rank[this.boardGroup(b.name)] ?? 4) || b.updatedAt.localeCompare(a.updatedAt))
       .map((v) => v.name)
   }
 
@@ -1633,7 +1633,11 @@ class Store {
   }
 
   private running(): number {
-    return this.state.workspaces.reduce((n, w) => n + (w.counts.running ?? 0) + (w.coordinator === 'running' ? 1 : 0), 0)
+    // A restart ends background work too.
+    return this.state.workspaces.reduce(
+      (n, w) => n + (w.counts.running ?? 0) + (w.counts.background ?? 0) + (w.coordinator === 'running' ? 1 : 0),
+      0,
+    )
   }
 
   private restartWhenIdle(): void {

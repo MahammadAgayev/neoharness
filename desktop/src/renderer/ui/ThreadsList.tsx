@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { Coordinator, type ThreadView } from '../../shared/model'
 import { plain } from '../lib/toasts'
-import { boardTime, stateGlyph, stateTone } from '../search'
+import { boardTime, stateGlyph, stateLabel, stateTone } from '../search'
 import { store, useStore, type Win } from '../store'
 import { handlers, type WinAction } from './registry'
 import { Glyph } from './Icon'
@@ -151,6 +151,7 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
                   <Glyph g={stateGlyph(v.state)} />
                 </span>
                 <span className={`name ${shown.has(v.name) ? 'open' : ''}`}>{v.name}</span>
+                {v.state === 'background' && <span className="t-muted">{stateLabel(v)}</span>}
                 {v.queued > 0 && <span className="t-muted">+{v.queued}</span>}
                 <span className="time">{boardTime(live ? v.since : v.updatedAt, now)}</span>
               </div>

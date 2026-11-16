@@ -112,6 +112,9 @@ func (a *Agent) Run(ctx context.Context, req agent.Request) (agent.Result, error
 }
 
 func (a *Agent) run(ctx context.Context, req agent.Request) (agent.Result, error) {
+	if req.Follow {
+		return a.follow(ctx, req), nil
+	}
 	args := a.args(req)
 	key := strings.Join(append(sessionArgs(args), a.Host, a.Dir, req.Cwd), "\x00")
 	if s := a.pool.take(req.Conversation, key); s != nil {
@@ -135,7 +138,7 @@ func (a *Agent) turn(ctx context.Context, s *session, req agent.Request, reused 
 		// What the session wrote between turns is not this turn's.
 		s.stderr.take()
 	}
-	acc := &accumulator{onEvent: req.OnEvent}
+	acc := &accumulator{onEvent: req.OnEvent, background: s.background}
 	// A failed write means the process is gone; the read below sees it.
 	_ = s.prompt(req.Prompt, req.Images)
 	read, exited := 0, false
@@ -162,15 +165,21 @@ func (a *Agent) turn(ctx context.Context, s *session, req agent.Request, reused 
 	if exited && reused && read == 0 {
 		return agent.Result{}, false
 	}
+	return a.finish(s, req, acc, exited), true
+}
 
-	res = agent.Result{
-		Text:     acc.text,
-		Tools:    acc.tools,
-		Tokens:   acc.tokens,
-		Stderr:   trim(s.stderr.take(), maxStderr),
-		Commands: acc.commands,
-		Model:    acc.model,
-		Context:  acc.context,
+// finish makes the result of a turn in s, and gives s back to the pool if
+// it is still up.
+func (a *Agent) finish(s *session, req agent.Request, acc *accumulator, exited bool) agent.Result {
+	res := agent.Result{
+		Text:       acc.text,
+		Tools:      acc.tools,
+		Tokens:     acc.tokens,
+		Stderr:     trim(s.stderr.take(), maxStderr),
+		Commands:   acc.commands,
+		Model:      acc.model,
+		Context:    acc.context,
+		Background: acc.background,
 	}
 	for _, m := range acc.models {
 		res.ContextWindow = max(res.ContextWindow, m.ContextWindow)
@@ -187,11 +196,67 @@ func (a *Agent) turn(ctx context.Context, s *session, req agent.Request, reused 
 		res.ExitCode = 1
 	}
 	if exited {
+		res.Background = 0
 		s.kill()
 	} else {
+		s.background = acc.background
 		a.pool.put(req.Conversation, s)
 	}
-	return res, true
+	return res
+}
+
+// followGrace is how long a follow waits, once no background work is left,
+// for the turn claude starts by itself. Claude starts it at once.
+var followGrace = 5 * time.Second
+
+// follow waits in the conversation's session for its background work to
+// end and for the turn claude then starts by itself.
+func (a *Agent) follow(ctx context.Context, req agent.Request) agent.Result {
+	s := a.pool.take(req.Conversation, "")
+	if s == nil {
+		return agent.Result{}
+	}
+	s.stderr.take()
+	acc := &accumulator{onEvent: req.OnEvent, background: s.background}
+	exited := false
+	stopped, kill := ctx.Done(), (<-chan time.Time)(nil)
+	grace := time.NewTimer(followGrace)
+	defer grace.Stop()
+	for !acc.ended && !exited {
+		if acc.background > 0 || acc.turned {
+			grace.Stop()
+		} else {
+			grace.Reset(followGrace)
+		}
+		select {
+		case line, open := <-s.lines:
+			if !open {
+				exited = true
+				break
+			}
+			acc.consume(line)
+		case <-grace.C:
+			a.pool.put(req.Conversation, s)
+			return agent.Result{}
+		case <-stopped:
+			stopped = nil
+			if !acc.turned {
+				// The person writes; their turn takes the session now.
+				a.pool.put(req.Conversation, s)
+				return agent.Result{Background: acc.background}
+			}
+			_ = s.interrupt()
+			kill = time.After(interruptWait)
+		case <-kill:
+			kill = nil
+			s.kill()
+		}
+	}
+	if exited && !acc.turned {
+		s.kill()
+		return agent.Result{}
+	}
+	return a.finish(s, req, acc, exited)
 }
 
 // command runs claude with args here in cwd, or on the ssh host.
@@ -295,6 +360,10 @@ type accumulator struct {
 	creates map[string]bool
 	// partial is the text so far of the message the model writes now.
 	partial string
+	// background is how many background tasks run now; turned says the
+	// model started a turn.
+	background int
+	turned     bool
 }
 
 type wire struct {
@@ -335,6 +404,8 @@ type wire struct {
 		} `json:"delta"`
 	} `json:"event"`
 	Parent *string `json:"parent_tool_use_id"`
+	// The background tasks that run now.
+	Tasks []json.RawMessage `json:"tasks"`
 	// Init record.
 	Model            string   `json:"model"`
 	SlashCommands    []string `json:"slash_commands"`
@@ -371,8 +442,15 @@ func (a *accumulator) consume(line []byte) {
 		return
 	}
 
+	if e.Type != "system" || e.Subtype == "init" {
+		a.turned = true
+	}
 	switch e.Type {
 	case "system":
+		if e.Subtype == "background_tasks_changed" {
+			a.background = len(e.Tasks)
+			a.emit(agent.Event{Kind: agent.KindBackground, Background: a.background, Tokens: a.tokens})
+		}
 		if e.Subtype == "init" {
 			a.model = e.Model
 			// Terminal commands act on the interactive screen, which a

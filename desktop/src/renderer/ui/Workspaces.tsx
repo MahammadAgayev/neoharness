@@ -28,6 +28,7 @@ function Counts(props: { w: WorkspaceView }) {
     ['◆', 'gold', inState(props.w, 'waiting')],
     ['✗', 'love', inState(props.w, 'failed')],
     ['●', 'foam', inState(props.w, 'running')],
+    ['◌', 'foam', c.background ?? 0],
     ['○', 'muted', c.idle ?? 0],
     ['✓', 'pine', c.resolved ?? 0],
   ]

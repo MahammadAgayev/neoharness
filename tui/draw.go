@@ -546,7 +546,7 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 		glyphSt = dim
 	}
 	x = put(x, a.glyph(v.State)+" ", glyphSt)
-	x = put(x, stateLabel(v.State), color(th.Fg2))
+	x = put(x, viewLabel(v), color(th.Fg2))
 	if !v.Since.IsZero() && v.State != model.StateIdle {
 		x = put(x, " "+elapsed(a.now().Sub(v.Since)), dim)
 	}

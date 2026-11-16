@@ -16,7 +16,7 @@
 
 - The workspaces screen shows each workspace's name, folder and open
   threads, most urgent first: `◆ 1 waiting · ✗ 1 failed · ● 2 running ·
-  ○ 3 idle`. Waiting is gold and failed is red; the rest is dim. The
+  ◌ 1 background · ○ 3 idle`. Waiting is gold and failed is red; the rest is dim. The
   coordinator counts only when it waits, runs or has a notice for you, and
   resolved threads do not count. With nothing open, the row says when the
   workspace was last used (`5m ago`, `2h ago`, `3d ago`). Rows keep their
@@ -36,7 +36,8 @@
 - The screen holds still. A running thread's `●` turns to `◉` and back
   every 0.8 s, the live tool row spins 4 times a second, and times change
   once a minute (`now`, `4m`, `1h05m`). A reply streams in as the agent
-  writes it, drawn at most 8 times a second. Nothing else moves on its own. The
+  writes it, drawn at most 8 times a second. Nothing else moves on its own:
+  the `◌` of background work holds still. The
   cursor is a block in Normal and Visual mode and a line in Insert, as in
   Vim, and it does not blink.
 - The folder picker lists "not pinned", the folder you started in, and every
@@ -65,19 +66,26 @@ yourself:
 |---|---|
 | idle | nothing to do |
 | running | a turn runs, or messages wait in the queue |
+| background | its turn ended, but work it started runs on, such as a shell or a subagent |
 | waiting | a permission request, a question to you, or the loop guard paused it |
 | failed | its turn ended in an error, and nothing came after it; the next message clears it |
 | resolved | closed; `:reopen`, or a message from you or the coordinator, brings it back |
 
 - The threads pane groups threads by state, each group with its count
   (`waiting · 1`): what waits for you and what failed on top, then what
-  runs, then what is idle. Resolved threads fold into `▸ N resolved`. A
+  runs, then background work, then what is idle. Resolved threads fold into `▸ N resolved`. A
   row is the state's glyph, the name, and on the right how long the thread
   has been in its state (`now`, `4m`, `2h`, `6d`); a waiting thread has a second row
   with what it waits for, such as `permission · Bash  psql -c …`. Any other
   thread with a todo list has a second row with its progress and the item
   in hand, `3/7 · wire the parser`, or `7/7 done`. `K` on a
   row shows the thread's last reply on the command line.
+- A thread in the background state shows `◌` and how much runs, `2 in
+  background`, on its row and its status line. Its turn end does not
+  notify you. When the work ends, the agent starts a turn by itself to
+  read the result, and the end of that turn notifies you as any turn end
+  does. A message to the thread runs at once; it does not wait for the
+  work. A hub restart ends the work, so an update waits for it.
 - A row that changes group moves only when your cursor is not in the
   threads pane or on the command line, so nothing moves under you; then it
   shows a light background for 1.5 s.

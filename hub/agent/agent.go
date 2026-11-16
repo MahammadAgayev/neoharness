@@ -41,6 +41,9 @@ const (
 	// of the message the model writes now. An adapter that cannot stream
 	// sends none.
 	KindTextDelta
+	// KindBackground says how much work the agent runs in the background
+	// now, in Background: shells or subagents that go on after the turn.
+	KindBackground
 )
 
 // The states of a todo item, for KindTodo.
@@ -67,6 +70,8 @@ func (k Kind) String() string {
 		return "todo"
 	case KindTextDelta:
 		return "text delta"
+	case KindBackground:
+		return "background"
 	}
 	return "unknown"
 }
@@ -86,6 +91,8 @@ type Event struct {
 	Text string
 	// State is a todo item's new state, for KindTodo.
 	State string
+	// Background is the number of background tasks, for KindBackground.
+	Background int
 	// Tokens is cumulative total tokens as last reported. Providers report this
 	// at unpredictable points and some only at the end, so it is monotonic
 	// rather than incremental: see Result.Tokens.
@@ -121,6 +128,12 @@ type Request struct {
 	// CLI's default.
 	Model  string
 	Effort string
+	// Follow sends no prompt. It waits on the background work the last turn
+	// of the conversation left (Result.Background) and returns when the CLI
+	// ends a turn of its own, which it starts when that work ends. With no
+	// work, and no turn of its own soon, it returns an empty Result.
+	// Cancelling ctx before the CLI starts that turn only stops the wait.
+	Follow bool
 	// OnEvent receives events as they arrive. Called from the adapter's read
 	// goroutine, one at a time, never concurrently. May be nil.
 	OnEvent func(Event)
@@ -201,6 +214,9 @@ type Result struct {
 	ContextWindow int
 	// Cost is what this invocation cost in US dollars.
 	Cost float64
+	// Background is the number of background tasks still running when the
+	// turn ended. The caller can Follow them.
+	Background int
 	// Lost says the agent has no record of the conversation the request
 	// resumed. The caller starts a new conversation and sends the prompt again.
 	Lost bool

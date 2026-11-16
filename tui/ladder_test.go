@@ -397,3 +397,41 @@ func TestEnterFromTheBoardOpensTheThreadInItsPlaceAndCtrlOBringsItBack(t *testin
 		t.Fatalf(":b from the list should follow <CR>; got %d windows", len(h.a.root.windows()))
 	}
 }
+
+// TestBackgroundWorkShowsAsItsOwnState: a turn that ended while its work runs
+// on is neither running nor idle. Its glyph holds still, as only the
+// running glyph moves.
+func TestBackgroundWorkShowsAsItsOwnState(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press(":b api-tests", "<CR>")
+	h.setThread("api-tests", func(v *model.ThreadView) {
+		v.State = model.StateBackground
+		v.Background = 2
+		v.Since = time.Time{}
+	})
+	if h.rowOf("background · 1") < 0 || !strings.Contains(h.line(h.rowOf("◌ api-tests")), "2 in background") {
+		t.Fatalf("the board should group the row under background and count its tasks:\n%s", h.screen())
+	}
+	w := h.a.cur
+	if foot := w.rect.Y + w.rect.H - 1; !strings.Contains(h.inPane(w, foot), "◌ 2 in background") {
+		t.Fatalf("the pane's status line should say what runs in the background:\n%s", h.screen())
+	}
+	before := h.screen()
+	h.a.now = func() time.Time { return time.Now().Add(pulseEvery) }
+	h.a.draw()
+	if strings.Count(before, "◌") != strings.Count(h.screen(), "◌") {
+		t.Fatal("the background glyph should not pulse")
+	}
+}
+
+func TestTheWorkspacesListCountsBackgroundWork(t *testing.T) {
+	h := start(t)
+	h.a.workspaces = []model.WorkspaceView{{Name: "busy", Coordinator: model.StateIdle, Counts: map[model.State]int{
+		model.StateRunning: 1, model.StateBackground: 2, model.StateIdle: 1}}}
+	h.a.renderWorkspaces()
+	h.a.draw()
+	if !strings.Contains(h.screen(), "1 running · ◌ 2 background · ○ 1 idle") {
+		t.Fatalf("background comes after running and before idle:\n%s", h.screen())
+	}
+}

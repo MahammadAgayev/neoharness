@@ -228,7 +228,7 @@ func (a *App) threadItem(v model.ThreadView) pickItem {
 }
 
 func (a *App) threadDetail(v model.ThreadView) string {
-	detail := stateLabel(v.State)
+	detail := viewLabel(v)
 	switch {
 	case v.Permission != nil:
 		detail += " · permission · " + v.Permission.Tool
@@ -316,7 +316,7 @@ func (a *App) pickWorkspaces() {
 		name := p.Name
 		detail := displayPin(p.Pin)
 		glyph := Span{"▪", a.th.Accent}
-		for _, s := range []model.State{model.StateRunning, model.StateFailed, model.StateWaiting} {
+		for _, s := range []model.State{model.StateBackground, model.StateRunning, model.StateFailed, model.StateWaiting} {
 			n := p.Counts[s]
 			if p.Coordinator == s {
 				n++

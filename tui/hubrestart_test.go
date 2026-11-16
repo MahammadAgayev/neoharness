@@ -79,3 +79,18 @@ func TestHubRestartAsksWhileTurnsRun(t *testing.T) {
 		t.Fatal(":hub restart and y should restart the hub")
 	}
 }
+
+// TestBackgroundWorkHoldsTheRestart: a restart ends the agent's background
+// work as it ends a turn.
+func TestBackgroundWorkHoldsTheRestart(t *testing.T) {
+	h := start(t)
+	var restarts atomic.Int32
+	h.a.hub = Hub{Restart: func() error { restarts.Add(1); return nil }, Version: func() string { return "new1111" }}
+	h.hub.version = "old0000"
+	h.a.workspaces = []model.WorkspaceView{{Name: "demo", Counts: map[model.State]int{model.StateBackground: 1}}}
+	h.a.handle(evResync{})
+	time.Sleep(50 * time.Millisecond)
+	if restarts.Load() != 0 {
+		t.Fatal("the hub restarted while background work ran")
+	}
+}

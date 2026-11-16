@@ -52,6 +52,7 @@ const paths: Record<string, string> = {
   'info': '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
   // States: idle is a ring, running a dot, waiting a solid diamond.
   idle: '<circle cx="12" cy="12" r="6.5"/>',
+  background: '<circle cx="12" cy="12" r="6.5" stroke-dasharray="3.4 3.4"/>',
   running: '<circle cx="12" cy="12" r="5" fill="currentColor"/>',
   waiting: '<path d="M12 4.5 19.5 12 12 19.5 4.5 12Z" fill="currentColor"/>',
   square: '<rect x="7.5" y="7.5" width="9" height="9" rx="2" fill="currentColor" stroke="none"/>',
@@ -79,6 +80,7 @@ export function Icon(props: { name: string; size?: number; className?: string })
 const glyphs: Record<string, string> = {
   '○': 'idle',
   '●': 'running',
+  '◌': 'background',
   '◆': 'waiting',
   '✓': 'check',
   '◇': 'diamond',

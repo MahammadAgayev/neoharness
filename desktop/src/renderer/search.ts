@@ -37,11 +37,11 @@ export const tabs: { tab: Tab; title: string }[] = [
 ]
 
 export function stateGlyph(s: string): string {
-  return s === 'running' ? '●' : s === 'waiting' ? '◆' : s === 'failed' ? '✗' : s === 'resolved' ? '✓' : '○'
+  return s === 'running' ? '●' : s === 'waiting' ? '◆' : s === 'failed' ? '✗' : s === 'resolved' ? '✓' : s === 'background' ? '◌' : '○'
 }
 
 export function stateTone(s: string): Tone | 'subtle' {
-  return s === 'running' ? 'foam' : s === 'waiting' ? 'gold' : s === 'failed' ? 'love' : s === 'resolved' ? 'pine' : 'muted'
+  return s === 'running' || s === 'background' ? 'foam' : s === 'waiting' ? 'gold' : s === 'failed' ? 'love' : s === 'resolved' ? 'pine' : 'muted'
 }
 
 // inState counts a workspace's threads in a state, its coordinator too.
@@ -70,8 +70,14 @@ export function boardTime(at: string, now = Date.now()): string {
   return ms < 60000 ? 'now' : age(at, now)
 }
 
+// stateLabel is a thread's state in words; background work says how much
+// runs.
+export function stateLabel(v: ThreadView): string {
+  return v.state === 'background' && v.background ? `${v.background} in background` : v.state
+}
+
 export function threadDetail(v: ThreadView): string {
-  let d = v.state
+  let d = stateLabel(v)
   if (v.permission) d += ` · permission · ${v.permission.tool}`
   else if (v.waiting === 'paused') d += ' · paused'
   else if (v.state === 'waiting') d += ' · question'
@@ -159,8 +165,10 @@ function workspaceItems(): Item[] {
     const waiting = inState(w, 'waiting')
     const failed = inState(w, 'failed')
     const running = inState(w, 'running')
+    const background = inState(w, 'background')
     const parts = [w.pin ? store.short(w.pin) : 'not pinned']
     if (running) parts.push(`${running} running`)
+    if (background) parts.push(`${background} background`)
     if (waiting) parts.push(`${waiting} waiting`)
     if (failed) parts.push(`${failed} failed`)
     return {
@@ -274,6 +282,7 @@ function byState(items: Item[]): Item[] {
   const groups: [string, string][] = [
     ['◆', 'waiting'],
     ['●', 'running'],
+    ['◌', 'background'],
     ['○', 'idle'],
     ['✓', 'resolved'],
   ]

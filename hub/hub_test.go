@@ -2905,3 +2905,118 @@ func TestNewsOutlivesARestart(t *testing.T) {
 		t.Fatalf("report after restart = %q", p)
 	}
 }
+
+// bgFake starts background work in each turn. A follow waits for done, or
+// for its stop, and then ends the turn the agent starts by itself.
+func bgFake(done chan struct{}) *fake {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if !req.Follow {
+			req.OnEvent(agent.Event{Kind: agent.KindToolStart, Tool: "Bash", Detail: "go test ./..."})
+			req.OnEvent(agent.Event{Kind: agent.KindBackground, Background: 1})
+			req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "started"})
+			return agent.Result{Text: "started", Tools: 1, Background: 1}
+		}
+		select {
+		case <-ctx.Done():
+			return agent.Result{Background: 1}
+		case <-done:
+		}
+		req.OnEvent(agent.Event{Kind: agent.KindBackground, Background: 0})
+		req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "the tests passed"})
+		return agent.Result{Text: "the tests passed"}
+	}
+	return f
+}
+
+// TestBackgroundWorkOutlivesTheTurn: a turn that leaves work running is not
+// done. Its turn end does not notify; the turn the agent starts when the
+// work ends does.
+func TestBackgroundWorkOutlivesTheTurn(t *testing.T) {
+	done := make(chan struct{})
+	f := bgFake(done)
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "api", "run the tests", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "api", model.StateBackground)
+	if v := view(t, h, "demo", "api"); v.Background != 1 || v.Level != model.LevelQuiet {
+		t.Fatalf("view %+v, want 1 in the background and nothing to notify", v)
+	}
+	if s := h.Workspaces()[0]; s.Counts[model.StateBackground] != 1 {
+		t.Errorf("workspace counts %v", s.Counts)
+	}
+	close(done)
+	stateIs(t, h, "demo", "api", model.StateIdle)
+	v := view(t, h, "demo", "api")
+	if v.Background != 0 || v.Level != model.LevelNotice || v.Reply != "the tests passed" {
+		t.Fatalf("view %+v, want a finished turn to notify", v)
+	}
+	evs, _ := h.Events("demo", "api", 0)
+	var got []string
+	for _, e := range evs {
+		if e.Kind == model.EventTurnEnd || e.Kind == model.EventText {
+			got = append(got, fmt.Sprintf("%s:%s:%d", e.Kind, e.Text, e.Level))
+		}
+	}
+	want := []string{"text:started:0", "turn::0", "text:the tests passed:0", "turn::2"}
+	if !slices.Equal(got, want) {
+		t.Errorf("events %v, want %v", got, want)
+	}
+	if reqs := f.requests(); len(reqs) != 2 || !reqs[1].Follow || reqs[1].Conversation != reqs[0].Conversation || !reqs[1].Resume {
+		t.Errorf("requests %+v, want the turn and a follow of its conversation", reqs)
+	}
+}
+
+// TestAMessageDuringBackgroundWorkRunsAtOnce: the agent takes a message
+// while its work runs, so the message does not wait for the work.
+func TestAMessageDuringBackgroundWorkRunsAtOnce(t *testing.T) {
+	f := bgFake(make(chan struct{}))
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "api", "run the tests", ""); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", "api", model.StateBackground)
+	if err := h.Send("demo", model.User, "api", "how is it going?"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the message to run", func() bool {
+		reqs := f.requests()
+		return len(reqs) >= 3 && strings.Contains(reqs[2].Prompt, "how is it going?")
+	})
+	stateIs(t, h, "demo", "api", model.StateBackground)
+	if reqs := f.requests(); len(reqs) != 4 || !reqs[1].Follow || reqs[2].Follow || !reqs[3].Follow {
+		t.Errorf("requests %+v, want turn, follow, turn, follow", reqs)
+	}
+}
+
+// TestTheEndOfBackgroundWorkIsNotIdle: between the end of the work and the
+// turn the agent starts to read it, the thread is not done.
+func TestTheEndOfBackgroundWorkIsNotIdle(t *testing.T) {
+	ended, turn := make(chan struct{}), make(chan struct{})
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if !req.Follow {
+			req.OnEvent(agent.Event{Kind: agent.KindBackground, Background: 1})
+			return agent.Result{Text: "started", Background: 1}
+		}
+		req.OnEvent(agent.Event{Kind: agent.KindBackground, Background: 0})
+		close(ended)
+		<-turn
+		req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "done"})
+		return agent.Result{Text: "done"}
+	}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	if err := h.OpenThread("demo", model.Coordinator, "api", "run the tests", ""); err != nil {
+		t.Fatal(err)
+	}
+	<-ended
+	if s := view(t, h, "demo", "api").State; s != model.StateBackground {
+		t.Errorf("state %s once the work ended, want background until the agent's turn starts", s)
+	}
+	close(turn)
+	stateIs(t, h, "demo", "api", model.StateIdle)
+}

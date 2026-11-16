@@ -763,7 +763,7 @@ func (a *App) onView(v model.ThreadView) {
 		}
 	}
 	// A stopped turn sends no turn end, so its tool calls would spin forever.
-	if v.State == model.StateIdle || v.State == model.StateResolved || v.State == model.StateFailed || v.Waiting == "paused" {
+	if v.State == model.StateIdle || v.State == model.StateBackground || v.State == model.StateResolved || v.State == model.StateFailed || v.Waiting == "paused" {
 		a.chat(v.Name).settle(false)
 	}
 	a.refreshTodo(v)
@@ -1293,7 +1293,7 @@ func (a *App) countSpans(p model.WorkspaceView) []Span {
 		n[model.StateRunning]++
 	}
 	var out []Span
-	for _, s := range []model.State{model.StateWaiting, model.StateFailed, model.StateRunning, model.StateIdle} {
+	for _, s := range []model.State{model.StateWaiting, model.StateFailed, model.StateRunning, model.StateBackground, model.StateIdle} {
 		if n[s] == 0 {
 			continue
 		}
@@ -1365,6 +1365,9 @@ func (a *App) renderThreads() {
 			nameSt = th.Fg3
 		}
 		info = wakeLabel(v)
+		if v.State == model.StateBackground {
+			info = viewLabel(v)
+		}
 		if v.Queued > 0 {
 			info = strings.TrimSpace(fmt.Sprintf("+%d queued  %s", v.Queued, info))
 		}
@@ -1434,7 +1437,7 @@ func (a *App) renderThreads() {
 		groups[group(a.boardAt[n])] = append(groups[group(a.boardAt[n])], n)
 	}
 	var lines []Line
-	for _, s := range []model.State{model.StateWaiting, model.StateFailed, model.StateRunning, model.StateIdle} {
+	for _, s := range []model.State{model.StateWaiting, model.StateFailed, model.StateRunning, model.StateBackground, model.StateIdle} {
 		if len(groups[s]) == 0 {
 			continue
 		}
