@@ -38,6 +38,11 @@ func renderMarkdown(src string, w int, th *Theme, prefix []Span) []Line {
 // read.
 const docWidth = 96
 
+// chatWidth is the widest text column of a chat. It is wider than an
+// artifact's, so a chat alone on a wide screen does not leave half of it
+// empty.
+const chatWidth = 120
+
 type mdRenderer struct {
 	src   []byte
 	th    *Theme

@@ -798,13 +798,13 @@ func TestHeadingsTakeTheInkOfTheText(t *testing.T) {
 	}
 }
 
-func TestChatWrapsAtTheDocumentWidth(t *testing.T) {
+func TestChatWrapsAt120Columns(t *testing.T) {
 	h := start(t)
 	h.s.SetSize(300, 40)
 	h.openDemo()
-	h.a.draw()
-	if w := h.a.cur; w.rect.W <= docWidth+2 || h.a.textWidth(w) != docWidth+2 {
-		t.Fatalf("a %d-column chat should wrap at %d, got %d", w.rect.W, docWidth+2, h.a.textWidth(w))
+	h.press("<C-w>o")
+	if w := h.a.cur; w.rect.W <= 122 || h.a.textWidth(w) != 122 {
+		t.Fatalf("a %d-column chat should wrap at 120 columns and its gutter, got %d", w.rect.W, h.a.textWidth(w))
 	}
 }
 

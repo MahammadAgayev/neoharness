@@ -468,10 +468,10 @@ func (a *App) line(w *Window) Line {
 
 func (a *App) textWidth(w *Window) int {
 	tw := max(w.rect.W-1-railWidth(w), 8)
-	// A chat wraps at a document's width, its gutter included: long lines
-	// are hard to read.
+	// A chat wraps at chatWidth, its gutter included: long lines are hard
+	// to read.
 	if w.Buf.Kind == KindChat {
-		tw = min(tw, docWidth+2)
+		tw = min(tw, chatWidth+2)
 	}
 	return tw
 }
