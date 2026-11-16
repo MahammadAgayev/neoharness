@@ -1,8 +1,11 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/gdamore/tcell/v2"
 
 	"github.com/MahammadAgayev/neoharness/api/model"
 )
@@ -19,65 +22,59 @@ func (h *neoharness) rowOf(want string) int {
 
 func (h *neoharness) line(y int) string { return strings.Split(h.screen(), "\n")[y] }
 
-func TestEachPaneHasAWinbarAndFocusShowsAsAnAccentRow(t *testing.T) {
+func TestEachPaneHasAStatusLineAtItsFootAndFocusShowsInIt(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	h.press(":b auth-refactor", "<CR>", "<C-w>v", ":b coordinator", "<CR>")
+	// left has focus, right does not.
 	left := h.a.cur
 	right := h.a.windowOf("auth-refactor")
 	if left == right || right == nil {
 		t.Fatal("two chats should show")
 	}
-	top := h.line(0)
-	if !strings.Contains(top, "coordinator") || !strings.Contains(top, "auth-refactor") || !strings.Contains(top, "threads") {
-		t.Fatalf("the top row should name each pane:\n%s", h.screen())
+	if top := strings.TrimSpace(h.line(0)); top != "" {
+		t.Fatalf("no bar on top: the top row is blank:\n%s", h.screen())
 	}
-	if !strings.Contains(top, " running") {
-		t.Fatalf("a winbar should show its thread's state:\n%s", top)
+	foot := left.rect.Y + left.rect.H - 1
+	if !strings.Contains(h.inPane(left, foot), "coordinator") || !strings.Contains(h.inPane(right, foot), "auth-refactor") || !strings.Contains(h.inPane(right, foot), "running") {
+		t.Fatalf("each pane's last row names it and its state:\n%s", h.screen())
 	}
 	cells, w, _ := h.s.GetContents()
-	under := func(win *Window) (string, bool) {
-		c := cells[w+win.rect.X+1]
-		return string(c.Runes), fgOf(c.Style) == fgOf(h.a.th.Accent)
+	name := func(win *Window) tcell.Style { return cells[foot*w+win.rect.X+1].Style }
+	if fgOf(name(left)) != fgOf(h.a.th.Fg) || !boldOf(name(left)) {
+		t.Fatal("the focused pane's name should be in bold fg")
 	}
-	if r, accent := under(left); r != "▔" || !accent {
-		t.Fatalf("the focused pane should have an accent ▔ row under its winbar, got %q", r)
-	}
-	if r, _ := under(right); r == "▔" {
-		t.Fatal("a pane without focus should have no focus row")
-	}
-	if fg := fgOf(cells[left.rect.X+1].Style); fg != fgOf(h.a.th.Fg) {
-		t.Fatal("the focused pane's name should be in fg")
-	}
-	if fg := fgOf(cells[right.rect.X+1].Style); fg != fgOf(h.a.th.Fg3) {
-		t.Fatal("a pane without focus should have its winbar in fg-3")
+	if fgOf(name(right)) != fgOf(h.a.th.Fg3) || boldOf(name(right)) {
+		t.Fatal("a pane without focus should have its name in fg-3")
 	}
 	h.a.cur = right
 	h.a.draw()
 	cells, _, _ = h.s.GetContents()
-	if r, _ := under(right); r != "▔" {
-		t.Fatal("the focus row should move with the focus")
-	}
-	if r, _ := under(left); r == "▔" {
-		t.Fatal("the focus row should leave the pane that lost focus")
+	if !boldOf(name(right)) || boldOf(name(left)) {
+		t.Fatal("the bold name should move with the focus")
 	}
 }
 
-func TestOneGlobalStatusLineNamesTheWorkspaceOnce(t *testing.T) {
+func TestTheCommandLineIsTheLastRowAndNamesTheWorkspaceOnce(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	v := h.a.threads[model.Coordinator]
 	v.Model, v.Context, v.ContextWindow = "claude-opus-5", 100, 1000
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	w := h.a.cur
+	if foot := h.inPane(w, w.rect.Y+w.rect.H-1); !strings.Contains(foot, "opus-5 · ctx 10%") {
+		t.Fatalf("a chat's status line shows its model and context:\n%s", foot)
+	}
 	h.press("<C-w>v")
 	_, H := h.s.Size()
 	if n := strings.Count(h.screen(), "demo"); n != 1 {
 		t.Fatalf("the workspace should show once, got %d:\n%s", n, h.screen())
 	}
-	status := h.line(H - 2)
-	for _, want := range []string{"demo", "opus-5", "ctx 10%", "● 1 running"} {
-		if !strings.Contains(status, want) {
-			t.Fatalf("the global status line should show %q:\n%s", want, status)
+	last := h.line(H - 1)
+	for _, want := range []string{"demo", "● 1 running"} {
+		if !strings.Contains(last, want) {
+			t.Fatalf("the command line should show %q on its right:\n%s", want, last)
 		}
 	}
 	if fg := h.fgAt("ctx 10%"); fg != fgOf(h.a.th.Fg3) {
@@ -85,7 +82,7 @@ func TestOneGlobalStatusLineNamesTheWorkspaceOnce(t *testing.T) {
 	}
 	h.press(":")
 	if !strings.HasPrefix(strings.TrimSpace(h.line(H-1)), ":") {
-		t.Fatal("the command line should be the last row, under the status line")
+		t.Fatal("the command line should be the last row")
 	}
 }
 
@@ -100,7 +97,7 @@ func TestThePromptHasOneBlankRowAboveAndBelow(t *testing.T) {
 	_, H := h.s.Size()
 	w := h.a.cur
 	prompt := h.rowOf("› write to coordinator")
-	if prompt != H-4 || h.inPane(w, H-3) != "" {
+	if prompt != H-4 || h.inPane(w, H-3) != "" || !strings.HasPrefix(h.inPane(w, H-2), "coordinator") {
 		t.Fatalf("one blank row parts the prompt from the status line; prompt row %d:\n%s", prompt, h.screen())
 	}
 	h.press("i")
@@ -122,15 +119,18 @@ func TestThePromptDockIsRecapThenTodoThenPrompt(t *testing.T) {
 	v.Todos = []model.Todo{{Text: "Write its test", State: model.TodoActive}, {Text: "Ship", State: model.TodoPending}}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.press(":recap", "<CR>")
-	recap, todo, prompt := h.rowOf("recap  Cache added"), h.rowOf("0 of 2 · Write its test"), h.rowOf("› write to")
-	if recap < 0 || todo != recap+1 || prompt != todo+1 {
-		t.Fatalf("the dock should be the recap, the todo line, the prompt, one row each; rows %d %d %d:\n%s", recap, todo, prompt, h.screen())
+	recap, todo, prompt := h.rowOf("※ recap: Cache added"), h.rowOf("0 of 2 · Write its test"), h.rowOf("› write to")
+	if recap < 0 || todo != recap+1 || prompt != todo+2 {
+		t.Fatalf("the dock should be the recap, the todo line, a blank row, the prompt; rows %d %d %d:\n%s", recap, todo, prompt, h.screen())
 	}
 	if w := h.a.cur; h.inPane(w, recap-1) != "" || h.inPane(w, prompt+1) != "" {
 		t.Fatalf("one blank row above the dock and one below the prompt:\n%s", h.screen())
 	}
-	if strings.Contains(h.screen(), "╭") {
-		t.Fatalf("the recap is a line with a bar, not a box:\n%s", h.screen())
+	if strings.Contains(h.screen(), "╭") || strings.Contains(h.screen(), "▍") || strings.Contains(h.screen(), "×") {
+		t.Fatalf("the recap is dim text, with no box, bar or ×:\n%s", h.screen())
+	}
+	if fg := h.fgAt("Cache added"); fg != fgOf(h.a.th.Fg3) {
+		t.Fatal("the recap should be dim, in fg-3")
 	}
 }
 
@@ -147,5 +147,32 @@ func TestEveryPaneHasTheSameInsetFromItsSeparator(t *testing.T) {
 		if gap := string(cells[2*w+x-1].Runes); gap != " " && gap != "" {
 			t.Fatalf("the column after a separator should be blank, found %q", gap)
 		}
+	}
+}
+
+func boldOf(st tcell.Style) bool {
+	_, _, attr := st.Decompose()
+	return attr&tcell.AttrBold != 0
+}
+
+// A question is what the person answers: the card shows all of it while the
+// window has room, and a blank row parts it from the prompt.
+func TestTheQuestionCardShowsTheWholeQuestionAboveABlankRow(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	var q []string
+	for i := 1; i <= 20; i++ {
+		q = append(q, fmt.Sprintf("- line %d of the question", i))
+	}
+	v := h.a.threads[model.Coordinator]
+	v.State, v.Waiting, v.QuestionID = model.StateWaiting, strings.Join(q, "\n"), "q1"
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	last, prompt := h.rowOf("line 20 of the question"), h.rowOf("› write to coordinator")
+	if h.rowOf("line 1 of the question") < 0 || last < 0 {
+		t.Fatalf("the whole question should show:\n%s", h.screen())
+	}
+	if prompt != last+2 || h.inPane(h.a.cur, last+1) != "" {
+		t.Fatalf("one blank row parts the card from the prompt; rows %d %d:\n%s", last, prompt, h.screen())
 	}
 }

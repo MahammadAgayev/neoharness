@@ -56,7 +56,7 @@ tcell simulation screen. A bug fix starts with a test that fails without it.
    the window, and `<C-o>` goes back.
 4. A thing shows its own state. No mode labels, except a muted `visual` /
    `v-line`. The cursor follows the Vim mode: a block in Normal and Visual,
-   a line in Insert, no blink. A needs-you item shows in the global status
+   a line in Insert, no blink. A needs-you item is counted on the command
    line until it is done.
 5. Love only for errors. Gold for what waits for you. One accent (Iris) for
    "you type here". Bold only for names with focus.

@@ -21,9 +21,9 @@ const scrollOff = 8
 // the left and right.
 const margin = 2
 
-// chromeRows are the rows on top of each pane: the winbar, and under it the
-// focus row, in accent in the pane with focus.
-const chromeRows = 2
+// chromeRows are the rows on top of each pane, over its text: none, as in
+// Vim. A pane's status line is its last row.
+const chromeRows = 0
 
 // The prompt grows to maxPromptLines before it scrolls.
 const maxPromptLines = 12
@@ -49,8 +49,9 @@ func (a *App) draw() {
 		}
 	}
 	live := false
-	// The last two rows are the global status line and the command line.
-	area := Rect{margin, 0, W - 2*margin, H - 2}
+	// A blank row on top keeps the panes off the terminal's edge; the last
+	// row is the command line.
+	area := Rect{margin, 1, W - 2*margin, H - 2}
 	a.root.layout(area, sep)
 	// Which threads are on screen changes with every window command, so the
 	// list is redrawn here rather than after each of them. Its rows fit the
@@ -68,10 +69,10 @@ func (a *App) draw() {
 	for _, w := range a.bindDiff() {
 		a.drawWindow(w, false)
 	}
+	a.drawToasts(W, H)
 	if a.picker != nil {
 		a.drawPicker(W, H)
 	}
-	a.drawStatusLine(W, H)
 	a.drawGlobal(W, H)
 
 	if a.cursorX >= 0 {
@@ -119,14 +120,14 @@ const promptGap = 1
 
 func (a *App) drawWindow(w *Window, focused bool) {
 	r := w.rect
-	if r.W < 4 || r.H < chromeRows+2 {
+	if r.W < 4 || r.H < chromeRows+3 {
 		return
 	}
 	b := w.Buf
 	right := r.X + r.W
 	top := r.Y + chromeRows
-	bottom := r.Y + r.H
-	a.drawWinbar(w, focused)
+	bottom := r.Y + r.H - 1
+	a.drawStatus(w, bottom, focused)
 
 	// The prompt is the last rows of a chat window, under the stream.
 	var promptLines []Line
@@ -138,25 +139,17 @@ func (a *App) drawWindow(w *Window, focused bool) {
 	textBottom := promptTop
 	// The recap is the top of the prompt dock, the end of the chat's lines.
 	b.SetRecap(a.recapText(w))
-	// The transcript ends above the card, so the card hides none of it.
-	cardBottom := textBottom
-	if title, body, _ := a.card(w); title != "" && textBottom-len(body)-1 > top {
-		textBottom -= len(body) + 1
-	} else if b.Prompt != nil && b.recap == "" && !b.hasTodo() {
-		// The dock and the card bring their own blank row above them.
+	// The transcript ends above the card, so the card hides none of it. A
+	// blank row parts the card from the chat above and the prompt below.
+	cardBottom := textBottom - 1
+	if title, body, _ := a.card(w); title != "" && textBottom-len(body)-2 > top {
+		textBottom -= len(body) + 2
+	} else if b.Prompt != nil {
+		// A blank row parts the prompt from the chat, or from the recap and
+		// the todo line, which bring their own blank row above them.
 		textBottom--
 	}
-	// Notices dock in the board's foot, under its rows.
-	if b.Kind == KindThreads {
-		ts := a.shownToasts()
-		for i, t := range ts {
-			a.drawLine(r.X, bottom-len(ts)+i, right, Line{Prefix: []Span{{" ", a.th.Fg}}, Spans: a.toastLine(t)})
-		}
-		if len(ts) > 0 {
-			textBottom -= len(ts) + 1
-		}
-	}
-	w.recapX = 0
+	w.recapShown = b.recap != ""
 	h := max(textBottom-top, 1)
 	w.textH = h
 
@@ -269,11 +262,6 @@ func (a *App) drawWindow(w *Window, focused bool) {
 				st = overlay(st, bg)
 			}
 			a.put(right-1, y, right, "…", st)
-		}
-		if l.Item == recapRow && (li == 0 || lines[li-1].Item != recapRow) {
-			// Its × closes it, as q and Esc do.
-			w.recapX, w.recapY = min(right, r.X+a.textWidth(w))-2, y
-			a.put(w.recapX, y, right, "×", overlay(a.th.Fg3, bg))
 		}
 		if showCursor && li == w.Cur {
 			a.cursorX, a.cursorY = r.X+rail+min(w.Col, r.W-rail-1), y
@@ -449,7 +437,7 @@ func (a *App) drawLine(x, y, maxX int, l Line) int {
 func (a *App) promptLines(w *Window, focused bool) ([]Line, int, int) {
 	p := w.Buf.Prompt
 	writing := focused && a.mode == modeInsert
-	bottom := w.rect.Y + w.rect.H - promptGap
+	bottom := w.rect.Y + w.rect.H - 1 - promptGap
 	a.fitPrompt(w)
 	rows := a.promptRows(w)
 	if len(p.Text) == 0 {
@@ -507,119 +495,58 @@ func (a *App) drawCells(x, y, maxX int, l Line, sel func(col int) bool) {
 	}
 }
 
-// drawWinbar draws the row on top of a pane: its name, then its state on
-// the right. The pane with focus has its name in fg and a row of ▔ in accent
-// under it; the others are in fg-3, so the eye finds focus where it reads.
-func (a *App) drawWinbar(w *Window, focused bool) {
+// drawStatus draws a pane's status line, its last row: its name and state on
+// the left, the chat's queue, branch, model and context on the right. The
+// pane with focus has its name in bold fg and its state in color; the others
+// are in fg-3, so the eye finds focus where it reads.
+func (a *App) drawStatus(w *Window, y int, focused bool) {
 	r := w.rect
 	right := r.X + r.W
-	y := r.Y
 	b := w.Buf
-	dim := a.th.Fg3
+	th := a.th
+	dim := th.Fg3
 	x := r.X + 1
-	// The workspace shows only for a pane of another one; the global status
-	// line names this one.
+	// The workspace shows only for a pane of another one; the command line
+	// names this one.
 	if b.Workspace != "" && b.Workspace != a.workspace {
-		x = a.put(x, y, right, b.Workspace+" · ", a.th.Run)
+		x = a.put(x, y, right, b.Workspace+" · ", th.Run)
 	}
 	name, nameSt := bufTitle(b), dim
 	if e := b.Edit; e != nil && e.Dirty {
 		name += " [+]"
 	}
 	if focused {
-		nameSt = a.th.Fg.Bold(true)
-		for i := r.X; i < right; i++ {
-			a.s.SetContent(i, y+1, '▔', nil, a.th.Accent)
-		}
+		nameSt = th.Fg.Bold(true)
 	}
 	x = a.put(x, y, right, name, nameSt) + 2
 	if b.Kind != KindChat {
 		return
 	}
 	v := a.threads[b.Thread]
-	glyphSt := a.th.state(v.State)
+	glyphSt := th.state(v.State)
 	// What needs the person keeps its color in every pane.
 	if !focused && v.State != model.StateWaiting && v.State != model.StateFailed {
 		glyphSt = dim
 	}
-	state := []Span{{a.glyph(v.State) + " ", glyphSt}, {stateLabel(v.State), dim}}
+	x = a.put(x, y, right, a.glyph(v.State)+" ", glyphSt)
+	x = a.put(x, y, right, stateLabel(v.State), dim)
 	if !v.Since.IsZero() && v.State != model.StateIdle {
-		state = append(state, Span{" " + elapsed(a.now().Sub(v.Since)), dim})
+		x = a.put(x, y, right, " "+elapsed(a.now().Sub(v.Since)), dim)
 	}
 	if wl := wakeLabel(v); wl != "" {
-		state = append(state, Span{"  " + wl, dim})
-	}
-	n := 0
-	for _, sp := range state {
-		n += width(sp.Text)
-	}
-	if rx := right - 1 - n; rx > x {
-		for _, sp := range state {
-			rx = a.put(rx, y, right, sp.Text, sp.Style)
-		}
-	}
-}
-
-// drawStatusLine draws the one status line of the shell, as Vim's
-// laststatus=3: the workspace, then the focused chat's model and context,
-// then what runs and waits.
-func (a *App) drawStatusLine(W, H int) {
-	y := H - 2
-	th := a.th
-	dim := th.Fg3
-	x := margin + 1
-	if a.offline {
-		x = a.put(x, y, W, "● offline  ", th.Alert)
-	}
-	if a.workspace != "" {
-		x = a.put(x, y, W, a.workspace, th.Fg2) + 3
-	}
-	// With the board closed, the newest notice shows here.
-	if ts := a.shownToasts(); a.boardWin() == nil && len(ts) > 0 {
-		x = a.drawLine(x, y, W-margin, Line{Spans: a.toastLine(ts[len(ts)-1])}) + 3
-	}
-	n := map[model.State]int{}
-	for _, v := range a.threads {
-		n[v.State]++
-	}
-	var right []Span
-	// What needs the person, in every workspace: the one place to look.
-	if len(a.waits) > 0 {
-		right = append(right, Span{fmt.Sprintf("◆ %d waiting", len(a.waits)), th.Wait})
-	}
-	if n[model.StateRunning] > 0 {
-		right = append(right, Span{fmt.Sprintf("● %d running", n[model.StateRunning]), th.Run})
-	}
-	rx := W - margin
-	for i, sp := range right {
-		rx -= width(sp.Text)
-		if i > 0 {
-			rx -= 2
-		}
-	}
-	for i, k := rx, 0; k < len(right); k++ {
-		if k > 0 {
-			i += 2
-		}
-		i = a.put(i, y, W, right[k].Text, right[k].Style)
+		x = a.put(x, y, right, "  "+wl, dim)
 	}
 
-	// The middle: the focused chat. When it does not fit, the parts with the
-	// highest rank go first: context matters most, it says when to start
-	// fresh.
-	w := a.cur
-	if w == nil || w.Buf.Kind != KindChat {
-		return
-	}
-	v := a.threads[w.Buf.Thread]
+	// The right: when it does not fit, the parts with the lowest rank go
+	// first; context matters most, it says when to start fresh.
 	type part struct {
 		Span
 		rank int // 0 stays
 	}
-	var mid []part
+	var parts []part
 	add := func(text string, st tcell.Style, rank int) {
 		if text != "" {
-			mid = append(mid, part{Span{text, st}, rank})
+			parts = append(parts, part{Span{text, st}, rank})
 		}
 	}
 	if v.Queued > 0 {
@@ -642,7 +569,7 @@ func (a *App) drawStatusLine(W, H int) {
 	const sep = " · "
 	total := func() int {
 		t := 0
-		for i, sp := range mid {
+		for i, sp := range parts {
 			t += width(sp.Text)
 			if i > 0 {
 				t += width(sep)
@@ -650,22 +577,18 @@ func (a *App) drawStatusLine(W, H int) {
 		}
 		return t
 	}
-	for rank := 1; x+total()+2 > rx && rank <= 4; rank++ {
-		mid = slices.DeleteFunc(mid, func(p part) bool { return p.rank == rank })
+	for rank := 1; right-1-total() <= x+2 && rank <= 4; rank++ {
+		parts = slices.DeleteFunc(parts, func(p part) bool { return p.rank == rank })
 	}
-	if x+total()+2 > rx {
+	if right-1-total() <= x+2 {
 		return
 	}
-	// Centered when it can be, as in the app's prompt info.
-	mx := max(x, (W-total())/2)
-	if mx+total()+2 > rx {
-		mx = x
-	}
-	for i, sp := range mid {
+	rx := right - 1 - total()
+	for i, sp := range parts {
 		if i > 0 {
-			mx = a.put(mx, y, W, sep, dim)
+			rx = a.put(rx, y, right, sep, dim)
 		}
-		mx = a.put(mx, y, W, sp.Text, sp.Style)
+		rx = a.put(rx, y, right, sp.Text, sp.Style)
 	}
 }
 
@@ -742,8 +665,9 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 		title = "question"
 		body = [][]Span{{{"question", th.Fg2}}}
 		rows := renderMarkdown(v.Waiting, bw-2, th, nil)
-		// A long question leaves the window room for the chat.
-		if n := max(min(questionRows, w.rect.H/2-4), 1); len(rows) > n {
+		// The question is what the person answers, so it is cut only where
+		// the window ends, leaving the chat a few rows.
+		if n := max(w.rect.H-questionRoom, 1); len(rows) > n {
 			rows = rows[:n]
 			rows[n-1].Spans = append(clone(rows[n-1].Spans), Span{" …", th.Fg3})
 		}
@@ -757,8 +681,9 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 // commandRows is the most rows of a command the card shows.
 const commandRows = 8
 
-// questionRows is the most rows of a question the card shows.
-const questionRows = 12
+// questionRoom is the rows of a window a question card leaves to the rest:
+// the status line, the prompt, the blank rows and a few rows of chat.
+const questionRoom = 9
 
 // drawFloats draws the card in the rows the transcript left for it, just
 // above bottom.
@@ -769,7 +694,7 @@ func (a *App) drawFloats(w *Window, top, bottom int) {
 	}
 	// One blank row parts the card from the chat above it.
 	y0 := bottom - len(body)
-	if y0-1 < top {
+	if y0-1 <= top {
 		return
 	}
 	x0 := w.rect.X
@@ -879,7 +804,9 @@ func (a *App) drawGlobal(W, H int) {
 		}
 		return
 	}
-	// Right side: keys typed so far, as Vim's showcmd.
+	// Right side: keys typed so far, as Vim's showcmd, then the workspace
+	// and what waits and runs: what waits counts every workspace, the one
+	// place to look.
 	var right []Span
 	if a.recordInto != 0 {
 		right = append(right, Span{"recording @" + string(a.recordInto) + "  ", th.Fg3})
@@ -891,6 +818,21 @@ func (a *App) drawGlobal(W, H int) {
 		}
 		right = append(right, Span{show + "  ", th.Fg3})
 	}
+	if a.workspace != "" {
+		right = append(right, Span{a.workspace, th.Fg2})
+	}
+	running := 0
+	for _, v := range a.threads {
+		if v.State == model.StateRunning {
+			running++
+		}
+	}
+	if len(a.waits) > 0 {
+		right = append(right, Span{fmt.Sprintf("  ◆ %d waiting", len(a.waits)), th.Wait})
+	}
+	if running > 0 {
+		right = append(right, Span{fmt.Sprintf("  ● %d running", running), th.Run})
+	}
 	rx := W - margin
 	for _, sp := range right {
 		rx -= width(sp.Text)
@@ -900,6 +842,9 @@ func (a *App) drawGlobal(W, H int) {
 	}
 
 	x := margin + 1
+	if a.offline {
+		x = a.put(x, y, W, "● offline  ", th.Alert)
+	}
 	// Other modes show themselves: the colored caret in Insert, the
 	// command line, the picker box. Visual needs a word to tell v from V.
 	if a.mode == modeVisual {

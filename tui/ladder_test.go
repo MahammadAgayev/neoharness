@@ -19,42 +19,26 @@ func (h *neoharness) board() *Window {
 	return nil
 }
 
-func TestNoticesDockInTheBoardsFootNeverOverItsRows(t *testing.T) {
+func TestToastsFloatAtTheTopRightNewestOnTop(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	h.a.toast("api-tests", Span{"✓", h.a.th.Done}, "Moved the store.", h.a.th.Done, 4*time.Second)
+	h.a.toast("auth-refactor", Span{"✓", h.a.th.Done}, "Split the session.", h.a.th.Done, 4*time.Second)
 	h.a.draw()
-	b := h.board()
-	row := h.rowOf("Moved the store.")
-	if row != b.rect.Y+b.rect.H-1 {
-		t.Fatalf("the notice should be the last row of the board, row %d:\n%s", row, h.screen())
+	W, _ := h.s.Size()
+	newest, older := h.rowOf("Split the session."), h.rowOf("Moved the store.")
+	if newest < 0 || older <= newest || newest > 4 {
+		t.Fatalf("toasts should stack at the top, the newest first; rows %d %d:\n%s", newest, older, h.screen())
 	}
-	line := h.line(row)
-	if !strings.Contains(line[strings.Index(line, "│"):], "✓ api-tests  Moved the store.") {
-		t.Fatalf("the notice should be in the board's column, as glyph, name, text:\n%s", line)
+	if !strings.Contains(h.line(newest-1), "✓ auth-refactor") {
+		t.Fatalf("a toast's first row is its glyph and thread:\n%s", h.screen())
 	}
-	for _, want := range []string{"auth-refactor", "○ api-tests"} {
-		if r := h.rowOf(want); r < 0 || r >= row {
-			t.Fatalf("%q should stay visible above the notice:\n%s", want, h.screen())
-		}
+	if top := []rune(h.line(newest - 2)); !strings.ContainsRune(string(top), '╭') || top[W-margin-1] != '╮' {
+		t.Fatalf("a toast is a box at the right edge:\n%s", h.screen())
 	}
-	if strings.Contains(h.screen(), "╭") {
-		t.Fatalf("a notice is a line, not a box:\n%s", h.screen())
-	}
-}
-
-func TestNoticesShowInTheStatusLineWhenTheBoardIsClosed(t *testing.T) {
-	h := start(t)
-	h.openDemo()
-	h.press("<C-w>o")
-	if h.board() != nil {
-		t.Fatal("<C-w>o should close the board")
-	}
-	h.a.toast("api-tests", Span{"✓", h.a.th.Done}, "Moved the store.", h.a.th.Done, 4*time.Second)
-	h.a.draw()
 	_, H := h.s.Size()
-	if !strings.Contains(h.line(H-2), "✓ api-tests  Moved the store.") {
-		t.Fatalf("with no board the notice goes in the status line:\n%s", h.screen())
+	if strings.Contains(h.line(H-1), "Moved the store.") {
+		t.Fatal("a toast never goes in the command line")
 	}
 }
 

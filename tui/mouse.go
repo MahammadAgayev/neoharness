@@ -29,8 +29,6 @@ func (a *App) mouse(ev *tcell.EventMouse) {
 		return
 	}
 	switch {
-	case pressed && w.recapX > 0 && y == w.recapY && x >= w.recapX-1 && x <= w.recapX+1:
-		a.closeRecap(w.Buf.Thread)
 	case btn&tcell.WheelUp != 0:
 		a.wheel(w, -wheelLines)
 	case btn&tcell.WheelDown != 0:
@@ -73,8 +71,8 @@ func (a *App) click(w *Window, x, y int, when time.Time) {
 	r := w.rect
 	row := y - r.Y - chromeRows
 	switch {
-	case row < 0:
-		// The winbar only focuses.
+	case y == r.Y+r.H-1:
+		// The status line only focuses.
 	case row < w.textH:
 		li := w.lineAt(row)
 		if li < 0 {

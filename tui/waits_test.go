@@ -25,16 +25,16 @@ func demoWaits() []model.Wait {
 	}
 }
 
-func TestTheStatusLineCountsTheWaitsOfEveryWorkspace(t *testing.T) {
+func TestTheCommandLineCountsTheWaitsOfEveryWorkspace(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	_, H := h.s.Size()
 	h.setWaits(append(demoWaits(), model.Wait{Workspace: "ops", Thread: "deploy", Kind: model.WaitFailed, ID: "failed", Text: "exit 1"})...)
-	if !strings.Contains(h.line(H-2), "◆ 3 waiting") || h.fgAt("◆ 3 waiting") != fgOf(h.a.th.Wait) {
-		t.Fatalf("the status line should count every wait, in wait ink:\n%s", h.line(H-2))
+	if !strings.Contains(h.line(H-1), "◆ 3 waiting") || h.fgAt("◆ 3 waiting") != fgOf(h.a.th.Wait) {
+		t.Fatalf("the command line should count every wait, in wait ink:\n%s", h.line(H-1))
 	}
 	h.setWaits()
-	if strings.Contains(h.line(H-2), "waiting") {
+	if strings.Contains(h.line(H-1), "waiting") {
 		t.Fatal("no waits, no count")
 	}
 }

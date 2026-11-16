@@ -111,7 +111,7 @@ func (a *App) key(ev *tcell.EventKey) {
 	// The recap card closes with Esc or q; in Insert, one Esc closes it and
 	// leaves Insert, as the person would not think of a second. The key
 	// that brings the person back opens it and does not close it.
-	if !back && a.recordInto == 0 && a.cur.recapX > 0 && (idle() && (k == "q" || k == "<Esc>") || a.mode == modeInsert && k == "<Esc>") {
+	if !back && a.recordInto == 0 && a.cur.recapShown && (idle() && (k == "q" || k == "<Esc>") || a.mode == modeInsert && k == "<Esc>") {
 		a.closeRecap(a.cur.Buf.Thread)
 		if a.mode != modeInsert {
 			return

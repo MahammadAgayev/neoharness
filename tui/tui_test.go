@@ -3266,7 +3266,7 @@ func TestMouseClickFocusesAWindow(t *testing.T) {
 	if h.a.cur != chat || h.a.cur.inPrompt || !strings.Contains(h.a.line(h.a.cur).Text(), "Opened auth-refactor") {
 		t.Fatal("a click on the chat should focus it, with the cursor on the clicked line")
 	}
-	h.click(chat.rect.X+5, chat.rect.Y+chat.rect.H-1)
+	h.click(h.at("› write to coordinator"))
 	if h.a.mode != modeInsert {
 		t.Fatal("a click on the prompt should start Insert")
 	}
@@ -3489,8 +3489,9 @@ func TestToastsSayTheirWorkspaceInMessages(t *testing.T) {
 	v.Waiting = "Which branch?"
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
-	// This workspace is in the status line; the notice names only the thread.
-	h.see("◆ api-tests  asks: Which branch?")
+	// This workspace is on the command line; the toast names only the thread.
+	h.see("◆ api-tests")
+	h.see("asks: Which branch?")
 	h.press("<Esc>", ":messages", "<CR>")
 	h.see("demo · api-tests: asks: Which branch?")
 }
@@ -3596,8 +3597,8 @@ func TestAnIdleThreadSaysWhenItWakes(t *testing.T) {
 	h.see("wakes at " + at)
 	h.press("<Esc>", ":b api-tests", "<CR>")
 	h.see("○ idle  wakes at " + at)
-	if row := h.rowOf("○ idle  wakes at " + at); row != 0 {
-		t.Fatalf("the wake time should be in the winbar, row %d", row)
+	if row, w := h.rowOf("○ idle  wakes at "+at), h.a.cur.rect; row != w.Y+w.H-1 {
+		t.Fatalf("the wake time should be in the status line, row %d", row)
 	}
 	for _, it := range h.a.threadItems() {
 		if it.label == "api-tests" && it.detail != "idle · wakes at "+at {
@@ -3752,8 +3753,8 @@ func TestTheRecapCardShowsAboveThePromptAfterAway(t *testing.T) {
 	}
 	away(model.RecapAway)
 	// It sits on the prompt, where the eyes are, not at the top of the chat.
-	if r, w := row("Cache added"), h.a.cur.rect; r != w.Y+w.H-promptGap-2 {
-		t.Fatalf("no recap card just above the prompt, row %d:\n%s", r, h.screen())
+	if r, w := row("Cache added"), h.a.cur.rect; r != w.Y+w.H-promptGap-4 {
+		t.Fatalf("no recap just above the prompt, row %d:\n%s", r, h.screen())
 	}
 	h.see("recap")
 	h.press("<Esc>")
@@ -3787,20 +3788,6 @@ func TestTheRecapCardShowsAboveThePromptAfterAway(t *testing.T) {
 		t.Fatal("the card stays after a message to the session")
 	}
 	h.press("<Esc>")
-
-	recap("Bench done.")
-	away(model.RecapAway)
-	y := row("recap")
-	x := strings.Index(strings.Split(h.screen(), "\n")[y], "×")
-	if x < 0 {
-		t.Fatalf("no × on the card:\n%s", h.screen())
-	}
-	x = len([]rune(strings.Split(h.screen(), "\n")[y][:x]))
-	h.a.handle(tcell.NewEventMouse(x, y, tcell.Button1, 0))
-	h.a.handle(tcell.NewEventMouse(x, y, tcell.ButtonNone, 0))
-	if row("Bench done.") >= 0 {
-		t.Fatal("× does not close the card")
-	}
 
 	recap("Tests pass.")
 	away(model.RecapAway)

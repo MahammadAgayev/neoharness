@@ -13,9 +13,8 @@ import (
 // :messages.
 const toastsShown = 3
 
-// toast is a one-line notice about a thread that is not on screen, in the
-// foot of the board, or in the status line when the board is closed. It never
-// covers the board's rows.
+// toast is a notice about a thread that is not on screen. Toasts float at
+// the top right, the newest on top, as Neovim's notifiers do.
 type toast struct {
 	workspace, thread string
 	glyph             Span
@@ -193,13 +192,30 @@ func (a *App) shownToasts() []*toast {
 	return out[max(len(out)-toastsShown, 0):]
 }
 
-// toastLine is a toast as one line: glyph, name, text.
-func (a *App) toastLine(t *toast) []Span {
-	name := t.thread
-	if t.workspace != a.workspace {
-		name = t.workspace + " · " + name
+// toastWidth is the widest a toast gets.
+const toastWidth = 56
+
+// drawToasts draws the toasts in boxes at the top right, the newest on top:
+// the glyph and the thread on the first row, the text under it.
+func (a *App) drawToasts(W, H int) {
+	tw := min(toastWidth, W-2*margin)
+	if tw < 20 {
+		return
 	}
-	return []Span{{t.glyph.Text + " ", t.glyph.Style}, {name + "  ", a.th.Fg2}, {flatten(t.body), a.th.Fg2}}
+	x0, y := W-tw-margin, 1
+	ts := a.shownToasts()
+	for i := len(ts) - 1; i >= 0 && y+4 < H; i-- {
+		t := ts[i]
+		name := t.thread
+		if t.workspace != a.workspace {
+			name = t.workspace + " · " + name
+		}
+		a.box(x0, y, tw, 4, "", t.border)
+		x := a.put(x0+2, y+1, x0+tw-2, t.glyph.Text+" ", t.glyph.Style)
+		a.put(x, y+1, x0+tw-2, name, a.th.Fg)
+		a.put(x0+4, y+2, x0+tw-2, truncate(flatten(t.body), tw-6), a.th.Fg2)
+		y += 4
+	}
 }
 
 // stillWaits reports whether a waiting toast's thread still waits and is not

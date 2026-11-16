@@ -65,7 +65,7 @@ focused window's status line. Errors and the answer to a key or command
 (`]q`, `K`, `:set`) show on the command line until your next key in
 Normal mode.
 
-The recap card shows as in the TUI, just above the prompt, when you come
+The recap card shows just above the prompt (the TUI shows dim text), when you come
 back after 2 minutes or more out of the window, or with no key or click
 for that long. `Esc`, `q` or `×` closes it until a newer recap, and so
 does a message to the session. `:recap` shows it again.

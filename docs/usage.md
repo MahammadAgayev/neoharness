@@ -19,13 +19,11 @@
   list's place, so the coordinator and the thread share the screen half and
   half. `<C-o>` there brings the list back.
   `<leader>t` goes to the list, or brings it back in a column of its own.
-- Each pane has a winbar on top: its name, and its state on the right. The
-  pane with focus has its name in bold and a row of `▔` in the accent color
-  under it. One status line at the foot of the screen, as Vim's
-  `laststatus=3`, names the workspace, shows the focused chat's model and
-  context, then `◆ N waiting`, the count of the waits list, and how many
-  threads run. The command line is
-  under it.
+- Each pane has a status line at its foot, as in Vim: its name and state on
+  the left; for a chat, its queue, branch, model and context on the right.
+  The pane with focus has its name in bold; the others are dim. The last
+  row of the screen is the command line, with the workspace, `◆ N waiting`
+  (the count of the waits list) and how many threads run on its right.
 - The screen holds still. A running thread's `●` turns to `◉` and back
   every 0.8 s, the live tool row spins 4 times a second, and times change
   once a minute (`now`, `4m`, `1h05m`). A reply streams in as the agent
@@ -101,10 +99,11 @@ yourself:
   messages. Your next message answers it, first in a new turn, with them;
   `<CR>` on one sends them without an answer, and the question closes.
 - When you come back after 2 minutes or more away, a chat shows its recap
-  in one line behind a bar just above the todo line and the prompt: where the session's work stands, in its own words,
-  as in Claude Code. Away is the terminal without focus, or no key for that
-  long when the terminal sends no focus events. `<Esc>`, `q` or a click on
-  `×` closes it, and so does a message to the session; it comes back
+  as dim text just above the todo line and the prompt, `※ recap: …`: where
+  the session's work stands, in its own words, as in Claude Code. Away is
+  the terminal without focus, or no key for that long when the terminal
+  sends no focus events. `<Esc>` or `q` closes it, and so does a message to
+  the session; it comes back
   only with a newer recap. A running turn hides it. `:recap` shows the
   recap of the chat in the window again, even after you closed it.
 - While the thread's todo list has open items, one line above the prompt
@@ -159,16 +158,16 @@ chained command or `rm`, offers no "always".
 
 ## Notifications
 
-Toasts are one line each in the foot of the threads pane, under its rows,
-which they never cover; with the pane closed, the newest shows in the status
-line. Each names the thread, and the workspace when it is not the open one.
+Toasts float at the top right, the newest on top, at most 3: a box with
+the glyph and the thread, and its text under them. Each names the
+workspace too when it is not the open one; `:messages` keeps them all.
 A toast that does not need you waits while you are in Insert or on the
 command line, and shows when you leave it. What needs you shows at once,
 except a thread of the open workspace while the threads pane is open: its
 row already says it.
 What needs you, in every workspace, is also in one list, oldest first, as
 Vim's quickfix list: permission requests, questions, failed turns and
-notices that need you. The status line counts it as `◆ N waiting`. `]q` and
+notices that need you. The command line counts it as `◆ N waiting`. `]q` and
 `[q`, or `:cn` and `:cp`, go to the next or previous one and open its
 thread at its card, in any workspace. `:waits` or `:copen` shows the list:
 `<CR>` goes to a wait, `x` dismisses a notice or a failure. An item leaves
@@ -190,7 +189,7 @@ workspace.
   what reaches you instead. A thread that ends a turn wakes it; it sends
   corrections on its own, and notifies you when the work you asked for is
   done or needs you. Tell it how often you want to hear from it.
-- When the focused session's context passes 80%, the status line shows
+- When a session's context passes 80%, its status line shows
   `ctx 82% · /compact` in red: every turn sends the whole context again, so
   `/compact` then saves tokens. `neoharness.o.compactwarn` changes the
   percentage. Past 90%, the session compacts by itself before its next

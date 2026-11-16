@@ -317,14 +317,13 @@ func (b *Buffer) todoLines(w int, th *Theme) []Line {
 	return rows
 }
 
-// recapLines are the recap at the top of the prompt dock, behind a bar in
-// done, cut at 4 rows.
+// recapLines are the recap at the top of the prompt dock: dim text that
+// stays above the prompt, as in Claude Code, cut at 4 rows.
 func (b *Buffer) recapLines(w int, th *Theme) []Line {
 	if b.recap == "" {
 		return nil
 	}
-	bar := []Span{{"▍", th.Done}}
-	rows := wrap([]Span{{"recap  ", th.Fg3}, {b.recap, th.Fg}}, w-1, bar, append(clone(bar), Span{"       ", th.Fg}))
+	rows := wrap([]Span{{"※ recap: ", th.Fg3}, {b.recap, th.Fg3}}, w, nil, []Span{{"  ", th.Fg3}})
 	if len(rows) > 4 {
 		rows = rows[:4]
 		rows[3].Spans = append(clone(rows[3].Spans), Span{"…", th.Fg3})

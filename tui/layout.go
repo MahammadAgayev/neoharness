@@ -35,8 +35,8 @@ type Window struct {
 	chatCur, chatCol int
 	// promptW is the width the prompt's Cur and Col are for.
 	promptW int
-	// recapX and recapY are where the recap card's × is, when the card shows.
-	recapX, recapY int
+	// recapShown says the chat shows its recap above the prompt.
+	recapShown bool
 }
 
 // lineAt is the line on a row of the window's text; -1 for none.
