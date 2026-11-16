@@ -555,9 +555,9 @@ func (a *App) clampCol(w *Window) {
 func (a *App) word(w *Window, d int) {
 	l := a.line(w)
 	rs := []rune(strings.Repeat(" ", l.prefixWidth()) + l.Text())
-	i := min(runeAt(rs, w.Col), len(rs)-1)
+	i := max(min(runeAt(rs, w.Col), len(rs)-1), 0)
 	for ; d > 0; d-- {
-		i = min(wordFwd(rs, i), len(rs)-1)
+		i = max(min(wordFwd(rs, i), len(rs)-1), 0)
 	}
 	for ; d < 0; d++ {
 		i = wordBack(rs, i)

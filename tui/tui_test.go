@@ -1810,6 +1810,16 @@ func TestMotionsCountWideCharactersAsTwoColumns(t *testing.T) {
 	}
 }
 
+func TestWordMotionsOnAWindowWithoutRows(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	w := h.a.cur
+	w.Cur = 1 << 20
+	h.a.word(w, 1)
+	h.a.word(w, -1)
+	h.a.wordEnd(w, 1)
+}
+
 func TestArtifactEditsInPlaceAndSaves(t *testing.T) {
 	h := editDemo(t, "# Design\n\nIntro.\n\n## Store\n\nKeep it in redis.\n")
 	for !strings.Contains(h.a.line(h.a.cur).Text(), "Keep it") {
