@@ -1710,6 +1710,20 @@ func TestTheSummarySaysTheCoordinatorsState(t *testing.T) {
 	}
 }
 
+func TestTheSummaryCountsNoticesAndSaysWhenTheWorkspaceWasLastUsed(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	before := time.Now().UTC()
+	if err := h.Notify("demo", model.Coordinator, "pick a phase", true); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range h.Workspaces() {
+		if s.Name == "demo" && (s.Notices != 1 || s.LastUsed.Before(before)) {
+			t.Fatalf("summary = %+v; one notice waits, and the workspace was used just now", s)
+		}
+	}
+}
+
 func TestCompletionsSearchAFolderWithManyFiles(t *testing.T) {
 	t.Setenv("NEOHARNESS_HOME", t.TempDir())
 	var queries []string

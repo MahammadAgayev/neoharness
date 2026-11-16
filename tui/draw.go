@@ -57,6 +57,10 @@ func (a *App) draw() {
 	// list is redrawn here rather than after each of them. Its rows fit the
 	// width the layout gives.
 	a.renderThreads()
+	// Its running glyphs pulse and its times age.
+	if a.workspacesShown() {
+		a.renderWorkspaces()
+	}
 	if a.waitsBuf != nil {
 		a.renderWaits()
 	}

@@ -14,6 +14,13 @@
 :restore [name]         bring back a deleted workspace; no name lists them
 ```
 
+- The workspaces screen shows each workspace's name, folder and open
+  threads, most urgent first: `◆ 1 waiting · ✗ 1 failed · ● 2 running ·
+  ○ 3 idle`. Waiting is gold and failed is red; the rest is dim. The
+  coordinator counts only when it waits, runs or has a notice for you, and
+  resolved threads do not count. With nothing open, the row says when the
+  workspace was last used (`5m ago`, `2h ago`, `3d ago`). Rows keep their
+  order.
 - A workspace opens with the coordinator on the left and the threads pane on
   the right. `<CR>`, `:b` or `:open` from the list opens the thread in the
   list's place, so the coordinator and the thread share the screen half and

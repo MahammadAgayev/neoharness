@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -35,6 +36,10 @@ func (a *App) glyph(s model.State) string {
 		return "◉"
 	}
 	return stateGlyph(s)
+}
+
+func (a *App) workspacesShown() bool {
+	return slices.ContainsFunc(a.root.windows(), func(w *Window) bool { return w.Buf == a.workspacesBuf })
 }
 
 // take handles an event; true when it must draw at once: everything the
@@ -96,6 +101,16 @@ func (a *App) scheduleNext(now time.Time, live bool) {
 		}
 		if !v.Since.IsZero() && board {
 			consider(agoTurns(v.Since, now))
+		}
+	}
+	if a.workspacesShown() {
+		for _, p := range a.workspaces {
+			if p.Counts[model.StateRunning] > 0 || p.Coordinator == model.StateRunning {
+				consider(nextPhase(now, pulseEvery))
+			}
+			if !p.LastUsed.IsZero() {
+				consider(agoTurns(p.LastUsed, now))
+			}
 		}
 	}
 	for k, t := range a.seenFrom {

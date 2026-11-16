@@ -11,6 +11,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -1251,7 +1252,7 @@ func (a *App) renderWorkspaces() {
 			{pad(p.Name, nameW+3), th.Fg},
 			{pad(truncate(displayPin(p.Pin), pinW), pinW+3), th.Fg3},
 		}
-		spans = append(spans, countSpans(p.Counts, th)...)
+		spans = append(spans, a.countSpans(p)...)
 		lines = append(lines, Line{Prefix: []Span{{"  ", th.Fg}}, Spans: spans, Item: p.Name})
 	}
 	if len(a.workspaces) == 0 {
@@ -1276,20 +1277,41 @@ func displayPin(pin string) string {
 	return shortHome(pin)
 }
 
-func countSpans(c map[model.State]int, th *Theme) []Span {
-	var out []Span
-	for _, s := range []model.State{model.StateRunning, model.StateFailed, model.StateWaiting, model.StateResolved} {
-		if n := c[s]; n > 0 {
-			out = append(out, Span{fmt.Sprintf("%s %d  ", stateGlyph(s), n), th.state(s)})
-		}
+// countSpans counts a workspace's open threads, most urgent first, and the
+// coordinator only when it waits or runs. With none open it says when the
+// workspace was last used.
+func (a *App) countSpans(p model.WorkspaceView) []Span {
+	th := a.th
+	n := maps.Clone(p.Counts)
+	if n == nil {
+		n = map[model.State]int{}
 	}
-	if len(out) == 0 {
-		idle := c[model.StateIdle]
-		label := "no threads"
-		if idle > 0 {
-			label = "all idle"
+	switch {
+	case p.Coordinator == model.StateWaiting || p.Notices > 0:
+		n[model.StateWaiting]++
+	case p.Coordinator == model.StateRunning:
+		n[model.StateRunning]++
+	}
+	var out []Span
+	for _, s := range []model.State{model.StateWaiting, model.StateFailed, model.StateRunning, model.StateIdle} {
+		if n[s] == 0 {
+			continue
 		}
-		out = append(out, Span{"○ " + label, th.Fg3})
+		if len(out) > 0 {
+			out = append(out, Span{" · ", th.Fg3})
+		}
+		st := th.Fg3
+		if s == model.StateWaiting || s == model.StateFailed {
+			st = th.state(s)
+		}
+		out = append(out, Span{fmt.Sprintf("%s %d %s", a.glyph(s), n[s], stateLabel(s)), st})
+	}
+	if len(out) == 0 && !p.LastUsed.IsZero() {
+		when := ago(a.now().Sub(p.LastUsed))
+		if when != "now" {
+			when += " ago"
+		}
+		out = append(out, Span{when, th.Fg3})
 	}
 	return out
 }

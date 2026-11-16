@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 
@@ -211,5 +212,70 @@ func TestTheStatusLineIsABarWithColorsInTheFocusedPane(t *testing.T) {
 	h.press("<C-w>l")
 	if fg := h.fgAt("ctx 10%"); fg != fgOf(h.a.th.Fg3) {
 		t.Fatal("a pane without focus should have its meta in fg-3")
+	}
+}
+
+// The workspaces list counts only open threads, most urgent first; a
+// workspace with none says when it was last used.
+func TestTheWorkspacesListCountsOpenThreadsMostUrgentFirst(t *testing.T) {
+	h := start(t)
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	// An even pulse phase draws ● and the next one ◉.
+	now = time.Unix(0, int64(phase(now, pulseEvery)+2)*int64(pulseEvery))
+	h.a.now = func() time.Time { return now }
+	h.a.workspaces = []model.WorkspaceView{
+		{Name: "busy", Coordinator: model.StateWaiting, Counts: map[model.State]int{
+			model.StateWaiting: 1, model.StateFailed: 1, model.StateRunning: 2, model.StateIdle: 1, model.StateResolved: 5}},
+		{Name: "noticed", Coordinator: model.StateIdle, Notices: 2, Counts: map[model.State]int{model.StateResolved: 3}},
+		{Name: "quiet", Coordinator: model.StateIdle, LastUsed: now.Add(-2 * time.Hour), Counts: map[model.State]int{model.StateResolved: 5}},
+		{Name: "fresh", Coordinator: model.StateIdle, LastUsed: now.Add(-5 * time.Minute), Counts: map[model.State]int{}},
+	}
+	h.a.renderWorkspaces()
+	h.a.draw()
+	row := func(name string) (int, string) {
+		for y, l := range strings.Split(h.screen(), "\n") {
+			if strings.Contains(l, " "+name+" ") {
+				return y, strings.TrimSpace(l)
+			}
+		}
+		t.Fatalf("no row for %s:\n%s", name, h.screen())
+		return 0, ""
+	}
+	want := map[string]string{
+		"busy":    "◆ 2 waiting · ✗ 1 failed · ● 2 running · ○ 1 idle",
+		"noticed": "◆ 1 waiting",
+		"quiet":   "2h ago",
+		"fresh":   "5m ago",
+	}
+	for name, w := range want {
+		if _, l := row(name); !strings.HasSuffix(l, w) {
+			t.Fatalf("%s row should end with %q: %q", name, w, l)
+		}
+	}
+	if strings.Contains(h.screen(), "✓") {
+		t.Fatalf("resolved threads should not be counted:\n%s", h.screen())
+	}
+
+	cells, w, _ := h.s.GetContents()
+	styleOf := func(name, glyph string) tcell.Style {
+		y, _ := row(name)
+		for x := 0; x < w; x++ {
+			if string(cells[y*w+x].Runes) == glyph {
+				return cells[y*w+x].Style
+			}
+		}
+		t.Fatalf("no %s in the %s row", glyph, name)
+		return tcell.StyleDefault
+	}
+	th := h.a.th
+	if fgOf(styleOf("busy", "◆")) != fgOf(th.Wait) || fgOf(styleOf("busy", "✗")) != fgOf(th.Alert) ||
+		fgOf(styleOf("busy", "●")) != fgOf(th.Fg3) || fgOf(styleOf("busy", "○")) != fgOf(th.Fg3) {
+		t.Fatal("waiting is gold, failed is love, running and idle are muted")
+	}
+
+	now = now.Add(pulseEvery)
+	h.a.draw()
+	if _, l := row("busy"); !strings.Contains(l, "◉ 2 running") {
+		t.Fatalf("the running glyph should pulse: %q", l)
 	}
 }

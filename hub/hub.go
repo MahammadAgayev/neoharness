@@ -2499,6 +2499,10 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 			v.Counts[th.state]++
 		} else {
 			v.Coordinator = th.state
+			v.Notices = len(th.t.Notices)
+		}
+		if th.t.UpdatedAt.After(v.LastUsed) {
+			v.LastUsed = th.t.UpdatedAt
 		}
 		for _, at := range th.t.Turns {
 			if age := int(now.Sub(at).Hours()); age >= 0 && age < 24 {

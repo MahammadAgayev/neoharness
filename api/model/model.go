@@ -400,6 +400,10 @@ type WorkspaceView struct {
 	Counts    map[State]int `json:"counts"`
 	// Coordinator is the coordinator's state; Counts are the threads'.
 	Coordinator State `json:"coordinator,omitempty"`
+	// Notices counts the coordinator's notices that wait for the person.
+	Notices int `json:"notices,omitempty"`
+	// LastUsed is when a thread of the workspace last changed.
+	LastUsed time.Time `json:"lastUsed,omitzero"`
 	// Activity is turns per hour over the last 24 hours, oldest first.
 	Activity []int `json:"activity"`
 	// CoordinatorAgent and ThreadsAgent are the agents the roles run here,
