@@ -449,6 +449,10 @@ func (a *App) exec(line string) {
 		if err := a.c.Reopen(a.workspace, target()); err != nil {
 			a.notify(err.Error(), a.th.Alert)
 		}
+	case "stop":
+		if needWorkspace() {
+			a.stopTurn(target())
+		}
 	case "b", "buffer", "buf":
 		if arg(0) == "" {
 			a.pickBuffers()
@@ -676,6 +680,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<CR>", "send (in Insert)"),
 		row("<CR>", "on a queued message: send it now, stopping the running turn; behind a question, it goes without an answer"),
 		row("u", "with an empty prompt: your last unanswered message back to the prompt; a queued one leaves the queue, a running turn stops and the message leaves the chat"),
+		row("<C-c>  x  :stop", "stop the running turn of this chat, or of the thread on the list's row; x on the transcript. <C-c> in Insert does nothing"),
 		row("!<command>", "run it in the thread's folder; the output goes with your next message"),
 		row("<C-j>  <S-CR>", "new line (in Insert)"),
 		row("p  <C-r>\"", "put the last yank in the prompt; <C-r>\" in Insert"),
@@ -736,6 +741,7 @@ func (a *App) helpBuf() *Buffer {
 		row(":setlocal threads& / threads?", "back to the config / show; no argument shows all"),
 		row(":open <name> [where]", "open a thread: folder or host:dir"),
 		row(":resolve  :reopen", "close or bring back a thread; your message or the coordinator's brings it back too"),
+		row(":stop [name]", "stop the running turn of this thread, the row's, or the one named; it keeps its work, and the queue waits for you"),
 		row(":allow :always :deny", "answer a permission (:deny <reason>)"),
 		row(":b <name>  :ls", "switch buffer"),
 		row(":vsplit :split [name]", "split with a buffer"),

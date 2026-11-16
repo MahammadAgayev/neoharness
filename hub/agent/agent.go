@@ -214,6 +214,11 @@ type Agent interface {
 	// not be carried out at all (the binary is missing, the context was
 	// cancelled). A model that ran and failed is a Result with a non-zero
 	// ExitCode, not an error.
+	//
+	// Cancelling ctx interrupts the turn: the agent asks its CLI to stop the
+	// turn and keep the conversation, and returns once it has stopped. The
+	// next Run with Resume continues the same conversation. An agent that
+	// cannot interrupt ends its process.
 	Run(ctx context.Context, req Request) (Result, error)
 }
 

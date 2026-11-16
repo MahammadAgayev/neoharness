@@ -16,6 +16,7 @@ export type WinAction =
   | 'nextMsg'
   | 'prevMsg'
   | 'enter'
+  | 'interrupt'
   | 'fold'
   | 'hover'
   | 'todo'

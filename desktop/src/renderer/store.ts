@@ -244,6 +244,9 @@ class Store {
   // opening are threads the person opens here: they see them open, so the
   // "opened" toast would only cover the screen.
   private opening = new Set<string>()
+  // stopping are threads the person stops here: the chat says so, and a
+  // "finished" or "paused" toast would only repeat it.
+  private stopping = new Set<string>()
   // boardAt is the state each board row is grouped by: it lags the thread's
   // while the person is on the board, so no row moves under them (settle).
   // settled is when each row that moved took its new group.
@@ -589,13 +592,14 @@ class Store {
     const order = old ? s.order : [...s.order, v.name]
     let chat = s.chats[v.name] ?? []
     // A stopped turn sends no turn end, so its tool calls would spin forever.
-    if (v.state === 'idle' || v.state === 'failed' || v.state === 'resolved') chat = settle(chat, false)
+    if (v.state === 'idle' || v.state === 'failed' || v.state === 'resolved' || v.waiting === 'paused') chat = settle(chat, false)
     // A turn makes the recap old news; its next one waits for the next return.
     const recapOpen = { ...s.recapOpen }
     if (v.state === 'running') delete recapOpen[`${s.workspace}/${v.name}`]
     this.set({ threads, order, chats: { ...s.chats, [v.name]: chat }, recapOpen })
     const spec = viewToast(s.workspace, old, v, { reply: lastText(chat), away: false, home: nh().home() })
     if (!old && this.opening.delete(v.name)) return
+    if (old && old.state !== v.state && this.stopping.delete(v.name)) return
     if (spec) this.toast(spec)
   }
 
@@ -603,7 +607,7 @@ class Store {
     const s = this.state
     if (!s.threads[key]) return
     let chat = s.chats[key] ?? []
-    if (v.state === 'idle' || v.state === 'failed' || v.state === 'resolved') chat = settle(chat, false)
+    if (v.state === 'idle' || v.state === 'failed' || v.state === 'resolved' || v.waiting === 'paused') chat = settle(chat, false)
     this.set({ threads: { ...s.threads, [key]: v }, chats: { ...s.chats, [key]: chat } })
   }
 
@@ -1245,8 +1249,9 @@ class Store {
       this.say(`${name} has no turn running`, 'muted')
       return
     }
-    if ((await this.try(this.call('stop', this.at(name)))) !== undefined)
-      this.echo(`stopped ${name}`)
+    this.stopping.add(name)
+    if ((await this.try(this.call('stop', this.at(name)))) !== undefined) this.echo(`stopped ${name}`)
+    else this.stopping.delete(name)
   }
 
   // threadRows are the rows of the threads list, as the list draws them.

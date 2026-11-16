@@ -248,7 +248,7 @@ version. Writing in the block yourself decides it too.
   in a split beside the one you work in, its workspace name in foam on its
   status line, so you answer it without leaving.
 - **macOS shortcuts** next to the Vim keys: `⌘P` threads, `⌘⇧F` search the
-  transcripts, `⌘.` stop the turn, `⌘N` open a thread, `⌘S` save, `⌘W` close
+  transcripts, `⌘.` stop the turn (`<C-c>` in Normal, as in the TUI), `⌘N` open a thread, `⌘S` save, `⌘W` close
   the window, `⌘\` split, `⌘1`…`⌘9` workspaces, `⌘/` help (also `<leader>h`, as `<leader>s` is settings), `⌘[` `⌘]` back and forward (`<C-o>` `<C-i>`).
   The arrows at the top left go back and forward too, as in Slack; their
   tooltips show the keys.

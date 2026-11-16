@@ -1955,9 +1955,10 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 			t.Queue = append(batch, t.Queue...)
 		}
 		// A stop means stop: what the person queued behind the turn waits
-		// for them.
-		if th.dropped && len(t.Queue) > 0 {
-			t.Paused = true
+		// for them, and a question of the turn waits for no one.
+		if th.dropped {
+			t.Asking = ""
+			t.Paused = len(t.Queue) > 0
 		}
 	case context.Cause(ctx) == errTurnTimeout:
 		failure = fmt.Sprintf("the turn ran past %s and was stopped", h.cfg.TurnTimeout)

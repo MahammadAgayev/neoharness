@@ -300,6 +300,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<C-w>o":     func(int) { a.only() },
 		"<C-w>=":     func(int) { a.root.equalize(true); a.root.equalize(false) },
 		"<Esc>":      func(int) { a.escape() },
+		"<C-c>":      func(int) { a.interrupt() },
 		"q":          func(int) { a.macroKey = "q" },
 		"@":          func(n int) { a.macroKey, a.macroN = "@", n },
 		// Actions with no ex command, for maps in defaults.lua and init.lua.
@@ -935,6 +936,43 @@ func (a *App) splitCur(vert bool, b *Buffer) {
 }
 
 // escape leaves Visual.
+// interrupt is <C-c>, Vim's interrupt key: in Normal it stops the turn of
+// the agent in the window or on the list's row; in Visual it only leaves
+// Visual. Insert does not reach it, so a <C-c> typed to leave Insert, or
+// twice, stops nothing.
+func (a *App) interrupt() {
+	if a.mode == modeVisual {
+		a.escape()
+		return
+	}
+	switch a.cur.Buf.Kind {
+	case KindChat:
+		a.stopTurn(a.cur.Buf.Thread)
+	case KindThreads:
+		a.stopTurn(a.line(a.cur).Item)
+	}
+}
+
+// stopTurn stops a thread's running turn. The chat says it was interrupted,
+// so only a failure shows here.
+func (a *App) stopTurn(name string) {
+	if a.workspace == "" || name == "" {
+		return
+	}
+	if s := a.threads[name].State; s != model.StateRunning && s != model.StateWaiting {
+		a.notify(name+" has no turn running", a.th.Fg3)
+		return
+	}
+	if a.stopping == nil {
+		a.stopping = map[string]bool{}
+	}
+	a.stopping[name] = true
+	if err := a.c.Stop(a.workspace, name); err != nil {
+		delete(a.stopping, name)
+		a.notify(err.Error(), a.th.Alert)
+	}
+}
+
 func (a *App) escape() {
 	if a.mode == modeVisual {
 		a.cur.vmode = 0

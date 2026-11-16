@@ -64,7 +64,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['<leader>T', 'open or close the todo list above the prompt: what is done, what is in hand, what is next'],
       ['y  <leader>y', 'yank the block, or the selection, to the clipboard'],
       ['v V  then j k  y', 'select blocks, then yank them; <Esc> ends it'],
-      ['x', 'stop the running turn'],
+      ['<C-c>  x', 'stop the running turn, of the chat or the thread on the row; <C-c> in Insert does nothing'],
       ["m{a-z}  '{a-z}  ''", 'mark a block or a thread row, go to the mark, go back'],
       ['K', "on a thread row: the thread's last reply, on the command line"],
     ],

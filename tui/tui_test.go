@@ -244,6 +244,8 @@ func (h *neoharness) press(keys ...string) {
 			ev = tcell.NewEventKey(tcell.KeyCtrlX, 0, 0)
 		case "<C-d>":
 			ev = tcell.NewEventKey(tcell.KeyCtrlD, 0, 0)
+		case "<C-c>":
+			ev = tcell.NewEventKey(tcell.KeyCtrlC, 0, 0)
 		case "<C-s>":
 			ev = tcell.NewEventKey(tcell.KeyCtrlS, 0, 0)
 		case "<C-^>":
@@ -3390,6 +3392,46 @@ func TestUTakesTheLastMessageBack(t *testing.T) {
 	h.press("u")
 	if len(chat.Prompt.Text) != 0 || len(h.hub.sent) != n {
 		t.Fatalf("prompt %q, sent %q: an answered message stays", string(chat.Prompt.Text), h.hub.sent)
+	}
+}
+
+// <C-c> in Normal, x on the transcript and :stop stop the turn of the agent
+// in focus, or of the thread on the list's row. <C-c> in Insert or Visual,
+// and any key on an idle agent, stops nothing.
+func TestCtrlCXAndStopInterruptTheTurn(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("<Esc>")
+	h.press("<C-c>", ":stop api-tests", "<CR>")
+	if len(h.hub.sent) != 0 || h.a.notice != "api-tests has no turn running" {
+		t.Fatalf("sent %q, notice %q: nothing runs", h.hub.sent, h.a.notice)
+	}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: model.Coordinator,
+		View: &model.ThreadView{Workspace: "demo", Name: model.Coordinator, Role: model.RoleCoordinator, State: model.StateRunning}})
+	h.press("i", "<C-c>", "<C-c>", "<Esc>", "v", "<C-c>")
+	if len(h.hub.sent) != 0 || h.a.mode != modeNormal {
+		t.Fatalf("sent %q, mode %v: <C-c> in Insert and Visual must not stop", h.hub.sent, h.a.mode)
+	}
+	h.press("<C-c>", "k", "x", ":stop", "<CR>")
+	if got := strings.Join(h.hub.sent, "|"); got != "stop coordinator|stop coordinator|stop coordinator" {
+		t.Fatalf("sent = %q", got)
+	}
+	h.hub.sent = nil
+	h.press("<C-w>l", "gg", "j", "<C-c>")
+	if got := strings.Join(h.hub.sent, "|"); got != "stop auth-refactor" || h.a.notice != "" {
+		t.Fatalf("sent %q, notice %q", got, h.a.notice)
+	}
+	// Stopped with a message queued, it waits paused: its tool calls stop
+	// spinning, and no toast repeats what the person did.
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: "auth-refactor",
+		View: &model.ThreadView{Workspace: "demo", Name: "auth-refactor", Role: model.RoleThread, State: model.StateWaiting, Waiting: "paused"}})
+	if len(h.a.toasts) != 0 {
+		t.Fatalf("toasts = %+v", h.a.toasts[0])
+	}
+	for _, bl := range h.a.chat("auth-refactor").blocks {
+		if bl.live {
+			t.Fatalf("%+v still spins", bl)
+		}
 	}
 }
 

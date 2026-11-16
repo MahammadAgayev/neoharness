@@ -601,6 +601,10 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
       case 'stopHere':
         if (v?.state === 'running') void store.stop(thread)
         return true
+      case 'interrupt':
+        if (vstart !== null) setVstart(null)
+        else void store.stop(thread)
+        return true
       case 'takeBack':
         void store.takeBack(thread).then((t) => {
           if (t) {

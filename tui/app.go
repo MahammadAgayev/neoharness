@@ -117,6 +117,8 @@ type App struct {
 	threads    map[string]model.ThreadView
 	order      []string
 	artifacts  []model.Artifact
+	// stopping are the threads the person stopped here, until their turn ends.
+	stopping map[string]bool
 
 	workspacesBuf *Buffer
 	threadsBuf    *Buffer
@@ -760,11 +762,16 @@ func (a *App) onView(v model.ThreadView) {
 		}
 	}
 	// A stopped turn sends no turn end, so its tool calls would spin forever.
-	if v.State == model.StateIdle || v.State == model.StateResolved || v.State == model.StateFailed {
+	if v.State == model.StateIdle || v.State == model.StateResolved || v.State == model.StateFailed || v.Waiting == "paused" {
 		a.chat(v.Name).settle(false)
 	}
 	a.refreshTodo(v)
-	a.toastView(a.workspace, old, v, had)
+	// The person stopped it: the chat says so, and a toast would repeat it.
+	if had && old.State != v.State && a.stopping[v.Name] {
+		delete(a.stopping, v.Name)
+	} else {
+		a.toastView(a.workspace, old, v, had)
+	}
 	a.renderThreads()
 }
 

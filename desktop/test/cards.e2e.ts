@@ -1226,6 +1226,52 @@ test('a confirmation shows for 2 s in the focused status line; a message stays o
   await expect(line).not.toContainText('nothing waits for you')
 })
 
+test('<C-c> in Normal stops the turn of the chat or of the row; in Insert it stops nothing', async () => {
+  await normal()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('c')
+  const before = hub.calls.length
+  const stops = (name: string) => hub.calls.slice(before).filter((c) => c.path.endsWith(`/${name}/stop`)).length
+  const line = page.locator('.cmdline')
+  hub.setView(view('demo', 'coordinator', { state: 'running' }))
+  await expect(page.locator('.statusline.focused .sl-state')).toContainText('running')
+  const prompt = page.locator('.window.chat', { has: page.locator('.sl-name', { hasText: /^coordinator$/ }) }).locator('.prompt .cm-content')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('i')
+  await expect(prompt).toBeFocused()
+  await page.keyboard.press('Control+c')
+  await page.keyboard.press('Control+c')
+  await page.waitForTimeout(200)
+  expect(stops('coordinator')).toBe(0)
+  // From the prompt's Normal mode, then from the transcript.
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Control+c')
+  await expect.poll(() => stops('coordinator')).toBe(1)
+  hub.setView(view('demo', 'coordinator', { state: 'running' }))
+  await expect(page.locator('.statusline.focused .sl-state')).toContainText('running')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Control+c')
+  await expect.poll(() => stops('coordinator')).toBe(2)
+  await page.keyboard.press('Control+c')
+  await expect(line).toContainText('coordinator has no turn running')
+  expect(stops('coordinator')).toBe(2)
+
+  // On the threads list, the thread on the row; no toast says it finished.
+  hub.setView(view('demo', 'api', { state: 'running' }))
+  await page.keyboard.type(':')
+  await page.keyboard.type('threads')
+  await page.keyboard.press('Enter')
+  const row = page.locator('.window.threads .list-row', { hasText: 'api' })
+  const i = await row.getAttribute('data-i')
+  await page.keyboard.press('g')
+  await page.keyboard.press('g')
+  for (let n = 0; n < Number(i); n++) await page.keyboard.press('j')
+  await page.keyboard.press('Control+c')
+  await expect.poll(() => stops('api')).toBe(1)
+  await page.waitForTimeout(200)
+  await expect(page.locator('.toast', { hasText: 'api' })).toHaveCount(0)
+})
+
 test("the prompt's cursor is the page's: a still block in Normal, a still 2px accent line in Insert", async () => {
   await normal()
   await page.keyboard.press('Space')

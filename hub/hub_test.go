@@ -1876,6 +1876,42 @@ func TestStopHoldsTheQueue(t *testing.T) {
 	}
 }
 
+// A stop while a question waits closes the question: the person said stop,
+// so nothing waits for them, and their next message starts a new turn.
+func TestStopClosesAWaitingQuestion(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if !strings.Contains(req.Prompt, "set up storage") {
+			return agent.Result{Text: "ok"}
+		}
+		if _, _, err := h.AskUser(ctx, "demo", model.Coordinator, "which database?"); err != nil {
+			return agent.Result{ExitCode: -1}
+		}
+		return agent.Result{Text: "ok"}
+	}
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")
+	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
+	if err := h.Stop("demo", model.Coordinator); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if v := view(t, h, "demo", model.Coordinator); v.Waiting != "" || v.QuestionID != "" {
+		t.Fatalf("after stop: waiting %q, question %q", v.Waiting, v.QuestionID)
+	}
+	if w := h.Waits(); len(w) != 0 {
+		t.Fatalf("waits = %+v", w)
+	}
+	evs, _ := h.Events("demo", model.Coordinator, 50)
+	if !slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventNote && e.Text == "Interrupted." }) {
+		t.Fatalf("the chat must say the turn was interrupted: %+v", evs)
+	}
+	_ = h.Send("demo", model.User, model.Coordinator, "next")
+	eventually(t, "the next turn", func() bool { return len(f.requests()) == 2 })
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+}
+
 // Taking back the last queued message leaves nothing to wait for.
 func TestUnqueueAfterStopEndsThePause(t *testing.T) {
 	f := &fake{}

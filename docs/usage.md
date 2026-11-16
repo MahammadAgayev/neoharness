@@ -51,6 +51,7 @@ yourself:
 ```
 :open <name> [folder|host:dir]    open a thread, locally or on an ssh host
 :resolve  :reopen                 close a thread, or bring it back with its session
+:stop [name]                      stop the running turn of a thread
 ```
 
 | State | Meaning |
@@ -117,6 +118,15 @@ yourself:
   queued one leaves the queue; a running turn stops, and the message
   leaves the chat. If the agent had begun on it, its next turn hears that
   you took it back.
+- `<C-c>` in Normal mode stops the running turn of the chat in the window,
+  or of the thread on the threads list's row, as Vim's interrupt key does.
+  `x` on the chat's transcript and `:stop [name]` do the same. The running
+  glyph stops and the chat says `Interrupted.`; the agent keeps the work it
+  did, and your next message starts a new turn. A permission request is
+  denied and a question closes. Messages queued behind the turn wait,
+  paused, until you write or `<CR>` on one. `<C-c>` in Insert does nothing,
+  so a `<C-c>`, or two, typed to leave Insert never stops a turn; `<Esc>`
+  never stops one.
 - `:image` puts the picture on the clipboard in the prompt, after the
   cursor, as `[image 1]`; `:image <file>` takes a file. A terminal cannot
   paste a picture, so this does it. The picture goes to the agent with the

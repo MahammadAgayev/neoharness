@@ -1186,6 +1186,10 @@ func (a *App) editNormal(k string, n int) {
 		return
 	}
 	if e == nil {
+		if k == "x" && w.Buf.Kind == KindChat {
+			a.stopTurn(w.Buf.Thread)
+			return
+		}
 		if k == "x" && w.Buf.Kind == KindWaits {
 			a.dismissWait(a.line(w).Item)
 			return

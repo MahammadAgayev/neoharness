@@ -103,6 +103,7 @@ const winMaps: Record<string, Action> = {
   O: w('insert'),
   A: w('append'),
   x: w('stopHere'),
+  '<C-c>': w('interrupt'),
   u: w('takeBack'),
   p: w('put'),
   gx: w('link'),
@@ -223,6 +224,7 @@ const winLabels: Record<WinAction, string> = {
   insert: 'Write',
   append: 'Write at the end',
   stopHere: 'Stop the turn',
+  interrupt: 'Stop the turn',
   takeBack: 'Take your message back',
   put: 'Put the yank in the prompt',
   link: 'Open the link',
@@ -477,6 +479,14 @@ export function onKey(e: KeyboardEvent): void {
       const cm = getCM(ed)
       if (cm) Vim.exitInsertMode(cm as never)
       command(key === '<C-o>' ? 'back' : 'forward').run()
+      return
+    }
+    // <C-c> in Insert does nothing, as in the TUI: a <C-c> typed to leave
+    // Insert, or twice, must not stop the turn. In Normal it stops it.
+    if (key === '<C-c>' && (vimState(ed)?.insertMode || !vimBusy(ed))) {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!vimBusy(ed) && w) handlers.get(w.id)?.('interrupt', 1)
       return
     }
     if (vimBusy(ed)) return

@@ -71,6 +71,9 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
       case 'enter':
         open(cursor)
         return true
+      case 'interrupt':
+        void store.stop(rows[cursor]?.name)
+        return true
       case 'fold':
         if (rows[cursor]?.state === 'resolved-fold') store.toggleResolved()
         return true

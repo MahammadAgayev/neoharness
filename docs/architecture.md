@@ -101,7 +101,12 @@ UUID.
   still shows.
 - Send now stops the running turn, so the queue goes in the next turn at
   once. Stop leaves the queue waiting: the thread is paused until the
-  person writes or sends now.
+  person writes or sends now. It closes a question of the turn: nothing
+  waits for the person.
+- To an agent, a stop cancels the turn's context: the agent asks its CLI
+  to interrupt the turn, keeps the conversation, and returns once the turn
+  stopped. Claude gets an `interrupt` control request on its stdin, so a
+  remote turn stops through ssh too.
 - From each turn the adapter reads the slash commands, the model, the
   context size and the cost. The status line shows the model and the
   context; the cost shows only in the cost view.
