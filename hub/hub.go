@@ -109,6 +109,12 @@ type Config struct {
 	// TextWidth is the widest column of reading text in the clients; 0 is
 	// the full width. A workspace can choose another with SetLocal.
 	TextWidth int
+	// Attention names the agent that orders the waits list and briefs its
+	// stops (next.go); empty is none. AttentionDelay is how long it waits
+	// after a change, so a burst of them is one turn; 0 is
+	// DefaultAttentionDelay.
+	Attention      string
+	AttentionDelay time.Duration
 }
 
 // What a reopened thread with a full context does before the coordinator's
@@ -124,6 +130,8 @@ type Hub struct {
 	cfg Config
 	// focus is the state of the person's focus doc (focus.go).
 	focus workspace.Focus
+	// attn is the attention agent's state (next.go).
+	attn attention
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -1399,6 +1407,7 @@ func (h *Hub) EditArtifact(workspaceName, name, text, baseText string, base int,
 	}
 	if ws == nil {
 		a.Off, a.Suggestion = h.focus.Off, h.focus.Suggestion
+		h.attentionSees()
 	}
 	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: a.Thread, Artifact: &a})
 	return a, text, nil

@@ -27,6 +27,9 @@ var reportsMD string
 //go:embed reports_notify.md
 var reportsNotifyMD string
 
+//go:embed attention.md
+var attentionMD string
+
 // SessionInput is what a hub session's system prompt depends on.
 type SessionInput struct {
 	Workspace string
@@ -251,4 +254,45 @@ func fill(tmpl string, in SessionInput) string {
 		"{{name}}", in.Name,
 		"{{location}}", in.Location,
 	).Replace(tmpl)
+}
+
+// AttentionSystem is the system prompt of the attention agent, which orders
+// what waits on the person.
+func AttentionSystem() string { return attentionMD }
+
+// AttentionWait is one wait as the attention agent reads it.
+type AttentionWait struct {
+	Workspace, Thread, Kind, Text, Age string
+	// State, Recap and Reply are what the wait's thread does.
+	State, Recap, Reply string
+	// New says the wait has no brief yet.
+	New bool
+}
+
+// Attention is one turn of the attention agent: the focus, empty for none,
+// and the waits, numbered from 1.
+func Attention(focus string, waits []AttentionWait) string {
+	var b strings.Builder
+	if strings.TrimSpace(focus) == "" {
+		b.WriteString("No focus.\n")
+	} else {
+		b.WriteString("Focus:\n\n" + strings.TrimSpace(focus) + "\n")
+	}
+	b.WriteString("\nWaits:\n")
+	for i, w := range waits {
+		line := fmt.Sprintf("[%d] %s · %s · %s · %s · %s", i+1, w.Workspace, w.Thread, w.Kind, clip(w.Text, replyLimit), w.Age)
+		if w.New {
+			line += " · new"
+		}
+		b.WriteString(line + "\n")
+		about := "  Thread: " + w.State + "."
+		if r := clip(w.Recap, replyLimit); r != "" {
+			about += " Recap: " + sentence(r)
+		}
+		if r := clip(w.Reply, replyLimit); r != "" {
+			about += " Last reply: " + sentence(r)
+		}
+		b.WriteString(about + "\n")
+	}
+	return b.String()
 }

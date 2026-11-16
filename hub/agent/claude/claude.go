@@ -312,6 +312,9 @@ func (a *Agent) args(req agent.Request) []string {
 			args = append(args, "--tools", "", "--strict-mcp-config")
 		}
 	}
+	if req.NoTools {
+		args = append(args, "--tools", "", "--strict-mcp-config")
+	}
 	if req.Conversation != "" {
 		if req.Resume {
 			args = append(args, "--resume", req.Conversation)

@@ -124,6 +124,9 @@ type Request struct {
 	// shell, none of the person's own tools. A session that manages others
 	// has no use for them, and their descriptions fill its context.
 	HarnessOnly bool
+	// NoTools leaves the session no tools at all and no MCP servers: it only
+	// reads the prompt and replies, as the attention agent does.
+	NoTools bool
 	// Model and Effort choose the model and effort level; empty leaves the
 	// CLI's default.
 	Model  string

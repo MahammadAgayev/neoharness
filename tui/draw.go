@@ -692,6 +692,13 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 			body = append(body, append(clone(l.Prefix), l.Spans...))
 		}
 	}
+	if b := a.brief(w.Buf.Thread); b != "" && title != "paused" {
+		var rows [][]Span
+		for _, r := range wrap([]Span{{b, th.Fg3}}, bw-2, nil, nil) {
+			rows = append(rows, r.Spans)
+		}
+		body = append(rows, body...)
+	}
 	return title, body, bw
 }
 

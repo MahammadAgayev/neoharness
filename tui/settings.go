@@ -33,6 +33,9 @@ type HubSettings struct {
 	NoTodos bool
 	// TextWidth is the widest column of reading text; 0 is the full width.
 	TextWidth int
+	// Attention names the agent that orders the waits list by the focus;
+	// empty, from attention = false, is none.
+	Attention string
 }
 
 // AgentSettings configure one agent.
@@ -149,6 +152,11 @@ func ReadHubSettings(path string) (HubSettings, error) {
 			}
 		case "neoharness.todos":
 			s.NoTodos = v == lua.LFalse
+		case "neoharness.attention":
+			s.Attention = ""
+			if v != lua.LFalse {
+				s.Attention = text(v)
+			}
 		case "neoharness.auto_compact":
 			if n, ok := v.(lua.LNumber); ok {
 				s.AutoCompact = int(n)
@@ -198,6 +206,9 @@ func (s HubSettings) Check() error {
 	names := []string{s.Coordinator}
 	if s.Threads != "" {
 		names = append(names, s.Threads)
+	}
+	if s.Attention != "" {
+		names = append(names, s.Attention)
 	}
 	for _, n := range names {
 		if _, ok := s.Agents[n]; !ok {

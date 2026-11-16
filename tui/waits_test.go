@@ -204,3 +204,29 @@ func TestWaitsBangShowsTheListOldestFirst(t *testing.T) {
 		t.Fatalf("<CR> goes to the row's wait, got %q", h.a.cur.Buf.Thread)
 	}
 }
+
+// With the attention agent, a stop carries why it is there and a brief: the
+// jump says the why, and the card starts with the brief, muted.
+func TestAStopsBriefOpensItsCard(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.setThread("api-tests", func(v *model.ThreadView) {
+		v.State = model.StateWaiting
+		v.Permission = &model.Permission{ID: "p1", Tool: "Bash", Detail: "go test ./..."}
+	})
+	ws := demoWaits()
+	ws[0].Why, ws[0].Brief = "blocks the refactor", "It runs the tests; read-only. Suggest: allow."
+	h.setWaits(ws...)
+	h.press("]q")
+	if h.a.cur.Buf.Thread != "api-tests" || !strings.Contains(h.a.notice, "(1 of 2) permission · blocks the refactor") {
+		t.Fatalf("notice = %q", h.a.notice)
+	}
+	h.a.draw()
+	h.see("It runs the tests; read-only. Suggest: allow.")
+	if h.fgAt("It runs the tests") != fgOf(h.a.th.Fg3) {
+		t.Fatal("a brief is muted")
+	}
+	if h.rowOf("┃ It runs the tests") >= h.rowOf("┃ Bash") {
+		t.Fatal("the brief comes before the command")
+	}
+}

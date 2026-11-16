@@ -22,6 +22,29 @@ func TestHubSettingsDefaultToOpus(t *testing.T) {
 	}
 }
 
+func TestTheAttentionAgentIsOnByDefaultAndFalseTurnsItOff(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "init.lua")
+	s, err := ReadHubSettings(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Attention != "attention" || s.Kind("attention") != "claude" || s.Agents["attention"].Model != "haiku" {
+		t.Fatalf("settings = %+v", s)
+	}
+	if err := os.WriteFile(path, []byte(`require("neoharness").setup({ attention = false })`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ = ReadHubSettings(path); s.Attention != "" {
+		t.Fatalf("attention = false left %q", s.Attention)
+	}
+	if err := os.WriteFile(path, []byte(`require("neoharness").setup({ attention = "nobody" })`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ = ReadHubSettings(path); s.Check() == nil {
+		t.Fatal("an attention agent that is not set up passed the check")
+	}
+}
+
 func TestInitLuaSetupChangesOnlyItsKeys(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "init.lua")
 	src := `

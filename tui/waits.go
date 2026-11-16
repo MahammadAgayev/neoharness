@@ -82,8 +82,25 @@ func (a *App) jumpWait(i int) {
 
 // fmtWait is a wait as the command line says it after a jump, as Vim's
 // (2 of 5).
+// The attention agent's why says more than the text, which the card
+// shows.
 func fmtWait(i, n int, w model.Wait) string {
-	return fmt.Sprintf("(%d of %d) %s · %s", i+1, n, w.Kind, flatten(w.Text))
+	about := w.Text
+	if w.Why != "" {
+		about = w.Why
+	}
+	return fmt.Sprintf("(%d of %d) %s · %s", i+1, n, w.Kind, flatten(about))
+}
+
+// brief is the attention agent's brief of what a thread of the open
+// workspace waits for, for its card; empty without the agent.
+func (a *App) brief(thread string) string {
+	for _, w := range a.waits {
+		if w.Workspace == a.workspace && w.Thread == thread && (w.Kind == model.WaitPermission || w.Kind == model.WaitQuestion) {
+			return w.Brief
+		}
+	}
+	return ""
 }
 
 // dismissWait drops a notice or a failure from the list, and reads a

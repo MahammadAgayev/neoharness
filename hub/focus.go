@@ -57,6 +57,7 @@ func (h *Hub) focusChanged() error {
 		return err
 	}
 	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: model.HubScope, Artifact: &a})
+	h.attentionSees()
 	return nil
 }
 

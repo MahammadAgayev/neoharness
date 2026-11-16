@@ -115,7 +115,9 @@ func (h *Hub) Waits() []model.Wait {
 	return h.waits()
 }
 
-func (h *Hub) waits() []model.Wait {
+// hubWaits is the waits list in the hub's own order, before the attention
+// agent's. Callers hold h.mu.
+func (h *Hub) hubWaits() []model.Wait {
 	out := []model.Wait{}
 	for _, ws := range h.workspaces {
 		for _, th := range ws.threads {
@@ -145,12 +147,14 @@ func (h *Hub) waits() []model.Wait {
 func (h *Hub) publishWaits() {
 	ws := h.waits()
 	if slices.EqualFunc(ws, h.lastWaits, func(a, b model.Wait) bool {
-		return a.Workspace == b.Workspace && a.Thread == b.Thread && a.Kind == b.Kind && a.ID == b.ID && a.Text == b.Text && a.Since.Equal(b.Since)
+		return a.Workspace == b.Workspace && a.Thread == b.Thread && a.Kind == b.Kind && a.ID == b.ID && a.Text == b.Text && a.Since.Equal(b.Since) &&
+			a.Why == b.Why && a.Brief == b.Brief
 	}) {
 		return
 	}
 	h.lastWaits = ws
 	h.publish(model.Update{Kind: model.UpdateWaits, Waits: ws})
+	h.attentionSees()
 }
 
 // Seen says the person saw a thread at a time: what came before it at

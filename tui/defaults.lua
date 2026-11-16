@@ -22,6 +22,7 @@ require("neoharness").setup({
   textwidth = 0,                 -- the widest column of chats and artifacts; 0: the full width. :setlocal textwidth=<n> in a workspace
   todos = true,                  -- threads keep a task list, shown above the prompt and in the threads list; false: none
   coordinator = "claude",        -- the agent below that coordinators run
+  attention = "attention",       -- the agent that orders what waits for you by your focus, so ]q goes to the best next thing; false: none
   -- threads = "claude",         -- the threads' agent; left out: the coordinator's
 })
 
@@ -36,6 +37,8 @@ require("neoharness.agents").setup({
     model = "claude-opus-5-5[1m]",
     context_window = 400000,     -- ctx % counts up to this, though the model takes more
   },
+  -- Orders the waits list: short turns with no tools, so a small model.
+  attention = { kind = "claude", model = "haiku" },
 })
 
 local map = neoharness.keymap.set

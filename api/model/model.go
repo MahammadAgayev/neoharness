@@ -231,6 +231,11 @@ type Wait struct {
 	ID        string    `json:"id"`
 	Text      string    `json:"text"`
 	Since     time.Time `json:"since"`
+	// Why says in a few words why the attention agent put it where it is,
+	// and Brief what it asks and what to do, in two short sentences. Empty
+	// without the agent.
+	Why   string `json:"why,omitempty"`
+	Brief string `json:"brief,omitempty"`
 }
 
 // HubScope is where a workspace name goes for a document of the hub, which

@@ -568,6 +568,13 @@ func TestHarnessOnlyDropsTheOtherTools(t *testing.T) {
 	}
 }
 
+func TestNoToolsLeavesNone(t *testing.T) {
+	got := New().args(agent.Request{Prompt: "order these", NoTools: true})
+	if i := slices.Index(got, "--tools"); i < 0 || got[i+1] != "" || !slices.Contains(got, "--strict-mcp-config") || slices.Contains(got, "--mcp-config") {
+		t.Errorf("args = %q, want no tools and no MCP servers", got)
+	}
+}
+
 // --- sessions that outlive a turn ---
 
 type fakeProvider struct {

@@ -194,7 +194,11 @@ counts what blocks on you as `◆ N waiting`; reviews are not counted. `]q`
 and `[q`, or `:cn` and `:cp`, go to the next or previous one and open its
 thread at its card, in any workspace. `:waits` or `:copen` shows the list:
 `<CR>` goes to a wait, `x` dismisses a notice or a failure, or reads a
-review. `:waits!` shows it oldest first. An item leaves the list only when
+review. `:waits!` shows it oldest first.
+The attention agent (see [configuration](configuration.md)) orders the list
+by your focus: what is under Now first, what is under Leave alone last.
+After a jump the command line says why the stop is there, and a
+permission or question card starts with its brief, muted. An item leaves the list only when
 it is done: answered, skipped, stopped, or the thread runs again; a review
 when you read the thread. A thread on screen for 2 seconds tells the hub
 you saw it; that quiets what it said since, but never what needs you.

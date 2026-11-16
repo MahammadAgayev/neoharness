@@ -180,7 +180,17 @@ draw a level, never which level an event has.
   oldest first. A review (`kind: review`, `id: review`) is a resting thread
   with unseen news at level 2, a turn end or a notice, and nothing else
   waiting on it. It does not raise the thread to level 3, clients do not
-  count it as waiting, and seen or a dismiss takes it off. `GET /waits` returns it, and a `waits` update carries the whole
+  count it as waiting, and seen or a dismiss takes it off.
+- With an attention agent (`attention` in `setup()`), the hub orders the
+  list by it (`hub/next.go`). When the waits or the focus change, it waits
+  `AttentionDelay` (4 s) for the burst to end, then runs one turn: a new
+  conversation with `NoTools`, the focus unless it is set aside, and the
+  waits numbered from 1. The reply is a JSON object, `{"next": [{"i", "why",
+  "brief"}]}`. Ordered waits come first, in its order, with `why` and
+  `brief`; the rest follow in the hub's order. A brief is kept while its
+  wait is the same, so the agent writes it once. Its own order changes
+  nothing it reads, so it does not wake itself. A failed turn or a reply
+  with no object keeps the order there was. `GET /waits` returns it, and a `waits` update carries the whole
   list each time it changes (no `waits` field is an empty list). An item
   leaves only when it is resolved: a permission is answered, a question
   answered or skipped, a turn stopped, a thread resolved or deleted, a

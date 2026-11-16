@@ -72,6 +72,7 @@ require("neoharness").setup({
   textwidth = 0,                        -- the widest column of chats and artifacts; 0: the full width
   todos = true,                         -- threads keep a task list; false: none, and no todo line or progress
   coordinator = "claude",               -- the agent coordinators run
+  attention = "attention",              -- the agent that orders what waits for you by your focus; false: none
   threads = "quick",                    -- the agent threads run; left out: the coordinator's
 })
 
@@ -84,8 +85,16 @@ require("neoharness.agents").setup({
     context_window = 400000,            -- ctx % counts up to this; claude itself can go further
   },
   quick = { kind = "claude", model = "sonnet" },
+  attention = { kind = "claude", model = "haiku" },  -- in defaults.lua
 })
 ```
+
+The attention agent orders the waits list, which `]q` walks, by your focus
+(`:focus`), and writes for each stop why it is there and a brief of what
+it asks. Each of its turns is new, with no tools: a few seconds after what
+waits changes, it reads the waits and the focus and replies with the order.
+`attention = false` turns it off; the hub's own order stands then, as it
+does while the agent has not answered.
 
 An agent has a name you choose. `kind` is the adapter that runs it; leave it
 out when the name is the kind. `claude` is the only kind for now. By default
