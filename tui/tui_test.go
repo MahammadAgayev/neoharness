@@ -324,6 +324,10 @@ func (h *neoharness) openDemo() {
 
 func TestWorkspacesScreenAndOpen(t *testing.T) {
 	h := start(t)
+	// An even pulse phase draws the running glyph as ●.
+	now := time.Unix(0, int64(phase(time.Now(), pulseEvery)/2*2)*int64(pulseEvery))
+	h.a.now = func() time.Time { return now }
+	h.a.draw()
 	h.see("workspaces")
 	h.see("demo")
 	h.see("/src/demo")
