@@ -323,6 +323,7 @@ func (a *App) setHighlight(group string, opts *lua.LTable) error {
 		"Accent": &th.Accent, "Wait": &th.Wait, "Alert": &th.Alert,
 		"Run": &th.Run, "Done": &th.Done, "Peer": &th.Peer,
 		"CursorLine": &th.CursorLine, "Selection": &th.Selection,
+		"StatusLine": &th.StatusLine, "StatusLineNC": &th.StatusLineNC,
 		"Search": &th.Search, "CurSearch": &th.CurSearch,
 		"Separator": &th.Separator, "Code": &th.Code,
 		// The Rose Pine names from before the roles, so an older init.lua loads.

@@ -495,30 +495,43 @@ func (a *App) drawCells(x, y, maxX int, l Line, sel func(col int) bool) {
 	}
 }
 
-// drawStatus draws a pane's status line, its last row: its name and state on
-// the left, the chat's queue, branch, model and context on the right. The
-// pane with focus has its name in bold fg and its state in color; the others
-// are in fg-3, so the eye finds focus where it reads.
+// drawStatus draws a pane's status line, its last row, as a bar: its name
+// and state on the left, the chat's queue, branch, model and context on the
+// right. The pane with focus has a brighter bar, its name in bold and its
+// meta in color, as Vim's StatusLine; the others are quieter, StatusLineNC.
 func (a *App) drawStatus(w *Window, y int, focused bool) {
 	r := w.rect
 	right := r.X + r.W
 	b := w.Buf
 	th := a.th
+	bar := th.StatusLineNC
+	if focused {
+		bar = th.StatusLine
+	}
+	a.fill(r.X, y, right, bar)
+	put := func(x int, text string, st tcell.Style) int { return a.put(x, y, right, text, overlay(st, bar)) }
 	dim := th.Fg3
+	// color is a meta part's own color in the pane with focus.
+	color := func(st tcell.Style) tcell.Style {
+		if focused {
+			return st
+		}
+		return dim
+	}
 	x := r.X + 1
 	// The workspace shows only for a pane of another one; the command line
 	// names this one.
 	if b.Workspace != "" && b.Workspace != a.workspace {
-		x = a.put(x, y, right, b.Workspace+" · ", th.Run)
+		x = put(x, b.Workspace+" · ", th.Run)
 	}
-	name, nameSt := bufTitle(b), dim
+	name, nameSt := bufTitle(b), th.Fg2
 	if e := b.Edit; e != nil && e.Dirty {
 		name += " [+]"
 	}
 	if focused {
 		nameSt = th.Fg.Bold(true)
 	}
-	x = a.put(x, y, right, name, nameSt) + 2
+	x = put(x, name, nameSt) + 2
 	if b.Kind != KindChat {
 		return
 	}
@@ -528,13 +541,13 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 	if !focused && v.State != model.StateWaiting && v.State != model.StateFailed {
 		glyphSt = dim
 	}
-	x = a.put(x, y, right, a.glyph(v.State)+" ", glyphSt)
-	x = a.put(x, y, right, stateLabel(v.State), dim)
+	x = put(x, a.glyph(v.State)+" ", glyphSt)
+	x = put(x, stateLabel(v.State), color(th.Fg2))
 	if !v.Since.IsZero() && v.State != model.StateIdle {
-		x = a.put(x, y, right, " "+elapsed(a.now().Sub(v.Since)), dim)
+		x = put(x, " "+elapsed(a.now().Sub(v.Since)), dim)
 	}
 	if wl := wakeLabel(v); wl != "" {
-		x = a.put(x, y, right, "  "+wl, dim)
+		x = put(x, "  "+wl, dim)
 	}
 
 	// The right: when it does not fit, the parts with the lowest rank go
@@ -552,11 +565,11 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 	if v.Queued > 0 {
 		add(fmt.Sprintf("+%d queued", v.Queued), dim, 0)
 	}
-	add(v.Branch, dim, 1)
-	add(shortModel(v.Model), dim, 2)
+	add(v.Branch, color(th.Run), 1)
+	add(shortModel(v.Model), color(th.Peer), 2)
 	if v.ContextWindow > 0 {
 		pct := v.Context * 100 / v.ContextWindow
-		label, ctxSt := fmt.Sprintf("ctx %d%%", pct), dim
+		label, ctxSt := fmt.Sprintf("ctx %d%%", pct), color(th.Done)
 		if limit, _ := a.opt("compactwarn").(lua.LNumber); limit > 0 && pct >= int(limit) {
 			// Every turn sends the whole context again: time to /compact.
 			label, ctxSt = label+" · /compact", th.Alert
@@ -586,9 +599,9 @@ func (a *App) drawStatus(w *Window, y int, focused bool) {
 	rx := right - 1 - total()
 	for i, sp := range parts {
 		if i > 0 {
-			rx = a.put(rx, y, right, sep, dim)
+			rx = put(rx, sep, dim)
 		}
-		rx = a.put(rx, y, right, sp.Text, sp.Style)
+		rx = put(rx, sp.Text, sp.Style)
 	}
 }
 

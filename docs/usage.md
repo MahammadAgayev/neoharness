@@ -19,9 +19,11 @@
   list's place, so the coordinator and the thread share the screen half and
   half. `<C-o>` there brings the list back.
   `<leader>t` goes to the list, or brings it back in a column of its own.
-- Each pane has a status line at its foot, as in Vim: its name and state on
-  the left; for a chat, its queue, branch, model and context on the right.
-  The pane with focus has its name in bold; the others are dim. The last
+- Each pane has a status line at its foot, a bar as in Vim: its name and
+  state on the left; for a chat, its queue, branch, model and context on the
+  right. The pane with focus has a brighter bar (`StatusLine`), its name in
+  bold, and the branch, model and context in their colors; the others have
+  a quieter bar (`StatusLineNC`) and dim text. The last
   row of the screen is the command line, with the workspace, `◆ N waiting`
   (the count of the waits list) and how many threads run on its right.
 - The screen holds still. A running thread's `●` turns to `◉` and back

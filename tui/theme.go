@@ -48,17 +48,20 @@ func (c rgb256) in(truecolor bool) tcell.Color {
 
 // Theme maps a role to a style; the roles have the app's names (fg, fg-2,
 // fg-3, accent, wait, alert, run, done, peer). Background is never set
-// except on the cursor line, the visual selection and search matches, so a
-// transparent terminal stays transparent.
+// except on the cursor line, the status lines, the visual selection and
+// search matches, so a transparent terminal stays transparent.
 type Theme struct {
 	Base, Fg, Fg2, Fg3    tcell.Style
 	Accent, Wait, Alert   tcell.Style
 	Run, Done, Peer       tcell.Style
 	CursorLine, Selection tcell.Style
-	Search, CurSearch     tcell.Style
-	Separator             tcell.Style
-	Bold, Italic, Code    tcell.Style
-	NoColor               bool
+	// StatusLine is the bar at the foot of the pane with focus,
+	// StatusLineNC of the others, as in Vim.
+	StatusLine, StatusLineNC tcell.Style
+	Search, CurSearch        tcell.Style
+	Separator                tcell.Style
+	Bold, Italic, Code       tcell.Style
+	NoColor                  bool
 	// TrueColor is false on a 256-color terminal; colors then come from the
 	// cterm values.
 	TrueColor bool
@@ -73,6 +76,7 @@ func newTheme(colors int) *Theme {
 			Accent: base.Bold(true), Peer: base, Run: base.Bold(true), Wait: base.Bold(true),
 			Done: base, Alert: base.Bold(true),
 			CursorLine: base.Reverse(true), Selection: base.Reverse(true),
+			StatusLine: base.Reverse(true), StatusLineNC: base.Underline(true),
 			Search: base.Reverse(true), CurSearch: base.Reverse(true),
 			Separator: base.Dim(true),
 			Bold:      base.Bold(true), Italic: base.Italic(true), Code: base,
@@ -82,25 +86,27 @@ func newTheme(colors int) *Theme {
 	tc := colors >= 1<<24
 	fg := func(c rgb256) tcell.Style { return base.Foreground(c.in(tc)) }
 	return &Theme{
-		Base:       base,
-		Fg:         fg(rpText),
-		Fg2:        fg(rpSubtle),
-		Fg3:        fg(rpMuted),
-		Accent:     fg(rpIris),
-		Wait:       fg(rpGold),
-		Alert:      fg(rpLove),
-		Run:        fg(rpFoam),
-		Done:       fg(rpPine),
-		Peer:       fg(rpRose),
-		CursorLine: base.Background(rpHLLow.in(tc)),
-		Selection:  base.Background(rpHLMed.in(tc)),
-		Search:     base.Background(rpGoldLow.in(tc)),
-		CurSearch:  base.Background(rpGold.in(tc)).Foreground(rpBase.in(tc)),
-		Separator:  fg(rpOverlay),
-		Bold:       fg(rpText).Bold(true),
-		Italic:     fg(rpText).Italic(true),
-		Code:       fg(rpRose),
-		TrueColor:  tc,
+		Base:         base,
+		Fg:           fg(rpText),
+		Fg2:          fg(rpSubtle),
+		Fg3:          fg(rpMuted),
+		Accent:       fg(rpIris),
+		Wait:         fg(rpGold),
+		Alert:        fg(rpLove),
+		Run:          fg(rpFoam),
+		Done:         fg(rpPine),
+		Peer:         fg(rpRose),
+		CursorLine:   base.Background(rpHLLow.in(tc)),
+		Selection:    base.Background(rpHLMed.in(tc)),
+		StatusLine:   base.Background(rpOverlay.in(tc)),
+		StatusLineNC: base.Background(rpHLLow.in(tc)),
+		Search:       base.Background(rpGoldLow.in(tc)),
+		CurSearch:    base.Background(rpGold.in(tc)).Foreground(rpBase.in(tc)),
+		Separator:    fg(rpOverlay),
+		Bold:         fg(rpText).Bold(true),
+		Italic:       fg(rpText).Italic(true),
+		Code:         fg(rpRose),
+		TrueColor:    tc,
 	}
 }
 

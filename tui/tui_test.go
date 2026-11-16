@@ -1072,10 +1072,11 @@ func TestStatusColorsAndPromptHeight(t *testing.T) {
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.s.SetSize(160, 36)
 	h.a.draw()
-	// Meta, all in fg-3: wait and alert keep their meaning.
-	for _, want := range []string{"trunk", "opus-5 1m", "ctx 10%"} {
-		if got := h.fgAt(want); got != fgOf(h.a.th.Fg3) {
-			t.Errorf("%s: color %v, want fg-3", want, got)
+	// Meta has its colors in the pane with focus; wait and alert keep their
+	// meaning, so the context is not gold.
+	for want, st := range map[string]tcell.Style{"trunk": h.a.th.Run, "opus-5 1m": h.a.th.Peer, "ctx 10%": h.a.th.Done} {
+		if got := h.fgAt(want); got != fgOf(st) {
+			t.Errorf("%s: color %v", want, got)
 		}
 	}
 	v.Context = 850

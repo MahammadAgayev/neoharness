@@ -44,8 +44,8 @@ func TestEachPaneHasAStatusLineAtItsFootAndFocusShowsInIt(t *testing.T) {
 	if fgOf(name(left)) != fgOf(h.a.th.Fg) || !boldOf(name(left)) {
 		t.Fatal("the focused pane's name should be in bold fg")
 	}
-	if fgOf(name(right)) != fgOf(h.a.th.Fg3) || boldOf(name(right)) {
-		t.Fatal("a pane without focus should have its name in fg-3")
+	if fgOf(name(right)) != fgOf(h.a.th.Fg2) || boldOf(name(right)) {
+		t.Fatal("a pane without focus should have its name in fg-2")
 	}
 	h.a.cur = right
 	h.a.draw()
@@ -76,9 +76,6 @@ func TestTheCommandLineIsTheLastRowAndNamesTheWorkspaceOnce(t *testing.T) {
 		if !strings.Contains(last, want) {
 			t.Fatalf("the command line should show %q on its right:\n%s", want, last)
 		}
-	}
-	if fg := h.fgAt("ctx 10%"); fg != fgOf(h.a.th.Fg3) {
-		t.Fatal("the context should be meta, in fg-3, below its limit")
 	}
 	h.press(":")
 	if !strings.HasPrefix(strings.TrimSpace(h.line(H-1)), ":") {
@@ -174,5 +171,45 @@ func TestTheQuestionCardShowsTheWholeQuestionAboveABlankRow(t *testing.T) {
 	}
 	if prompt != last+2 || h.inPane(h.a.cur, last+1) != "" {
 		t.Fatalf("one blank row parts the card from the prompt; rows %d %d:\n%s", last, prompt, h.screen())
+	}
+}
+
+func bgOf(st tcell.Style) tcell.Color {
+	_, bg, _ := st.Decompose()
+	return bg
+}
+
+// The status line is a bar at each pane's foot, as Vim's StatusLine and
+// StatusLineNC, so every pane, the coordinator's too, shows where it ends.
+// The focused one has its colors: branch, model and context.
+func TestTheStatusLineIsABarWithColorsInTheFocusedPane(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads[model.Coordinator]
+	v.Branch, v.Model, v.Context, v.ContextWindow = "main", "claude-opus-5", 100, 1000
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.press("<Esc>")
+	coord, board := h.a.cur, h.board()
+	cells, sw, _ := h.s.GetContents()
+	at := func(w *Window, x int) tcell.Style { return cells[(w.rect.Y+w.rect.H-1)*sw+x].Style }
+	for x := coord.rect.X; x < coord.rect.X+coord.rect.W; x++ {
+		if bgOf(at(coord, x)) != bgOf(h.a.th.StatusLine) {
+			t.Fatalf("the focused pane's status line should be a StatusLine bar, col %d", x)
+		}
+	}
+	if bgOf(at(board, board.rect.X)) != bgOf(h.a.th.StatusLineNC) || bgOf(h.a.th.StatusLineNC) == bgOf(h.a.th.StatusLine) {
+		t.Fatal("a pane without focus should have a StatusLineNC bar")
+	}
+	for text, want := range map[string]tcell.Style{"main": h.a.th.Run, "opus-5": h.a.th.Peer, "ctx 10%": h.a.th.Done} {
+		if fg := h.fgAt(text); fg != fgOf(want) {
+			t.Errorf("%q should have its color in the focused pane", text)
+		}
+	}
+	if fg := fgOf(at(board, board.rect.X+1)); fg != fgOf(h.a.th.Fg2) {
+		t.Fatal("a pane without focus should have its name in fg-2")
+	}
+	h.press("<C-w>l")
+	if fg := h.fgAt("ctx 10%"); fg != fgOf(h.a.th.Fg3) {
+		t.Fatal("a pane without focus should have its meta in fg-3")
 	}
 }

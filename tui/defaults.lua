@@ -96,6 +96,9 @@ hl("Peer", { fg = "#ea9a97", ctermfg = 181 })              -- another session's 
 hl("Code", { fg = "#ea9a97", ctermfg = 181 })
 hl("Separator", { fg = "#393552", ctermfg = 237 })
 hl("CursorLine", { bg = "#2a283e", ctermbg = 236 })
+hl("StatusLine", { bg = "#393552", ctermbg = 237 })       -- the focused pane's status line
+hl("StatusLineNC", { bg = "#2a283e", ctermbg = 236 })     -- the other panes'
+
 hl("Selection", { bg = "#44415a", ctermbg = 238 })
 hl("Search", { bg = "#4d4143", ctermbg = 94 })             -- matches while you type / or ?
 hl("CurSearch", { fg = "#232136", bg = "#f6c177", ctermfg = 235, ctermbg = 179 }) -- the one the cursor goes to
