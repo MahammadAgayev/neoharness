@@ -679,8 +679,8 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 		title = "paused"
 		body = [][]Span{{{"paused", th.Fg2}}, {{"write to continue", th.Fg3}}}
 	case v.QuestionID != "":
+		// No label: the gold bar and the status line say it is a question.
 		title = "question"
-		body = [][]Span{{{"question", th.Fg2}}}
 		rows := renderMarkdown(v.Waiting, bw-2, th, nil)
 		// The question is what the person answers, so it is cut only where
 		// the window ends, leaving the chat a few rows.
@@ -692,12 +692,11 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 			body = append(body, append(clone(l.Prefix), l.Spans...))
 		}
 	}
+	// The brief comes last, next to the prompt where the person answers.
 	if b := a.brief(w.Buf.Thread); b != "" && title != "paused" {
-		var rows [][]Span
 		for _, r := range wrap([]Span{{b, th.Fg3}}, bw-2, nil, nil) {
-			rows = append(rows, r.Spans)
+			body = append(body, r.Spans)
 		}
-		body = append(rows, body...)
 	}
 	return title, body, bw
 }

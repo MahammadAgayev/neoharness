@@ -92,7 +92,7 @@ require("neoharness.agents").setup({
 
 The attention agent orders the waits list, which `]q` walks, by your focus
 (`:focus`), and writes for each stop why it is there and a brief of what
-it asks. Each of its turns is new, with no tools: a few seconds after what
+is at stake and what it suggests. Each of its turns is new, with no tools: a few seconds after what
 waits changes, it reads the waits and the focus and replies with the order.
 `attention = false` turns it off; the hub's own order stands then, as it
 does while the agent has not answered. It may also suggest an edit of your

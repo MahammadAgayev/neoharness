@@ -23,6 +23,8 @@ Reply with one JSON object and nothing else:
   go ahead of reviews inside it.
 - `why` says in at most eight words why the wait is where it is, such as
   "blocks the refactor's last test run".
-- `brief` only for a wait marked `new`: at most two short sentences on what
-  it asks and what you suggest, such as "It wants to run go test ./hub/...;
-  read-only. Suggest: allow." Leave it out for the others; they keep theirs.
+- `brief` only for a wait marked `new`: one short line the person cannot
+  read in the wait's text, what is at stake and what you suggest, such as
+  "read-only · suggest: allow" or "touches every module mid-build ·
+  suggest: defer". It shows under the question or the command, so never
+  restate them. Leave it out for the others; they keep theirs.

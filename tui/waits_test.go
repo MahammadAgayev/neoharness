@@ -206,8 +206,9 @@ func TestWaitsBangShowsTheListOldestFirst(t *testing.T) {
 }
 
 // With the attention agent, a stop carries why it is there and a brief: the
-// jump says the why, and the card starts with the brief, muted.
-func TestAStopsBriefOpensItsCard(t *testing.T) {
+// jump says the why, and the card ends with the brief, muted, next to the
+// prompt where the person answers.
+func TestAStopsBriefEndsItsCard(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	h.setThread("api-tests", func(v *model.ThreadView) {
@@ -226,7 +227,28 @@ func TestAStopsBriefOpensItsCard(t *testing.T) {
 	if h.fgAt("It runs the tests") != fgOf(h.a.th.Fg3) {
 		t.Fatal("a brief is muted")
 	}
-	if h.rowOf("┃ It runs the tests") >= h.rowOf("┃ Bash") {
-		t.Fatal("the brief comes before the command")
+	if h.rowOf("┃ It runs the tests") <= h.rowOf("┃ go test ./...") {
+		t.Fatal("the brief comes after the command")
+	}
+}
+
+// A question card starts with the question itself, with no label that only
+// repeats its kind, and the brief follows it.
+func TestAQuestionCardStartsWithTheQuestion(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.setThread("api-tests", func(v *model.ThreadView) {
+		v.State, v.Waiting, v.QuestionID = model.StateWaiting, "Bump every dependency now?", "q1"
+	})
+	ws := demoWaits()
+	ws[0].Kind, ws[0].Why, ws[0].Brief = model.WaitQuestion, "outside the focus", "Touches every module. Suggest: defer."
+	h.setWaits(ws...)
+	h.press("]q")
+	h.a.draw()
+	if strings.Contains(h.screen(), "┃ question") {
+		t.Fatalf("the card has no kind label:\n%s", h.screen())
+	}
+	if q, b := h.rowOf("┃ Bump every dependency now?"), h.rowOf("┃ Touches every module."); q < 0 || b <= q {
+		t.Fatalf("the question comes first, then the brief:\n%s", h.screen())
 	}
 }

@@ -3268,7 +3268,9 @@ func TestAQuestionWaitsInACardLikeAPermission(t *testing.T) {
 	if n := strings.Count(h.screen(), "Which phase first?"); n != 1 {
 		t.Fatalf("the question shows %d times:\n%s", n, h.screen())
 	}
-	h.see("question")
+	if strings.Contains(h.screen(), "┃ question") {
+		t.Fatalf("the card does not repeat its kind:\n%s", h.screen())
+	}
 	if strings.Contains(h.screen(), "␣x") {
 		t.Fatalf("the card has no key hints; they are in :help:\n%s", h.screen())
 	}
