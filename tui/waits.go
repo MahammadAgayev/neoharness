@@ -72,6 +72,10 @@ func (a *App) nextWait(n int) {
 func (a *App) jumpWait(i int) {
 	w := a.waits[i]
 	a.waitAt = waitKey(w)
+	a.landed.workspace, a.landed.thread, a.landed.brief = w.Workspace, w.Thread, ""
+	if w.Kind != model.WaitPermission && w.Kind != model.WaitQuestion {
+		a.landed.brief = w.Brief
+	}
 	if w.Workspace == model.HubScope {
 		a.openSuggestion()
 		return

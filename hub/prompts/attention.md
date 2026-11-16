@@ -24,7 +24,11 @@ Reply with one JSON object and nothing else:
 - `why` says in at most eight words why the wait is where it is, such as
   "blocks the refactor's last test run".
 - `brief` only for a wait marked `new`: one short line the person cannot
-  read in the wait's text, what is at stake and what you suggest, such as
-  "read-only · suggest: allow" or "touches every module mid-build ·
-  suggest: defer". It shows under the question or the command, so never
-  restate them. Leave it out for the others; they keep theirs.
+  read in the wait's text or the why. For a permission or a question, what
+  is at stake and what you suggest, such as "read-only · suggest: allow" or
+  "lands mid-build · suggest: defer". For a review, a failure or a notice,
+  what came of it and the next move, such as "tests pass, 3 files ·
+  suggest: merge". It shows beside the text and the why, so never restate
+  them: not "bumps every dependency" for a question that asks to bump
+  them, nor "outside the focus" when the why says so. Leave it out for the
+  others; they keep theirs.

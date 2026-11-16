@@ -202,8 +202,12 @@ type App struct {
 	waitsByAge bool
 	waitAt     string
 	waitsBuf   *Buffer
-	seenFrom   map[string]time.Time
-	seenSent   map[string]bool
+	// landed is the thread ]q went to and the brief of its wait when that
+	// wait has no card, as a review: it shows until the thread runs again,
+	// though the hub drops the review once the person sees the thread.
+	landed   struct{ workspace, thread, brief string }
+	seenFrom map[string]time.Time
+	seenSent map[string]bool
 	// replacing is set by r: the next key replaces replaceN runes.
 	replacing bool
 	// finding is f F t T, after an operator if one came first: the next key
@@ -765,6 +769,9 @@ func (a *App) onView(v model.ThreadView) {
 	// A turn makes the recap old news; its next one waits for the next return.
 	if v.State == model.StateRunning {
 		delete(a.recapOpen, a.recapKey(v.Name))
+		if a.landed.workspace == a.workspace && a.landed.thread == v.Name {
+			a.landed = struct{ workspace, thread, brief string }{}
+		}
 	}
 	// A turn that ended may have reported the thread's first command list.
 	if had && old.State == model.StateRunning && v.State != model.StateRunning {

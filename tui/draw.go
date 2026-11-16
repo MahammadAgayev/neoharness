@@ -648,7 +648,7 @@ func bufTitle(b *Buffer) string {
 // rows, and its width. No title, no card.
 func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 	v, ok := a.threads[w.Buf.Thread]
-	if w.Buf.Kind != KindChat || !ok || v.State != model.StateWaiting {
+	if w.Buf.Kind != KindChat || !ok {
 		return
 	}
 	bw = a.textWidth(w)
@@ -656,6 +656,15 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 		return
 	}
 	th := a.th
+	if l := a.landed; v.State != model.StateWaiting {
+		if l.brief == "" || l.workspace != a.workspace || l.thread != v.Name || v.State != model.StateIdle {
+			return
+		}
+		for _, r := range wrap([]Span{{l.brief, th.Fg3}}, bw-2, nil, nil) {
+			body = append(body, r.Spans)
+		}
+		return "brief", body, bw
+	}
 	switch {
 	case v.Permission != nil:
 		title = "permission"
@@ -721,9 +730,14 @@ func (a *App) drawFloats(w *Window, top, bottom int) {
 		return
 	}
 	x0 := w.rect.X
+	// Gold is for what waits; a review's brief only tells.
+	bar := a.th.Wait
+	if title == "brief" {
+		bar = a.th.Fg3
+	}
 	for i, spans := range body {
 		a.fill(x0, y0+i, x0+bw, a.th.Base)
-		x := a.put(x0, y0+i, x0+bw, "┃ ", a.th.Wait)
+		x := a.put(x0, y0+i, x0+bw, "┃ ", bar)
 		for _, sp := range spans {
 			x = a.put(x, y0+i, x0+bw, sp.Text, sp.Style)
 		}

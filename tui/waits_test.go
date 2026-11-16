@@ -252,3 +252,29 @@ func TestAQuestionCardStartsWithTheQuestion(t *testing.T) {
 		t.Fatalf("the question comes first, then the brief:\n%s", h.screen())
 	}
 }
+
+// A review has no card, so after ]q its brief shows alone above the prompt,
+// muted. It stays while the person reads, after the hub drops the review,
+// and goes when the thread runs again.
+func TestAReviewsBriefShowsAboveThePrompt(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.setThread("api-tests", func(v *model.ThreadView) { v.State = model.StateIdle })
+	h.setWaits(model.Wait{Workspace: "demo", Thread: "api-tests", Kind: model.WaitReview, ID: model.ReviewID, Text: "done", Since: time.Now(),
+		Why: "in the focus", Brief: "added the health check · suggest: run the tests"})
+	h.press("]q")
+	h.a.draw()
+	h.see("┃ added the health check")
+	if h.fgAt("added the health check") != fgOf(h.a.th.Fg3) || h.fgAt("┃ added the health check") == fgOf(h.a.th.Wait) {
+		t.Fatal("a review's brief is muted, bar too: it blocks nothing")
+	}
+	h.setWaits()
+	h.a.draw()
+	h.see("┃ added the health check")
+	h.setThread("api-tests", func(v *model.ThreadView) { v.State = model.StateRunning })
+	h.setThread("api-tests", func(v *model.ThreadView) { v.State = model.StateIdle })
+	h.a.draw()
+	if strings.Contains(h.screen(), "added the health check") {
+		t.Fatalf("a new turn makes the brief old news:\n%s", h.screen())
+	}
+}
