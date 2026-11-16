@@ -52,3 +52,14 @@ func TestFocusOffAndOn(t *testing.T) {
 		t.Fatalf("a wrong argument says so: %q", h.a.notice)
 	}
 }
+
+// The focus has no thread, so its save names no one who sees it.
+func TestSavingTheFocusSaysSaved(t *testing.T) {
+	h := start(t)
+	h.hub.arts = append(h.hub.arts, model.Artifact{Name: model.FocusDoc, Title: "Focus"})
+	h.hub.docs = map[string]string{model.FocusDoc: model.FocusTemplate}
+	h.press(":focus", "<CR>", "o", "- one", "<Esc>", ":w", "<CR>")
+	if !strings.HasPrefix(h.a.notice, "saved focus v") || strings.Contains(h.a.notice, "sees it") {
+		t.Fatalf("notice = %q", h.a.notice)
+	}
+}

@@ -1132,7 +1132,11 @@ func (a *App) saveEdit(force bool) bool {
 	if merged {
 		what = "merged and saved"
 	}
-	a.notify(fmt.Sprintf("%s %s v%d · %s sees it with your next message", what, b.Artifact, art.Version, art.Thread), a.th.Fg2)
+	msg := fmt.Sprintf("%s %s v%d", what, b.Artifact, art.Version)
+	if art.Thread != "" {
+		msg += fmt.Sprintf(" · %s sees it with your next message", art.Thread)
+	}
+	a.notify(msg, a.th.Fg2)
 	return true
 }
 
