@@ -43,6 +43,25 @@ func (a *App) refreshTodo(v model.ThreadView) {
 	}
 }
 
+// todoProgress is a thread's todo list on its row of the threads list: the
+// count and the item in hand.
+func todoProgress(todos []model.Todo, th *Theme) []Span {
+	done, cur := 0, ""
+	for _, t := range todos {
+		switch {
+		case t.State == model.TodoDone:
+			done++
+		case cur == "" || t.State == model.TodoActive:
+			cur = t.Text
+		}
+	}
+	count := fmt.Sprintf("%d/%d", done, len(todos))
+	if cur == "" {
+		return []Span{{count + " done", th.Fg3}}
+	}
+	return []Span{{count + " · ", th.Fg3}, {cur, th.Fg2}}
+}
+
 func (a *App) todoLines(todos []model.Todo) []Line {
 	th := a.th
 	in := []Span{{" ", th.Fg}}

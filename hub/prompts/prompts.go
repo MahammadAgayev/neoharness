@@ -15,6 +15,9 @@ var coordinatorMD string
 //go:embed thread.md
 var threadMD string
 
+//go:embed todos.md
+var todosMD string
+
 //go:embed compact.md
 var compactMD string
 
@@ -31,6 +34,8 @@ type SessionInput struct {
 	Location  string
 	// Notify says the coordinator is the one that notifies the person.
 	Notify bool
+	// Todos asks a thread to keep a task list the person can follow.
+	Todos bool
 }
 
 // Coordinator is the system prompt for a workspace's coordinator.
@@ -58,7 +63,13 @@ func Reports(names []string) string {
 }
 
 // Thread is the system prompt for a thread.
-func Thread(in SessionInput) string { return fill(threadMD, in) }
+func Thread(in SessionInput) string {
+	todos := ""
+	if in.Todos {
+		todos = "\n\n" + strings.TrimSpace(todosMD)
+	}
+	return fill(strings.Replace(threadMD, "{{todos}}", todos, 1), in)
+}
 
 // Wake is the message a thread gets when the wake-up it asked for comes.
 func Wake(note string) string {

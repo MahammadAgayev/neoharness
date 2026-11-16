@@ -104,6 +104,8 @@ type Config struct {
 	// AutoCompact is the context percent at which a session compacts before
 	// its next turn; 0 never. A workspace can choose another with SetLocal.
 	AutoCompact int
+	// NoTodos keeps no todo lists, and the thread prompt does not ask for one.
+	NoTodos bool
 }
 
 // What a reopened thread with a full context does before the coordinator's
@@ -173,6 +175,8 @@ type thread struct {
 	quiet bool
 	// recapped says the current turn wrote a recap.
 	recapped bool
+	// todoTurn says the current turn changed the todo list.
+	todoTurn bool
 	// ask is the question the running turn waits on; nil when none.
 	ask *asking
 	// clock stops a turn that runs past Config.TurnTimeout, not counting
@@ -1844,7 +1848,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 	}
 	t.InFlight = batch
 	th.quiet = !slices.ContainsFunc(batch, func(m workspace.Message) bool { return m.From != reportFrom })
-	th.recapped = false
+	th.recapped, th.todoTurn = false, false
 	now := time.Now().UTC()
 	t.Turns = append(slices.DeleteFunc(t.Turns, func(at time.Time) bool { return now.Sub(at) > 24*time.Hour }), now)
 
@@ -2035,8 +2039,12 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 	case agent.KindToolFailed:
 		h.event(ws, th, model.Event{Kind: model.EventTool, ID: e.ID, Exit: 1, Text: e.Text})
 	case agent.KindTodo:
+		if h.cfg.NoTodos {
+			break
+		}
 		was := slices.IndexFunc(th.t.Todos, func(t model.Todo) bool { return t.ID == e.ID && t.State == model.TodoDone })
-		th.t.Todos = changeTodo(th.t.Todos, e)
+		th.t.Todos = changeTodo(th.t.Todos, e, !th.todoTurn)
+		th.todoTurn = true
 		if i := slices.IndexFunc(th.t.Todos, func(t model.Todo) bool { return t.ID == e.ID }); i >= 0 && was < 0 && th.t.Todos[i].State == model.TodoDone {
 			h.news(ws, th, func(n *workspace.News) { n.Done = append(n.Done, th.t.Todos[i].Text) })
 		}
@@ -2053,10 +2061,14 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 
 // changeTodo applies one change to a todo list. A change to an item the list
 // never had is dropped: it has no text to show.
-func changeTodo(todos []model.Todo, e agent.Event) []model.Todo {
+func changeTodo(todos []model.Todo, e agent.Event, newTurn bool) []model.Todo {
 	// Views already sent out share the old slice.
 	todos = slices.Clone(todos)
 	i := slices.IndexFunc(todos, func(t model.Todo) bool { return t.ID == e.ID })
+	// A done list stays on show until a later turn starts the next one.
+	if newTurn && i < 0 && e.Text != "" && !slices.ContainsFunc(todos, func(t model.Todo) bool { return t.State != model.TodoDone }) {
+		todos = nil
+	}
 	switch {
 	case e.State == agent.TodoRemoved:
 		if i >= 0 {
@@ -2181,7 +2193,7 @@ func (h *Hub) defaults(ws *space, t *workspace.Thread) Defaults {
 }
 
 func (h *Hub) systemPrompt(ws *space, th *thread) string {
-	in := prompts.SessionInput{Workspace: ws.p.Name, Name: th.t.Name, Location: th.t.Location.String(), Notify: h.cfg.Notify}
+	in := prompts.SessionInput{Workspace: ws.p.Name, Name: th.t.Name, Location: th.t.Location.String(), Notify: h.cfg.Notify, Todos: !h.cfg.NoTodos}
 	if th.t.Role == model.RoleCoordinator {
 		return prompts.Coordinator(in)
 	}

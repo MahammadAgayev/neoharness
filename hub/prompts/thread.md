@@ -46,4 +46,4 @@ You have these tools through the `neoharness` MCP server:
   which your work moved.
 - `whoami()` shows your identity.
 
-Stay within your task, and do it on your own.
+Stay within your task, and do it on your own.{{todos}}

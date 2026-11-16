@@ -1095,6 +1095,7 @@ test('the todo list shows in one line above the prompt and unfolds, as in the TU
   const line = page.locator('.window', { has: page.locator('.statusline.focused') }).locator('.todo-line')
   await expect(line.locator('.todo-head')).toHaveText('▸1 of 3 · Write its test')
   await expect(line.locator('.todo-item')).toHaveCount(0)
+  await expect(page.locator('.board .list-need')).toHaveText('1/3 · Write its test')
   await page.keyboard.press('Space')
   await page.keyboard.press('T')
   await expect(line.locator('.todo-head')).toHaveText('▾1 of 3')
@@ -1109,8 +1110,10 @@ test('the todo list shows in one line above the prompt and unfolds, as in the TU
   await expect(line.locator('.todo-item')).toHaveCount(0)
   await line.locator('.todo-head').click()
   await expect(line.locator('.todo-item')).toHaveCount(3)
+  // A done list stays until the thread starts the next one.
   hub.setView(view('demo', 'api', { todos: todos.map((t) => ({ ...t, state: 'done' as const })) }))
-  await expect(line).toHaveCount(0)
+  await expect(line.locator('.todo-head')).toHaveText('▾3 of 3')
+  await expect(page.locator('.board .list-need')).toHaveText('3/3 done')
   hub.setView(view('demo', 'api'))
 })
 

@@ -889,7 +889,7 @@ func (a *App) openArtifactAt() {
 // the window.
 func (a *App) toggleTodo() {
 	if !a.cur.Buf.ToggleTodo() {
-		a.notify("no open todo list here · :todo shows the whole list", a.th.Fg3)
+		a.notify("no todo list here · :todo shows the whole list", a.th.Fg3)
 	}
 }
 

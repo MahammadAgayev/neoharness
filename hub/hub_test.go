@@ -2678,6 +2678,12 @@ func TestTodoEventsKeepTheThreadsTodoList(t *testing.T) {
 			{Kind: agent.KindTodo, ID: "3", Text: "Ship it", State: agent.TodoPending},
 			{Kind: agent.KindTodo, ID: "7", State: agent.TodoDone},
 		},
+		{
+			{Kind: agent.KindTodo, ID: "3", State: agent.TodoDone},
+		},
+		{
+			{Kind: agent.KindTodo, ID: "8", Text: "Plan the release", State: agent.TodoPending},
+		},
 	}
 	f := &fake{}
 	n := 0
@@ -2710,10 +2716,50 @@ func TestTodoEventsKeepTheThreadsTodoList(t *testing.T) {
 		t.Fatalf("an update to an item it never saw must not add it: todos = %+v, want %+v", got, want)
 	}
 
+	if err := h.Send("demo", model.User, model.Coordinator, "finish"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	want = []model.Todo{{ID: "1", Text: "Write the lexer", State: model.TodoDone}, {ID: "3", Text: "Ship it", State: model.TodoDone}}
+	if got := todos(); !slices.Equal(got, want) {
+		t.Fatalf("a done list stays: todos = %+v, want %+v", got, want)
+	}
+
+	if err := h.Send("demo", model.User, model.Coordinator, "next"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	want = []model.Todo{{ID: "8", Text: "Plan the release", State: model.TodoPending}}
+	if got := todos(); !slices.Equal(got, want) {
+		t.Fatalf("a new item after a done list starts a new list: todos = %+v, want %+v", got, want)
+	}
+
 	if err := h.Send("demo", model.User, model.Coordinator, "/clear"); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the todo list to go with the conversation", func() bool { return len(todos()) == 0 })
+}
+
+func TestTodosOffKeepsNoTodoList(t *testing.T) {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		req.OnEvent(agent.Event{Kind: agent.KindTodo, ID: "1", Text: "Write the parser", State: agent.TodoPending})
+		return agent.Result{Text: "ok"}
+	}
+	t.Setenv("NEOHARNESS_HOME", t.TempDir())
+	h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }, NoTodos: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	pinned(t, h, "demo")
+	if err := h.Send("demo", model.User, model.Coordinator, "plan"); err != nil {
+		t.Fatal(err)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if got := view(t, h, "demo", model.Coordinator).Todos; len(got) != 0 {
+		t.Fatalf("todos = %+v, want none", got)
+	}
 }
 
 // newsHub is a hub whose coordinator hears of the threads' news at once.

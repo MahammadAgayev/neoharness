@@ -71,7 +71,7 @@ for that long. `Esc`, `q` or `×` closes it until a newer recap, and so
 does a message to the session. `:recap` shows it again.
 
 The todo list shows above the prompt as in the TUI: one line,
-`▸ 3 of 7 · ` and the item in hand, while it has open items. `za` or
+`▸ 3 of 7 · ` and the item in hand; a done list stays until the next. `za` or
 `<CR>` on it, a click, or `<leader>T` unfolds it; done items are struck
 through, there, in `:todo`, and as tasks in replies and artifacts.
 
@@ -80,7 +80,8 @@ waiting and failed (`✗`) on top, then running and idle. A row shows the
 thread's name, in full ink when a window shows it, and on the right how
 long it has run or waited, or when it last changed (`now`, `5m`, `6d`,
 then the date); the time changes at most once a minute. Under the name, a
-waiting thread shows what it waits for. An idle row is the name alone: the
+waiting thread shows what it waits for, and any other thread its todo
+progress, `3/7 · ` and the item in hand. An idle row is the name alone: the
 start of its last reply shows on hover, and `K` on the row shows it on the
 command line. While the cursor or the mouse is on the list, a thread that
 changes state keeps its place; it moves to its new group when you leave,

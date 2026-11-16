@@ -19,6 +19,7 @@ require("neoharness").setup({
   notify = "threads",            -- every thread notifies you; "coordinator": the coordinator decides
   reopen_compact = "ask",        -- the coordinator reopens a thread past compactwarn: "compact" first, "ask" you, or "off"
   auto_compact = 90,             -- past this context %, a session compacts before its next turn; 0 never
+  todos = true,                  -- threads keep a task list, shown above the prompt and in the threads list; false: none
   coordinator = "claude",        -- the agent below that coordinators run
   -- threads = "claude",         -- the threads' agent; left out: the coordinator's
 })

@@ -165,9 +165,24 @@ export function ThreadsList(props: { win: Win; focused: boolean }) {
 
 const settleMs = 1000
 
-// Need is what a waiting thread needs, to read without opening it.
+// Need is what a waiting thread needs, to read without opening it; else its
+// todo list: the count and the item in hand.
 function Need(props: { v: ThreadView }) {
   const { v } = props
+  const todos = v.todos ?? []
+  if (v.state !== 'waiting' && todos.length > 0) {
+    const done = todos.filter((t) => t.state === 'done').length
+    const cur = todos.find((t) => t.state === 'active') ?? todos.find((t) => t.state === 'pending')
+    return (
+      <div className="list-need">
+        <span className="t-muted">
+          {done}/{todos.length}
+          {cur ? ' · ' : ' done'}
+        </span>
+        {cur && <span className="t-subtle">{cur.text}</span>}
+      </div>
+    )
+  }
   if (v.state !== 'waiting') return null
   const [label, text] = v.permission
     ? ['permission', v.permission.detail]

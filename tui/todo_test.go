@@ -99,9 +99,28 @@ func TestTodoLineShowsAboveThePromptAndUnfolds(t *testing.T) {
 	}
 	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
 	h.a.draw()
-	if strings.Contains(h.screen(), "of 3") {
-		t.Fatal("a list with nothing left to do does not show above the prompt")
+	h.see("▸ 3 of 3")
+}
+
+func TestThreadsListShowsEachThreadsTodoProgress(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads["auth-refactor"]
+	v.Todos = []model.Todo{
+		{ID: "1", Text: "Split the session store", State: model.TodoDone},
+		{ID: "2", Text: "Move the tests", State: model.TodoActive},
+		{ID: "3", Text: "Update the docs", State: model.TodoPending},
 	}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("1/3 · Move the tests")
+
+	for i := range v.Todos {
+		v.Todos[i].State = model.TodoDone
+	}
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	h.see("3/3 done")
 }
 
 // struck says the first cell of want on screen is struck through.

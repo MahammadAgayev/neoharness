@@ -1402,6 +1402,9 @@ func (a *App) renderThreads() {
 				need = []Span{{"question", th.Wait}, {"  " + first, th.Fg}}
 			}
 		}
+		if need == nil && len(v.Todos) > 0 {
+			need = todoProgress(v.Todos, th)
+		}
 		if need != nil {
 			out = append(out, Line{Prefix: []Span{{"   ", th.Fg}}, Spans: need, Item: n, Tint: tint(n)})
 		}

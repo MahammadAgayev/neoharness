@@ -29,6 +29,8 @@ type HubSettings struct {
 	// AutoCompact is the context percent at which a session compacts before
 	// its next turn; 0 never.
 	AutoCompact int
+	// NoTodos is todos = false: threads keep no todo list.
+	NoTodos bool
 }
 
 // AgentSettings configure one agent.
@@ -139,6 +141,8 @@ func ReadHubSettings(path string) (HubSettings, error) {
 			s.Threads = text(v)
 		case "neoharness.reopen_compact":
 			s.ReopenCompact = text(v)
+		case "neoharness.todos":
+			s.NoTodos = v == lua.LFalse
 		case "neoharness.auto_compact":
 			if n, ok := v.(lua.LNumber); ok {
 				s.AutoCompact = int(n)

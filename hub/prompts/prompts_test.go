@@ -21,6 +21,17 @@ func TestSessionPromptsFillEveryPlaceholder(t *testing.T) {
 	}
 }
 
+func TestThreadPromptAsksForATaskListOnlyWhenTodosAreOn(t *testing.T) {
+	in := SessionInput{Workspace: "demo", Name: "api", Location: "/src"}
+	if strings.Contains(Thread(in), "task list") {
+		t.Error("todos off: the prompt does not ask for a task list")
+	}
+	in.Todos = true
+	if !strings.Contains(Thread(in), "task list") {
+		t.Error("todos on: the prompt asks for a task list")
+	}
+}
+
 func TestCompactPrompt(t *testing.T) {
 	if got := Compact(""); strings.Contains(got, "{{") || strings.Contains(got, "Focus on") {
 		t.Errorf("no focus: %q", got)

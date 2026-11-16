@@ -274,10 +274,10 @@ func (b *Buffer) Lines(w int, th *Theme, spin int) []Line {
 }
 
 // todoLines are the chat's todo list above the prompt: one line, folded,
-// with the count and the item in hand; unfolded, every item. A list with
-// nothing left to do does not show.
+// with the count and the item in hand; unfolded, every item. A done list
+// shows until the agent starts the next.
 func (b *Buffer) todoLines(w int, th *Theme) []Line {
-	if !b.hasTodo() {
+	if len(b.todos) == 0 {
 		return nil
 	}
 	done, cur := 0, ""
@@ -293,7 +293,7 @@ func (b *Buffer) todoLines(w int, th *Theme) []Line {
 	fold, head := "▸ ", []Span{{fmt.Sprintf("%d of %d", done, len(b.todos)), th.Fg3}}
 	if b.todoOpen {
 		fold = "▾ "
-	} else {
+	} else if cur != "" {
 		head = append(head, Span{" · ", th.Fg3}, Span{cur, th.Fg})
 	}
 	rows := wrap(append([]Span{{fold, th.Fg3}}, head...), w, in, append(clone(in), Span{"  ", th.Fg}))
@@ -369,10 +369,6 @@ func (b *Buffer) SetPending(evs []model.Event) {
 	}
 }
 
-func (b *Buffer) hasTodo() bool {
-	return slices.ContainsFunc(b.todos, func(t model.Todo) bool { return t.State != model.TodoDone })
-}
-
 // SetTodos shows the thread's todo list above the prompt.
 func (b *Buffer) SetTodos(todos []model.Todo) {
 	if !slices.Equal(b.todos, todos) {
@@ -384,7 +380,7 @@ func (b *Buffer) SetTodos(todos []model.Todo) {
 // ToggleTodo opens or closes the todo list above the prompt; false when
 // there is none.
 func (b *Buffer) ToggleTodo() bool {
-	if !b.hasTodo() {
+	if len(b.todos) == 0 {
 		return false
 	}
 	b.todoOpen = !b.todoOpen

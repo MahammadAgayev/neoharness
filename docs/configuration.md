@@ -69,6 +69,7 @@ require("neoharness").setup({
   notify = "threads",                   -- every thread notifies you; "coordinator": the coordinator decides
   reopen_compact = "ask",               -- the coordinator reopens a thread past compactwarn: "compact", "ask" or "off"
   auto_compact = 90,                    -- past this context %, a session compacts before its next turn; 0 never
+  todos = true,                         -- threads keep a task list; false: none, and no todo line or progress
   coordinator = "claude",               -- the agent coordinators run
   threads = "quick",                    -- the agent threads run; left out: the coordinator's
 })
@@ -118,6 +119,11 @@ as it is and does not try again until a `/compact` works. Keep
 `compactwarn` below `auto_compact` to see the warning first; `0` turns auto
 compact off, and the warning still shows. `:setlocal auto_compact=<n>` sets
 it for one workspace.
+
+With `todos = true` (the default) the thread prompt asks each thread to
+keep a task list for work of more than a few steps. It shows above the
+thread's prompt and on its row in the threads list. `todos = false` drops
+the request and the lists, so neither shows.
 
 Claude Code's own auto-compact stays as it is. It starts only near the
 model's whole window, far past `context_window`, so the hub compacts first.

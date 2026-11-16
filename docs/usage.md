@@ -74,7 +74,9 @@ yourself:
   runs, then what is idle. Resolved threads fold into `▸ N resolved`. A
   row is the state's glyph, the name, and on the right how long the thread
   has been in its state (`now`, `4m`, `2h`, `6d`); a waiting thread has a second row
-  with what it waits for, such as `permission · Bash  psql -c …`. `K` on a
+  with what it waits for, such as `permission · Bash  psql -c …`. Any other
+  thread with a todo list has a second row with its progress and the item
+  in hand, `3/7 · wire the parser`, or `7/7 done`. `K` on a
   row shows the thread's last reply on the command line.
 - A row that changes group moves only when your cursor is not in the
   threads pane or on the command line, so nothing moves under you; then it
@@ -115,11 +117,11 @@ yourself:
   the session; it comes back
   only with a newer recap. A running turn hides it. `:recap` shows the
   recap of the chat in the window again, even after you closed it.
-- While the thread's todo list has open items, one line above the prompt
+- While the thread has a todo list, one line above the prompt
   shows it: `▸ 3 of 7 · ` and the item in hand. `za` or `<CR>` on the line,
   or `<leader>T`, unfolds it into every item: done ones checked and struck
-  through, the one in hand `●`, the next ones `○`. It goes away when every
-  item is done. A done task in a reply or an artifact (`- [x]`) is struck
+  through, the one in hand `●`, the next ones `○`. A done list stays,
+  `▸ 7 of 7`, until a later turn starts a new one. A done task in a reply or an artifact (`- [x]`) is struck
   through too.
 - `u` with an empty prompt is Esc in Claude Code: your last message comes
   back to the prompt to edit, while the agent has not answered it yet. A
@@ -261,8 +263,10 @@ to select text with the terminal.
 `:todo` shows the todo list of the thread in the window: what it plans to do,
 what it does now and what is done, struck through. It follows the work as
 the thread changes the list, and `<C-o>` goes back. `:todo <name>` shows another thread's. The
-list belongs to the conversation, so `/clear` empties it. A thread whose
-agent keeps no todo list shows none.
+list belongs to the conversation, so `/clear` and `/compact` empty it. The
+thread prompt asks threads to keep one for work of more than a few steps;
+the coordinator keeps none. `todos = false` in `setup()` turns todo lists
+off (see [configuration](configuration.md)).
 
 `:cost` shows what the workspace cost: in all, today, the last 14 days as
 bars, by thread and by model, and the turns that cost the most. `<CR>` on a

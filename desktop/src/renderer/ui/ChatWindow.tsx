@@ -373,7 +373,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
   const artifacts = useMemo(() => new Set(peek ? [] : artifactList.map((a) => a.name)), [artifactList, peek])
   const pending = v?.pending ?? []
   const todos = v?.todos ?? []
-  const todoAt = todos.some((t) => t.state !== 'done') ? blocks.length + pending.length : -1
+  const todoAt = todos.length > 0 ? blocks.length + pending.length : -1
   const todoOpen = useStore((s) => !!s.todoOpen[thread])
   const streaming = useStore((s) => s.streams[thread])
   const working = v?.state === 'running' && !streaming && !blocks.some((b) => 'live' in b && b.live)
@@ -557,7 +557,7 @@ export function ChatWindow(props: { win: Win; focused: boolean }) {
         return true
       }
       case 'todo':
-        if (todoAt < 0) store.say('no open todo list here · :todo shows the whole list', 'muted')
+        if (todoAt < 0) store.say('no todo list here · :todo shows the whole list', 'muted')
         else store.toggleTodo(thread)
         return true
       case 'fold': {
