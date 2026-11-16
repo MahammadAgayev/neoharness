@@ -282,7 +282,7 @@ type Hub struct {
 
 // Run opens the workspace on a terminal and blocks until the user quits.
 func Run(c Client, hub Hub) error {
-	s, err := tcell.NewScreen()
+	s, err := newScreen()
 	if err != nil {
 		return err
 	}
