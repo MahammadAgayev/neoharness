@@ -25,6 +25,7 @@ const appMaps: Record<string, Action> = {
   '<leader>pt': c('threads'),
   '<leader>pl': c('local-threads'),
   '<leader>pa': c('artifacts'),
+  '<leader>f': c('focus'),
   '<leader>ps': c('grep'),
   '<leader>pm': c('notifications'),
   '<leader>pv': c('workspaces'),

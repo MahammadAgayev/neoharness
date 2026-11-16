@@ -233,6 +233,26 @@ type Wait struct {
 	Since     time.Time `json:"since"`
 }
 
+// HubScope is where a workspace name goes for a document of the hub, which
+// is in no workspace. It is no valid workspace name. FocusDoc is its one
+// document: what the person works on now, in every workspace.
+const (
+	HubScope = "~"
+	FocusDoc = "focus"
+)
+
+// FocusTemplate is the focus before the person writes one.
+const FocusTemplate = "# Focus\n\n## Now\n\n## Keep moving\n\n## Leave alone\n"
+
+// Suggestion is an edit of the focus the attention agent suggests: the
+// whole text as it would have it, on version Base, and why in one line.
+type Suggestion struct {
+	Text string    `json:"text"`
+	Why  string    `json:"why"`
+	Base int       `json:"base"`
+	At   time.Time `json:"at"`
+}
+
 // Artifact is a markdown document an agent wrote for the person to read. Its
 // text is stored apart from this summary.
 type Artifact struct {
@@ -241,9 +261,14 @@ type Artifact struct {
 	Thread  string `json:"thread"`
 	Version int    `json:"version"`
 	// UserEdit says the newest version is the person's edit.
-	UserEdit  bool      `json:"userEdit,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	UserEdit bool `json:"userEdit,omitempty"`
+	// Off says the person set the focus aside with :focus off, and
+	// Suggestion is the attention agent's edit of it that waits for them.
+	// Only the focus has them.
+	Off        bool        `json:"off,omitempty"`
+	Suggestion *Suggestion `json:"suggestion,omitempty"`
+	CreatedAt  time.Time   `json:"createdAt"`
+	UpdatedAt  time.Time   `json:"updatedAt"`
 }
 
 // Merge is what an edit of an artifact becomes when it is merged into the

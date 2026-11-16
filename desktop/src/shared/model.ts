@@ -80,9 +80,30 @@ export interface Artifact {
   thread: string
   version: number
   userEdit?: boolean
+  // off says the person set the focus aside with :focus off, and
+  // suggestion is the attention agent's edit of it that waits for them.
+  // Only the focus has them.
+  off?: boolean
+  suggestion?: Suggestion
   createdAt: string
   updatedAt: string
 }
+
+// Suggestion is an edit of the focus the attention agent suggests: the
+// whole text as it would have it, on version base, and why in one line.
+export interface Suggestion {
+  text: string
+  why: string
+  base: number
+  at: string
+}
+
+// HubScope is where a workspace name goes for a document of the hub, in no
+// workspace; FocusDoc is its one document. FocusKey names it in the app's
+// docs and buffers, where a '/' can be in no artifact's name.
+export const HubScope = '~'
+export const FocusDoc = 'focus'
+export const FocusKey = '~/focus'
 
 export interface Permission {
   id: string

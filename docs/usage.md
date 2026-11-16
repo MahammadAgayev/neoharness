@@ -238,6 +238,17 @@ reports. They belong to the workspace, and every session can read them.
 - `:page <name>` makes a page, unless it is there already, and links it at
   the cursor as the agents write a link: `` `name` ``.
 
+### Your focus
+
+The focus is your document of what you work on now, in every workspace. It
+belongs to the hub, not to a workspace, and only you write it.
+
+- `<leader>f` or `:focus` opens it, from any workspace or none. Before you
+  write one it is a template: `## Now`, `## Keep moving`, `## Leave alone`.
+  It edits and saves as any artifact.
+- `:focus off` sets it aside and `:focus on` brings it back; the text stays.
+  While it is aside, its top line says `set aside · :focus on`.
+
 ## Keys
 
 `<leader>` is `<Space>`. Vim motions, operators, search, marks, macros and
@@ -249,6 +260,7 @@ reports. They belong to the workspace, and every session can read them.
 | `<leader>pt` | pick a thread of any workspace (not resolved ones) |
 | `<leader>pl` | pick a thread of this workspace |
 | `<leader>pa` | pick an artifact |
+| `<leader>f` | your focus |
 | `<leader>ps` | search every transcript |
 | `<leader>pm` | pick a notification and open its thread |
 | `<leader>w` | pick a workspace |
@@ -271,7 +283,8 @@ to select text with the terminal.
 ## Commands
 
 `:b <name>`, `:ls`, `:split`, `:vsplit`, `:only`, `:threads`, `:artifacts`,
-`:messages`, `:help`, `:q`, `:qa`, `:q!`, `:qa!`.
+`:focus`, `:focus on`, `:focus off`, `:messages`, `:help`, `:q`, `:qa`, `:q!`,
+`:qa!`.
 
 `:todo` shows the todo list of the thread in the window: what it plans to do,
 what it does now and what is done, struck through. It follows the work as

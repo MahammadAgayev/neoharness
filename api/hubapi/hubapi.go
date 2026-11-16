@@ -89,6 +89,10 @@ type (
 	Seen struct {
 		At time.Time `json:"at"`
 	}
+	// FocusOff sets the focus aside (:focus off) or brings it back.
+	FocusOff struct {
+		Off bool `json:"off"`
+	}
 	Error struct {
 		Error string `json:"error"`
 	}
@@ -258,6 +262,12 @@ func (c *Client) Answer(workspace, thread, id string, d model.Decision, msg stri
 }
 
 // Waits is what needs the person in every workspace, oldest first.
+// SetFocusOff sets the focus aside, or brings it back. The focus itself is
+// the artifact model.FocusDoc in model.HubScope.
+func (c *Client) SetFocusOff(off bool) error {
+	return c.do("POST", "/focus", FocusOff{Off: off}, nil)
+}
+
 func (c *Client) Waits() ([]model.Wait, error) {
 	var ws []model.Wait
 	return ws, c.do("GET", "/waits", nil, &ws)

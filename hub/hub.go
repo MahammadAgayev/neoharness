@@ -122,6 +122,8 @@ const (
 // Hub is the running state of every workspace.
 type Hub struct {
 	cfg Config
+	// focus is the state of the person's focus doc (focus.go).
+	focus workspace.Focus
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -239,6 +241,7 @@ func New(cfg Config) (*Hub, error) {
 		tokens:     map[string]ident{},
 		subs:       map[int]chan model.Update{},
 		files:      map[model.Location]fileList{},
+		focus:      workspace.LoadFocus(),
 	}
 	ps, err := workspace.List()
 	if err != nil {
@@ -1329,12 +1332,21 @@ func (h *Hub) WriteArtifact(workspaceName, by, name, text string) (model.Artifac
 func (h *Hub) EditArtifact(workspaceName, name, text, baseText string, base int, force bool) (model.Artifact, string, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	ws, err := h.workspace(workspaceName)
+	var ws *space
+	var err error
+	if workspaceName == model.HubScope {
+		err = hubDoc(name)
+	} else {
+		ws, err = h.workspace(workspaceName)
+	}
 	if err != nil {
 		return model.Artifact{}, "", err
 	}
 	a, old, err := workspace.Artifact(workspaceName, name)
-	if errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, os.ErrNotExist) && ws == nil {
+		// The person starts the focus; no session holds it.
+		a, err = model.Artifact{Name: name, CreatedAt: time.Now().UTC()}, nil
+	} else if errors.Is(err, os.ErrNotExist) {
 		if base != 0 {
 			return a, "", fmt.Errorf("no artifact %q in %s", name, workspaceName)
 		}
@@ -1363,7 +1375,11 @@ func (h *Hub) EditArtifact(workspaceName, name, text, baseText string, base int,
 	if text == old {
 		return a, text, nil
 	}
-	th, ok := ws.threads[a.Thread]
+	var th *thread
+	ok := false
+	if ws != nil {
+		th, ok = ws.threads[a.Thread]
+	}
 	if ok {
 		if _, unseen := th.t.Edits[name]; !unseen {
 			if th.t.Edits == nil {
@@ -1381,6 +1397,9 @@ func (h *Hub) EditArtifact(workspaceName, name, text, baseText string, base int,
 		h.event(ws, th, model.Event{Kind: model.EventArtifact, From: model.User, Detail: name, Text: a.Title, Version: a.Version})
 		h.changed(ws, th)
 	}
+	if ws == nil {
+		a.Off, a.Suggestion = h.focus.Off, h.focus.Suggestion
+	}
 	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: a.Thread, Artifact: &a})
 	return a, text, nil
 }
@@ -1390,10 +1409,13 @@ func (h *Hub) EditArtifact(workspaceName, name, text, baseText string, base int,
 func (h *Hub) MergeArtifact(workspaceName, name, text, baseText string, base int) (model.Merge, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if _, err := h.workspace(workspaceName); err != nil {
+	if err := h.docScope(workspaceName, name); err != nil {
 		return model.Merge{}, err
 	}
 	a, old, err := workspace.Artifact(workspaceName, name)
+	if workspaceName == model.HubScope {
+		a, old, err = h.readFocus()
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		return model.Merge{}, fmt.Errorf("no artifact %q in %s", name, workspaceName)
 	} else if err != nil {
@@ -1441,8 +1463,11 @@ func editNote(name string, seen workspace.Edit, now string, version int) string 
 func (h *Hub) ReadArtifact(workspaceName, name string) (model.Artifact, string, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if _, err := h.workspace(workspaceName); err != nil {
+	if err := h.docScope(workspaceName, name); err != nil {
 		return model.Artifact{}, "", err
+	}
+	if workspaceName == model.HubScope {
+		return h.readFocus()
 	}
 	a, text, err := workspace.Artifact(workspaceName, name)
 	if errors.Is(err, os.ErrNotExist) {

@@ -158,6 +158,13 @@ func Handler(h *hub.Hub, info hubapi.Info, stop func()) http.Handler {
 		}
 		reply(w, nil, h.Answer(r.PathValue("p"), r.PathValue("t"), in.ID, in.Decision, in.Message))
 	})
+	mux.HandleFunc("POST /focus", func(w http.ResponseWriter, r *http.Request) {
+		var in hubapi.FocusOff
+		if !decode(w, r, &in) {
+			return
+		}
+		reply(w, nil, h.SetFocusOff(in.Off))
+	})
 	mux.HandleFunc("GET /waits", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, h.Waits(), nil)
 	})

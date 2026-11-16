@@ -145,6 +145,10 @@ short tint, but only when the cursor and the mouse are off the list. With Reduce
 
 ### Artifacts
 
+`<leader>f` or `:focus` opens your focus, the hub's document of what you
+work on now, as in the TUI; `:focus off` and `:focus on` set it aside and
+bring it back.
+
 An artifact opens as a page: one centered column, as wide as the window
 or `textwidth`, with the chat's type a size up. Headings, lists, task boxes,
 tables, quotes, alerts and highlighted code show rendered, and they stay

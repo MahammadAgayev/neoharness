@@ -43,6 +43,7 @@ export const exCommands = [
   'close',
   'threads',
   'artifacts',
+  'focus',
   'messages',
   'todo',
   'recap',

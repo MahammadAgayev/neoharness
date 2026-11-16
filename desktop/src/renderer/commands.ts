@@ -21,6 +21,7 @@ export const commands: Command[] = [
   { id: 'threads', title: 'Pick a thread of any workspace', keys: ['<leader>pt', '⌘P'], run: () => s.openPicker('threads', true) },
   { id: 'local-threads', title: 'Pick a thread of this workspace', keys: ['<leader>pl', '<leader>pb', ':ls'], run: () => s.openPicker('threads', true, true) },
   { id: 'artifacts', title: 'Pick an artifact', keys: ['<leader>pa', ':artifacts'], run: () => s.openPicker('artifacts', true) },
+  { id: 'focus', title: 'Your focus: what you work on now, in every workspace', keys: ['<leader>f', ':focus'], run: () => void s.openFocus() },
   { id: 'grep', title: 'Search every transcript', keys: ['<leader>ps', '⌘⇧F'], run: () => s.openPicker('text', true) },
   { id: 'notifications', title: 'Pick a notification', keys: ['<leader>pm'], run: () => s.openPicker('notifications', true) },
   { id: 'workspace-pick', title: 'Pick a workspace', keys: ['<leader>w', ':workspace'], run: () => s.openPicker('workspaces', true) },

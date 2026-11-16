@@ -232,7 +232,16 @@ command.
 ~/.neoharness/workspaces/<workspace>/threads/<name>/images/        images the person sent, named by content
 ~/.neoharness/workspaces/<workspace>/artifacts/<name>.md / .json   artifact text / metadata
 ~/.neoharness/workspaces/<workspace>/costs.jsonl                   one line per paid turn: when, thread, model, cost
+~/.neoharness/artifacts/focus.md / .json                           the person's focus: text / metadata
+~/.neoharness/focus.json                                           the focus set aside, and the edit suggested to it
 ```
+
+The focus is the one document of the hub, in no workspace. The API reaches
+it as the artifact `focus` of the workspace `~`, which is no valid
+workspace name, so a client edits and merges it as any artifact. It reads
+as `model.FocusTemplate` at version 0 until the person saves it; nothing
+else can be written under `~`. Its summary carries `off`, which `POST /focus
+{off}` sets, and an update for it has `workspace: "~"`.
 
 `GET /cost?workspace=<name>` adds up what a workspace cost; with no name,
 every workspace. The totals per thread count every turn. The days, the

@@ -58,6 +58,7 @@ type Client interface {
 	Waits() ([]model.Wait, error)
 	Seen(workspace, thread string, at time.Time) error
 	Dismiss(workspace, thread, id string) error
+	SetFocusOff(off bool) error
 	Updates(ctx context.Context) (<-chan model.Update, error)
 }
 
@@ -576,6 +577,12 @@ func (a *App) apply(u model.Update) {
 			a.turnEnded(u.Workspace, u.Thread)
 		}
 	case model.UpdateArtifact:
+		if u.Workspace == model.HubScope && u.Artifact != nil {
+			if b, ok := a.bufs[artifactName(model.HubScope, u.Artifact.Name)]; ok {
+				a.loadArtifact(b)
+			}
+			return
+		}
 		if u.Workspace != a.workspace || u.Artifact == nil {
 			return
 		}
@@ -1009,10 +1016,14 @@ func (a *App) leaveList() bool {
 
 // openArtifact shows an artifact in the current window, as gf opens a file;
 // <C-o> goes back.
-func (a *App) openArtifact(name string) {
-	b, ok := a.bufs[artifactName(a.workspace, name)]
+func (a *App) openArtifact(name string) { a.openDoc(a.workspace, name) }
+
+// openDoc shows a document of a workspace, or of the hub's scope, in the
+// current window.
+func (a *App) openDoc(scope, name string) {
+	b, ok := a.bufs[artifactName(scope, name)]
 	if !ok {
-		b = newArtifact(a.workspace, name)
+		b = newArtifact(scope, name)
 	}
 	if _, ok := a.loadArtifact(b); !ok {
 		return

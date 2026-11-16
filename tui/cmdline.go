@@ -30,7 +30,7 @@ type cmdline struct {
 }
 
 var commands = []string{
-	"allow", "always", "artifacts", "b", "buffer", "cn", "copen", "cp", "deny", "diffoff", "edit", "folder", "help", "hub", "image", "ls", "messages", "new",
+	"allow", "always", "artifacts", "b", "buffer", "cn", "copen", "cp", "deny", "diffoff", "edit", "focus", "folder", "help", "hub", "image", "ls", "messages", "new",
 	"only", "open", "page", "q", "qa", "quit", "recap", "reopen", "resolve", "restore", "cost", "setlocal", "split", "threads",
 	"vsplit", "waits", "workspace", "workspaces", "wq",
 }
@@ -477,6 +477,17 @@ func (a *App) exec(line string) {
 		a.renderWaits()
 		a.cur.show(a.waitsBuf)
 		a.cur.Follow = false
+	case "focus":
+		switch arg(0) {
+		case "":
+			a.openDoc(model.HubScope, model.FocusDoc)
+		case "on", "off":
+			if err := a.c.SetFocusOff(arg(0) == "off"); err != nil {
+				a.notify(err.Error(), a.th.Alert)
+			}
+		default:
+			a.notify(":focus takes on or off", a.th.Alert)
+		}
 	case "messages", "mes":
 		a.cur.show(a.messagesBuf)
 		a.cur.Follow = true
@@ -728,6 +739,8 @@ func (a *App) helpBuf() *Buffer {
 		row("<leader>pt  <leader>w", "pick a thread of any workspace, a workspace"),
 		row("<leader>pl", "pick a thread of this workspace, resolved ones too"),
 		row("<leader>pa", "pick an artifact; <CR> on a name in a chat opens it too"),
+		row("<leader>f  :focus", "your focus: what you work on now, in every workspace; it edits as any artifact"),
+		row(":focus off  :focus on", "set the focus aside and bring it back; the text stays"),
 		row("<leader>ps", "search every transcript"),
 		row("<leader>pm", "pick a notification; it opens its thread, in any workspace"),
 		row("<leader>pv", "workspaces screen"),

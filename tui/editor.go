@@ -778,6 +778,9 @@ func (e *Editor) meta() string {
 	if e.art.Version > e.Base {
 		m += fmt.Sprintf(" · v%d is newer", e.art.Version)
 	}
+	if e.art.Off {
+		m += " · set aside · :focus on"
+	}
 	return m
 }
 

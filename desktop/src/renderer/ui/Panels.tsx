@@ -99,6 +99,8 @@ const sections: { title: string; rows: [string, string][] }[] = [
     title: 'an artifact',
     rows: [
       ['<leader>d  ⌘⇧N  :doc <name>', 'start a doc you write; the coordinator works from it and keeps its status'],
+      ['<leader>f  :focus', 'your focus: what you work on now, in every workspace; it edits as any artifact'],
+      [':focus off  :focus on', 'set the focus aside and bring it back; the text stays'],
       ['i a o', 'write in it; it stays rendered as you type, and saves as markdown'],
       ['h j k l  w b e  0 $  gg G  { }', 'move in Normal mode; a block is a line'],
       ['dd yy p  cw ciw  x  u <C-r>  v V  /', 'delete, yank and put blocks and words, undo, select, find'],

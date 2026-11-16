@@ -1,6 +1,7 @@
 import { Selection, EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { FocusDoc, FocusKey } from '../../shared/model'
 
 import {
   artifactsKey,
@@ -457,14 +458,15 @@ export function ArtifactWindow(props: { win: Win; focused: boolean }) {
   return (
     <div className="window artifact" onMouseDown={() => store.focus(win.id)}>
       <div className={`statusline ${focused ? 'focused' : ''}`}>
-        <span className="sl-ws">{workspace} · </span>
+        {name !== FocusKey && <span className="sl-ws">{workspace} · </span>}
         <span className="sl-name">
-          {name}
+          {name === FocusKey ? FocusDoc : name}
           {dirty ? ' [+]' : ''}
         </span>
         {a && (
           <span className="sl-dim">
             v{a.version} · {a.userEdit ? 'edited by you' : a.thread}
+            {a.off ? ' · set aside · :focus on' : ''}
           </span>
         )}
         <Echo focused={focused} />

@@ -80,6 +80,7 @@ export const calls = {
     path: `${th(a.workspace, a.thread)}/seen`,
     body: { at: a.at },
   }),
+  setFocusOff: (a: { off: boolean }): Req => ({ method: 'POST', path: '/focus', body: { off: a.off } }),
   dismiss: (a: { workspace: string; thread: string; id: string }): Req => ({
     method: 'DELETE',
     path: `${th(a.workspace, a.thread)}/waits/${e(a.id)}`,

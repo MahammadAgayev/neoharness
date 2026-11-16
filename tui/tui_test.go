@@ -40,6 +40,8 @@ type fakeClient struct {
 	waits     []model.Wait
 	seen      []string
 	dismissed []string
+	// focusOff is each :focus off (true) and on (false).
+	focusOff []bool
 
 	// images are what each Send carried, by the index of its sent line.
 	images map[int][][]byte
@@ -168,6 +170,10 @@ func (f *fakeClient) Updates(ctx context.Context) (<-chan model.Update, error) {
 func (f *fakeClient) Waits() ([]model.Wait, error) { return slices.Clone(f.waits), nil }
 func (f *fakeClient) Seen(p, t string, at time.Time) error {
 	f.seen = append(f.seen, p+"/"+t)
+	return nil
+}
+func (f *fakeClient) SetFocusOff(off bool) error {
+	f.focusOff = append(f.focusOff, off)
 	return nil
 }
 func (f *fakeClient) Dismiss(p, t, id string) error {

@@ -7,6 +7,9 @@ import { useSyncExternalStore } from 'react'
 import type { CallArgs, CallName, HubStatus, Result } from '../shared/api'
 import {
   Coordinator,
+  FocusDoc,
+  FocusKey,
+  HubScope,
   User,
   validName,
   type Artifact,
@@ -572,7 +575,15 @@ class Store {
       }
       case 'artifact': {
         const a = u.artifact
-        if (u.workspace !== s.workspace || !a) return
+        if (!a) return
+        if (u.workspace === HubScope) {
+          const d = this.state.docs[FocusKey]
+          if (!d) return
+          if (d.edit && a.version !== d.edit.base) void this.mergeIn(FocusKey)
+          else void this.loadDoc(FocusKey)
+          return
+        }
+        if (u.workspace !== s.workspace) return
         this.set({ artifacts: [a, ...s.artifacts.filter((x) => x.name !== a.name)] })
         const d = this.state.docs[a.name]
         if (!d) return
@@ -1391,8 +1402,21 @@ class Store {
     if (this.state.docs[name]) this.show(id, { kind: 'artifact', name })
   }
 
+  // openFocus is :focus: the hub's focus doc, from any workspace or none.
+  async openFocus(id = this.cur()?.id): Promise<void> {
+    if (id === undefined) return
+    await this.loadDoc(FocusKey)
+    if (this.state.docs[FocusKey]) this.show(id, { kind: 'artifact', name: FocusKey })
+  }
+
+  // docRef is where a doc is in the hub: the open workspace, or the hub's
+  // scope for the focus.
+  private docRef(name: string): { workspace: string; name: string } {
+    return name === FocusKey ? { workspace: HubScope, name: FocusDoc } : { workspace: this.state.workspace, name }
+  }
+
   private async loadDoc(name: string): Promise<void> {
-    const r = await this.try(this.call('artifact', { workspace: this.state.workspace, name }))
+    const r = await this.try(this.call('artifact', this.docRef(name)))
     if (!r) return
     const d = this.state.docs[name]
     this.set({ docs: { ...this.state.docs, [name]: { artifact: r.artifact, text: r.text, edit: d?.edit ?? null, conflicts: d?.conflicts } } })
@@ -1433,8 +1457,7 @@ class Store {
     let r
     try {
       r = await this.call('editArtifact', {
-        workspace: this.state.workspace,
-        name,
+        ...this.docRef(name),
         text: d.edit.text,
         base: d.edit.base,
         baseText: d.edit.baseText,
@@ -1463,7 +1486,7 @@ class Store {
       if (!d?.edit || d.edit.base === d.artifact.version) return
       const sent = d.edit.text
       const m = await this.try(
-        this.call('mergeArtifact', { workspace: this.state.workspace, name, text: sent, base: d.edit.base, baseText: d.edit.baseText }),
+        this.call('mergeArtifact', { ...this.docRef(name), text: sent, base: d.edit.base, baseText: d.edit.baseText }),
       )
       if (!m) return
       const cur = this.state.docs[name]
@@ -1753,6 +1776,11 @@ class Store {
         return this.threadsPane()
       case 'artifacts':
         return this.openPicker('artifacts', true)
+      case 'focus':
+        if (!a[0]) return this.openFocus()
+        if (a[0] !== 'on' && a[0] !== 'off') return this.say(':focus takes on or off', 'love')
+        await this.try(this.call('setFocusOff', { off: a[0] === 'off' }))
+        return
       case 'allow':
         return this.answer('allow')
       case 'always':

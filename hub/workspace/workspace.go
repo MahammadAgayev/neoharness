@@ -229,7 +229,13 @@ func ThreadDir(workspace, thread string) string {
 	return filepath.Join(Dir(workspace), "threads", thread)
 }
 
-func artifactDir(workspace string) string { return filepath.Join(Dir(workspace), "artifacts") }
+func artifactDir(workspace string) string {
+	if workspace == model.HubScope {
+		// Beside the workspaces, not among them.
+		return filepath.Join(filepath.Dir(Root()), "artifacts")
+	}
+	return filepath.Join(Dir(workspace), "artifacts")
+}
 
 // SaveArtifact writes an artifact's text and summary.
 func SaveArtifact(workspace string, a model.Artifact, text string) error {
@@ -528,4 +534,28 @@ func writeFile(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	return os.Rename(name, path)
+}
+
+// Focus is the state of the person's focus beside its text: set aside, and
+// the edit the attention agent suggests.
+type Focus struct {
+	Off        bool              `json:"off,omitempty"`
+	Suggestion *model.Suggestion `json:"suggestion,omitempty"`
+}
+
+func focusFile() string { return filepath.Join(filepath.Dir(Root()), "focus.json") }
+
+// LoadFocus reads the focus state; none is the zero Focus.
+func LoadFocus() Focus {
+	var f Focus
+	_ = readJSON(focusFile(), &f)
+	return f
+}
+
+// SaveFocus writes the focus state.
+func SaveFocus(f Focus) error {
+	if err := os.MkdirAll(filepath.Dir(focusFile()), 0o755); err != nil {
+		return err
+	}
+	return writeJSON(focusFile(), f, 0o644)
 }

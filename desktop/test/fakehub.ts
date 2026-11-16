@@ -142,6 +142,14 @@ export class FakeHub {
       }
       if (url.pathname === '/deleted') return json([])
       if (url.pathname === '/waits') return json(this.waits)
+      if (url.pathname === '/focus' && m === 'POST') {
+        const cur = this.artifacts['~']?.find((a) => a.artifact.name === 'focus')
+        if (cur) {
+          cur.artifact = { ...cur.artifact, off: body.off }
+          this.push({ kind: 'artifact', workspace: '~', artifact: cur.artifact })
+        }
+        return json({})
+      }
       if (url.pathname === '/cost') {
         const all = !url.searchParams.get('workspace')
         const day = (back: number) => {
