@@ -2534,6 +2534,35 @@ func TestParagraphObjects(t *testing.T) {
 	}
 }
 
+// d c y take the lines a j k G gg motion goes over, as in Vim.
+func TestLinewiseMotions(t *testing.T) {
+	for _, c := range []struct {
+		keys []string
+		want string
+	}{
+		{[]string{"dj"}, "# D\n\n\nthree\n"},
+		{[]string{"j", "dk"}, "# D\n\n\nthree\n"},
+		{[]string{"dG"}, "# D\n"},
+		{[]string{"j", "dgg"}, "\nthree\n"},
+		{[]string{"cj", "new", "<Esc>"}, "# D\n\nnew\n\nthree\n"},
+		{[]string{"yj", "G", "p"}, "# D\n\none\ntwo\n\nthree\n\none\ntwo"},
+	} {
+		h, ed := srcEdit(t, "one\ntwo\n\nthree")
+		h.press(c.keys...)
+		if got := ed.Text(); got != c.want {
+			t.Errorf("%v = %q, want %q", c.keys, got, c.want)
+		}
+	}
+	// In the rendered focus, as in the source.
+	h := start(t)
+	h.hub.arts = append(h.hub.arts, model.Artifact{Name: model.FocusDoc, Title: "Focus", Version: 1})
+	h.hub.docs = map[string]string{model.FocusDoc: "# Focus\n\n## Now\n- one\n"}
+	h.press(":focus", "<CR>", "gg", "dG", ":w", "<CR>")
+	if got := h.hub.docs[model.FocusDoc]; strings.TrimSpace(got) != "" {
+		t.Fatalf("ggdG should empty the focus, saved %q", got)
+	}
+}
+
 func TestFastEscapeThenKeyIsTwoKeys(t *testing.T) {
 	h := editDemo(t, "# D\n\none\n")
 	h.press(":e", "<CR>", "G", "k", "A", "!")
@@ -2575,6 +2604,14 @@ func TestYankMotionsWithoutASource(t *testing.T) {
 	h.press("yip")
 	if !strings.Contains(clip(), "Keep (the cache) warm, said Ann.") || strings.Contains(clip(), "Next") {
 		t.Fatalf("yip on the document = %q", clip())
+	}
+	h.press("yj")
+	if !strings.Contains(clip(), "said Ann.") || strings.Contains(clip(), "Next") {
+		t.Fatalf("yj on the document = %q", clip())
+	}
+	h.press("yG")
+	if !strings.Contains(clip(), "said Ann.") || !strings.Contains(clip(), "Next paragraph.") {
+		t.Fatalf("yG on the document = %q", clip())
 	}
 }
 

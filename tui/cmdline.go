@@ -803,7 +803,7 @@ func (a *App) helpBuf() *Buffer {
 		row("]c [c  do dp", "after a :w that a newer version refused: next / previous change, take it"),
 		row(":diffoff  :q", "end the diff (:q in the newer version's window)"),
 		row("x s r J  dd cc D C", "change in Normal"),
-		row("d c y  w e b $ 0 iw aw", "operators and motions; v V then d c y"),
+		row("d c y  w e b $ 0 iw aw j k G gg", "operators and motions; v V then d c y"),
 		row("i( a[ i\" a` ib iB ip", "text objects after d c y: ci( da\" yap"),
 		row("f t F T  %", "finds and brackets after d c y: dt, cf) d%"),
 		row("p P  u <C-r>  .", "paste, undo, redo, repeat"),

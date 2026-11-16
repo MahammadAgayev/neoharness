@@ -317,7 +317,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		binds[f] = func(n int) { a.finding, a.findN = f, n }
 	}
 	for _, op := range []string{"d", "c", "y"} {
-		for _, m := range []string{"w", "e", "b", "$", "0", "^", "iw", "aw", "ip", "ap"} {
+		for _, m := range []string{"w", "e", "b", "$", "0", "^", "iw", "aw", "ip", "ap", "j", "k", "G", "gg"} {
 			k := op + m
 			binds[k] = func(n int) { a.editNormal(k, n) }
 		}

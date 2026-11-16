@@ -1056,6 +1056,13 @@ func (a *App) yankMotion(motion string, n int) {
 		a.yankLines(from, to)
 		return
 	}
+	if motion == "j" || motion == "k" || motion == "G" || motion == "gg" {
+		count := len(w.Buf.Lines(a.textWidth(w), a.th, a.spin))
+		if from, to, ok := lineSpan(motion, w.Cur, n, count); ok {
+			a.yankLines(from, to)
+		}
+		return
+	}
 	l := a.line(w)
 	text := []rune(l.Text())
 	row := &Editor{Src: [][]rune{text}, Off: runeAt(text, max(w.Col-l.prefixWidth(), 0))}
@@ -1182,8 +1189,26 @@ func (a *App) takeBack(w *Window) bool {
 	return true
 }
 
+// lineSpan is the lines from..to that a linewise motion goes over from line
+// at, in a text of count lines. j and k past the edge go nowhere, as in Vim.
+func lineSpan(motion string, at, n, count int) (from, to int, ok bool) {
+	n = max(n, 1)
+	switch motion {
+	case "j":
+		return at, min(at+n, count-1), at < count-1
+	case "k":
+		return max(at-n, 0), at, at > 0
+	case "G":
+		return at, count - 1, true
+	case "gg":
+		return 0, at, true
+	}
+	return 0, 0, false
+}
+
 // editNormal runs a Normal key that changes the source: x D dd p P u <C-r>
-// J s S C cc r, and an operator (d c y) with a motion (w e b $ 0 ^ iw aw).
+// J s S C cc r, and an operator (d c y) with a motion (w e b $ 0 ^ iw aw,
+// and the lines of j k G gg).
 func (a *App) editNormal(k string, n int) {
 	w := a.cur
 	e := w.Buf.Edit
@@ -1261,9 +1286,16 @@ func (a *App) editOp(e *Editor, k string, n int) (insert, ok bool) {
 		last := min(e.Line+n-1, len(e.Src)-1)
 		e.yankLines(e.Line, last)
 		a.clip(e.reg.text, last-e.Line+1)
-	case "dip", "dap", "yip", "yap", "cip", "cap":
-		blank := func(i int) bool { return strings.TrimSpace(string(e.Src[i])) == "" }
-		from, to := paragraph(len(e.Src), e.Line, k[1] == 'a', blank)
+	case "dip", "dap", "yip", "yap", "cip", "cap",
+		"dj", "dk", "dG", "dgg", "cj", "ck", "cG", "cgg", "yj", "yk", "yG", "ygg":
+		m := k[1:]
+		from, to, ok := lineSpan(m, e.Line, n, len(e.Src))
+		if m == "ip" || m == "ap" {
+			blank := func(i int) bool { return strings.TrimSpace(string(e.Src[i])) == "" }
+			from, to = paragraph(len(e.Src), e.Line, k[1] == 'a', blank)
+		} else if !ok {
+			return false, false
+		}
 		switch k[0] {
 		case 'y':
 			e.yankLines(from, to)
