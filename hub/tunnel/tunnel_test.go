@@ -4,6 +4,7 @@ package tunnel
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -115,4 +116,54 @@ func TestADroppedTunnelOpensAgain(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("the dropped tunnel was not opened again")
+}
+
+// A laptop that sleeps through a long turn: the host refuses many tries in
+// a row, and the tunnel must still come back while the turn runs.
+func TestADroppedTunnelKeepsTryingUntilTheHostIsBack(t *testing.T) {
+	startGrace = 20 * time.Millisecond
+	m := New(4242)
+	m.reopenEvery, m.reopenMax = time.Millisecond, 5*time.Millisecond
+	var logged strings.Builder
+	var logMu sync.Mutex
+	m.Logf = func(format string, args ...any) {
+		logMu.Lock()
+		defer logMu.Unlock()
+		fmt.Fprintf(&logged, format+"\n", args...)
+	}
+	defer m.Close()
+	var mu sync.Mutex
+	starts := 0
+	m.command = func(ctx context.Context, host string, port int) *exec.Cmd {
+		mu.Lock()
+		defer mu.Unlock()
+		starts++
+		switch {
+		case starts == 1:
+			return exec.CommandContext(ctx, "sleep", "0.1")
+		case starts < 30:
+			return exec.CommandContext(ctx, "sh", "-c", "exit 255")
+		}
+		return exec.CommandContext(ctx, "sleep", "30")
+	}
+	if err := m.Ensure("gpu1"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := starts
+		mu.Unlock()
+		if n >= 30 {
+			time.Sleep(50 * time.Millisecond)
+			logMu.Lock()
+			defer logMu.Unlock()
+			if !strings.Contains(logged.String(), "tunnel to gpu1 dropped") || !strings.Contains(logged.String(), "tunnel to gpu1 open again") {
+				t.Fatalf("hub.log should say the tunnel dropped and opened again:\n%s", logged.String())
+			}
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("the tunnel gave up before the host came back")
 }

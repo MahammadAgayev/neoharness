@@ -26,6 +26,8 @@ var startGrace = 1500 * time.Millisecond
 // Manager owns the tunnels.
 type Manager struct {
 	Port int
+	// Logf writes to the hub log, so a dropped tunnel can be seen there.
+	Logf func(format string, args ...any)
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -34,8 +36,9 @@ type Manager struct {
 	tunnels map[string]*tunnel
 	// command builds the ssh command; replaced in tests.
 	command func(ctx context.Context, host string, port int) *exec.Cmd
-	// reopenEvery is how long a dropped tunnel waits before it opens again.
-	reopenEvery time.Duration
+	// reopenEvery is how long a dropped tunnel waits before it opens again;
+	// each failed try doubles it, up to reopenMax.
+	reopenEvery, reopenMax time.Duration
 }
 
 type tunnel struct {
@@ -47,7 +50,8 @@ type tunnel struct {
 // here.
 func New(port int) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Manager{Port: port, ctx: ctx, cancel: cancel, tunnels: map[string]*tunnel{}, command: sshCommand, reopenEvery: 5 * time.Second}
+	return &Manager{Port: port, ctx: ctx, cancel: cancel, tunnels: map[string]*tunnel{}, command: sshCommand,
+		reopenEvery: 5 * time.Second, reopenMax: time.Minute, Logf: func(string, ...any) {}}
 }
 
 func sshCommand(ctx context.Context, host string, port int) *exec.Cmd {
@@ -108,23 +112,31 @@ func (m *Manager) Ensure(host string) error {
 	return nil
 }
 
-// reopenTries is how often a dropped tunnel tries to open again before it
-// leaves it to the next turn.
-const reopenTries = 12
-
 // reopen opens a tunnel again when it drops (the network went away, the
-// laptop slept), so an MCP call later in the same turn still reaches the hub.
+// laptop slept). It does not give up: a long turn can outlive the outage, and
+// its MCP calls need the tunnel back.
 func (m *Manager) reopen(host string, t *tunnel) {
 	<-t.done
-	for range reopenTries {
+	if m.ctx.Err() != nil {
+		return
+	}
+	m.Logf("tunnel to %s dropped", host)
+	wait := m.reopenEvery
+	for tries := 1; ; tries++ {
 		select {
 		case <-m.ctx.Done():
 			return
-		case <-time.After(m.reopenEvery):
+		case <-time.After(wait):
 		}
-		if m.ctx.Err() != nil || m.Ensure(host) == nil {
+		err := m.Ensure(host)
+		if err == nil {
+			m.Logf("tunnel to %s open again", host)
 			return
 		}
+		if tries == 1 {
+			m.Logf("%v; trying again up to every %s", err, m.reopenMax)
+		}
+		wait = min(wait*2, m.reopenMax)
 	}
 }
 

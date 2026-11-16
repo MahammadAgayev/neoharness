@@ -202,7 +202,9 @@ turn's 4-hour limit stops while a permission or a question waits.
 ## Remote threads
 
 Per host, the hub keeps `ssh -N -R 47821:127.0.0.1:47821 <host>` open and
-opens it again when it drops. A turn runs `claude` over ssh in the thread's
+opens it again when it drops, for as long as the hub runs: first after 5 s,
+then up to once a minute. `hub.log` says when a tunnel drops and when it is
+open again. A turn runs `claude` over ssh in the thread's
 folder. File lists, the git branch and `!` commands use the same ssh
 command.
 
