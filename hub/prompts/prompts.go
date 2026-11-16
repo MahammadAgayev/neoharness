@@ -30,6 +30,9 @@ var reportsNotifyMD string
 //go:embed attention.md
 var attentionMD string
 
+//go:embed attention_edit.md
+var attentionEditMD string
+
 // SessionInput is what a hub session's system prompt depends on.
 type SessionInput struct {
 	Workspace string
@@ -257,8 +260,13 @@ func fill(tmpl string, in SessionInput) string {
 }
 
 // AttentionSystem is the system prompt of the attention agent, which orders
-// what waits on the person.
-func AttentionSystem() string { return attentionMD }
+// what waits on the person. edits lets it suggest edits of the focus.
+func AttentionSystem(edits bool) string {
+	if edits {
+		return attentionMD + attentionEditMD
+	}
+	return attentionMD
+}
 
 // AttentionWait is one wait as the attention agent reads it.
 type AttentionWait struct {
@@ -270,13 +278,17 @@ type AttentionWait struct {
 }
 
 // Attention is one turn of the attention agent: the focus, empty for none,
-// and the waits, numbered from 1.
-func Attention(focus string, waits []AttentionWait) string {
+// why of the edit of it that waits for the person, empty for none, and the
+// waits, numbered from 1.
+func Attention(focus, suggested string, waits []AttentionWait) string {
 	var b strings.Builder
 	if strings.TrimSpace(focus) == "" {
 		b.WriteString("No focus.\n")
 	} else {
 		b.WriteString("Focus:\n\n" + strings.TrimSpace(focus) + "\n")
+	}
+	if suggested != "" {
+		b.WriteString("\nYour edit of the focus waits for the person: " + sentence(clip(suggested, replyLimit)) + "\n")
 	}
 	b.WriteString("\nWaits:\n")
 	for i, w := range waits {

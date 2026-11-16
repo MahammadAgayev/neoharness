@@ -37,6 +37,18 @@ func TestTheAttentionAgentIsOnByDefaultAndFalseTurnsItOff(t *testing.T) {
 	if s, _ = ReadHubSettings(path); s.Attention != "" {
 		t.Fatalf("attention = false left %q", s.Attention)
 	}
+	if err := os.WriteFile(path, []byte(`require("neoharness").setup({ focus_edit = "allow" })`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ = ReadHubSettings(path); s.FocusEdit != "allow" || s.Check() != nil {
+		t.Fatalf("focus_edit = %q", s.FocusEdit)
+	}
+	if err := os.WriteFile(path, []byte(`require("neoharness").setup({ focus_edit = "sometimes" })`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ = ReadHubSettings(path); s.Check() == nil {
+		t.Fatal("a bad focus_edit passed the check")
+	}
 	if err := os.WriteFile(path, []byte(`require("neoharness").setup({ attention = "nobody" })`), 0o644); err != nil {
 		t.Fatal(err)
 	}

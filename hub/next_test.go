@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -125,4 +126,106 @@ func TestNoAttentionAgentNoWakes(t *testing.T) {
 			t.Fatal("an attention turn ran with attention off")
 		}
 	}
+}
+
+// TestTheAgentSuggestsAnEditOfTheFocus: with focus_edit = "ask" the edit
+// waits for the person, as the last stop; their save or x ends it, and a
+// dismissed edit is not suggested again. With "allow" it is saved at once,
+// as the agent's version.
+func TestTheAgentSuggestsAnEditOfTheFocus(t *testing.T) {
+	doc := strings.Replace(model.FocusTemplate, "## Now\n", "## Now\n- hub tests green\n", 1)
+	struck := strings.Replace(doc, "- hub tests green", "- ~~hub tests green~~", 1)
+	attn := &fake{}
+	attn.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if !strings.Contains(req.Prompt, "hub tests green") || strings.Contains(req.Prompt, "~~hub tests green~~") {
+			return agent.Result{Text: `{"next":[]}`}
+		}
+		return agent.Result{Text: `{"next":[], "edit": {"text": ` + quote(struck) + `, "why": "go test ./hub/... passed in alpha"}}`}
+	}
+	h := attentionHub(t, &fake{}, attn)
+	if _, _, err := h.EditArtifact(model.HubScope, model.FocusDoc, doc, model.FocusTemplate, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the suggestion", func() bool {
+		a, _, _ := h.ReadArtifact(model.HubScope, model.FocusDoc)
+		return a.Suggestion != nil
+	})
+	a, text, _ := h.ReadArtifact(model.HubScope, model.FocusDoc)
+	if text != doc || a.Version != 1 || a.Suggestion.Text != struck || a.Suggestion.Why != "go test ./hub/... passed in alpha" || a.Suggestion.Base != 1 {
+		t.Fatalf("focus = %+v %q", a, text)
+	}
+	ws := h.Waits()
+	if len(ws) != 1 || ws[0].Kind != model.WaitFocus || ws[0].Workspace != model.HubScope || ws[0].Thread != model.FocusDoc || ws[0].ID != model.SuggestionID || ws[0].Text != a.Suggestion.Why {
+		t.Fatalf("waits = %+v", ws)
+	}
+	if !strings.Contains(attn.requests()[0].SystemPrompt, `"edit"`) {
+		t.Fatal("the agent is not told it may suggest an edit")
+	}
+
+	// x drops it, and the same edit is not suggested again.
+	if err := h.Dismiss(model.HubScope, "", model.SuggestionID); err != nil {
+		t.Fatal(err)
+	}
+	if a, _, _ := h.ReadArtifact(model.HubScope, model.FocusDoc); a.Suggestion != nil || len(h.Waits()) != 0 {
+		t.Fatal("x left the suggestion")
+	}
+	runs := len(attn.requests())
+	_ = h.SetFocusOff(true)
+	_ = h.SetFocusOff(false)
+	eventually(t, "another turn", func() bool { return len(attn.requests()) > runs })
+	time.Sleep(50 * time.Millisecond)
+	if a, _, _ := h.ReadArtifact(model.HubScope, model.FocusDoc); a.Suggestion != nil {
+		t.Fatal("a dismissed edit came back")
+	}
+
+	// The person's save ends a suggestion too.
+	h.mu.Lock()
+	h.focus.Dismissed = ""
+	h.mu.Unlock()
+	doc2 := doc + "\nmore\n"
+	if _, _, err := h.EditArtifact(model.HubScope, model.FocusDoc, doc2, doc, 1, false); err != nil {
+		t.Fatal(err)
+	}
+	h.mu.Lock()
+	h.focus.Suggestion = &model.Suggestion{Text: struck, Base: 2}
+	h.mu.Unlock()
+	if _, _, err := h.EditArtifact(model.HubScope, model.FocusDoc, doc2+"x\n", doc2, 2, false); err != nil {
+		t.Fatal(err)
+	}
+	if a, _, _ := h.ReadArtifact(model.HubScope, model.FocusDoc); a.Suggestion != nil {
+		t.Fatal("a save left the suggestion")
+	}
+}
+
+func TestFocusEditAllowSavesTheAgentsEdit(t *testing.T) {
+	doc := strings.Replace(model.FocusTemplate, "## Now\n", "## Now\n- hub tests green\n", 1)
+	struck := strings.Replace(doc, "- hub tests green", "- ~~hub tests green~~", 1)
+	attn := &fake{script: func(ctx context.Context, req agent.Request) agent.Result {
+		return agent.Result{Text: `{"next":[], "edit": {"text": ` + quote(struck) + `, "why": "tests pass"}}`}
+	}}
+	h := attentionHub(t, &fake{}, attn)
+	h.cfg.FocusEdit = FocusEditAllow
+	if _, _, err := h.EditArtifact(model.HubScope, model.FocusDoc, doc, model.FocusTemplate, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the agent's version", func() bool {
+		a, text, _ := h.ReadArtifact(model.HubScope, model.FocusDoc)
+		return a.Version == 2 && text == struck && !a.UserEdit && a.Thread == "attention" && a.Suggestion == nil
+	})
+}
+
+func TestFocusEditOffSuggestsNothing(t *testing.T) {
+	attn := &fake{}
+	h := attentionHub(t, &fake{}, attn)
+	h.cfg.FocusEdit = FocusEditOff
+	_ = h.SetFocusOff(true)
+	eventually(t, "a turn", func() bool { return len(attn.requests()) > 0 })
+	if strings.Contains(attn.requests()[0].SystemPrompt, `"edit"`) {
+		t.Fatal("focus_edit = off still offers edits")
+	}
+}
+
+func quote(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
 }

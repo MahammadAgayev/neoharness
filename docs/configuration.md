@@ -73,6 +73,7 @@ require("neoharness").setup({
   todos = true,                         -- threads keep a task list; false: none, and no todo line or progress
   coordinator = "claude",               -- the agent coordinators run
   attention = "attention",              -- the agent that orders what waits for you by your focus; false: none
+  focus_edit = "ask",                   -- its edits of your focus: "ask" you, "allow" (saved at once) or "off"
   threads = "quick",                    -- the agent threads run; left out: the coordinator's
 })
 
@@ -94,7 +95,10 @@ The attention agent orders the waits list, which `]q` walks, by your focus
 it asks. Each of its turns is new, with no tools: a few seconds after what
 waits changes, it reads the waits and the focus and replies with the order.
 `attention = false` turns it off; the hub's own order stands then, as it
-does while the agent has not answered.
+does while the agent has not answered. It may also suggest an edit of your
+focus, mostly striking through what is done; `focus_edit` says whether the
+edit waits for you (`"ask"`), is saved at once as the agent's version
+(`"allow"`), or is never asked for (`"off"`).
 
 An agent has a name you choose. `kind` is the adapter that runs it; leave it
 out when the name is the kind. `claude` is the only kind for now. By default

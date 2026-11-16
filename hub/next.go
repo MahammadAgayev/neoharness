@@ -127,7 +127,10 @@ func (h *Hub) runAttention() {
 	defer h.wg.Done()
 	h.attn.running = false
 	if err == nil && res.ExitCode == 0 {
-		if next, briefs, ok := parseNext(res.Text, ws); ok {
+		if next, briefs, edit, ok := parseNext(res.Text, ws); ok {
+			if edit != nil && h.cfg.FocusEdit != FocusEditOff {
+				h.suggest(*edit)
+			}
 			h.attn.next = next
 			if h.attn.briefs == nil {
 				h.attn.briefs = map[string]string{}
@@ -154,9 +157,12 @@ func (h *Hub) runAttention() {
 
 // attentionRequest is the agent's turn for the waits ws. Callers hold h.mu.
 func (h *Hub) attentionRequest(ws []model.Wait) agent.Request {
-	focus := ""
+	focus, suggested := "", ""
 	if fa, text, err := h.readFocus(); err == nil && !fa.Off && fa.Version > 0 {
 		focus = text
+	}
+	if s := h.focus.Suggestion; s != nil {
+		suggested = s.Why
 	}
 	in := make([]prompts.AttentionWait, len(ws))
 	now := time.Now()
@@ -173,8 +179,8 @@ func (h *Hub) attentionRequest(ws []model.Wait) agent.Request {
 	}
 	home, _ := os.UserHomeDir()
 	return agent.Request{
-		Prompt:       prompts.Attention(focus, in),
-		SystemPrompt: prompts.AttentionSystem(),
+		Prompt:       prompts.Attention(focus, suggested, in),
+		SystemPrompt: prompts.AttentionSystem(focus != "" && h.cfg.FocusEdit != FocusEditOff),
 		Cwd:          home,
 		NoTools:      true,
 		Model:        h.cfg.Agents[h.cfg.Attention].Model,
@@ -198,10 +204,10 @@ func ageOf(d time.Duration) string {
 // parseNext reads the agent's reply: the JSON object in it, which numbers
 // the waits ws from 1. A number it does not know, or a reply with no
 // object, is no order.
-func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, bool) {
+func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, *model.Suggestion, bool) {
 	i, j := strings.Index(text, "{"), strings.LastIndex(text, "}")
 	if i < 0 || j < i {
-		return nil, nil, false
+		return nil, nil, nil, false
 	}
 	var out struct {
 		Next []struct {
@@ -209,9 +215,17 @@ func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, bool) {
 			Why   string `json:"why"`
 			Brief string `json:"brief"`
 		} `json:"next"`
+		Edit *struct {
+			Text string `json:"text"`
+			Why  string `json:"why"`
+		} `json:"edit"`
 	}
 	if json.Unmarshal([]byte(text[i:j+1]), &out) != nil {
-		return nil, nil, false
+		return nil, nil, nil, false
+	}
+	var edit *model.Suggestion
+	if e := out.Edit; e != nil && strings.TrimSpace(e.Text) != "" {
+		edit = &model.Suggestion{Text: e.Text, Why: oneLine(e.Why, replyLimit)}
 	}
 	var next []stop
 	briefs := map[string]string{}
@@ -227,5 +241,53 @@ func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, bool) {
 			briefs[briefKey(w)] = oneLine(b, replyLimit)
 		}
 	}
-	return next, briefs, true
+	return next, briefs, edit, true
+}
+
+// suggest takes the agent's edit of the focus: it waits for the person, or
+// with focus_edit = "allow" it is saved at once as the agent's version. An
+// edit that changes nothing, or that the person dismissed, is dropped.
+// Callers hold h.mu.
+func (h *Hub) suggest(s model.Suggestion) {
+	a, text, err := h.readFocus()
+	if err != nil || a.Version == 0 || s.Text == text || s.Text == h.focus.Dismissed {
+		return
+	}
+	if s.Text != "" && !strings.HasSuffix(s.Text, "\n") && strings.HasSuffix(text, "\n") {
+		s.Text += "\n"
+		if s.Text == text {
+			return
+		}
+	}
+	if h.cfg.FocusEdit == FocusEditAllow {
+		a.Off, a.Suggestion = false, nil
+		a.Version++
+		a.Title, a.UpdatedAt, a.UserEdit, a.Thread = title(s.Text, model.FocusDoc), time.Now().UTC(), false, "attention"
+		if workspace.SaveArtifact(model.HubScope, a, s.Text) == nil {
+			_ = h.focusChanged()
+		}
+		return
+	}
+	if cur := h.focus.Suggestion; cur != nil && cur.Text == s.Text {
+		return
+	}
+	s.Base, s.At = a.Version, time.Now().UTC()
+	h.focus.Suggestion = &s
+	_ = h.focusChanged()
+	h.publishWaits()
+}
+
+// dismissSuggestion is x on the focus's suggested edit: it goes, and the
+// agent does not suggest it again. Callers hold h.mu.
+func (h *Hub) dismissSuggestion(id string) error {
+	s := h.focus.Suggestion
+	if id != model.SuggestionID || s == nil {
+		return fmt.Errorf("nothing waits as %q in the hub", id)
+	}
+	h.focus.Suggestion, h.focus.Dismissed = nil, s.Text
+	if err := h.focusChanged(); err != nil {
+		return err
+	}
+	h.publishWaits()
+	return nil
 }

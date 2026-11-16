@@ -108,7 +108,7 @@ func startHub(asked func()) (stop func(), err error) {
 	h, err := hub.New(hub.Config{MCPPort: port, Agents: defaults, Coordinator: cfg.Coordinator, Threads: cfg.Threads,
 		Factory: agentFactory(tunnels, agents), Files: listFiles, Branch: gitBranch, Shell: runShell,
 		Notify: cfg.Notify == "coordinator", ReopenCompact: cfg.ReopenCompact, CompactWarn: cfg.CompactWarn,
-		AutoCompact: cfg.AutoCompact, NoTodos: cfg.NoTodos, TextWidth: cfg.TextWidth, Attention: cfg.Attention})
+		AutoCompact: cfg.AutoCompact, NoTodos: cfg.NoTodos, TextWidth: cfg.TextWidth, Attention: cfg.Attention, FocusEdit: cfg.FocusEdit})
 	if err != nil {
 		apiLn.Close()
 		mcpLn.Close()

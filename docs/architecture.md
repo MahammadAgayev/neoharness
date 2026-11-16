@@ -190,7 +190,15 @@ draw a level, never which level an event has.
   `brief`; the rest follow in the hub's order. A brief is kept while its
   wait is the same, so the agent writes it once. Its own order changes
   nothing it reads, so it does not wake itself. A failed turn or a reply
-  with no object keeps the order there was. `GET /waits` returns it, and a `waits` update carries the whole
+  with no object keeps the order there was.
+- With a focus, and `focus_edit` not `off`, the reply may hold `"edit":
+  {"text", "why"}`: the whole focus as the agent would have it. Under
+  `ask` it is the focus's `suggestion`, and a wait of `kind: focus`, `id:
+  suggestion`, in `workspace: "~"` and `thread: "focus"`, after the
+  reviews. The person's save of the focus ends it; `DELETE
+  /workspaces/~/threads/focus/waits/suggestion`
+  dismisses it, and the same text is not suggested again. Under `allow` it
+  is saved at once as a version by `attention`. `GET /waits` returns it, and a `waits` update carries the whole
   list each time it changes (no `waits` field is an empty list). An item
   leaves only when it is resolved: a permission is answered, a question
   answered or skipped, a turn stopped, a thread resolved or deleted, a

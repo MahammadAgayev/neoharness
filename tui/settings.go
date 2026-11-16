@@ -36,6 +36,9 @@ type HubSettings struct {
 	// Attention names the agent that orders the waits list by the focus;
 	// empty, from attention = false, is none.
 	Attention string
+	// FocusEdit is what an edit of the focus the attention agent suggests
+	// does: ask, allow or off.
+	FocusEdit string
 }
 
 // AgentSettings configure one agent.
@@ -152,6 +155,8 @@ func ReadHubSettings(path string) (HubSettings, error) {
 			}
 		case "neoharness.todos":
 			s.NoTodos = v == lua.LFalse
+		case "neoharness.focus_edit":
+			s.FocusEdit = text(v)
 		case "neoharness.attention":
 			s.Attention = ""
 			if v != lua.LFalse {
@@ -219,6 +224,11 @@ func (s HubSettings) Check() error {
 	case "", "compact", "ask", "off":
 	default:
 		return fmt.Errorf("reopen_compact is compact, ask or off, not %q", s.ReopenCompact)
+	}
+	switch s.FocusEdit {
+	case "", "ask", "allow", "off":
+	default:
+		return fmt.Errorf("focus_edit is ask, allow or off, not %q", s.FocusEdit)
 	}
 	if s.TextWidth < 0 {
 		return fmt.Errorf("textwidth is a column count, 0 for the full width, not %d", s.TextWidth)

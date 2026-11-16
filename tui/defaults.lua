@@ -23,6 +23,7 @@ require("neoharness").setup({
   todos = true,                  -- threads keep a task list, shown above the prompt and in the threads list; false: none
   coordinator = "claude",        -- the agent below that coordinators run
   attention = "attention",       -- the agent that orders what waits for you by your focus, so ]q goes to the best next thing; false: none
+  focus_edit = "ask",            -- its edits of your focus, such as striking a done line: "ask" you, "allow" (saved at once), or "off"
   -- threads = "claude",         -- the threads' agent; left out: the coordinator's
 })
 

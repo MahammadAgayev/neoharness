@@ -781,6 +781,9 @@ func (e *Editor) meta() string {
 	if e.art.Off {
 		m += " · set aside · :focus on"
 	}
+	if e.art.Suggestion != nil && e.diff == nil {
+		m += " · an edit waits · :diffsplit"
+	}
 	return m
 }
 

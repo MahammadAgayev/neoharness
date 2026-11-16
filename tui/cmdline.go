@@ -30,7 +30,7 @@ type cmdline struct {
 }
 
 var commands = []string{
-	"allow", "always", "artifacts", "b", "buffer", "cn", "copen", "cp", "deny", "diffoff", "edit", "focus", "folder", "help", "hub", "image", "ls", "messages", "new",
+	"allow", "always", "artifacts", "b", "buffer", "cn", "copen", "cp", "deny", "diffoff", "diffsplit", "edit", "focus", "folder", "help", "hub", "image", "ls", "messages", "new",
 	"only", "open", "page", "q", "qa", "quit", "recap", "reopen", "resolve", "restore", "cost", "setlocal", "split", "threads",
 	"vsplit", "waits", "workspace", "workspaces", "wq",
 }
@@ -348,6 +348,8 @@ func (a *App) exec(line string) {
 		if edit != nil {
 			a.dropEdit()
 		}
+	case "diffsplit", "diffs":
+		a.openSuggestion()
 	case "diffoff", "diffo":
 		if e := diffOf(a.cur); e != nil {
 			a.closeDiff(e)
@@ -724,7 +726,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<C-w>v  <C-w>s", "split vertically / horizontally"),
 		row("<C-w>c  <C-w>o  <C-w>=", "close, only, equal sizes"),
 		row("]b [b  <C-^>", "next / previous thread, alternate"),
-		row("]q [q  :cn :cp", "next / previous wait, in any workspace: what blocks a turn first, then failures and notices, then reviews"),
+		row("]q [q  :cn :cp", "next / previous wait, in any workspace: what blocks a turn first, then failures and notices, then reviews, then an edit of your focus"),
 		row(":waits  :copen", "the waits list; <CR> goes to one, x dismisses a notice or a failure, or reads a review"),
 		row(":waits!", "the waits list, oldest first"),
 		row("<C-o>", "back to the buffer the window showed before"),
@@ -741,6 +743,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<leader>pa", "pick an artifact; <CR> on a name in a chat opens it too"),
 		row("<leader>f  :focus", "your focus: what you work on now, in every workspace; it edits as any artifact"),
 		row(":focus off  :focus on", "set the focus aside and bring it back; the text stays"),
+		row(":diffsplit", "in the focus: the edit the attention agent suggests, beside it; do takes a change, :w saves"),
 		row("<leader>ps", "search every transcript"),
 		row("<leader>pm", "pick a notification; it opens its thread, in any workspace"),
 		row("<leader>pv", "workspaces screen"),

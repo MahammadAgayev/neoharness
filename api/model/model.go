@@ -214,11 +214,18 @@ const (
 	// notice. It blocks nothing, so it is not counted as waiting; it goes
 	// when they read the thread or dismiss it.
 	WaitReview WaitKind = "review"
+	// WaitFocus is an edit of the focus the attention agent suggests. It is
+	// in model.HubScope, its thread is model.FocusDoc, it blocks nothing, and goes when the
+	// person saves the focus or dismisses it.
+	WaitFocus WaitKind = "focus"
 )
 
 // ReviewID names a thread's review in the waits list; a thread has at most
-// one.
-const ReviewID = "review"
+// one. SuggestionID names the focus's suggested edit; there is at most one.
+const (
+	ReviewID     = "review"
+	SuggestionID = "suggestion"
+)
 
 // Wait is one item of the waits list: something that needs the person, in
 // any workspace. ID names it to Answer or Dismiss. The list is in the order

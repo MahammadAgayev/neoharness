@@ -541,6 +541,9 @@ func writeFile(path string, data []byte, mode os.FileMode) error {
 type Focus struct {
 	Off        bool              `json:"off,omitempty"`
 	Suggestion *model.Suggestion `json:"suggestion,omitempty"`
+	// Dismissed is the text of the edit the person dismissed last, so the
+	// agent's next turn does not suggest it again.
+	Dismissed string `json:"dismissed,omitempty"`
 }
 
 func focusFile() string { return filepath.Join(filepath.Dir(Root()), "focus.json") }

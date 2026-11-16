@@ -252,6 +252,14 @@ belongs to the hub, not to a workspace, and only you write it.
   It edits and saves as any artifact.
 - `:focus off` sets it aside and `:focus on` brings it back; the text stays.
   While it is aside, its top line says `set aside · :focus on`.
+- The attention agent orders what waits for you by it, and may suggest an
+  edit, such as striking through an action the waits show is done. The edit
+  is the last stop of `]q` (`◇ focus`), and the focus's top line says
+  `an edit waits · :diffsplit`. Either opens the focus beside the edit, in
+  diff mode: `do` takes a change, `]c` `[c` move, and `:w` saves your focus
+  as it is then. `x` on its row in `:waits` drops it, and the agent does
+  not suggest the same edit again. `focus_edit = "allow"` saves its edits
+  at once instead, and `"off"` stops them.
 
 ## Keys
 

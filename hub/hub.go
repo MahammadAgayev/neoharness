@@ -115,7 +115,19 @@ type Config struct {
 	// DefaultAttentionDelay.
 	Attention      string
 	AttentionDelay time.Duration
+	// FocusEdit is what becomes of an edit of the focus the attention agent
+	// suggests: one of the FocusEdit constants; empty is FocusEditAsk.
+	FocusEdit string
 }
+
+// What an edit of the focus the attention agent suggests does: wait for the
+// person, save at once as the agent's version, or nothing, as it is never
+// asked for.
+const (
+	FocusEditAsk   = "ask"
+	FocusEditAllow = "allow"
+	FocusEditOff   = "off"
+)
 
 // What a reopened thread with a full context does before the coordinator's
 // message: compact first, ask the person, or nothing.
@@ -1406,7 +1418,14 @@ func (h *Hub) EditArtifact(workspaceName, name, text, baseText string, base int,
 		h.changed(ws, th)
 	}
 	if ws == nil {
-		a.Off, a.Suggestion = h.focus.Off, h.focus.Suggestion
+		// The person's save answers a suggestion: they took of it what
+		// they wanted.
+		if h.focus.Suggestion != nil {
+			h.focus.Suggestion = nil
+			_ = workspace.SaveFocus(h.focus)
+			h.publishWaits()
+		}
+		a.Off = h.focus.Off
 		h.attentionSees()
 	}
 	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: a.Thread, Artifact: &a})

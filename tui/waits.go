@@ -30,11 +30,12 @@ func (a *App) setWaits(ws []model.Wait) {
 	a.renderWaits()
 }
 
-// waiting counts what blocks on the person: a review only waits to be read.
+// waiting counts what blocks on the person: a review only waits to be
+// read, and a suggested edit of the focus to be taken or left.
 func (a *App) waiting() int {
 	n := 0
 	for _, w := range a.waits {
-		if w.Kind != model.WaitReview {
+		if w.Kind != model.WaitReview && w.Kind != model.WaitFocus {
 			n++
 		}
 	}
@@ -71,6 +72,10 @@ func (a *App) nextWait(n int) {
 func (a *App) jumpWait(i int) {
 	w := a.waits[i]
 	a.waitAt = waitKey(w)
+	if w.Workspace == model.HubScope {
+		a.openSuggestion()
+		return
+	}
 	a.goThread(w.Workspace, w.Thread)
 	if a.workspace != w.Workspace || a.cur.Buf.Kind != KindChat || a.cur.Buf.Thread != w.Thread {
 		return
@@ -111,7 +116,7 @@ func (a *App) dismissWait(key string) {
 		return
 	}
 	w := a.waits[i]
-	if w.Kind != model.WaitNotice && w.Kind != model.WaitFailed && w.Kind != model.WaitReview {
+	if w.Kind != model.WaitNotice && w.Kind != model.WaitFailed && w.Kind != model.WaitReview && w.Kind != model.WaitFocus {
 		a.notify("answer it in its thread: <CR> goes there", a.th.Fg3)
 		return
 	}
@@ -149,9 +154,14 @@ func (a *App) renderWaits() {
 			glyph = Span{"↗ ", th.Wait}
 		case model.WaitReview:
 			glyph, ink = Span{"✓ ", th.Done}, th.Done
+		case model.WaitFocus:
+			glyph = Span{"◇ ", th.Wait}
 		}
 		name := w.Thread
-		if w.Workspace != a.workspace {
+		switch {
+		case w.Workspace == model.HubScope:
+			name = model.FocusDoc
+		case w.Workspace != a.workspace:
 			name = w.Workspace + " · " + name
 		}
 		spans := []Span{glyph, {name + "  ", th.Fg2}, {string(w.Kind) + " · ", ink}}

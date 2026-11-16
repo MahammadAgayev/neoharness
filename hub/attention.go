@@ -71,6 +71,8 @@ func rank(k model.WaitKind) int {
 		return 0
 	case model.WaitReview:
 		return 2
+	case model.WaitFocus:
+		return 3
 	}
 	return 1
 }
@@ -131,6 +133,9 @@ func (h *Hub) hubWaits() []model.Wait {
 			out = append(out, w...)
 		}
 	}
+	if s := h.focus.Suggestion; s != nil {
+		out = append(out, model.Wait{Workspace: model.HubScope, Thread: model.FocusDoc, Kind: model.WaitFocus, ID: model.SuggestionID, Text: s.Why, Since: s.At})
+	}
 	slices.SortStableFunc(out, func(a, b model.Wait) int {
 		if c := rank(a.Kind) - rank(b.Kind); c != 0 {
 			return c
@@ -187,6 +192,9 @@ func (h *Hub) Seen(workspaceName, name string, at time.Time) error {
 func (h *Hub) Dismiss(workspaceName, name, id string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if workspaceName == model.HubScope {
+		return h.dismissSuggestion(id)
+	}
 	ws, th, err := h.lookup(workspaceName, name)
 	if err != nil {
 		return err

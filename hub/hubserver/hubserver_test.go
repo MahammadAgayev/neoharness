@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -274,5 +275,41 @@ func TestWaitsOverTheAPI(t *testing.T) {
 	}
 	if ws, _ := c.Waits(); len(ws) != 0 {
 		t.Fatalf("waits after dismiss = %+v", ws)
+	}
+}
+
+// The focus is reached through the API as the artifact focus of ~, and
+// its suggested edit is dismissed as any wait.
+func TestTheFocusOverTheAPI(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("NEOHARNESS_HOME", home)
+	h, err := hub.New(hub.Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return echo{} }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close()
+	sock := filepath.Join(home, "hub.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: Handler(h, hubapi.Info{}, func() {})}
+	go srv.Serve(ln)
+	defer srv.Close()
+	c := hubapi.New(sock)
+	if a, text, err := c.Artifact(model.HubScope, model.FocusDoc); err != nil || a.Version != 0 || text != model.FocusTemplate {
+		t.Fatalf("focus = %+v %q %v", a, text, err)
+	}
+	if _, _, err := c.EditArtifact(model.HubScope, model.FocusDoc, "# Focus\n\n- one\n", model.FocusTemplate, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetFocusOff(true); err != nil {
+		t.Fatal(err)
+	}
+	if a, _, _ := c.Artifact(model.HubScope, model.FocusDoc); !a.Off || a.Version != 1 {
+		t.Fatalf("focus = %+v", a)
+	}
+	if err := c.Dismiss(model.HubScope, model.FocusDoc, model.SuggestionID); err == nil || !strings.Contains(err.Error(), "nothing waits") {
+		t.Fatalf("err = %v, want the hub's own answer", err)
 	}
 }
