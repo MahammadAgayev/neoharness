@@ -701,6 +701,8 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 	}
 	// The brief comes last, next to the prompt where the person answers.
 	if b := a.brief(w.Buf.Thread); b != "" && title != "paused" {
+		// A blank row keeps the brief apart from the last option.
+		body = append(body, nil)
 		for _, r := range wrap([]Span{{b, th.Fg3}}, bw-2, nil, nil) {
 			body = append(body, r.Spans)
 		}

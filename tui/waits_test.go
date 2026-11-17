@@ -266,8 +266,8 @@ func TestAQuestionCardStartsWithTheQuestion(t *testing.T) {
 	if strings.Contains(h.screen(), "┃ question") {
 		t.Fatalf("the card has no kind label:\n%s", h.screen())
 	}
-	if q, b := h.rowOf("┃ Bump every dependency now?"), h.rowOf("┃ Touches every module."); q < 0 || b <= q {
-		t.Fatalf("the question comes first, then the brief:\n%s", h.screen())
+	if q, b := h.rowOf("┃ Bump every dependency now?"), h.rowOf("┃ Touches every module."); q < 0 || b <= q+1 {
+		t.Fatalf("the question comes first, then a blank row, then the brief:\n%s", h.screen())
 	}
 }
 
