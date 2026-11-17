@@ -191,12 +191,7 @@ func needsOf(ws *space, th *thread) (waits []model.Wait, unseen model.Level, at 
 		waits = append(waits, w(model.WaitPermission, p.ID, p))
 	}
 	if ask != nil {
-		// Only the turn that asked can take a skip by its ID.
-		id := ""
-		if th.ask != nil && th.ask.id == ask.ID {
-			id = ask.ID
-		}
-		waits = append(waits, w(model.WaitQuestion, id, *ask))
+		waits = append(waits, w(model.WaitQuestion, ask.ID, *ask))
 	}
 	// While a turn runs or messages wait, the failure is behind it.
 	if failure != nil && !th.busy && len(th.t.Queue) == 0 {

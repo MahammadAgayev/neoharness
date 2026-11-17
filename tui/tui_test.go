@@ -1696,7 +1696,7 @@ func TestArtifactNamesInAChatAreLinks(t *testing.T) {
 func TestTurnEndStopsEverySpinner(t *testing.T) {
 	b := newChat("demo", "api")
 	for _, e := range []model.Event{
-		{Kind: model.EventTool, Tool: "mcp__neoharness__ask_user", Detail: "which release?"},
+		{Kind: model.EventTool, Tool: "mcp__neoharness__ask", Detail: "which release?"},
 		{Kind: model.EventAsk, Text: "which release?"},
 		{Kind: model.EventTurnEnd},
 	} {

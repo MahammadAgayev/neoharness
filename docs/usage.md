@@ -107,17 +107,15 @@ yourself:
 - Messages sent while a thread is busy wait in a queue and show dim at the
   end of the chat. `<CR>` on one sends it now: the running turn stops, and
   the queue goes in the next turn at once.
-- A question waits in a card above the prompt, as a permission request
-  does, and the thread waits for you. You answer by writing: your message
-  goes back to the thread as the answer, in the same turn. `<leader>x`
-  skips it, and the thread goes on without the answer. A picture cannot be
-  the answer; send it after. Once answered, the question shows as a block
-  in the chat. The others' messages wait, dim, as for any running turn.
-  The time a question waits does not count toward the 4-hour turn limit.
-- If the turn ends before your answer (a stop, a crash, a restart), the
-  question stays and holds the coordinator's and the other threads'
-  messages. Your next message answers it, first in a new turn, with them;
-  `<CR>` on one sends them without an answer, and the question closes.
+- A question waits in a card above the prompt, and the thread waits for
+  you. Asking does not hold the thread's turn: it ends, and the question
+  stays, over a restart too. You answer by writing: your next message is
+  the answer, in a new turn, and it may carry a picture. `<leader>x` skips
+  it: the thread hears that you skipped it and goes on without the answer.
+  Once answered, the question shows as a block in the chat. The
+  coordinator's and the other threads' messages wait behind it, dim; your
+  answer goes first, with them, and `<CR>` on one sends them without an
+  answer, and the question closes.
 - When you come back after 2 minutes or more away, a card at the top
   right says how all the work stands, in every workspace, in the attention
   agent's few lines (or as counts without it, `◆ 2 waiting · ✓ 3 to

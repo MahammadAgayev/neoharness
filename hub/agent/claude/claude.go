@@ -303,7 +303,7 @@ func (a *Agent) args(req agent.Request) []string {
 			"headers": map[string]string{"Authorization": "Bearer " + h.Token},
 		}}})
 		// No one can answer Claude's own question tool under -p; the
-		// harness's ask_user asks the person instead.
+		// harness's ask asks the person instead.
 		args = append(args, "--permission-prompt-tool", permissionTool, "--permission-mode", permissionMode,
 			"--disallowedTools", "AskUserQuestion", "--mcp-config", string(cfg))
 		if req.HarnessOnly {

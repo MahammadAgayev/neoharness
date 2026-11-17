@@ -189,7 +189,7 @@ func (h *Hub) Dismiss(workspaceName, name, id string) error {
 		t.SeenAt = time.Now().UTC()
 	case slices.ContainsFunc(t.Notices, func(n workspace.Notice) bool { return n.ID == id }):
 		t.Notices = slices.DeleteFunc(t.Notices, func(n workspace.Notice) bool { return n.ID == id })
-	case slices.ContainsFunc(th.perms, func(p *pending) bool { return p.ID == id }), th.ask != nil && th.ask.id == id:
+	case slices.ContainsFunc(th.perms, func(p *pending) bool { return p.ID == id }), id != "" && id == questionID(ws, th):
 		return errors.New("answer it instead: allow, deny, or skip")
 	default:
 		return fmt.Errorf("nothing waits as %q on %s", id, name)

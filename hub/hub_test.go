@@ -397,123 +397,60 @@ func TestPendingPermissionIsDeniedWhenTheTurnEnds(t *testing.T) {
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
 }
 
-// askAndEnd asks a question and lets the turn end before the answer, as a
-// stop, a crash or a restart does: the question stays, and the person's next
-// message answers it in a new turn.
-func askAndEnd(t *testing.T, h *Hub, name, q string) {
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() { _, _, _ = h.AskUser(ctx, "demo", name, q) }()
-	eventually(t, "the question", func() bool { return view(t, h, "demo", name).QuestionID != "" })
-	cancel()
-	eventually(t, "the question to outlive its call", func() bool { return view(t, h, "demo", name).QuestionID == "" })
-}
-
-// TestAQuestionWaitsForTheAnswerInItsTurn: as a permission request, a
-// question holds the turn; the person's message is the answer, and the turn
-// goes on with it. Others' messages wait as for any running turn.
-func TestAQuestionWaitsForTheAnswerInItsTurn(t *testing.T) {
-	f := &fake{}
-	h := newHub(t, f)
-	answered := make(chan string, 1)
-	f.script = func(ctx context.Context, req agent.Request) agent.Result {
-		if !strings.Contains(req.Prompt, "set up storage") {
-			return agent.Result{Text: "ok"}
-		}
-		answer, _, _ := h.AskUser(ctx, "demo", model.Coordinator, "which database?")
-		answered <- answer
-		return agent.Result{Text: "Using " + answer}
-	}
-	pinned(t, h, "demo")
-	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")
+// TestAQuestionEndsTheTurn: ask does not wait. The turn ends, the thread
+// waits for the person, and the question is a card and a wait until they
+// answer by writing; their message goes first, with what waited behind it.
+func TestAQuestionEndsTheTurn(t *testing.T) {
+	h, f := askThenHold(t)
 	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
 	if v := view(t, h, "demo", model.Coordinator); v.Waiting != "which database?" || v.QuestionID == "" {
 		t.Fatalf("waiting = %q, question %q", v.Waiting, v.QuestionID)
 	}
-	hubMessage(h, wakeFrom, "fyi")
-	if err := h.Send("demo", model.User, model.Coordinator, "postgres"); err != nil {
-		t.Fatal(err)
+	if w := h.Waits(); len(w) != 1 || w[0].Kind != model.WaitQuestion || w[0].ID != view(t, h, "demo", model.Coordinator).QuestionID {
+		t.Fatalf("waits = %+v", w)
 	}
-	eventually(t, "the held message's turn", func() bool { return len(f.requests()) == 2 })
+	if err := h.Send("demo", model.User, model.Coordinator, "postgres", pngImage); err != nil {
+		t.Fatalf("an answer may carry a picture: %v", err)
+	}
+	eventually(t, "the answer's turn", func() bool { return len(f.requests()) == 2 })
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
-	if p := f.requests()[1].Prompt; !strings.Contains(p, "fyi") || strings.Contains(p, "postgres") {
-		t.Fatalf("second turn = %q: the answer went in the first, the held message after", p)
-	}
-	if a := <-answered; a != "postgres" {
-		t.Fatalf("the turn got %q", a)
-	}
-	evs, _ := h.Events("demo", model.Coordinator, 50)
-	ask := slices.IndexFunc(evs, func(e model.Event) bool { return e.Kind == model.EventAsk })
-	ans := slices.IndexFunc(evs, func(e model.Event) bool { return e.Kind == model.EventMessage && e.Text == "postgres" })
-	if ask < 0 || ans < ask {
-		t.Fatalf("events = %+v, want the question, then the answer", evs)
+	if w := h.Waits(); slices.ContainsFunc(w, func(w model.Wait) bool { return w.Kind == model.WaitQuestion }) {
+		t.Fatalf("the answer closes the question: %+v", w)
 	}
 }
 
-// TestASkippedQuestionLetsTheTurnGoOn: skipping answers nothing, and a
-// picture cannot be the answer.
-func TestASkippedQuestionLetsTheTurnGoOn(t *testing.T) {
-	f := &fake{}
-	h := newHub(t, f)
-	got := make(chan bool, 1)
-	f.script = func(ctx context.Context, req agent.Request) agent.Result {
-		_, skipped, _ := h.AskUser(ctx, "demo", model.Coordinator, "which database?")
-		got <- skipped
-		return agent.Result{Text: "ok"}
-	}
-	pinned(t, h, "demo")
-	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")
-	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
-	if err := h.Send("demo", model.User, model.Coordinator, "this one", pngImage); err == nil {
-		t.Fatal("a picture went as the answer")
-	}
+// TestASkippedQuestionTellsTheThread: a skip is the person's word too, so
+// the thread hears it and goes on without the answer.
+func TestASkippedQuestionTellsTheThread(t *testing.T) {
+	h, f := askThenHold(t)
 	id := view(t, h, "demo", model.Coordinator).QuestionID
+	if err := h.Answer("demo", model.Coordinator, id, model.Allow, ""); err == nil {
+		t.Fatal("a question is answered by writing, not allowed")
+	}
 	if err := h.Answer("demo", model.Coordinator, id, model.Deny, ""); err != nil {
 		t.Fatal(err)
 	}
-	if !<-got {
-		t.Fatal("the question was not skipped")
+	eventually(t, "the skip's turn", func() bool { return len(f.requests()) == 2 })
+	if p := f.requests()[1].Prompt; !strings.Contains(p, "skipped your question") || !strings.Contains(p, "fyi") {
+		t.Fatalf("prompt = %q", p)
 	}
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
-}
-
-// TestAQuestionDoesNotCountTowardTheTurnTimeout: a turn that waits for the
-// person is not wedged.
-func TestAQuestionDoesNotCountTowardTheTurnTimeout(t *testing.T) {
-	f := &fake{}
-	t.Setenv("NEOHARNESS_HOME", t.TempDir())
-	h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }, TurnTimeout: 80 * time.Millisecond})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(h.Close)
-	f.script = func(ctx context.Context, req agent.Request) agent.Result {
-		answer, _, err := h.AskUser(ctx, "demo", model.Coordinator, "which database?")
-		if err != nil {
-			return agent.Result{ExitCode: -1}
-		}
-		return agent.Result{Text: "Using " + answer}
-	}
-	pinned(t, h, "demo")
-	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")
-	stateIs(t, h, "demo", model.Coordinator, model.StateWaiting)
-	time.Sleep(300 * time.Millisecond)
-	_ = h.Send("demo", model.User, model.Coordinator, "postgres")
-	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
-	evs, _ := h.Events("demo", model.Coordinator, 50)
-	if slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventError }) {
-		t.Fatalf("events = %+v: the wait counted toward the timeout", evs)
+	if w := h.Waits(); slices.ContainsFunc(w, func(w model.Wait) bool { return w.Kind == model.WaitQuestion }) {
+		t.Fatalf("waits = %+v", w)
 	}
 }
 
-// askThenHold has the coordinator ask a question and its turn end before
-// the answer, then another thread write to it while the question waits.
+// askThenHold has the coordinator ask a question, which ends its turn,
+// then another thread write to it while the question waits.
 func askThenHold(t *testing.T) (*Hub, *fake) {
 	t.Helper()
 	f := &fake{}
 	h := newHub(t, f)
 	f.script = func(ctx context.Context, req agent.Request) agent.Result {
 		if strings.Contains(req.Prompt, "set up storage") {
-			askAndEnd(t, h, model.Coordinator, "which database?")
+			if err := h.Ask("demo", model.Coordinator, "which database?"); err != nil {
+				t.Error(err)
+			}
 			return agent.Result{Text: "asked"}
 		}
 		return agent.Result{Text: "ok"}
@@ -1702,7 +1639,9 @@ func TestRestoreSaysATurnWasStoppedByTheDelete(t *testing.T) {
 func TestTheSummarySaysTheCoordinatorsState(t *testing.T) {
 	h := newHub(t, &fake{})
 	pinned(t, h, "demo")
-	askAndEnd(t, h, model.Coordinator, "Which phase first?")
+	if err := h.Ask("demo", model.Coordinator, "Which phase first?"); err != nil {
+		t.Fatal(err)
+	}
 	for _, s := range h.Workspaces() {
 		if s.Name == "demo" && (s.Coordinator != model.StateWaiting || s.Counts[model.StateWaiting] != 0) {
 			t.Fatalf("summary = %+v; the coordinator waits, and it is not a thread", s)
@@ -1890,7 +1829,7 @@ func TestStopHoldsTheQueue(t *testing.T) {
 	}
 }
 
-// A stop while a question waits closes the question: the person said stop,
+// A stop of the turn that asked closes the question: the person said stop,
 // so nothing waits for them, and their next message starts a new turn.
 func TestStopClosesAWaitingQuestion(t *testing.T) {
 	f := &fake{}
@@ -1899,10 +1838,10 @@ func TestStopClosesAWaitingQuestion(t *testing.T) {
 		if !strings.Contains(req.Prompt, "set up storage") {
 			return agent.Result{Text: "ok"}
 		}
-		if _, _, err := h.AskUser(ctx, "demo", model.Coordinator, "which database?"); err != nil {
-			return agent.Result{ExitCode: -1}
-		}
-		return agent.Result{Text: "ok"}
+		// It asks and works on, until the stop.
+		_ = h.Ask("demo", model.Coordinator, "which database?")
+		<-ctx.Done()
+		return agent.Result{ExitCode: -1}
 	}
 	pinned(t, h, "demo")
 	_ = h.Send("demo", model.User, model.Coordinator, "set up storage")

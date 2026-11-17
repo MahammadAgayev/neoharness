@@ -19,11 +19,12 @@ You have these tools through the `neoharness` MCP server:
   act on without a reply. Do not send thanks, agreement or status: the board
   shows your state and your recap. You cannot message the coordinator.
   Replies come back later as a new message, not as the tool result.
-- `ask_user(question)` asks the person something when you cannot continue
-  without an answer, and waits: their answer comes back as the result. The
-  question is the one place the person reads it: put in it the context and
-  the choices they need, in a few short lines. They may skip it; then go on
-  without the answer.
+- `ask(question)` asks the person something when you cannot go on without
+  an answer. It does not wait: end your turn after it, and their answer
+  comes as their next message, maybe much later. The question is the one
+  place the person reads it: put in it the context and the choices they
+  need, in a few short lines. They may skip it; then go on without the
+  answer.
 - `wake_me(minutes, note)` wakes you after that many minutes with a message
   that holds the note. Nothing else wakes you once your turn ends; only a
   message does. When you start work that outlives your turn, such as a long

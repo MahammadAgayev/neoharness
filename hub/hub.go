@@ -210,8 +210,6 @@ type thread struct {
 	recapped bool
 	// todoTurn says the current turn changed the todo list.
 	todoTurn bool
-	// ask is the question the running turn waits on; nil when none.
-	ask *asking
 	// clock stops a turn that runs past Config.TurnTimeout, not counting
 	// the time it waits for the person.
 	clock *turnClock
@@ -220,13 +218,6 @@ type thread struct {
 	stream      string
 	streamTimer *time.Timer
 	streamed    bool
-}
-
-// asking is a question a turn waits on: its answer comes on done, empty
-// when the person skips it.
-type asking struct {
-	id   string
-	done chan string
 }
 
 type pending struct {
@@ -816,16 +807,6 @@ func (h *Hub) SendNow(workspaceName, to, text string, images ...[]byte) error {
 	defer h.mu.Unlock()
 	var th *thread
 	var err error
-	if ws, t, err := h.lookup(workspaceName, to); err == nil && t.ask != nil {
-		// The answer, or a skip that lets the turn go on: the queue waits
-		// for it, as for any running turn.
-		if strings.TrimSpace(text) == "" && len(images) == 0 {
-			h.answer(ws, t, "")
-			return nil
-		}
-		_, err := h.send(workspaceName, model.User, to, text, images)
-		return err
-	}
 	if strings.TrimSpace(text) == "" && len(images) == 0 {
 		var ws *space
 		ws, th, err = h.lookup(workspaceName, to)
@@ -948,7 +929,7 @@ func (h *Hub) send(workspaceName, from, to, text string, images [][]byte) (*thre
 		return nil, errors.New("a thread cannot message itself")
 	}
 	if to == model.Coordinator && from != model.User {
-		return nil, errors.New("threads do not message the coordinator: its board shows your state and your recap; ask the person with ask_user")
+		return nil, errors.New("threads do not message the coordinator: its board shows your state and your recap; ask the person with ask")
 	}
 	switch {
 	case th.t.Resolved && from == model.User:
@@ -965,13 +946,6 @@ func (h *Hub) send(workspaceName, from, to, text string, images [][]byte) (*thre
 		if done, err := h.command(ws, th, text); done {
 			return th, err
 		}
-	}
-	if from == model.User && th.ask != nil {
-		if len(images) > 0 {
-			return nil, errors.New("answer the question first, then send the picture")
-		}
-		h.answer(ws, th, strings.TrimSpace(text))
-		return th, nil
 	}
 	// The thread asked and ended its reply; what still runs (background
 	// tasks) must not hold the answer back. Checked before enqueue, which may
@@ -1630,54 +1604,37 @@ func (h *Hub) armWake(ws *space, th *thread) {
 	})
 }
 
-// AskUser asks the person a question and waits for the answer, as a
-// permission request does: the thread waits for them, and the answer comes
-// back in the same turn. skipped says they went on without answering. A turn
-// that ends first keeps the question, and the person's next message answers
-// it in a new turn.
-func (h *Hub) AskUser(ctx context.Context, workspaceName, name, question string) (answer string, skipped bool, err error) {
+// Ask puts a question to the person and does not wait: the thread waits
+// for them once its turn ends, and their next message to it is the answer.
+// What others send it waits behind the question.
+func (h *Hub) Ask(workspaceName, name, question string) error {
 	h.mu.Lock()
+	defer h.mu.Unlock()
 	ws, th, err := h.lookup(workspaceName, name)
 	if err != nil {
-		h.mu.Unlock()
-		return "", false, err
+		return err
 	}
-	h.nextPerm++
-	a := &asking{id: fmt.Sprintf("q%d", h.nextPerm), done: make(chan string, 1)}
-	th.t.Asking, th.ask = strings.TrimSpace(question), a
-	h.event(ws, th, model.Event{Kind: model.EventAsk, ID: a.id, Text: th.t.Asking})
-	h.note(ws, th, workspace.Entry{Kind: jAsked, ID: a.id, Text: th.t.Asking})
+	q := strings.TrimSpace(question)
+	if q == "" {
+		return errors.New("empty question")
+	}
+	at := time.Now().UTC()
+	id := fmt.Sprintf("q%d", at.UnixNano())
+	th.t.Asking = q
+	h.event(ws, th, model.Event{At: at, Kind: model.EventAsk, ID: id, Text: q})
+	h.note(ws, th, workspace.Entry{At: at, Kind: jAsked, ID: id, Text: q})
 	h.changed(ws, th)
-	h.mu.Unlock()
-	select {
-	case answer = <-a.done:
-		return answer, answer == "", nil
-	case <-ctx.Done():
-		h.mu.Lock()
-		if th.ask == a {
-			th.ask = nil
-			h.changed(ws, th)
-		}
-		h.mu.Unlock()
-		return "", false, ctx.Err()
-	}
+	return nil
 }
 
-// answer gives a waiting question its answer; empty skips it. Callers hold
-// h.mu.
-func (h *Hub) answer(ws *space, th *thread, text string) {
-	a := th.ask
-	th.ask, th.t.Asking = nil, ""
-	if text == "" {
-		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Question skipped."})
-		h.note(ws, th, workspace.Entry{Kind: jDismissed, ID: a.id})
-	} else {
-		h.event(ws, th, model.Event{Kind: model.EventMessage, From: model.User, Text: text})
-		h.note(ws, th, workspace.Entry{Kind: jWrote})
-		th.t.AgentTurns = 0
+// questionID names a thread's open question, empty for none.
+func questionID(ws *space, th *thread) string {
+	for _, w := range waitsOf(ws, th) {
+		if w.Kind == model.WaitQuestion {
+			return w.ID
+		}
 	}
-	h.changed(ws, th)
-	a.done <- text
+	return ""
 }
 
 // Recap keeps where a session's work stands, for the person to read when
@@ -1845,12 +1802,12 @@ func (h *Hub) Answer(workspaceName, name, id string, d model.Decision, msg strin
 	if err != nil {
 		return err
 	}
-	if a := th.ask; a != nil && (id == a.id || id == "" && len(th.perms) == 0) {
+	if q := questionID(ws, th); th.t.Asking != "" && (id != "" && id == q || id == "" && len(th.perms) == 0) {
 		// Only a skip answers a question here; the answer itself is a message.
 		if d != model.Deny {
 			return errors.New("answer the question by writing to the thread")
 		}
-		h.answer(ws, th, "")
+		h.enqueue(ws, th, model.User, "I skipped your question. Go on without the answer.")
 		return nil
 	}
 	if id == "" && len(th.perms) > 0 {
@@ -2023,7 +1980,6 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	th.cancel = nil
 	t.InFlight = nil
 	h.denyAll(ws, th, "the turn ended")
-	th.ask = nil
 	th.clock.stop()
 	h.endStream(ws, th, true)
 	if th.started {
@@ -2535,7 +2491,7 @@ func (h *Hub) changed(ws *space, th *thread) {
 		th.state = s
 		th.t.Since = time.Now().UTC()
 	}
-	th.clock.hold(len(th.perms) > 0 || th.ask != nil)
+	th.clock.hold(len(th.perms) > 0)
 	switch {
 	case th.t.Asking == "":
 		th.t.AskedAt = time.Time{}
@@ -2653,9 +2609,7 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		v.Waiting = "permission"
 	case t.Asking != "":
 		v.Waiting = t.Asking
-		if th.ask != nil {
-			v.QuestionID = th.ask.id
-		}
+		v.QuestionID = questionID(ws, th)
 	case t.Paused:
 		v.Waiting = "paused"
 	}
