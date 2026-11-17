@@ -108,10 +108,14 @@ yourself:
   end of the chat. `<CR>` on one sends it now: the running turn stops, and
   the queue goes in the next turn at once.
 - A question waits in a card above the prompt, and the thread waits for
-  you. Asking does not hold the thread's turn: it ends, and the question
-  stays, over a restart too. You answer by writing: your next message is
-  the answer, in a new turn, and it may carry a picture. `<leader>x` skips
-  it: the thread hears that you skipped it and goes on without the answer.
+  you. It comes at the end of its turn, after the reply that explains it,
+  and holds one short decision, with two to four numbered options when the
+  answer is one of a few. Asking does not hold the thread's turn: it ends,
+  and the question stays, over a restart too. You answer by writing: your
+  next message is the answer, in a new turn, and it may carry a picture.
+  An option's number alone, such as `2`, answers with that option: the
+  thread reads `2 · assign`. `<leader>x` skips it: the thread hears that
+  you skipped it and goes on without the answer.
   Once answered, the question shows as a block in the chat. The
   coordinator's and the other threads' messages wait behind it, dim; your
   answer goes first, with them, and `<CR>` on one sends them without an

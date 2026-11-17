@@ -63,8 +63,14 @@ UUID.
   cannot stream sends none, and the reply comes whole.
 - Messages that arrive while a thread is busy wait in a queue. All of them
   go into the next turn as one prompt.
-- `ask` does not wait: it keeps the question with the thread (an `asked`
-  entry in the journal) and the agent ends its turn. The thread waits for
+- `ask(question, options)` does not wait: it keeps the question with the
+  thread (an `asked` entry in the journal, with its options) and the agent
+  ends its turn. The question is one short decision; the agent's reply
+  gives the context, and the question's event goes into the transcript
+  when the turn ends, after the reply. Options are none, or two to four
+  short strings; the thread's view carries them while the question is
+  open. A message of the person that is only an option's number becomes
+  `<n> · <option>`. The thread waits for
   the person, and the others' messages wait too, so the thread does not
   move on from it. The person's next message is the answer and goes first
   in the next turn, with them; send now with nothing written sends them

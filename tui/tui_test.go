@@ -3913,3 +3913,58 @@ func TestRecapCommandOpensTheCard(t *testing.T) {
 		}
 	}
 }
+
+// A question's options show numbered under it, in the card while it waits
+// and in its block after the answer, once each time; typing a number
+// answers with that option.
+func TestAQuestionShowsItsOptionsNumbered(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	q := "May I assign reviewers?"
+	opts := []string{"suggest only: no one is notified", "assign"}
+	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: model.Coordinator, Event: &model.Event{Kind: model.EventAsk, ID: "q1", Text: q, Options: opts}})
+	v := h.a.threads[model.Coordinator]
+	v.State, v.Waiting, v.QuestionID, v.Options = model.StateWaiting, q, "q1", opts
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.toasts = nil
+	h.press("<Esc>")
+	h.a.draw()
+	for _, want := range []string{"1 suggest only: no one is notified", "2 assign"} {
+		if n := strings.Count(h.screen(), want); n != 1 {
+			t.Fatalf("%q shows %d times:\n%s", want, n, h.screen())
+		}
+	}
+	if h.fgAt("1 suggest") != fgOf(h.a.th.Fg3) || h.fgAt("suggest only") != fgOf(h.a.th.Fg) {
+		t.Fatal("the number is muted and the label reads as the choice")
+	}
+
+	v.State, v.Waiting, v.QuestionID, v.Options = model.StateIdle, "", "", nil
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: v.Name, View: &v})
+	h.a.draw()
+	if n := strings.Count(h.screen(), "2 assign"); n != 1 {
+		t.Fatalf("after the answer the block keeps its options:\n%s", h.screen())
+	}
+	if h.fgAt("suggest only") != fgOf(h.a.th.Fg3) {
+		t.Fatal("an answered question's options leave the text ink")
+	}
+}
+
+// A question that already waits when the TUI opens the workspace shows
+// once, in its card, as one that comes while it is open does.
+func TestAQuestionWaitingAtLoadShowsOnce(t *testing.T) {
+	h := start(t)
+	q := "May I assign reviewers?"
+	for i, v := range h.hub.threads["demo"] {
+		if v.Name == model.Coordinator {
+			v.State, v.Waiting, v.QuestionID, v.Options = model.StateWaiting, q, "q1", []string{"suggest only", "assign"}
+			h.hub.threads["demo"][i] = v
+		}
+	}
+	h.hub.events[model.Coordinator] = append(h.hub.events[model.Coordinator], model.Event{Kind: model.EventAsk, ID: "q1", Text: q, Options: []string{"suggest only", "assign"}})
+	h.openDemo()
+	h.a.toasts = nil
+	h.a.draw()
+	if n := strings.Count(h.screen(), q); n != 1 {
+		t.Fatalf("the question shows %d times:\n%s", n, h.screen())
+	}
+}

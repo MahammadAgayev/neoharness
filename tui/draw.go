@@ -695,6 +695,9 @@ func (a *App) card(w *Window) (title string, body [][]Span, bw int) {
 		for _, l := range rows {
 			body = append(body, append(clone(l.Prefix), l.Spans...))
 		}
+		for _, l := range optionLines(v.Options, bw-2, th, th.Fg, nil) {
+			body = append(body, append(clone(l.Prefix), l.Spans...))
+		}
 	}
 	// The brief comes last, next to the prompt where the person answers.
 	if b := a.brief(w.Buf.Thread); b != "" && title != "paused" {

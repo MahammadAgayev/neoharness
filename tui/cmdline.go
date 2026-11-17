@@ -748,6 +748,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<leader>c", "coordinator"),
 		row("<leader>nc  <leader>nh", "dismiss notifications, their history"),
 		row("<leader>a A x", "allow, allow always (what the card names), deny a permission; x also skips a question"),
+		row("2<CR>", "in the prompt under a question with options: answer with option 2"),
 		{},
 		sec("commands"),
 		row(":new <name> [folder]", "create a workspace; no folder opens a folder picker"),

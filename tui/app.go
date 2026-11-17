@@ -536,6 +536,7 @@ func (a *App) loadHistory(v model.ThreadView) {
 	}
 	b.settle(v.State == model.StateRunning)
 	b.SetWorking(v.State == model.StateRunning)
+	b.SetAsking(v.QuestionID != "")
 }
 
 func (a *App) apply(u model.Update) {

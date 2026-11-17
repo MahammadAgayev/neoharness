@@ -448,7 +448,7 @@ func askThenHold(t *testing.T) (*Hub, *fake) {
 	h := newHub(t, f)
 	f.script = func(ctx context.Context, req agent.Request) agent.Result {
 		if strings.Contains(req.Prompt, "set up storage") {
-			if err := h.Ask("demo", model.Coordinator, "which database?"); err != nil {
+			if err := h.Ask("demo", model.Coordinator, "which database?", nil); err != nil {
 				t.Error(err)
 			}
 			return agent.Result{Text: "asked"}
@@ -1639,7 +1639,7 @@ func TestRestoreSaysATurnWasStoppedByTheDelete(t *testing.T) {
 func TestTheSummarySaysTheCoordinatorsState(t *testing.T) {
 	h := newHub(t, &fake{})
 	pinned(t, h, "demo")
-	if err := h.Ask("demo", model.Coordinator, "Which phase first?"); err != nil {
+	if err := h.Ask("demo", model.Coordinator, "Which phase first?", nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, s := range h.Workspaces() {
@@ -1839,7 +1839,7 @@ func TestStopClosesAWaitingQuestion(t *testing.T) {
 			return agent.Result{Text: "ok"}
 		}
 		// It asks and works on, until the stop.
-		_ = h.Ask("demo", model.Coordinator, "which database?")
+		_ = h.Ask("demo", model.Coordinator, "which database?", nil)
 		<-ctx.Done()
 		return agent.Result{ExitCode: -1}
 	}
@@ -2984,4 +2984,70 @@ func TestTheEndOfBackgroundWorkIsNotIdle(t *testing.T) {
 	}
 	close(turn)
 	stateIs(t, h, "demo", "api", model.StateIdle)
+}
+
+// TestAQuestionComesAtTheEndOfItsTurnWithItsOptions: the reply explains,
+// the question and its options come after it, and the number of an option
+// answers it.
+func TestAQuestionComesAtTheEndOfItsTurnWithItsOptions(t *testing.T) {
+	f := &fake{}
+	h := newHub(t, f)
+	opts := []string{"suggest only: no one is notified", "assign"}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if strings.Contains(req.Prompt, "find reviewers") {
+			if err := h.Ask("demo", model.Coordinator, "May I assign reviewers?", opts); err != nil {
+				t.Error(err)
+			}
+			req.OnEvent(agent.Event{Kind: agent.KindAssistantText, Text: "Found three owners."})
+			return agent.Result{Text: "Found three owners."}
+		}
+		return agent.Result{Text: "ok"}
+	}
+	pinned(t, h, "demo")
+	_ = h.Send("demo", model.User, model.Coordinator, "find reviewers")
+	eventually(t, "the asking turn to end", func() bool {
+		evs, _ := h.Events("demo", model.Coordinator, 50)
+		return slices.ContainsFunc(evs, func(e model.Event) bool { return e.Kind == model.EventAsk })
+	})
+	evs, _ := h.Events("demo", model.Coordinator, 50)
+	var kinds []model.EventKind
+	for _, e := range evs {
+		if e.Kind == model.EventText || e.Kind == model.EventTurnEnd || e.Kind == model.EventAsk {
+			kinds = append(kinds, e.Kind)
+		}
+	}
+	if want := []model.EventKind{model.EventText, model.EventTurnEnd, model.EventAsk}; !slices.Equal(kinds, want) {
+		t.Fatalf("events %v, want %v", kinds, want)
+	}
+	if e := evs[len(evs)-1]; e.Kind != model.EventAsk || !slices.Equal(e.Options, opts) {
+		t.Fatalf("last event = %+v", e)
+	}
+	if v := view(t, h, "demo", model.Coordinator); v.Waiting != "May I assign reviewers?" || !slices.Equal(v.Options, opts) {
+		t.Fatalf("view waits on %q with %+v", v.Waiting, v.Options)
+	}
+	_ = h.Send("demo", model.User, model.Coordinator, " 2 ")
+	eventually(t, "the answer's turn", func() bool { return len(f.requests()) == 2 })
+	if p := f.requests()[1].Prompt; !strings.Contains(p, "2 · assign") {
+		t.Fatalf("the number names its option: %q", p)
+	}
+	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
+	if v := view(t, h, "demo", model.Coordinator); len(v.Options) != 0 {
+		t.Fatalf("options outlive the question: %+v", v.Options)
+	}
+}
+
+// TestAskTakesTwoToFourOptions: a choice of one is no choice, and more
+// than four is too many to read in a card.
+func TestAskTakesTwoToFourOptions(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	o := "a"
+	for _, bad := range [][]string{{o}, {o, o, o, o, o}, {o, " "}} {
+		if err := h.Ask("demo", model.Coordinator, "which?", bad); err == nil {
+			t.Fatalf("%d options were taken: %+v", len(bad), bad)
+		}
+	}
+	if err := h.Ask("demo", model.Coordinator, "which?", nil); err != nil {
+		t.Fatal(err)
+	}
 }

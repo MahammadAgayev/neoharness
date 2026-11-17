@@ -314,7 +314,7 @@ func TestThreadStateComesBackFromTheJournalAlone(t *testing.T) {
 	for _, n := range []string{"asks", "loop", "fails"} {
 		_ = h.OpenThread("demo", model.User, n, "", "")
 	}
-	if err := h.Ask("demo", "asks", "which branch?"); err != nil {
+	if err := h.Ask("demo", "asks", "which branch?", nil); err != nil {
 		t.Fatal(err)
 	}
 	_ = h.Send("demo", model.Coordinator, "loop", "ping")

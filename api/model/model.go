@@ -169,6 +169,8 @@ type Event struct {
 	// Version is an artifact's version.
 	Version  int  `json:"version,omitempty"`
 	NeedsYou bool `json:"needsYou,omitempty"`
+	// Options are the choices of a question.
+	Options []string `json:"options,omitempty"`
 	// Level is how much of the person's attention the event asks for. The
 	// hub sets it once, so every client draws the same thing.
 	Level Level `json:"level,omitempty"`
@@ -276,6 +278,8 @@ type JournalEntry struct {
 	Tools     int       `json:"tools,omitempty"`
 	NeedsYou  bool      `json:"needsYou,omitempty"`
 	Level     Level     `json:"level,omitempty"`
+	// Options are the choices of a question.
+	Options []string `json:"options,omitempty"`
 }
 
 // The kinds of journal entry.
@@ -387,7 +391,10 @@ type ThreadView struct {
 	Waiting string    `json:"waiting,omitempty"`
 	// QuestionID names the thread's open question, when Waiting is one: the
 	// person answers it by writing, or skips it with this ID.
-	QuestionID string      `json:"questionId,omitempty"`
+	QuestionID string `json:"questionId,omitempty"`
+	// Options are the choices of the open question; the person answers
+	// with one's number or in their own words.
+	Options    []string    `json:"options,omitempty"`
 	Permission *Permission `json:"permission,omitempty"`
 	Pending    []Event     `json:"pending,omitempty"` // queued, not yet in the transcript
 	// Reply is the start of the last turn's reply; empty while a turn runs,

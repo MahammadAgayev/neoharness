@@ -3,6 +3,7 @@ package tui
 import (
 	"cmp"
 	"fmt"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -71,10 +72,12 @@ type block struct {
 	exit  int
 	// needsYou marks a notice the person must act on.
 	needsYou bool
-	art      model.Artifact
-	tools    []toolCall
-	live     bool
-	open     bool
+	// options are a question's choices.
+	options []string
+	art     model.Artifact
+	tools   []toolCall
+	live    bool
+	open    bool
 	// brief is a coordinator's message long enough to fold, as of the last
 	// render.
 	brief  bool
@@ -361,7 +364,7 @@ func (b *Buffer) lastMessage() int {
 
 // SetPending shows a chat's queued messages after its transcript.
 func (b *Buffer) SetPending(evs []model.Event) {
-	if !slices.Equal(b.pending, evs) {
+	if !reflect.DeepEqual(b.pending, evs) {
 		b.pending = evs
 		b.dirty = true
 	}
@@ -543,7 +546,7 @@ func (b *Buffer) AddEvent(e model.Event) {
 		}
 		b.push(&block{kind: bAnswer, text: e.Text})
 	case model.EventAsk:
-		b.push(&block{kind: bAsk, text: e.Text})
+		b.push(&block{kind: bAsk, text: e.Text, options: e.Options})
 	case model.EventProgress:
 		b.push(&block{kind: bProgress, text: e.Text})
 	case model.EventNote:
@@ -658,7 +661,8 @@ func (bl *block) renderFresh(w int, th *Theme, spin int) []Line {
 		// answered and no longer waits, so it leaves the wait ink.
 		bar := []Span{{"▎ ", th.Fg3}}
 		label := Line{Prefix: bar, Spans: []Span{{"question", th.Fg3.Italic(true)}}}
-		return append([]Line{label}, renderMarkdown(bl.text, w, th, bar)...)
+		lines := append([]Line{label}, renderMarkdown(bl.text, w, th, bar)...)
+		return append(lines, optionLines(bl.options, w, th, th.Fg3, bar)...)
 	case bProgress:
 		return wrap([]Span{{bl.text, th.Fg2}}, w, []Span{{"  ↳ ", th.Run}}, []Span{{"    ", th.Fg}})
 	case bNote:
@@ -821,4 +825,15 @@ func shortTool(name string) string {
 		}
 	}
 	return name
+}
+
+// optionLines are a question's choices, numbered as the person answers
+// them, the number muted.
+func optionLines(opts []string, w int, th *Theme, ink tcell.Style, prefix []Span) []Line {
+	var out []Line
+	for i, o := range opts {
+		spans := []Span{{strconv.Itoa(i+1) + " ", th.Fg3}, {o, ink}}
+		out = append(out, wrap(spans, w, prefix, append(clone(prefix), Span{"  ", th.Fg}))...)
+	}
+	return out
 }

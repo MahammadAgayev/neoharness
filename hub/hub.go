@@ -215,6 +215,9 @@ type thread struct {
 	clock *turnClock
 	// f is what the journal says of the thread now.
 	f facts
+	// asked is the question the running turn asked, which shows when the
+	// turn ends, after its reply.
+	asked *model.Event
 	// stream is the reply so far, which streamTimer sends; streamed says
 	// clients show some of it.
 	stream      string
@@ -949,6 +952,11 @@ func (h *Hub) send(workspaceName, from, to, text string, images [][]byte) (*thre
 		if done, err := h.command(ws, th, text); done {
 			return th, err
 		}
+		if a := th.f.ask; a != nil {
+			if n, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && n >= 1 && n <= len(a.Options) {
+				text = fmt.Sprintf("%d · %s", n, a.Options[n-1])
+			}
+		}
 	}
 	// The thread asked and ended its reply; what still runs (background
 	// tasks) must not hold the answer back. Checked before enqueue, which may
@@ -1604,8 +1612,9 @@ func (h *Hub) armWake(ws *space, th *thread) {
 
 // Ask puts a question to the person and does not wait: the thread waits
 // for them once its turn ends, and their next message to it is the answer.
-// What others send it waits behind the question.
-func (h *Hub) Ask(workspaceName, name, question string) error {
+// What others send it waits behind the question. options are none, or two
+// to four choices.
+func (h *Hub) Ask(workspaceName, name, question string, options []string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	ws, th, err := h.lookup(workspaceName, name)
@@ -1616,10 +1625,25 @@ func (h *Hub) Ask(workspaceName, name, question string) error {
 	if q == "" {
 		return errors.New("empty question")
 	}
+	if n := len(options); n == 1 || n > 4 {
+		return fmt.Errorf("give two to four options, or none; got %d", n)
+	}
+	var opts []string
+	for _, o := range options {
+		if o = oneLine(o, replyLimit); o == "" {
+			return errors.New("an option is empty")
+		}
+		opts = append(opts, o)
+	}
 	at := time.Now().UTC()
 	id := fmt.Sprintf("q%d", at.UnixNano())
-	h.event(ws, th, model.Event{At: at, Kind: model.EventAsk, ID: id, Text: q})
-	h.note(ws, th, model.JournalEntry{At: at, Kind: model.JournalAsked, ID: id, Text: q})
+	e := model.Event{At: at, Kind: model.EventAsk, ID: id, Text: q, Options: opts}
+	if th.busy {
+		th.asked = &e
+	} else {
+		h.event(ws, th, e)
+	}
+	h.note(ws, th, model.JournalEntry{At: at, Kind: model.JournalAsked, ID: id, Text: q, Options: opts})
 	h.changed(ws, th)
 	return nil
 }
@@ -2069,6 +2093,10 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		h.note(ws, th, model.JournalEntry{Kind: model.JournalTurn, Text: oneLine(res.Text, replyLimit), Tools: res.Tools, Level: lvl})
 	}
 	th.quiet = false
+	if th.asked != nil {
+		h.event(ws, th, *th.asked)
+		th.asked = nil
+	}
 	th.background = 0
 	if err == nil {
 		th.background = res.Background
@@ -2436,7 +2464,11 @@ func boardWait(th *thread) prompts.Wait {
 		p := th.perms[0].Permission
 		return prompts.Wait{Permission: strings.TrimSuffix(p.Tool+": "+p.Detail, ": ")}
 	case th.f.ask != nil:
-		return prompts.Wait{Question: th.f.ask.Text}
+		q := th.f.ask.Text
+		if len(th.f.ask.Options) > 0 {
+			q += " (" + strings.Join(th.f.ask.Options, " / ") + ")"
+		}
+		return prompts.Wait{Question: q}
 	}
 	return prompts.Wait{Paused: th.f.hold != nil}
 }
@@ -2591,6 +2623,7 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 	case th.f.ask != nil:
 		v.Waiting = th.f.ask.Text
 		v.QuestionID = th.f.ask.ID
+		v.Options = th.f.ask.Options
 	case th.f.hold != nil:
 		v.Waiting = "paused"
 	}

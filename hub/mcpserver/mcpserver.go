@@ -66,7 +66,8 @@ type sendIn struct {
 }
 
 type askIn struct {
-	Question string `json:"question" jsonschema:"the question, with the context and the choices the person needs to answer it, in a few short lines"`
+	Question string   `json:"question" jsonschema:"the decision you need, in one short sentence, without the options"`
+	Options  []string `json:"options,omitempty" jsonschema:"two to four choices as plain strings, each a few words, and what it means after a colon when that is not plain, such as SQLite: one file, no server; leave out for an open question"`
 }
 
 type wakeIn struct {
@@ -177,12 +178,12 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			return text(fmt.Sprintf("You will be woken in %d minutes.", in.Minutes)), nil, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "ask", Description: "Ask the person a question you cannot go on without. It does not wait: end your turn after it, and their answer comes as their next message, maybe much later. The question shows as a card under your chat, and the person reads only that: put in it the context and the choices they need, in a few short lines, and do not say it again in your reply."},
+	mcp.AddTool(s, &mcp.Tool{Name: "ask", Description: "Ask the person a decision you cannot go on without. It does not wait: your turn ends, the question shows after your reply, and their answer comes as their next message, maybe much later. Your reply gives the context, the question the decision in one short sentence, and options, when the answer is one of a few, the two to four choices: each says its part once, so the question does not list the options and the reply repeats neither. The person may answer with an option's number or in their own words."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in askIn) (*mcp.CallToolResult, any, error) {
-			if err := h.Ask(p, me, in.Question); err != nil {
+			if err := h.Ask(p, me, in.Question, in.Options); err != nil {
 				return nil, nil, err
 			}
-			return text("Asked. The person sees the question in its card, so end your turn now without saying it again; their answer comes as their next message."), nil, nil
+			return text("Asked. The question and its numbered options show right after your reply, so your reply must not list the options or ask the question again: give only the context they need, in a few lines, or nothing; then end your turn. Their answer comes as their next message."), nil, nil
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "recap", Description: "Say where your work stands, so the person gets back on track when they come back. It shows at the top of your chat when they come back; it replaces your last one. Call it last in a turn in which your work moved. Plain words, short: outcomes, not steps."},

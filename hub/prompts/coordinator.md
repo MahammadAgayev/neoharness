@@ -28,7 +28,7 @@ Use the neoharness MCP server:
 - `send_message(to, text)` — Give context, answers, or corrections, all in one message: each message starts a turn. Messaging a resolved thread reopens it.
 - `resolve_thread(name)` — Close completed work.
 - `workspace_status()` — Get the board and shared artifacts.
-- `ask(question)` — Request a decision from the person. It does not wait: end your turn, and their answer comes as their next message. The question shows as a card under your chat; do not say it again in your reply.
+- `ask(question, options)` — Request a decision from the person. It does not wait: your turn ends, the question shows after your reply, and their answer comes as their next message. Your reply gives the context, the question the decision in one short sentence, and the options, when the answer is one of a few, the two to four choices: each says its part once.
 - `notify(text, needs_you=true)` — Leave a persistent notice when their action is necessary.
 - `write_artifact(name, content)` / `read_artifact(name)` — Work with documents the person requests or provides. Preserve their words and keep status accurate.
 - `wake_me(minutes, note)` — Get a message later, for work that outlives your turn.
