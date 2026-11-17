@@ -247,7 +247,9 @@ func needsOf(ws *space, th *thread) (waits []model.Wait, unseen model.Level, at 
 }
 
 // migrate moves what came before the journal into it, once: the news log,
-// and the news each thread kept in its thread.json. Callers hold h.mu.
+// and the news each thread kept in its thread.json. A failure in that news
+// may be over; reconcile moves in the one that still stands. Callers hold
+// h.mu.
 func (h *Hub) migrate(ws *space) {
 	if old, _ := workspace.OldNews(ws.p.Name); len(old) > 0 {
 		ws.journal = append(old, ws.journal...)
@@ -274,9 +276,6 @@ func (h *Hub) migrate(ws *space) {
 		}
 		if old.Reply != "" {
 			h.note(ws, th, model.JournalEntry{Kind: model.JournalTurn, Text: old.Reply, Tools: 1})
-		}
-		if old.Failed {
-			h.note(ws, th, model.JournalEntry{Kind: model.JournalFailed, Text: th.t.Failed})
 		}
 		_ = workspace.SaveThread(ws.p.Name, th.t)
 	}

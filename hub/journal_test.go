@@ -392,3 +392,23 @@ func TestRotationKeepsWhatStillWaits(t *testing.T) {
 		t.Fatalf("asks = %q, waits %+v", v.Waiting, h.Waits())
 	}
 }
+
+// TestOldNewsOfAFailureThatIsOverDoesNotWait: a thread's old news said its
+// turn failed, but a later turn ended well; the failure does not come back.
+func TestOldNewsOfAFailureThatIsOverDoesNotWait(t *testing.T) {
+	h0 := newHub(t, &fake{})
+	pinned(t, h0, "demo")
+	h0.Close()
+	old := &workspace.Thread{Name: "old", Role: model.RoleThread, Reply: "Done.", News: &workspace.News{Reply: "Done.", Failed: true}}
+	if err := workspace.SaveThread("demo", old); err != nil {
+		t.Fatal(err)
+	}
+	h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return &fake{} }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close()
+	if ws := h.Waits(); slices.ContainsFunc(ws, func(w model.Wait) bool { return w.Kind == model.WaitFailed }) {
+		t.Fatalf("waits = %+v", ws)
+	}
+}
