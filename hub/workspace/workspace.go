@@ -43,7 +43,7 @@ type Workspace struct {
 	AutoCompact string `json:"autoCompact,omitempty"`
 	// TextWidth is the :setlocal textwidth here; empty is the config's.
 	TextWidth string `json:"textWidth,omitempty"`
-	// BoardSeq is the last news item the coordinator's board showed.
+	// BoardSeq is the last journal entry the coordinator's board showed.
 	BoardSeq int64 `json:"boardSeq,omitempty"`
 }
 
@@ -164,7 +164,7 @@ type Notice struct {
 }
 
 // News is what a thread kept for the coordinator's next board before the
-// news log. The hub only reads it, to move it to the log.
+// journal. The hub only reads it, to move it to the journal.
 type News struct {
 	Recap     bool     `json:"recap,omitempty"`
 	Done      []string `json:"done,omitempty"`
@@ -415,27 +415,30 @@ func AppendEvent(workspace, thread string, e model.Event) error {
 	return err
 }
 
-// NewsItem is one piece of news of a workspace's threads: a recap, a todo
-// item done, an artifact written, the reply of a turn that ran tools and
-// wrote no recap, or a failed turn. Seq rises across the hub, so readers
-// keep where they are by it.
-type NewsItem struct {
-	Seq    int64     `json:"seq"`
-	At     time.Time `json:"at"`
-	Thread string    `json:"thread"`
-	Kind   string    `json:"kind"`
-	Text   string    `json:"text,omitempty"`
+// Entry is one fact of a workspace's journal: what happened to a session
+// that matters outside its chat. Kind says what; ID names the permission,
+// question or notice it is about; Tools counts a turn's tool calls. Seq
+// rises across the hub, so readers keep their place by it.
+type Entry struct {
+	Seq      int64     `json:"seq"`
+	At       time.Time `json:"at"`
+	Thread   string    `json:"thread"`
+	Kind     string    `json:"kind"`
+	ID       string    `json:"id,omitempty"`
+	Text     string    `json:"text,omitempty"`
+	Tools    int       `json:"tools,omitempty"`
+	NeedsYou bool      `json:"needsYou,omitempty"`
 }
 
-func newsFile(workspace string) string { return filepath.Join(Dir(workspace), "news.jsonl") }
+func journalFile(workspace string) string { return filepath.Join(Dir(workspace), "journal.jsonl") }
 
-// AppendNews adds one item to the workspace's news log.
-func AppendNews(workspace string, n NewsItem) error {
-	data, err := json.Marshal(n)
+// AppendJournal adds one entry to the workspace's journal.
+func AppendJournal(workspace string, e Entry) error {
+	data, err := json.Marshal(e)
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(newsFile(workspace), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(journalFile(workspace), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
@@ -444,10 +447,14 @@ func AppendNews(workspace string, n NewsItem) error {
 	return err
 }
 
-// ReadNews reads the workspace's news log, oldest first. A truncated last line,
-// left by a crash mid-write, is skipped.
-func ReadNews(workspace string) ([]NewsItem, error) {
-	f, err := os.Open(newsFile(workspace))
+// Journal reads the workspace's journal, oldest first. A truncated last
+// line, left by a crash mid-write, is skipped.
+func Journal(workspace string) ([]Entry, error) {
+	return readEntries(journalFile(workspace))
+}
+
+func readEntries(path string) ([]Entry, error) {
+	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -455,28 +462,44 @@ func ReadNews(workspace string) ([]NewsItem, error) {
 		return nil, err
 	}
 	defer f.Close()
-	var out []NewsItem
+	var out []Entry
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		var n NewsItem
-		if json.Unmarshal(sc.Bytes(), &n) == nil {
-			out = append(out, n)
+		var e Entry
+		if json.Unmarshal(sc.Bytes(), &e) == nil {
+			out = append(out, e)
 		}
 	}
 	return out, sc.Err()
 }
 
-// SaveNews writes the whole news log, as rotation leaves it.
-func SaveNews(workspace string, items []NewsItem) error {
+// SaveJournal writes the whole journal, as rotation leaves it.
+func SaveJournal(workspace string, entries []Entry) error {
 	var b []byte
-	for _, n := range items {
-		data, err := json.Marshal(n)
+	for _, e := range entries {
+		data, err := json.Marshal(e)
 		if err != nil {
 			return err
 		}
 		b = append(append(b, data...), '\n')
 	}
-	return writeFile(newsFile(workspace), b, 0o644)
+	return writeFile(journalFile(workspace), b, 0o644)
+}
+
+// OldNews reads the news log the journal replaced, and removes it. Its
+// entries are journal entries; a "reply" was a turn that ran tools.
+func OldNews(workspace string) ([]Entry, error) {
+	path := filepath.Join(Dir(workspace), "news.jsonl")
+	es, err := readEntries(path)
+	if err != nil || es == nil {
+		return nil, err
+	}
+	for i := range es {
+		if es[i].Kind == "reply" {
+			es[i].Kind, es[i].Tools = "turn", 1
+		}
+	}
+	return es, os.Remove(path)
 }
 
 func costFile(workspace string) string { return filepath.Join(Dir(workspace), "costs.jsonl") }

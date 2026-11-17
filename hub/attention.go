@@ -181,6 +181,7 @@ func (h *Hub) Seen(workspaceName, name string, at time.Time) error {
 		return nil
 	}
 	t.SeenAt = at
+	h.note(ws, th, workspace.Entry{At: at, Kind: jSeen})
 	if t.Unseen > 0 && !at.Before(t.UnseenAt) {
 		t.Unseen = 0
 	}
@@ -215,6 +216,7 @@ func (h *Hub) Dismiss(workspaceName, name, id string) error {
 	default:
 		return fmt.Errorf("nothing waits as %q on %s", id, name)
 	}
+	h.note(ws, th, workspace.Entry{Kind: jDismissed, ID: id})
 	h.changed(ws, th)
 	return nil
 }

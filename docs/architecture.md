@@ -84,16 +84,12 @@ UUID.
   the question or permission it waits for, the error of a failed last turn,
   its recap, and its tasks (`3/5 done, now: …`). A turn end is not progress
   by itself: a thread can end a turn only to answer a message. So the hub
-  keeps the threads' news instead, in the workspace's news log
-  (`news.jsonl`, `hub/news.go`): a new recap, todo items done, artifacts
-  written, a failed turn, and, for a turn that ran tools and wrote no
-  recap, the start of its reply. Each item has a `seq` that rises across
-  the hub. Nobody empties the log; each reader keeps its place. The board
+  keeps the threads' news instead, in the workspace's journal (below): a
+  new recap, todo items done, artifacts written, a failed turn, and, for a
+  turn that ran tools and wrote no recap, the start of its reply. The board
   shows what came after the workspace's `boardSeq` once, as a `New:` line
-  under the thread, then moves `boardSeq` to the end. The attention agent
-  reads what came after the person last saw each thread (`SeenAt`). An item
-  goes once both have read it (or its thread is gone) and it is 7 days
-  old; a log keeps at most 2000 items. A restart keeps it all. With `notify = "coordinator"`, news also wakes the coordinator, 15
+  under the thread, then moves `boardSeq` to the end; a restart keeps it.
+  With `notify = "coordinator"`, news also wakes the coordinator, 15
   seconds later so that news close together makes one turn, and again when
   the hub starts if news waits. A turn with no news wakes nothing. The
   coordinator decides with `notify` what reaches the person; these turns do
@@ -158,6 +154,25 @@ which its work moved, so no extra model turn makes it. The hub saves it with
 the thread and sends it in the thread's view; the TUI and the app show it
 in a card at the top of the chat when the person comes back (see
 usage.md). Which recap the person closed stays in the client.
+
+## Journal
+
+The transcript is what a session said and did; the journal is what
+happened to it that matters outside its chat (`hub/journal.go`). Each
+workspace has one, `journal.jsonl`, append-only. An entry is `{seq, at,
+thread, kind, id, text, tools, needsYou}`, and `seq` rises across the hub.
+The kinds: `opened`, `started` (a turn), `turn` (it ended well: the reply's
+first line and how many tools it ran), `failed`, `recap`, `done` (a todo
+item), `artifact`, `asked`, `permission`, `decided`, `notice`, `wrote` (the
+person wrote to the session), `dismissed` (a skip, or `x` on a wait),
+`seen`, `resolved`, `reopened`.
+
+Nobody empties it; each reader keeps its place. The coordinator's board
+reads after `boardSeq` (in `workspace.json`), and the attention agent after
+the person last saw each session (`seen`). An entry goes once both have
+read it, or its session is gone, and it is 7 days old; a journal keeps at
+most 2000 entries. At start the hub moves what came before the journal into
+it once: the old `news.jsonl`, and the news a `thread.json` kept.
 
 ## Attention
 
@@ -255,12 +270,13 @@ command.
 ```
 ~/.neoharness/hub.sock                                             local API socket (0600)
 ~/.neoharness/hub.log                                              hub log
-~/.neoharness/workspaces/<workspace>/workspace.json                name, folder, deleted
+~/.neoharness/workspaces/<workspace>/workspace.json                name, folder, deleted, the board's place in the journal
 ~/.neoharness/workspaces/<workspace>/threads/<name>/thread.json    state, queue, session (0600: it holds the MCP token)
 ~/.neoharness/workspaces/<workspace>/threads/<name>/events.jsonl   transcript, append-only
 ~/.neoharness/workspaces/<workspace>/threads/<name>/images/        images the person sent, named by content
 ~/.neoharness/workspaces/<workspace>/artifacts/<name>.md / .json   artifact text / metadata
 ~/.neoharness/workspaces/<workspace>/costs.jsonl                   one line per paid turn: when, thread, model, cost
+~/.neoharness/workspaces/<workspace>/journal.jsonl                 the journal: what happened to its sessions
 ~/.neoharness/artifacts/focus.md / .json                           the person's focus: text / metadata
 ~/.neoharness/focus.json                                           the focus set aside, and the edit suggested to it
 ```

@@ -155,8 +155,8 @@ type Hub struct {
 	subs       map[int]chan model.Update
 	nextSub    int
 	nextPerm   int
-	// newsSeq is the last Seq a news item got, in any workspace.
-	newsSeq int64
+	// journalSeq is the last Seq a journal entry got, in any workspace.
+	journalSeq int64
 	// lastWaits is the waits list as last published.
 	lastWaits []model.Wait
 
@@ -176,8 +176,8 @@ type space struct {
 	// reports wakes the coordinator about the threads' news, when
 	// Config.Notify is on.
 	reports *time.Timer
-	// news is the workspace's news log, oldest first.
-	news []workspace.NewsItem
+	// journal is the workspace's journal, oldest first.
+	journal []workspace.Entry
 }
 
 type thread struct {
@@ -313,7 +313,7 @@ func (h *Hub) load(p workspace.Workspace) (*space, error) {
 		th.state = th.derive()
 		_ = workspace.SaveThread(p.Name, t)
 	}
-	h.loadNews(ws)
+	h.loadJournal(ws)
 	return ws, nil
 }
 
@@ -766,6 +766,7 @@ func (h *Hub) OpenThread(workspaceName, by, name, brief, loc string) error {
 		return err
 	}
 	h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Opened by " + by + " in " + l.String()})
+	h.note(ws, th, workspace.Entry{Kind: jOpened, Text: by})
 	if strings.TrimSpace(brief) != "" {
 		h.enqueue(ws, th, by, brief)
 	}
@@ -841,6 +842,7 @@ func (h *Hub) SendNow(workspaceName, to, text string, images ...[]byte) error {
 		if err == nil && th.t.Asking != "" {
 			th.t.Asking = ""
 			h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Question not answered; the queued messages went in."})
+			h.note(ws, th, workspace.Entry{Kind: jDismissed})
 			h.changed(ws, th)
 			if !th.busy {
 				h.kick(ws, th)
@@ -1134,6 +1136,7 @@ func (h *Hub) enqueue(ws *space, th *thread, from, text string, images ...string
 		t.Paused = false
 		t.Asking = ""
 		t.Notices = nil
+		h.note(ws, th, workspace.Entry{Kind: jWrote})
 	}
 	h.changed(ws, th)
 	h.kick(ws, th)
@@ -1166,6 +1169,7 @@ func (h *Hub) Resolve(workspaceName, by, name string) error {
 	}
 	h.denyAll(th, "the thread was resolved")
 	h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Resolved by " + by})
+	h.note(ws, th, workspace.Entry{Kind: jResolved, Text: by})
 	h.changed(ws, th)
 	return nil
 }
@@ -1227,6 +1231,7 @@ func (h *Hub) reopen(ws *space, th *thread, by string) {
 		text = "Reopened by " + by
 	}
 	h.event(ws, th, model.Event{Kind: model.EventNote, Text: text})
+	h.note(ws, th, workspace.Entry{Kind: jReopened, Text: by})
 	h.changed(ws, th)
 }
 
@@ -1340,7 +1345,7 @@ func (h *Hub) WriteArtifact(workspaceName, by, name, text string) (model.Artifac
 	}
 	h.event(ws, th, model.Event{Kind: model.EventArtifact, Detail: name, Text: a.Title, Version: a.Version})
 	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: by, Artifact: &a})
-	h.addNews(ws, th, newsArtifact, name)
+	h.note(ws, th, workspace.Entry{Kind: jArtifact, Text: name})
 	h.changed(ws, th)
 	return a, nil
 }
@@ -1633,6 +1638,7 @@ func (h *Hub) AskUser(ctx context.Context, workspaceName, name, question string)
 	a := &asking{id: fmt.Sprintf("q%d", h.nextPerm), done: make(chan string, 1)}
 	th.t.Asking, th.ask = strings.TrimSpace(question), a
 	h.event(ws, th, model.Event{Kind: model.EventAsk, ID: a.id, Text: th.t.Asking})
+	h.note(ws, th, workspace.Entry{Kind: jAsked, ID: a.id, Text: th.t.Asking})
 	h.changed(ws, th)
 	h.mu.Unlock()
 	select {
@@ -1656,8 +1662,10 @@ func (h *Hub) answer(ws *space, th *thread, text string) {
 	th.ask, th.t.Asking = nil, ""
 	if text == "" {
 		h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Question skipped."})
+		h.note(ws, th, workspace.Entry{Kind: jDismissed, ID: a.id})
 	} else {
 		h.event(ws, th, model.Event{Kind: model.EventMessage, From: model.User, Text: text})
+		h.note(ws, th, workspace.Entry{Kind: jWrote})
 		th.t.AgentTurns = 0
 	}
 	h.changed(ws, th)
@@ -1675,7 +1683,7 @@ func (h *Hub) Recap(workspaceName, name, text string) error {
 	}
 	th.t.Recap, th.t.RecapAt = oneLine(text, replyLimit), time.Now().UTC()
 	th.recapped = true
-	h.addNews(ws, th, newsRecap, th.t.Recap)
+	h.note(ws, th, workspace.Entry{Kind: jRecap, Text: th.t.Recap})
 	h.changed(ws, th)
 	return nil
 }
@@ -1717,10 +1725,10 @@ func withNews(ws *space) []string {
 	var out []string
 	for _, n := range slices.Sorted(maps.Keys(ws.threads)) {
 		th := ws.threads[n]
-		if th.deleted || th.t.Resolved {
+		if n == model.Coordinator || th.deleted || th.t.Resolved {
 			continue
 		}
-		if slices.ContainsFunc(ws.news, func(it workspace.NewsItem) bool { return it.Thread == n && ws.forBoard(it) }) {
+		if _, any := newsOf(ws, n, ws.forBoard); any {
 			out = append(out, n)
 		}
 	}
@@ -1744,8 +1752,10 @@ func (h *Hub) Notify(workspaceName, name, text string, needsYou bool) error {
 	}
 	at := time.Now().UTC()
 	h.event(ws, th, model.Event{At: at, Kind: model.EventNotice, Text: text, NeedsYou: needsYou})
+	id := fmt.Sprintf("n%d", at.UnixNano())
+	h.note(ws, th, workspace.Entry{At: at, Kind: jNotice, ID: id, Text: text, NeedsYou: needsYou})
 	if needsYou {
-		th.t.Notices = append(th.t.Notices, workspace.Notice{ID: fmt.Sprintf("n%d", at.UnixNano()), Text: text, At: at})
+		th.t.Notices = append(th.t.Notices, workspace.Notice{ID: id, Text: text, At: at})
 		h.changed(ws, th)
 	}
 	return nil
@@ -1801,6 +1811,7 @@ func (h *Hub) Permission(ctx context.Context, workspaceName, name string, q agen
 	}
 	th.perms = append(th.perms, p)
 	h.event(ws, th, model.Event{Kind: model.EventPermission, ID: p.ID, Tool: q.Tool, Detail: q.Detail})
+	h.note(ws, th, workspace.Entry{Kind: jPermission, ID: p.ID, Text: strings.TrimSuffix(q.Tool+": "+q.Detail, ": ")})
 	h.changed(ws, th)
 	h.mu.Unlock()
 
@@ -1857,6 +1868,7 @@ func (h *Hub) Answer(workspaceName, name, id string, d model.Decision, msg strin
 		text += ": " + msg
 	}
 	h.event(ws, th, model.Event{Kind: model.EventAnswer, ID: p.ID, Tool: p.Tool, Text: text})
+	h.note(ws, th, workspace.Entry{Kind: jDecided, ID: p.ID, Text: text})
 	h.dropPerm(ws, th, p.ID)
 	p.done <- d
 	return nil
@@ -1937,6 +1949,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 	th.started = false
 	th.interrupted, th.dropped = false, false
 	th.cancel = cancel
+	h.note(ws, th, workspace.Entry{Kind: jStarted})
 	h.changed(ws, th)
 
 	prompt := compose(batch, ws.threads, t.Role == model.RoleCoordinator)
@@ -2039,6 +2052,9 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		// A stop means stop: what the person queued behind the turn waits
 		// for them, and a question of the turn waits for no one.
 		if th.dropped {
+			if t.Asking != "" {
+				h.note(ws, th, workspace.Entry{Kind: jDismissed})
+			}
 			t.Asking = ""
 			t.Paused = len(t.Queue) > 0
 		}
@@ -2083,12 +2099,12 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		if ended {
 			t.Reply = oneLine(res.Text, replyLimit)
 		}
-		switch {
-		case failure != "":
-			h.addNews(ws, th, newsFailed, failure)
-		case ended && res.Tools > 0 && !th.recapped && t.Reply != "":
-			h.addNews(ws, th, newsReply, t.Reply)
-		}
+	}
+	switch {
+	case failure != "":
+		h.note(ws, th, workspace.Entry{Kind: jFailed, Text: failure})
+	case ended && !compact:
+		h.note(ws, th, workspace.Entry{Kind: jTurn, Text: oneLine(res.Text, replyLimit), Tools: res.Tools})
 	}
 	th.quiet = false
 	th.background = 0
@@ -2136,6 +2152,7 @@ func (h *Hub) follow(ws *space, th *thread) {
 			th.following = false
 			th.busy = true
 			th.started, th.interrupted, th.dropped, th.recapped, th.todoTurn = false, false, false, false, false
+			h.note(ws, th, workspace.Entry{Kind: jStarted})
 			th.clock = newTurnClock(h.cfg.TurnTimeout, func() { cancelCause(errTurnTimeout) })
 			now := time.Now().UTC()
 			t.Turns = append(slices.DeleteFunc(t.Turns, func(at time.Time) bool { return now.Sub(at) > 24*time.Hour }), now)
@@ -2190,7 +2207,7 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 		th.t.Todos = changeTodo(th.t.Todos, e, !th.todoTurn)
 		th.todoTurn = true
 		if i := slices.IndexFunc(th.t.Todos, func(t model.Todo) bool { return t.ID == e.ID }); i >= 0 && was < 0 && th.t.Todos[i].State == model.TodoDone {
-			h.addNews(ws, th, newsDone, th.t.Todos[i].Text)
+			h.note(ws, th, workspace.Entry{Kind: jDone, Text: th.t.Todos[i].Text})
 		}
 		h.changed(ws, th)
 	case agent.KindBackground:
@@ -2424,7 +2441,7 @@ func (h *Hub) board(ws *space) string {
 			continue
 		}
 		b := boardThread(th)
-		b.News = newsOf(ws, n, ws.forBoard)
+		b.News, _ = newsOf(ws, n, ws.forBoard)
 		lines = append(lines, prompts.BoardLine(b))
 	}
 	h.boardRead(ws)
