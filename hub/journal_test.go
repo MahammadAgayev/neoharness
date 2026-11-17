@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -212,5 +213,66 @@ func TestTheNewsLogBecomesTheJournal(t *testing.T) {
 	stateIs(t, h, "demo", model.Coordinator, model.StateIdle)
 	if es, _ := workspace.Journal("demo"); es[0].Seq != 3 || es[len(es)-1].Seq <= 3 {
 		t.Fatalf("new entries must come after the old ones: %+v", es)
+	}
+}
+
+// TestWhatThreadsKeptBeforeTheJournalStillWaits: a question, a notice and
+// unseen news a thread kept from before the journal still wait after the
+// upgrade, once, and a permission does not outlive the hub.
+func TestWhatThreadsKeptBeforeTheJournalStillWaits(t *testing.T) {
+	h0 := newHub(t, &fake{})
+	pinned(t, h0, "demo")
+	ws := h0.workspaces["demo"]
+	for _, n := range []string{"asks", "done"} {
+		if _, err := h0.addThread(ws, n, model.RoleThread, model.Location{Dir: t.TempDir()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h0.note(ws, ws.threads["done"], workspace.Entry{Kind: jPermission, ID: "p1", Text: "Bash: ls"})
+	h0.Close()
+	at := time.Now().Add(-time.Hour).UTC()
+	edit := func(name string, f func(*workspace.Thread)) {
+		ts, _ := workspace.Threads("demo")
+		for _, th := range ts {
+			if th.Name == name {
+				f(th)
+				_ = workspace.SaveThread("demo", th)
+			}
+		}
+	}
+	edit("asks", func(th *workspace.Thread) { th.Asking, th.AskedAt = "which branch?", at })
+	edit(model.Coordinator, func(th *workspace.Thread) {
+		th.Notices = []workspace.Notice{{ID: "n1", Text: "approve the plan", At: at}}
+	})
+	edit("done", func(th *workspace.Thread) {
+		th.Unseen, th.UnseenAt, th.Reply = model.LevelNotice, at, "Moved the store."
+	})
+
+	open := func() (*Hub, []string) {
+		h, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return &fake{} }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, w := range h.Waits() {
+			got = append(got, w.Thread+" "+string(w.Kind)+" "+w.Text)
+		}
+		return h, got
+	}
+	h, got := open()
+	want := "asks question which branch?, coordinator notice approve the plan, done review Moved the store."
+	if strings.Join(got, ", ") != want {
+		t.Fatalf("waits = %v\nwant    %s", got, want)
+	}
+	n := len(h.workspaces["demo"].journal)
+	h.Close()
+	h, got = open()
+	defer h.Close()
+	if strings.Join(got, ", ") != want || len(h.workspaces["demo"].journal) != n {
+		t.Fatalf("a second start changed the journal: %v, %d entries, then %d", got, n, len(h.workspaces["demo"].journal))
+	}
+	es := h.workspaces["demo"].journal
+	if !slices.ContainsFunc(es, func(e workspace.Entry) bool { return e.Kind == jDecided && e.ID == "p1" }) {
+		t.Fatalf("the permission is still open: %+v", es)
 	}
 }

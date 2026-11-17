@@ -136,9 +136,9 @@ type Thread struct {
 	// Notices are the coordinator's notices that need the person, until
 	// the person writes to it or dismisses them.
 	Notices []Notice `json:"notices,omitempty"`
-	// SeenAt is when the person last saw the thread. Unseen is the highest
-	// attention level of 1 and 2 since then, and UnseenAt when the last of
-	// those came.
+	// SeenAt is when the person last saw the thread. Unseen and UnseenAt
+	// are what it kept of its news before the journal; the hub only reads
+	// them, to move them to the journal.
 	SeenAt   time.Time   `json:"seenAt,omitzero"`
 	Unseen   model.Level `json:"unseen,omitempty"`
 	UnseenAt time.Time   `json:"unseenAt,omitzero"`
@@ -417,17 +417,19 @@ func AppendEvent(workspace, thread string, e model.Event) error {
 
 // Entry is one fact of a workspace's journal: what happened to a session
 // that matters outside its chat. Kind says what; ID names the permission,
-// question or notice it is about; Tools counts a turn's tool calls. Seq
-// rises across the hub, so readers keep their place by it.
+// question or notice it is about; Tools counts a turn's tool calls; Level
+// is the attention it asks for, as the hub set it once. Seq rises across
+// the hub, so readers keep their place by it.
 type Entry struct {
-	Seq      int64     `json:"seq"`
-	At       time.Time `json:"at"`
-	Thread   string    `json:"thread"`
-	Kind     string    `json:"kind"`
-	ID       string    `json:"id,omitempty"`
-	Text     string    `json:"text,omitempty"`
-	Tools    int       `json:"tools,omitempty"`
-	NeedsYou bool      `json:"needsYou,omitempty"`
+	Seq      int64       `json:"seq"`
+	At       time.Time   `json:"at"`
+	Thread   string      `json:"thread"`
+	Kind     string      `json:"kind"`
+	ID       string      `json:"id,omitempty"`
+	Text     string      `json:"text,omitempty"`
+	Tools    int         `json:"tools,omitempty"`
+	NeedsYou bool        `json:"needsYou,omitempty"`
+	Level    model.Level `json:"level,omitempty"`
 }
 
 func journalFile(workspace string) string { return filepath.Join(Dir(workspace), "journal.jsonl") }

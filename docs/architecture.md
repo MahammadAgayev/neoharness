@@ -160,7 +160,8 @@ usage.md). Which recap the person closed stays in the client.
 The transcript is what a session said and did; the journal is what
 happened to it that matters outside its chat (`hub/journal.go`). Each
 workspace has one, `journal.jsonl`, append-only. An entry is `{seq, at,
-thread, kind, id, text, tools, needsYou}`, and `seq` rises across the hub.
+thread, kind, id, text, tools, needsYou, level}`, and `seq` rises across
+the hub; `level` is the attention level, set once, as for events.
 The kinds: `opened`, `started` (a turn), `turn` (it ended well: the reply's
 first line and how many tools it ran), `failed`, `recap`, `done` (a todo
 item), `artifact`, `asked`, `permission`, `decided`, `notice`, `wrote` (the
@@ -194,6 +195,15 @@ draw a level, never which level an event has.
   thread. A client sends it after the thread was on screen, in a window in
   front, for `model.SeenDwell` (2 s) without a break. It quiets levels 1 and
   2 that came before `at`, in every client. It never clears level 3.
+- The waits list, a thread's level and its review come from the journal
+  (`needsOf`): an entry that needs the person opens a wait, and a later one
+  closes it. A permission closes when it is `decided`, answered or not. A
+  question closes when the person writes or skips it. A failure closes
+  when a turn starts, and a notice when the person writes to the
+  coordinator or dismisses it; `resolved` closes everything. `seen` marks
+  what came before it as read. At start the hub makes the journal agree
+  with the threads: a permission is `decided` as lost, since its turn died
+  with the hub.
 - The waits list is what needs the person in every workspace, in the order
   to go through it: pending permissions and questions, which block a turn;
   then failed turns and notices that need the person; then reviews; each

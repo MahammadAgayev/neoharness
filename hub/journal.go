@@ -56,6 +56,17 @@ func (h *Hub) note(ws *space, th *thread, e workspace.Entry) {
 	if e.At.IsZero() {
 		e.At = time.Now().UTC()
 	}
+	switch e.Kind {
+	case jPermission, jAsked, jFailed:
+		e.Level = model.LevelNeedsYou
+	case jNotice:
+		e.Level = model.LevelNotice
+		if e.NeedsYou {
+			e.Level = model.LevelNeedsYou
+		}
+	case jArtifact:
+		e.Level = model.LevelAmbient
+	}
 	ws.journal = append(ws.journal, e)
 	_ = workspace.AppendJournal(ws.p.Name, e)
 	if len(ws.journal) > journalMax+journalMax/10 {
@@ -76,16 +87,137 @@ func boardNews(kind string) bool {
 	return false
 }
 
-// loadJournal reads a workspace's journal, after migrate. Callers hold
-// h.mu.
+// loadJournal reads a workspace's journal, moves into it what came before
+// it, and makes it agree with what the threads kept. Callers hold h.mu.
 func (h *Hub) loadJournal(ws *space) {
 	ws.journal, _ = workspace.Journal(ws.p.Name)
 	h.journalSeq = max(h.journalSeq, ws.p.BoardSeq)
 	h.migrate(ws)
-	if len(ws.journal) > 0 {
-		h.journalSeq = max(h.journalSeq, ws.journal[len(ws.journal)-1].Seq)
+	for _, n := range slices.Sorted(maps.Keys(ws.threads)) {
+		h.reconcile(ws, ws.threads[n])
 	}
 	h.rotateJournal(ws)
+}
+
+// reconcile makes a thread's journal agree with what the thread kept at
+// start. A permission never outlives the hub, as its turn died with it. A
+// question, a notice, a failure or unseen news a thread kept from before
+// the journal goes into it. Callers hold h.mu.
+func (h *Hub) reconcile(ws *space, th *thread) {
+	t := th.t
+	ws0, unseen, _ := needsOf(ws, th)
+	open := map[model.WaitKind]bool{}
+	for _, w := range ws0 {
+		open[w.Kind] = true
+		if w.Kind == model.WaitPermission {
+			h.note(ws, th, workspace.Entry{Kind: jDecided, ID: w.ID, Text: "lost: neoharness stopped"})
+		}
+	}
+	switch {
+	case t.Asking != "" && !open[model.WaitQuestion]:
+		h.note(ws, th, workspace.Entry{Kind: jAsked, Text: t.Asking, At: t.AskedAt})
+	case t.Asking == "" && open[model.WaitQuestion]:
+		h.note(ws, th, workspace.Entry{Kind: jDismissed})
+	}
+	for _, n := range t.Notices {
+		if !slices.ContainsFunc(ws0, func(w model.Wait) bool { return w.ID == n.ID }) {
+			h.note(ws, th, workspace.Entry{Kind: jNotice, ID: n.ID, Text: n.Text, NeedsYou: true, At: n.At})
+		}
+	}
+	if failed(th) && !open[model.WaitFailed] {
+		h.note(ws, th, workspace.Entry{Kind: jFailed, Text: t.Failed, At: t.FailedAt})
+	}
+	if t.Unseen > 0 {
+		if t.Unseen > unseen && !t.Resolved {
+			h.note(ws, th, workspace.Entry{Kind: jTurn, Text: t.Reply, Level: t.Unseen, At: t.UnseenAt})
+		}
+		t.Unseen, t.UnseenAt = 0, time.Time{}
+		_ = workspace.SaveThread(ws.p.Name, t)
+	}
+}
+
+// needsOf is what a session's journal says waits on the person: what
+// opened and nothing closed since, in order. unseen is the highest level
+// of 1 and 2 since they last saw it, and at when the last of those came.
+func needsOf(ws *space, th *thread) (waits []model.Wait, unseen model.Level, at time.Time) {
+	var perms, notices []workspace.Entry
+	var ask, failure *workspace.Entry
+	var seen time.Time
+	drop := func(es []workspace.Entry, id string) []workspace.Entry {
+		return slices.DeleteFunc(es, func(e workspace.Entry) bool { return e.ID == id })
+	}
+	for _, e := range ws.journal {
+		if e.Thread != th.t.Name {
+			continue
+		}
+		switch e.Kind {
+		case jPermission:
+			perms = append(perms, e)
+		case jDecided:
+			perms = drop(perms, e.ID)
+		case jAsked:
+			ask = &e
+		case jNotice:
+			if e.NeedsYou {
+				notices = append(notices, e)
+			}
+		case jFailed:
+			failure = &e
+		case jStarted:
+			failure = nil
+		case jWrote:
+			ask, failure, notices = nil, nil, nil
+		case jDismissed:
+			switch {
+			case e.ID == failedID:
+				failure = nil
+			case e.ID == model.ReviewID:
+				seen = later(seen, e.At)
+			case slices.ContainsFunc(notices, func(n workspace.Entry) bool { return n.ID == e.ID }):
+				notices = drop(notices, e.ID)
+			default:
+				ask = nil
+			}
+		case jSeen:
+			seen = later(seen, e.At)
+		case jResolved:
+			perms, notices, ask, failure = nil, nil, nil, nil
+		}
+	}
+	w := func(kind model.WaitKind, id string, e workspace.Entry) model.Wait {
+		return model.Wait{Workspace: ws.p.Name, Thread: th.t.Name, Kind: kind, ID: id, Text: e.Text, Since: e.At}
+	}
+	for _, p := range perms {
+		waits = append(waits, w(model.WaitPermission, p.ID, p))
+	}
+	if ask != nil {
+		// Only the turn that asked can take a skip by its ID.
+		id := ""
+		if th.ask != nil && th.ask.id == ask.ID {
+			id = ask.ID
+		}
+		waits = append(waits, w(model.WaitQuestion, id, *ask))
+	}
+	// While a turn runs or messages wait, the failure is behind it.
+	if failure != nil && !th.busy && len(th.t.Queue) == 0 {
+		waits = append(waits, w(model.WaitFailed, failedID, *failure))
+	}
+	for _, n := range notices {
+		waits = append(waits, w(model.WaitNotice, n.ID, n))
+	}
+	for _, e := range ws.journal {
+		if e.Thread == th.t.Name && e.At.After(seen) && (e.Level == model.LevelAmbient || e.Level == model.LevelNotice) {
+			unseen, at = max(unseen, e.Level), e.At
+		}
+	}
+	return waits, unseen, at
+}
+
+func later(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
 }
 
 // migrate moves what came before the journal into it, once: the news log,

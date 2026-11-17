@@ -39,28 +39,8 @@ func level(e model.Event, role model.Role, quiet bool) model.Level {
 
 // waitsOf is what waits on the person in one thread.
 func waitsOf(ws *space, th *thread) []model.Wait {
-	t := th.t
-	w := func(kind model.WaitKind, id, text string, since time.Time) model.Wait {
-		return model.Wait{Workspace: ws.p.Name, Thread: t.Name, Kind: kind, ID: id, Text: text, Since: since}
-	}
-	var out []model.Wait
-	for _, p := range th.perms {
-		out = append(out, w(model.WaitPermission, p.ID, strings.TrimSuffix(p.Tool+": "+p.Detail, ": "), p.at))
-	}
-	if t.Asking != "" {
-		id := ""
-		if th.ask != nil {
-			id = th.ask.id
-		}
-		out = append(out, w(model.WaitQuestion, id, t.Asking, t.AskedAt))
-	}
-	if failed(th) {
-		out = append(out, w(model.WaitFailed, failedID, t.Failed, t.FailedAt))
-	}
-	for _, n := range t.Notices {
-		out = append(out, w(model.WaitNotice, n.ID, n.Text, n.At))
-	}
-	return out
+	w, _, _ := needsOf(ws, th)
+	return w
 }
 
 // rank is where a kind of wait goes in the list: what blocks a turn first,
@@ -81,15 +61,15 @@ func rank(k model.WaitKind) int {
 // end or a notice. Under notify = "coordinator" a thread's turn end is only
 // ambient, so the coordinator's word is the review instead.
 func review(ws *space, th *thread) (model.Wait, bool) {
-	t := th.t
-	if t.Unseen != model.LevelNotice || th.state != model.StateIdle {
+	_, unseen, at := needsOf(ws, th)
+	if unseen != model.LevelNotice || th.state != model.StateIdle {
 		return model.Wait{}, false
 	}
-	text := t.Reply
+	text := th.t.Reply
 	if text == "" {
 		text = "finished a turn"
 	}
-	return model.Wait{Workspace: ws.p.Name, Thread: t.Name, Kind: model.WaitReview, ID: model.ReviewID, Text: text, Since: t.UnseenAt}, true
+	return model.Wait{Workspace: ws.p.Name, Thread: th.t.Name, Kind: model.WaitReview, ID: model.ReviewID, Text: text, Since: at}, true
 }
 
 // failedID names a thread's failure in the waits list; a thread has at
@@ -104,10 +84,11 @@ func failed(th *thread) bool {
 
 // threadLevel is the highest level still open on a thread.
 func threadLevel(ws *space, th *thread) model.Level {
-	if len(waitsOf(ws, th)) > 0 {
+	w, unseen, _ := needsOf(ws, th)
+	if len(w) > 0 {
 		return model.LevelNeedsYou
 	}
-	return th.t.Unseen
+	return unseen
 }
 
 // Waits is what needs the person in every workspace, oldest first.
@@ -182,9 +163,6 @@ func (h *Hub) Seen(workspaceName, name string, at time.Time) error {
 	}
 	t.SeenAt = at
 	h.note(ws, th, workspace.Entry{At: at, Kind: jSeen})
-	if t.Unseen > 0 && !at.Before(t.UnseenAt) {
-		t.Unseen = 0
-	}
 	h.changed(ws, th)
 	return nil
 }
@@ -202,13 +180,13 @@ func (h *Hub) Dismiss(workspaceName, name, id string) error {
 		return err
 	}
 	t := th.t
+	_, unseen, _ := needsOf(ws, th)
 	switch {
 	case id == failedID && failed(th):
 		t.FailedAt = time.Time{}
-	case id == model.ReviewID && t.Unseen > 0:
+	case id == model.ReviewID && unseen > 0:
 		// x on a review reads it.
 		t.SeenAt = time.Now().UTC()
-		t.Unseen = 0
 	case slices.ContainsFunc(t.Notices, func(n workspace.Notice) bool { return n.ID == id }):
 		t.Notices = slices.DeleteFunc(t.Notices, func(n workspace.Notice) bool { return n.ID == id })
 	case slices.ContainsFunc(th.perms, func(p *pending) bool { return p.ID == id }), th.ask != nil && th.ask.id == id:

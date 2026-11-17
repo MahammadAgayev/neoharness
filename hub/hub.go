@@ -571,7 +571,7 @@ func (h *Hub) DeleteWorkspace(name string) error {
 		if th.cancel != nil {
 			th.cancel()
 		}
-		h.denyAll(th, "the workspace was deleted")
+		h.denyAll(ws, th, "the workspace was deleted")
 		delete(h.tokens, th.t.Token)
 	}
 	delete(h.workspaces, name)
@@ -832,6 +832,9 @@ func (h *Hub) SendNow(workspaceName, to, text string, images ...[]byte) error {
 		}
 		// Stopped with messages queued: nothing runs, so they start now.
 		if err == nil && th.t.Paused {
+			if th.t.Asking != "" {
+				h.note(ws, th, workspace.Entry{Kind: jDismissed})
+			}
 			th.t.Paused, th.t.Asking = false, ""
 			h.changed(ws, th)
 			h.kick(ws, th)
@@ -1046,6 +1049,7 @@ func (h *Hub) command(ws *space, th *thread, text string) (bool, error) {
 		}
 		focus := strings.Join(f[1:], " ")
 		t.AgentTurns, t.Paused, t.Asking = 0, false, ""
+		h.note(ws, th, workspace.Entry{Kind: jWrote})
 		// Before what is queued: the agent has not read it yet, so it goes to
 		// the compacted session, as a held message of a reopened thread does.
 		t.Queue = append([]workspace.Message{{From: model.User, Text: focus, At: time.Now().UTC(), Compact: true, Shown: true}}, t.Queue...)
@@ -1114,6 +1118,7 @@ func (h *Hub) clear(ws *space, th *thread) error {
 	t.Context, t.Summary = 0, ""
 	t.Queue = []workspace.Message{}
 	t.Asking, t.Paused, t.AgentTurns = "", false, 0
+	h.note(ws, th, workspace.Entry{Kind: jWrote})
 	h.event(ws, th, model.Event{Kind: model.EventClear, Text: "Cleared. The next message starts a new conversation."})
 	h.changed(ws, th)
 	return nil
@@ -1167,7 +1172,7 @@ func (h *Hub) Resolve(workspaceName, by, name string) error {
 	if th.cancel != nil {
 		th.cancel()
 	}
-	h.denyAll(th, "the thread was resolved")
+	h.denyAll(ws, th, "the thread was resolved")
 	h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Resolved by " + by})
 	h.note(ws, th, workspace.Entry{Kind: jResolved, Text: by})
 	h.changed(ws, th)
@@ -1194,7 +1199,7 @@ func (h *Hub) Delete(workspaceName, name string) error {
 	if th.cancel != nil {
 		th.cancel()
 	}
-	h.denyAll(th, "the thread was deleted")
+	h.denyAll(ws, th, "the thread was deleted")
 	delete(ws.threads, name)
 	delete(h.tokens, th.t.Token)
 	if err := workspace.DeleteThread(workspaceName, name); err != nil {
@@ -1297,6 +1302,7 @@ func (h *Hub) compactReopened(ws *space, th *thread) {
 		th.autoTried = true
 		t.Paused = true
 		t.Asking = fmt.Sprintf("context %d%% full · /compact first, or send the message as is", pct)
+		h.note(ws, th, workspace.Entry{Kind: jAsked, Text: t.Asking})
 	}
 }
 
@@ -1756,8 +1762,8 @@ func (h *Hub) Notify(workspaceName, name, text string, needsYou bool) error {
 	h.note(ws, th, workspace.Entry{At: at, Kind: jNotice, ID: id, Text: text, NeedsYou: needsYou})
 	if needsYou {
 		th.t.Notices = append(th.t.Notices, workspace.Notice{ID: id, Text: text, At: at})
-		h.changed(ws, th)
 	}
+	h.changed(ws, th)
 	return nil
 }
 
@@ -1821,7 +1827,7 @@ func (h *Hub) Permission(ctx context.Context, workspaceName, name string, q agen
 	case <-ctx.Done():
 		d = model.Deny
 		h.mu.Lock()
-		h.dropPerm(ws, th, p.ID)
+		h.dropPerm(ws, th, p.ID, "the turn ended")
 		h.mu.Unlock()
 	case <-h.ctx.Done():
 		return false, "neoharness is shutting down"
@@ -1868,21 +1874,27 @@ func (h *Hub) Answer(workspaceName, name, id string, d model.Decision, msg strin
 		text += ": " + msg
 	}
 	h.event(ws, th, model.Event{Kind: model.EventAnswer, ID: p.ID, Tool: p.Tool, Text: text})
-	h.note(ws, th, workspace.Entry{Kind: jDecided, ID: p.ID, Text: text})
-	h.dropPerm(ws, th, p.ID)
+	h.dropPerm(ws, th, p.ID, text)
 	p.done <- d
 	return nil
 }
 
-func (h *Hub) dropPerm(ws *space, th *thread, id string) {
+// dropPerm takes a permission off the thread, answered or not: text says
+// how it ended.
+func (h *Hub) dropPerm(ws *space, th *thread, id, text string) {
+	if !slices.ContainsFunc(th.perms, func(p *pending) bool { return p.ID == id }) {
+		return
+	}
 	th.perms = slices.DeleteFunc(th.perms, func(p *pending) bool { return p.ID == id })
+	h.note(ws, th, workspace.Entry{Kind: jDecided, ID: id, Text: text})
 	h.changed(ws, th)
 }
 
-func (h *Hub) denyAll(th *thread, why string) {
+func (h *Hub) denyAll(ws *space, th *thread, why string) {
 	for _, p := range th.perms {
 		p.msg = why
 		p.done <- model.Deny
+		h.note(ws, th, workspace.Entry{Kind: jDecided, ID: p.ID, Text: "denied: " + why})
 	}
 	th.perms = nil
 }
@@ -2008,7 +2020,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	th.busy = false
 	th.cancel = nil
 	t.InFlight = nil
-	h.denyAll(th, "the turn ended")
+	h.denyAll(ws, th, "the turn ended")
 	th.ask = nil
 	th.clock.stop()
 	h.endStream(ws, th, true)
@@ -2104,7 +2116,12 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	case failure != "":
 		h.note(ws, th, workspace.Entry{Kind: jFailed, Text: failure})
 	case ended && !compact:
-		h.note(ws, th, workspace.Entry{Kind: jTurn, Text: oneLine(res.Text, replyLimit), Tools: res.Tools})
+		// A quiet turn stays out of the chat, and so out of what is new.
+		lvl := model.LevelQuiet
+		if !th.quiet {
+			lvl = level(model.Event{Kind: model.EventTurnEnd, Background: res.Background}, t.Role, h.cfg.Notify)
+		}
+		h.note(ws, th, workspace.Entry{Kind: jTurn, Text: oneLine(res.Text, replyLimit), Tools: res.Tools, Level: lvl})
 	}
 	th.quiet = false
 	th.background = 0
@@ -2546,11 +2563,6 @@ func (h *Hub) event(ws *space, th *thread, e model.Event) {
 	e.Level = level(e, th.t.Role, h.cfg.Notify)
 	_ = workspace.AppendEvent(ws.p.Name, th.t.Name, e)
 	h.publish(model.Update{Kind: model.UpdateEvent, Workspace: ws.p.Name, Thread: th.t.Name, Event: &e})
-	if e.Level == model.LevelAmbient || e.Level == model.LevelNotice {
-		th.t.Unseen = max(th.t.Unseen, e.Level)
-		th.t.UnseenAt = e.At
-		h.changed(ws, th)
-	}
 }
 
 // quietKind says an event is the turn's talk, which a quiet turn keeps out of
