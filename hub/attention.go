@@ -148,8 +148,10 @@ func (h *Hub) hubWaits() []model.Wait {
 	return out
 }
 
-// publishWaits sends the waits list when it changed. Callers hold h.mu.
+// publishWaits sends the waits list when it changed, and wakes the
+// attention agent when what it reads changed. Callers hold h.mu.
 func (h *Hub) publishWaits() {
+	defer h.attentionSees()
 	ws := h.waits()
 	if slices.EqualFunc(ws, h.lastWaits, func(a, b model.Wait) bool {
 		return a.Workspace == b.Workspace && a.Thread == b.Thread && a.Kind == b.Kind && a.ID == b.ID && a.Text == b.Text && a.Since.Equal(b.Since) &&
@@ -159,7 +161,6 @@ func (h *Hub) publishWaits() {
 	}
 	h.lastWaits = ws
 	h.publish(model.Update{Kind: model.UpdateWaits, Waits: ws})
-	h.attentionSees()
 }
 
 // Seen says the person saw a thread at a time: what came before it at

@@ -273,6 +273,12 @@ func (c *Client) Waits() ([]model.Wait, error) {
 	return ws, c.do("GET", "/waits", nil, &ws)
 }
 
+// Status is how all the work stands, as the attention agent last wrote it.
+func (c *Client) Status() (model.Status, error) {
+	var s model.Status
+	return s, c.do("GET", "/status", nil, &s)
+}
+
 func (c *Client) Seen(workspace, thread string, at time.Time) error {
 	return c.do("POST", threadPath(workspace, thread)+"/seen", Seen{At: at}, nil)
 }

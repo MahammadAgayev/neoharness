@@ -245,6 +245,14 @@ type Wait struct {
 	Brief string `json:"brief,omitempty"`
 }
 
+// Status is how all the work stands, in every workspace, as the attention
+// agent last wrote it: a few short lines, for the person to read when they
+// come back.
+type Status struct {
+	Lines []string  `json:"lines,omitempty"`
+	At    time.Time `json:"at,omitzero"`
+}
+
 // HubScope is where a workspace name goes for a document of the hub, which
 // is in no workspace. It is no valid workspace name. FocusDoc is its one
 // document: what the person works on now, in every workspace.
@@ -493,6 +501,8 @@ const (
 	UpdateStopped UpdateKind = "stopped"
 	// UpdateWaits is the whole waits list, after it changed.
 	UpdateWaits UpdateKind = "waits"
+	// UpdateStatus is the attention agent's new Status.
+	UpdateStatus UpdateKind = "status"
 	// UpdateDelta is the reply a thread writes now: Text is the text so far.
 	// It is never in the transcript; the text event that follows replaces
 	// it, and an empty Text drops it.
@@ -509,6 +519,7 @@ type Update struct {
 	Summary   *WorkspaceView `json:"summary,omitempty"`
 	Artifact  *Artifact      `json:"artifact,omitempty"`
 	Waits     []Wait         `json:"waits,omitempty"`
+	Status    *Status        `json:"status,omitempty"`
 	Text      string         `json:"text,omitempty"`
 }
 

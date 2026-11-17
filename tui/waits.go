@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
+
 	"github.com/MahammadAgayev/neoharness/api/model"
 )
 
@@ -23,6 +25,10 @@ func (a *App) loadWaits() {
 		return
 	}
 	a.setWaits(ws)
+	// A hub older than the status has none to give; that is no error.
+	if s, err := a.c.Status(); err == nil {
+		a.status = s
+	}
 }
 
 func (a *App) setWaits(ws []model.Wait) {
@@ -129,6 +135,32 @@ func (a *App) dismissWait(key string) {
 	}
 }
 
+// waitGlyph is a wait's glyph and the ink of its kind.
+func waitGlyph(th *Theme, k model.WaitKind) (Span, tcell.Style) {
+	switch k {
+	case model.WaitFailed:
+		return Span{"✗ ", th.Alert}, th.Alert
+	case model.WaitNotice:
+		return Span{"↗ ", th.Wait}, th.Wait
+	case model.WaitReview:
+		return Span{"✓ ", th.Done}, th.Done
+	case model.WaitFocus:
+		return Span{"◇ ", th.Wait}, th.Wait
+	}
+	return Span{"◆ ", th.Wait}, th.Wait
+}
+
+// waitName is the name a wait goes by from the open workspace.
+func waitName(open string, w model.Wait) string {
+	switch {
+	case w.Workspace == model.HubScope:
+		return model.FocusDoc
+	case w.Workspace != open:
+		return w.Workspace + " · " + w.Thread
+	}
+	return w.Thread
+}
+
 func (a *App) renderWaits() {
 	th := a.th
 	if len(a.waits) == 0 {
@@ -148,27 +180,17 @@ func (a *App) renderWaits() {
 		ws = slices.Clone(ws)
 		slices.SortStableFunc(ws, func(x, y model.Wait) int { return x.Since.Compare(y.Since) })
 	}
+	// How all the work stands heads the list; its lines are no stops.
 	var lines []Line
+	for _, l := range a.status.Lines {
+		lines = append(lines, Line{Prefix: []Span{{" ", th.Fg}}, Spans: []Span{{l, th.Fg2}}})
+	}
+	if len(lines) > 0 {
+		lines = append(lines, Line{})
+	}
 	for _, w := range ws {
-		glyph, ink := Span{"◆ ", th.Wait}, th.Wait
-		switch w.Kind {
-		case model.WaitFailed:
-			glyph, ink = Span{"✗ ", th.Alert}, th.Alert
-		case model.WaitNotice:
-			glyph = Span{"↗ ", th.Wait}
-		case model.WaitReview:
-			glyph, ink = Span{"✓ ", th.Done}, th.Done
-		case model.WaitFocus:
-			glyph = Span{"◇ ", th.Wait}
-		}
-		name := w.Thread
-		switch {
-		case w.Workspace == model.HubScope:
-			name = model.FocusDoc
-		case w.Workspace != a.workspace:
-			name = w.Workspace + " · " + name
-		}
-		spans := []Span{glyph, {name + "  ", th.Fg2}, {string(w.Kind) + " · ", ink}}
+		glyph, ink := waitGlyph(th, w.Kind)
+		spans := []Span{glyph, {waitName(a.workspace, w) + "  ", th.Fg2}, {string(w.Kind) + " · ", ink}}
 		at := ago(a.now().Sub(w.Since))
 		used := 0
 		for _, s := range spans {
@@ -226,3 +248,72 @@ func (a *App) see(now time.Time) {
 		}
 	}
 }
+
+// backLines is the card the person sees when they come back: how all the
+// work stands, in the attention agent's words or else as counts, and the
+// next thing, the top of the waits list. Empty when there is nothing to say.
+func (a *App) backLines() [][]Span {
+	th := a.th
+	var lines [][]Span
+	for _, l := range a.status.Lines {
+		lines = append(lines, []Span{{l, th.Fg2}})
+	}
+	if len(lines) == 0 {
+		var parts []string
+		count := func(n int, what string) {
+			if n > 0 {
+				parts = append(parts, fmt.Sprintf(what, n))
+			}
+		}
+		read, failed := 0, 0
+		for _, w := range a.waits {
+			switch w.Kind {
+			case model.WaitReview:
+				read++
+			case model.WaitFailed:
+				failed++
+			}
+		}
+		count(a.waiting()-failed, "◆ %d waiting")
+		count(failed, "✗ %d failed")
+		count(read, "✓ %d to read")
+		if len(parts) > 0 {
+			lines = append(lines, []Span{{strings.Join(parts, " · "), th.Fg2}})
+		}
+	}
+	if len(a.waits) == 0 {
+		return lines
+	}
+	w := a.waits[0]
+	glyph, _ := waitGlyph(th, w.Kind)
+	about := w.Text
+	if w.Why != "" {
+		about = w.Why
+	}
+	return append(lines, []Span{glyph, {"next  ", th.Fg3}, {waitName(a.workspace, w) + " · " + string(w.Kind) + "  ", th.Fg}, {flatten(about), th.Fg2}})
+}
+
+// drawBack draws the card of backLines at the top right, where toasts go,
+// and says how many rows it took.
+func (a *App) drawBack(W int) int {
+	lines := a.backLines()
+	if !a.backShown || len(lines) == 0 {
+		return 0
+	}
+	tw := min(backWidth, W-2*margin)
+	if tw < 20 {
+		return 0
+	}
+	x0, h := W-tw-margin, len(lines)+2
+	a.box(x0, 1, tw, h, "", a.th.Fg3)
+	for i, l := range lines {
+		x := x0 + 2
+		for _, sp := range l {
+			x = a.put(x, 2+i, x0+tw-2, truncate(sp.Text, max(x0+tw-2-x, 0)), sp.Style)
+		}
+	}
+	return h
+}
+
+// backWidth fits a status line, which the agent keeps under 70 columns.
+const backWidth = 76

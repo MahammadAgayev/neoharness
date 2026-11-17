@@ -182,12 +182,18 @@ draw a level, never which level an event has.
   waiting on it. It does not raise the thread to level 3, clients do not
   count it as waiting, and seen or a dismiss takes it off.
 - With an attention agent (`attention` in `setup()`), the hub orders the
-  list by it (`hub/next.go`). When the waits or the focus change, it waits
+  list by it (`hub/next.go`). When the waits, an open thread's line on
+  the board (its todo progress aside), or the focus change, it waits
   `AttentionDelay` (4 s) for the burst to end, then runs one turn: a new
-  conversation with `NoTools`, the focus unless it is set aside, and the
-  waits numbered from 1. The reply is a JSON object, `{"next": [{"i", "why",
-  "brief"}]}`. Ordered waits come first, in its order, with `why` and
-  `brief`; the rest follow in the hub's order. A brief is kept while its
+  conversation with `NoTools`, the focus unless it is set aside, the
+  waits numbered from 1, and every open thread as the coordinator's board
+  shows it, without the news that board clears. The reply is a JSON object,
+  `{"status": [...], "next": [{"i", "why", "brief"}]}`. Ordered waits come
+  first, in its order, with `why` and `brief`; the rest follow in the hub's
+  order. `status` is up to 4 lines on how all the work stands; the hub
+  keeps it as `model.Status`, `GET /status` returns it, and a `status`
+  update carries it when it changes. Clients show it when the person comes
+  back. A brief is kept while its
   wait is the same, so the agent writes it once. Its own order changes
   nothing it reads, so it does not wake itself. A failed turn or a reply
   with no object keeps the order there was.

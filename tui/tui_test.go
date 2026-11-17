@@ -168,6 +168,7 @@ func (f *fakeClient) Updates(ctx context.Context) (<-chan model.Update, error) {
 }
 
 func (f *fakeClient) Waits() ([]model.Wait, error) { return slices.Clone(f.waits), nil }
+func (f *fakeClient) Status() (model.Status, error) { return model.Status{}, nil }
 func (f *fakeClient) Seen(p, t string, at time.Time) error {
 	f.seen = append(f.seen, p+"/"+t)
 	return nil

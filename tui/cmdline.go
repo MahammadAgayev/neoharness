@@ -726,7 +726,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<C-w>v  <C-w>s", "split vertically / horizontally"),
 		row("<C-w>c  <C-w>o  <C-w>=", "close, only, equal sizes"),
 		row("]b [b  <C-^>", "next / previous thread, alternate"),
-		row("]q [q  :cn :cp", "next / previous wait, in any workspace: what blocks a turn first, then failures and notices, then reviews, then an edit of your focus"),
+		row("]q [q  :cn :cp", "next / previous wait, in any workspace: what blocks a turn first, then failures and notices, then reviews, then an edit of your focus; back after 2 min away, a card says how all the work stands and what is next, and ]q goes there"),
 		row(":waits  :copen", "the waits list; <CR> goes to one, x dismisses a notice or a failure, or reads a review"),
 		row(":waits!", "the waits list, oldest first"),
 		row("<C-o>", "back to the buffer the window showed before, or to the workspace a jump left"),

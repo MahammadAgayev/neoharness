@@ -229,3 +229,43 @@ func quote(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
+
+// TestTheAttentionAgentWritesHowTheWorkStands: the agent reads every open
+// thread, not only those that wait, and its status is how all the work
+// stands, kept for the person to read when they come back. A thread's new
+// recap wakes it, though nothing waits.
+func TestTheAttentionAgentWritesHowTheWorkStands(t *testing.T) {
+	attn := &fake{}
+	attn.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if !strings.Contains(req.Prompt, "plan drafted") {
+			return agent.Result{Text: `{"next":[]}`}
+		}
+		return agent.Result{Text: `{"status":["alpha: plan drafted, nothing waits","  "],"next":[]}`}
+	}
+	h := attentionHub(t, &fake{}, attn)
+	pinned(t, h, "alpha")
+	ch, stop := h.Subscribe()
+	defer stop()
+	if err := h.Recap("alpha", model.Coordinator, "plan drafted"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the status", func() bool { return len(h.Status().Lines) == 1 })
+	if s := h.Status(); s.Lines[0] != "alpha: plan drafted, nothing waits" || s.At.IsZero() {
+		t.Fatalf("status = %+v", s)
+	}
+	req := attn.requests()[len(attn.requests())-1]
+	if !strings.Contains(req.Prompt, "Threads:\n") || !strings.Contains(req.Prompt, "- alpha · coordinator: idle. Recap: plan drafted.") {
+		t.Fatalf("the threads are not in the prompt: %s", req.Prompt)
+	}
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case u := <-ch:
+			if u.Kind == model.UpdateStatus && u.Status != nil && len(u.Status.Lines) == 1 {
+				return
+			}
+		case <-timeout:
+			t.Fatal("no status update")
+		}
+	}
+}

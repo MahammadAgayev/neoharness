@@ -2431,15 +2431,7 @@ func (h *Hub) board(ws *space) string {
 			continue
 		}
 		t := th.t
-		b := prompts.BoardThread{Name: n, State: string(th.state), Wait: boardWait(th), Recap: t.Recap, Failed: t.Failed, Total: len(t.Todos)}
-		for _, td := range t.Todos {
-			switch td.State {
-			case model.TodoDone:
-				b.Done++
-			case model.TodoActive:
-				b.Now = td.Text
-			}
-		}
+		b := boardThread(th)
 		if nw := t.News; nw != nil {
 			b.News = prompts.News{Recap: nw.Recap, Done: nw.Done, Artifacts: nw.Artifacts, Reply: nw.Reply}
 			t.News = nil
@@ -2454,6 +2446,22 @@ func (h *Hub) board(ws *space) string {
 }
 
 // boardWait is what a thread waits for, in the order derive ranks it.
+// boardThread is a thread as the board shows it, without its news, which
+// only the coordinator's board reads and clears.
+func boardThread(th *thread) prompts.BoardThread {
+	t := th.t
+	b := prompts.BoardThread{Name: t.Name, State: string(th.state), Wait: boardWait(th), Recap: t.Recap, Failed: t.Failed, Total: len(t.Todos)}
+	for _, td := range t.Todos {
+		switch td.State {
+		case model.TodoDone:
+			b.Done++
+		case model.TodoActive:
+			b.Now = td.Text
+		}
+	}
+	return b
+}
+
 func boardWait(th *thread) prompts.Wait {
 	switch {
 	case len(th.perms) > 0:

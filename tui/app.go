@@ -56,6 +56,7 @@ type Client interface {
 	Reopen(workspace, thread string) error
 	Answer(workspace, thread, id string, d model.Decision, msg string) error
 	Waits() ([]model.Wait, error)
+	Status() (model.Status, error)
 	Seen(workspace, thread string, at time.Time) error
 	Dismiss(workspace, thread, id string) error
 	SetFocusOff(off bool) error
@@ -206,6 +207,11 @@ type App struct {
 	// wait has no card, as a review: it shows until the thread runs again,
 	// though the hub drops the review once the person sees the thread.
 	landed   struct{ workspace, thread, brief string }
+	// status is how all the work stands, from the attention agent, and
+	// backShown keeps the card that says it and what is next, from when the
+	// person comes back to their next key.
+	status    model.Status
+	backShown bool
 	// wsJumps are the jumps into another workspace, the newest last, for
 	// <C-o>: each window keeps its own jumps, and a workspace its windows.
 	wsJumps []wsJump
@@ -554,6 +560,11 @@ func (a *App) apply(u model.Update) {
 		a.restartWhenIdle()
 	case model.UpdateWaits:
 		a.setWaits(u.Waits)
+	case model.UpdateStatus:
+		if u.Status != nil {
+			a.status = *u.Status
+			a.renderWaits()
+		}
 	case model.UpdateDelta:
 		// The text lands in the buffer now and shows on the next frame, so a
 		// fast stream costs at most the frame budget.
@@ -1629,8 +1640,16 @@ func (a *App) focus(in bool) {
 }
 
 // cameBack opens the recap card of each chat with a recap the person has not
-// closed.
+// closed, and the card of how all the work stands and what is next. ]q
+// starts again at the top, so one key goes to what the card names.
 func (a *App) cameBack() {
+	a.waitAt = ""
+	if lines := a.backLines(); len(lines) > 0 {
+		a.backShown = true
+		for _, l := range lines {
+			a.logMessage(spansText(l), a.th.Fg2)
+		}
+	}
 	for n, v := range a.threads {
 		if k := a.recapKey(n); v.Recap != "" && v.RecapAt.After(a.recapSeen[k]) {
 			a.recapOpen[k] = true

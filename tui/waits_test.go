@@ -309,3 +309,66 @@ func TestCtrlOGoesBackToTheWorkspaceAJumpLeft(t *testing.T) {
 		t.Fatalf("then <C-o> leaves ops, got %q", h.a.workspace)
 	}
 }
+
+// When the person comes back, a card at the top right says how all the work
+// stands, in the attention agent's words, and the next thing: the top of the
+// waits list. It stays until their next key, and ]q goes to that thing, as
+// the walk starts again at the top.
+func TestComingBackShowsHowTheWorkStandsAndWhatIsNext(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	clock := time.Now()
+	h.a.now = func() time.Time { return clock }
+	away := func() {
+		h.a.handle(tcell.NewEventFocus(false))
+		clock = clock.Add(model.RecapAway)
+		h.a.handle(tcell.NewEventFocus(true))
+		h.a.draw()
+	}
+	ws := demoWaits()
+	ws[1].Why = "blocks the release"
+	h.setWaits(ws[1], ws[0])
+	h.press("]q", "]q")
+	h.a.apply(model.Update{Kind: model.UpdateStatus, Status: &model.Status{Lines: []string{"demo: auth moved, tests pass", "ops: deploy waits on you"}, At: clock}})
+	h.a.draw()
+	if strings.Contains(h.screen(), "auth moved") {
+		t.Fatal("the status shows before the person was away")
+	}
+
+	away()
+	h.see("demo: auth moved, tests pass")
+	h.see("ops: deploy waits on you")
+	h.see("next  auth-refactor · question  blocks the release")
+	if h.fgAt("◆ next") != fgOf(h.a.th.Wait) {
+		t.Fatal("the next thing's glyph is in its wait ink")
+	}
+	h.press("]q")
+	if h.a.cur.Buf.Thread != "auth-refactor" {
+		t.Fatalf("]q goes to the next thing the card named, got %q", h.a.cur.Buf.Thread)
+	}
+	if strings.Contains(h.screen(), "auth moved") {
+		t.Fatal("the card stays after the next key")
+	}
+	h.press(":waits", "<CR>")
+	if l := h.a.waitsBuf.blocks[0].raw[0]; !strings.Contains(spansText(l.Spans), "auth moved") || l.Item != "" {
+		t.Fatalf(":waits starts with the status, which is no stop: %+v", l)
+	}
+	h.press("<C-o>")
+	if !slices.ContainsFunc(h.a.messages, func(l Line) bool { return strings.Contains(spansText(l.Spans), "auth moved") }) {
+		t.Fatal(":messages keeps the status")
+	}
+
+	// Without the attention agent, the counts say how it stands.
+	h.a.apply(model.Update{Kind: model.UpdateStatus, Status: &model.Status{}})
+	h.setWaits(append(ws, model.Wait{Workspace: "ops", Thread: "deploy", Kind: model.WaitReview, ID: model.ReviewID, Text: "deployed"})...)
+	away()
+	h.see("◆ 2 waiting · ✓ 1 to read")
+
+	// Nothing waits and no status: nothing to show.
+	h.press("j")
+	h.setWaits()
+	away()
+	if strings.Contains(h.screen(), "next") || strings.Contains(h.screen(), "to read") {
+		t.Fatalf("a card with nothing to say:\n%s", h.screen())
+	}
+}

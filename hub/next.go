@@ -3,6 +3,7 @@ package hub
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -29,7 +30,10 @@ type attention struct {
 	// briefs are by wait key and text: a brief stays while its wait is the
 	// same, so the agent writes it once.
 	briefs map[string]string
-	// seen is what the agent last woke for: the waits and the focus.
+	// status is how all the work stands, in the agent's words.
+	status model.Status
+	// seen is what the agent last woke for: the waits, the threads and the
+	// focus.
 	seen    string
 	timer   *time.Timer
 	running bool
@@ -69,7 +73,7 @@ func (h *Hub) waits() []model.Wait {
 }
 
 // attentionSees wakes the agent when what it reads changed: a wait came or
-// went or changed, or the focus did. Its own order changes none of it, so it
+// went or changed, a thread's state or recap did, or the focus did. Its own order changes none of it, so it
 // does not wake itself. Callers hold h.mu.
 func (h *Hub) attentionSees() {
 	if h.cfg.Attention == "" {
@@ -78,6 +82,11 @@ func (h *Hub) attentionSees() {
 	var b strings.Builder
 	for _, w := range h.hubWaits() {
 		b.WriteString(briefKey(w) + "\x01")
+	}
+	// Todo progress is left out: it would wake the agent at every item.
+	for _, t := range h.attentionBoard() {
+		t.Done, t.Now = 0, ""
+		fmt.Fprintf(&b, "%v\x01", t)
 	}
 	fa, ftext, _ := h.readFocus()
 	fmt.Fprintf(&b, "%d %v %d", fa.Version, fa.Off, len(ftext))
@@ -127,7 +136,12 @@ func (h *Hub) runAttention() {
 	defer h.wg.Done()
 	h.attn.running = false
 	if err == nil && res.ExitCode == 0 {
-		if next, briefs, edit, ok := parseNext(res.Text, ws); ok {
+		if next, briefs, edit, status, ok := parseNext(res.Text, ws); ok {
+			if status != nil && !slices.Equal(status, h.attn.status.Lines) {
+				h.attn.status = model.Status{Lines: status, At: time.Now().UTC()}
+				s := h.attn.status
+				h.publish(model.Update{Kind: model.UpdateStatus, Status: &s})
+			}
 			if edit != nil && h.cfg.FocusEdit != FocusEditOff {
 				h.suggest(*edit)
 			}
@@ -179,13 +193,42 @@ func (h *Hub) attentionRequest(ws []model.Wait) agent.Request {
 	}
 	home, _ := os.UserHomeDir()
 	return agent.Request{
-		Prompt:       prompts.Attention(focus, suggested, in),
+		Prompt:       prompts.Attention(focus, suggested, in, h.attentionBoard()),
 		SystemPrompt: prompts.AttentionSystem(focus != "" && h.cfg.FocusEdit != FocusEditOff),
 		Cwd:          home,
 		NoTools:      true,
 		Model:        h.cfg.Agents[h.cfg.Attention].Model,
 		Effort:       h.cfg.Agents[h.cfg.Attention].Effort,
 	}
+}
+
+// attentionBoard is every open thread of every workspace, as the
+// coordinator's board shows them, without the news it clears. Callers hold
+// h.mu.
+func (h *Hub) attentionBoard() []prompts.BoardThread {
+	var out []prompts.BoardThread
+	for _, name := range slices.Sorted(maps.Keys(h.workspaces)) {
+		ws := h.workspaces[name]
+		for _, n := range slices.Sorted(maps.Keys(ws.threads)) {
+			th := ws.threads[n]
+			if th.deleted || th.t.Resolved {
+				continue
+			}
+			b := boardThread(th)
+			b.Name = name + " · " + n
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// Status is how all the work stands, as the attention agent last wrote it.
+func (h *Hub) Status() model.Status {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s := h.attn.status
+	s.Lines = slices.Clone(s.Lines)
+	return s
 }
 
 // ageOf is how long a wait has waited, as the agent reads it.
@@ -203,13 +246,14 @@ func ageOf(d time.Duration) string {
 
 // parseNext reads the agent's reply: the JSON object in it, which numbers
 // the waits ws from 1. A number it does not know, or a reply with no
-// object, is no order.
-func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, *model.Suggestion, bool) {
+// object, is no order. The status is nil when the reply has none.
+func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, *model.Suggestion, []string, bool) {
 	i, j := strings.Index(text, "{"), strings.LastIndex(text, "}")
 	if i < 0 || j < i {
-		return nil, nil, nil, false
+		return nil, nil, nil, nil, false
 	}
 	var out struct {
+		Status []string `json:"status"`
 		Next []struct {
 			I     int    `json:"i"`
 			Why   string `json:"why"`
@@ -221,7 +265,16 @@ func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, *model.
 		} `json:"edit"`
 	}
 	if json.Unmarshal([]byte(text[i:j+1]), &out) != nil {
-		return nil, nil, nil, false
+		return nil, nil, nil, nil, false
+	}
+	var status []string
+	if out.Status != nil {
+		status = []string{}
+		for _, l := range out.Status {
+			if l = oneLine(l, replyLimit); l != "" && len(status) < statusLines {
+				status = append(status, l)
+			}
+		}
 	}
 	var edit *model.Suggestion
 	if e := out.Edit; e != nil && strings.TrimSpace(e.Text) != "" {
@@ -241,8 +294,11 @@ func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, *model.
 			briefs[briefKey(w)] = oneLine(b, replyLimit)
 		}
 	}
-	return next, briefs, edit, true
+	return next, briefs, edit, status, true
 }
+
+// statusLines is the most lines of status the person reads.
+const statusLines = 4
 
 // suggest takes the agent's edit of the focus: it waits for the person, or
 // with focus_edit = "allow" it is saved at once as the agent's version. An

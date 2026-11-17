@@ -278,9 +278,10 @@ type AttentionWait struct {
 }
 
 // Attention is one turn of the attention agent: the focus, empty for none,
-// why of the edit of it that waits for the person, empty for none, and the
-// waits, numbered from 1.
-func Attention(focus, suggested string, waits []AttentionWait) string {
+// why of the edit of it that waits for the person, empty for none, the
+// waits, numbered from 1, and every open thread as the coordinator's board
+// shows it, each named with its workspace.
+func Attention(focus, suggested string, waits []AttentionWait, threads []BoardThread) string {
 	var b strings.Builder
 	if strings.TrimSpace(focus) == "" {
 		b.WriteString("No focus.\n")
@@ -305,6 +306,10 @@ func Attention(focus, suggested string, waits []AttentionWait) string {
 			about += " Last reply: " + sentence(r)
 		}
 		b.WriteString(about + "\n")
+	}
+	b.WriteString("\nThreads:\n")
+	for _, t := range threads {
+		b.WriteString(BoardLine(t) + "\n")
 	}
 	return b.String()
 }

@@ -89,6 +89,9 @@ func (a *App) key(ev *tcell.EventKey) {
 		return
 	}
 	back := a.keyAfterAway()
+	if !back {
+		a.backShown = false
+	}
 	if run := a.confirm; run != nil {
 		a.confirm = nil
 		a.notice = ""

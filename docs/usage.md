@@ -118,6 +118,13 @@ yourself:
   question stays and holds the coordinator's and the other threads'
   messages. Your next message answers it, first in a new turn, with them;
   `<CR>` on one sends them without an answer, and the question closes.
+- When you come back after 2 minutes or more away, a card at the top
+  right says how all the work stands, in every workspace, in the attention
+  agent's few lines (or as counts without it, `◆ 2 waiting · ✓ 3 to
+  read`), and what is next: the top of the waits list, with why it is
+  there. `]q` goes to it, as a come-back starts the walk at the top again.
+  The card closes at your next key; `:messages` keeps it, and `:waits`
+  starts with the same lines.
 - When you come back after 2 minutes or more away, a chat shows its recap
   as dim text just above the todo line and the prompt, `※ recap: …`: where
   the session's work stands, in its own words, as in Claude Code. Away is

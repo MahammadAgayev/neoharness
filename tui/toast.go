@@ -202,7 +202,7 @@ func (a *App) drawToasts(W, H int) {
 	if tw < 20 {
 		return
 	}
-	x0, y := W-tw-margin, 1
+	x0, y := W-tw-margin, 1+a.drawBack(W)
 	ts := a.shownToasts()
 	for i := len(ts) - 1; i >= 0 && y+4 < H; i-- {
 		t := ts[i]

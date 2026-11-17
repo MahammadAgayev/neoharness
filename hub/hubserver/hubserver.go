@@ -168,6 +168,9 @@ func Handler(h *hub.Hub, info hubapi.Info, stop func()) http.Handler {
 	mux.HandleFunc("GET /waits", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, h.Waits(), nil)
 	})
+	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, h.Status(), nil)
+	})
 	mux.HandleFunc("POST /workspaces/{p}/threads/{t}/seen", func(w http.ResponseWriter, r *http.Request) {
 		var in hubapi.Seen
 		if !decode(w, r, &in) {
