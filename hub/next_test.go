@@ -241,7 +241,7 @@ func TestTheAttentionAgentWritesHowTheWorkStands(t *testing.T) {
 		if !strings.Contains(req.Prompt, "plan drafted") {
 			return agent.Result{Text: `{"next":[]}`}
 		}
-		return agent.Result{Text: `{"status":[{"where":"alpha","parts":["plan drafted"," ","nothing waits"]},{"where":"beta","parts":["  "]},"gamma: a plain line"],"next":[]}`}
+		return agent.Result{Text: `{"status":"alpha plan drafted · nothing waits","next":[]}`}
 	}
 	h := attentionHub(t, &fake{}, attn)
 	pinned(t, h, "alpha")
@@ -250,8 +250,8 @@ func TestTheAttentionAgentWritesHowTheWorkStands(t *testing.T) {
 	if err := h.Recap("alpha", model.Coordinator, "plan drafted"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the status", func() bool { return len(h.Status().Lines) == 2 })
-	want := []model.StatusLine{{Where: "alpha", Parts: []string{"plan drafted", "nothing waits"}}, {Parts: []string{"gamma: a plain line"}}}
+	eventually(t, "the status", func() bool { return len(h.Status().Lines) == 1 })
+	want := []model.StatusLine{{Parts: []string{"alpha plan drafted · nothing waits"}}}
 	if s := h.Status(); !slices.EqualFunc(s.Lines, want, sameLine) || s.At.IsZero() {
 		t.Fatalf("status = %+v", s)
 	}
@@ -263,7 +263,7 @@ func TestTheAttentionAgentWritesHowTheWorkStands(t *testing.T) {
 	for {
 		select {
 		case u := <-ch:
-			if u.Kind == model.UpdateStatus && u.Status != nil && len(u.Status.Lines) == 2 {
+			if u.Kind == model.UpdateStatus && u.Status != nil && len(u.Status.Lines) == 1 {
 				return
 			}
 		case <-timeout:
@@ -296,4 +296,70 @@ func TestTheAttentionAgentRunsWhenTheHubStarts(t *testing.T) {
 	}
 	defer h.Close()
 	eventually(t, "the status after a start", func() bool { return len(h.Status().Lines) == 1 })
+}
+
+// An older agent's status as lines keeps only its first: the person reads
+// one line above the next things to do.
+func TestTheStatusIsOneLine(t *testing.T) {
+	r, ok := parseNext(`{"status":[{"where":"alpha","parts":["plan drafted"," "]},"beta: a plain line"],"next":[]}`, nil)
+	if want := []model.StatusLine{{Where: "alpha", Parts: []string{"plan drafted"}}}; !ok || !slices.EqualFunc(r.status, want, sameLine) {
+		t.Fatalf("status = %+v", r.status)
+	}
+}
+
+// TestTheAgentSaysWhereToGoNext: besides the waits, the agent names places
+// to go, each a thread or a workspace's coordinator with what to do there,
+// in its order among the waits. A place where a wait already is, or that
+// is not there, is left out, and x drops one until the agent's next order.
+func TestTheAgentSaysWhereToGoNext(t *testing.T) {
+	attn := &fake{}
+	attn.script = func(ctx context.Context, req agent.Request) agent.Result {
+		return agent.Result{Text: `{"next":[
+			{"go":"beta","why":"its build ended","brief":"give it the next task"},
+			{"i":1,"why":"blocks the plan"},
+			{"go":"alpha · coordinator","why":"has a wait","brief":"look"},
+			{"go":"gamma · nobody","brief":"look"},
+			{"go":"beta · coordinator","brief":"twice"},
+			{"go":"alpha · api","why":"no brief"}]}`}
+	}
+	h := attentionHub(t, &fake{}, attn)
+	pinned(t, h, "alpha")
+	pinned(t, h, "beta")
+	_ = h.Notify("alpha", model.Coordinator, "approve the plan", true)
+
+	eventually(t, "the agent's order", func() bool { return len(h.Waits()) == 2 && h.Waits()[0].Kind == model.WaitNext })
+	ws := h.Waits()
+	g := ws[0]
+	if g.Workspace != "beta" || g.Thread != model.Coordinator || g.ID != model.NextID || g.Text != "give it the next task" ||
+		g.Brief != "give it the next task" || g.Why != "its build ended" || ws[1].Kind != model.WaitNotice {
+		t.Fatalf("waits = %+v", ws)
+	}
+
+	if err := h.Dismiss("beta", model.Coordinator, model.NextID); err != nil {
+		t.Fatal(err)
+	}
+	if ws := h.Waits(); len(ws) != 1 || ws[0].Kind != model.WaitNotice {
+		t.Fatalf("after x = %+v", ws)
+	}
+	if err := h.Dismiss("beta", model.Coordinator, model.NextID); err == nil {
+		t.Fatal("dismissed a place that is gone")
+	}
+}
+
+// TestWithNothingElseTheCoordinatorThatMovedLastIsNext: the list always
+// holds a next thing; with no waits and no agent it is the coordinator of
+// the workspace that moved last.
+func TestWithNothingElseTheCoordinatorThatMovedLastIsNext(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "alpha")
+	pinned(t, h, "beta")
+	_ = h.Recap("alpha", model.Coordinator, "plan drafted")
+	ws := h.Waits()
+	if len(ws) != 1 || ws[0].Workspace != "alpha" || ws[0].Thread != model.Coordinator || ws[0].Kind != model.WaitNext {
+		t.Fatalf("waits = %+v", ws)
+	}
+	_ = h.Dismiss("alpha", model.Coordinator, model.NextID)
+	if ws := h.Waits(); len(ws) != 1 || ws[0].Workspace != "beta" {
+		t.Fatalf("after x = %+v", ws)
+	}
 }

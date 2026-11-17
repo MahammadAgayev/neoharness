@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -118,14 +119,20 @@ func TestSeenQuietsNoticesButNotWhatNeedsYou(t *testing.T) {
 	}
 }
 
+// needs is the waits list without the places to go, which the hub always
+// has one of.
+func needs(ws []model.Wait) []model.Wait {
+	return slices.DeleteFunc(slices.Clone(ws), func(w model.Wait) bool { return w.Kind == model.WaitNext })
+}
+
 func waitsUpdate(t *testing.T, ch <-chan model.Update, want int) []model.Wait {
 	t.Helper()
 	timeout := time.After(2 * time.Second)
 	for {
 		select {
 		case u := <-ch:
-			if u.Kind == model.UpdateWaits && len(u.Waits) == want {
-				return u.Waits
+			if ws := needs(u.Waits); u.Kind == model.UpdateWaits && len(ws) == want {
+				return ws
 			}
 		case <-timeout:
 			t.Fatalf("no waits update with %d items", want)
@@ -220,9 +227,9 @@ func TestFailuresAndNoticesWaitAcrossARestart(t *testing.T) {
 	if err := h.OpenThread("demo", model.Coordinator, "flaky", "crash", ""); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the failure to wait", func() bool { return len(h.Waits()) == 1 })
+	eventually(t, "the failure to wait", func() bool { return len(needs(h.Waits())) == 1 })
 	_ = h.Notify("demo", model.Coordinator, "look at flaky", true)
-	before := h.Waits()
+	before := needs(h.Waits())
 	h.Close()
 
 	h2, err := New(cfg)
@@ -230,7 +237,7 @@ func TestFailuresAndNoticesWaitAcrossARestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(h2.Close)
-	ws := h2.Waits()
+	ws := needs(h2.Waits())
 	if len(ws) != 2 || ws[0].Kind != model.WaitFailed || ws[0].Thread != "flaky" || !strings.Contains(ws[0].Text, "crashed on purpose") ||
 		ws[1].Kind != model.WaitNotice || ws[1].ID != before[1].ID {
 		t.Fatalf("waits after the restart = %+v", ws)

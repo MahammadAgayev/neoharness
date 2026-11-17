@@ -1853,7 +1853,7 @@ func TestStopClosesAWaitingQuestion(t *testing.T) {
 	if v := view(t, h, "demo", model.Coordinator); v.Waiting != "" || v.QuestionID != "" {
 		t.Fatalf("after stop: waiting %q, question %q", v.Waiting, v.QuestionID)
 	}
-	if w := h.Waits(); len(w) != 0 {
+	if w := needs(h.Waits()); len(w) != 0 {
 		t.Fatalf("waits = %+v", w)
 	}
 	evs, _ := h.Events("demo", model.Coordinator, 50)

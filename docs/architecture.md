@@ -229,6 +229,14 @@ draw a level, never which level an event has.
   with unseen news at level 2, a turn end or a notice, and nothing else
   waiting on it. It does not raise the thread to level 3, clients do not
   count it as waiting, and seen or a dismiss takes it off.
+- A place to go (`kind: next`, `id: next`) is a thread, or a workspace's
+  coordinator, where the work waits for the person's move, with what to
+  do there as its text and brief. The attention agent names them; with no
+  other item, the hub puts the coordinator of the workspace whose journal
+  moved last, so the list is never empty while a workspace is open. One
+  on a thread that has a wait, or a resolved or deleted thread, is left
+  out. Clients do not count it as waiting. A dismiss drops it until the
+  agent's next order; the hub keeps them in memory only.
 - With an attention agent (`attention` in `setup()`), the hub orders the
   list by it (`hub/next.go`). When the waits, an open thread's line on
   the board (its todo progress aside), or the focus change, it waits
@@ -236,14 +244,14 @@ draw a level, never which level an event has.
   conversation with `NoTools`, the focus unless it is set aside, the
   waits numbered from 1, and every open thread as the coordinator's board
   shows it, with the news since the person last saw each one. The reply is a JSON object,
-  `{"status": [{"where", "parts"}], "next": [{"i", "why", "brief"}]}`.
-  Ordered waits come first, in its order, with `why` and `brief`; the rest
-  follow in the hub's order. `status` is up to 4 lines on how all the work
-  stands, each the work of one workspace or one goal: `where` names it,
-  and `parts` are short pieces that clients join with ` · `. A client
-  draws `where` as a column, in gold when that workspace has a wait that
-  is not a review; a plain string from the agent is a line with no
-  `where`. The hub
+  `{"status": "...", "next": [{"i", "why", "brief"}, {"go", "why",
+  "brief"}]}`. An item is a wait by its number, or a place to go, `go`
+  naming it `"workspace · thread"` or `"workspace"` for its coordinator,
+  with a brief of what to do there. Ordered items come first, in its
+  order, with `why` and `brief`; the rest follow in the hub's order.
+  `status` is one line on how all the work stands, kept as one
+  `model.StatusLine` with one part; an older reply with a list of lines
+  keeps its first. The hub
   keeps it as `model.Status`, `GET /status` returns it, and a `status`
   update carries it when it changes. Clients show it when the person comes
   back. A brief is kept while its
@@ -263,7 +271,7 @@ draw a level, never which level an event has.
   answered or skipped, a turn stopped, a thread resolved or deleted, a
   failed thread runs again, the person writes to the coordinator that sent
   the notice. `DELETE /workspaces/{w}/threads/{t}/waits/{id}` dismisses a
-  notice or a failure, or reads a review; a permission or a question is
+  notice, a failure or a place to go, or reads a review; a permission or a question is
   answered instead.
 - Failures, notices, questions and seen times are in the journal, so the
   list survives a restart. A pending permission does not: its turn ends

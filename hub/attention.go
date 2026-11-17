@@ -179,6 +179,9 @@ func (h *Hub) Dismiss(workspaceName, name, id string) error {
 	if workspaceName == model.HubScope {
 		return h.dismissSuggestion(id)
 	}
+	if id == model.NextID {
+		return h.dismissNext(workspaceName, name)
+	}
 	ws, th, err := h.lookup(workspaceName, name)
 	if err != nil {
 		return err

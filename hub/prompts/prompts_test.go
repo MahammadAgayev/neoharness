@@ -53,6 +53,9 @@ func TestTheBoardShowsTheRecapTasksAndNews(t *testing.T) {
 	if got := BoardLine(BoardThread{Name: "api", State: "idle", News: News{Reply: "Moved the store."}}); got != "- api: idle.\n  New: reply: Moved the store." {
 		t.Errorf("reply: %q", got)
 	}
+	if got := BoardLine(BoardThread{Name: "api", State: "idle", Recap: "Done", Reply: "Asked SQLite or Postgres"}); got != "- api: idle. Recap: Done. Last reply: Asked SQLite or Postgres." {
+		t.Errorf("last reply: %q", got)
+	}
 	if got := BoardLine(BoardThread{Name: "api", State: "idle", Recap: "Done"}); got != "- api: idle. Recap: Done." {
 		t.Errorf("no news: %q", got)
 	}

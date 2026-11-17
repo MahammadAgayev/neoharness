@@ -240,7 +240,7 @@ func TestWaitsOverTheAPI(t *testing.T) {
 	if err := c.CreateWorkspace("demo", t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
-	if ws, err := c.Waits(); err != nil || len(ws) != 0 {
+	if ws, err := c.Waits(); err != nil || len(ws) != 1 || ws[0].Kind != model.WaitNext {
 		t.Fatalf("waits = %+v, %v", ws, err)
 	}
 	if s, err := c.Status(); err != nil || len(s.Lines) != 0 {
@@ -257,7 +257,7 @@ func TestWaitsOverTheAPI(t *testing.T) {
 	for w.ID == "" {
 		select {
 		case u := <-updates:
-			if u.Kind == model.UpdateWaits && len(u.Waits) == 1 {
+			if u.Kind == model.UpdateWaits && len(u.Waits) == 1 && u.Waits[0].Kind == model.WaitNotice {
 				w = u.Waits[0]
 			}
 		case <-timeout:
@@ -279,7 +279,7 @@ func TestWaitsOverTheAPI(t *testing.T) {
 	if err := c.Dismiss("demo", model.Coordinator, w.ID); err == nil {
 		t.Fatal("dismissed twice")
 	}
-	if ws, _ := c.Waits(); len(ws) != 0 {
+	if ws, _ := c.Waits(); len(ws) != 1 || ws[0].Kind != model.WaitNext {
 		t.Fatalf("waits after dismiss = %+v", ws)
 	}
 }

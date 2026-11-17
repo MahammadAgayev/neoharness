@@ -37,15 +37,20 @@ func (a *App) setWaits(ws []model.Wait) {
 }
 
 // waiting counts what blocks on the person: a review only waits to be
-// read, and a suggested edit of the focus to be taken or left.
+// read, a suggested edit of the focus to be taken or left, and a place to
+// go to be gone to.
 func (a *App) waiting() int {
 	n := 0
 	for _, w := range a.waits {
-		if w.Kind != model.WaitReview && w.Kind != model.WaitFocus {
+		if blocks(w) {
 			n++
 		}
 	}
 	return n
+}
+
+func blocks(w model.Wait) bool {
+	return w.Kind != model.WaitReview && w.Kind != model.WaitFocus && w.Kind != model.WaitNext
 }
 
 func (a *App) waitIndex(key string) int {
@@ -126,7 +131,7 @@ func (a *App) dismissWait(key string) {
 		return
 	}
 	w := a.waits[i]
-	if w.Kind != model.WaitNotice && w.Kind != model.WaitFailed && w.Kind != model.WaitReview && w.Kind != model.WaitFocus {
+	if w.Kind == model.WaitPermission || w.Kind == model.WaitQuestion {
 		a.notify("answer it in its thread: <CR> goes there", a.th.Fg3)
 		return
 	}
@@ -146,6 +151,8 @@ func waitGlyph(th *Theme, k model.WaitKind) (Span, tcell.Style) {
 		return Span{"✓ ", th.Done}, th.Done
 	case model.WaitFocus:
 		return Span{"◇ ", th.Wait}, th.Wait
+	case model.WaitNext:
+		return Span{"→ ", th.Fg2}, th.Fg2
 	}
 	return Span{"◆ ", th.Wait}, th.Wait
 }
@@ -188,11 +195,16 @@ func (a *App) waitItems(byAge bool) []pickItem {
 		if w.Brief != "" {
 			about = w.Brief
 		}
+		detail := ago(a.now().Sub(w.Since)) + "  " + string(w.Kind) + " · " + flatten(about)
+		if w.Kind == model.WaitNext {
+			// It waited for no one, and its glyph says what it is.
+			detail = flatten(about)
+		}
 		key := waitKey(w)
 		items = append(items, pickItem{
 			glyph:  glyph,
 			label:  waitName(a.workspace, w),
-			detail: ago(a.now().Sub(w.Since)) + "  " + string(w.Kind) + " · " + flatten(about),
+			detail: detail,
 			wait:   key,
 			run: func() {
 				switch i := a.waitIndex(key); {
@@ -293,7 +305,7 @@ func (a *App) statusLines() [][]Span {
 		if w > 0 {
 			st := th.Fg3
 			if slices.ContainsFunc(a.waits, func(x model.Wait) bool {
-				return x.Workspace == l.Where && x.Kind != model.WaitReview && x.Kind != model.WaitFocus
+				return x.Workspace == l.Where && blocks(x)
 			}) {
 				st = th.Wait
 			}
@@ -306,7 +318,8 @@ func (a *App) statusLines() [][]Span {
 
 // backLines is the card the person sees when they come back: how all the
 // work stands, in the attention agent's words or else as counts, and the
-// next thing, the top of the waits list. Empty when there is nothing to say.
+// next things, the top of the waits list. Empty when there is nothing to
+// say.
 func (a *App) backLines() [][]Span {
 	th := a.th
 	lines := a.statusLines()
@@ -333,17 +346,26 @@ func (a *App) backLines() [][]Span {
 			lines = append(lines, []Span{{strings.Join(parts, " · "), th.Fg2}})
 		}
 	}
-	if len(a.waits) == 0 {
-		return lines
+	next := a.waits[:min(len(a.waits), backNext)]
+	col := 0
+	for _, w := range next {
+		col = max(col, min(width(waitName(a.workspace, w)), statusWhere))
 	}
-	w := a.waits[0]
-	glyph, _ := waitGlyph(th, w.Kind)
-	about := w.Text
-	if w.Why != "" {
-		about = w.Why
+	for _, w := range next {
+		glyph, _ := waitGlyph(th, w.Kind)
+		about := w.Text
+		if w.Brief != "" {
+			about = w.Brief
+		} else if w.Why != "" {
+			about = w.Why
+		}
+		lines = append(lines, []Span{glyph, {pad(truncate(waitName(a.workspace, w), col), col+2), th.Fg}, {flatten(about), th.Fg2}})
 	}
-	return append(lines, []Span{glyph, {"next  ", th.Fg3}, {waitName(a.workspace, w) + " · " + string(w.Kind) + "  ", th.Fg}, {flatten(about), th.Fg2}})
+	return lines
 }
+
+// backNext is how many next things the come-back card names.
+const backNext = 3
 
 // drawBack draws the card of backLines at the top right, where toasts go,
 // and says how many rows it took.

@@ -54,7 +54,7 @@ func TestNewsIsReadByTheCoordinatorAndThePersonApart(t *testing.T) {
 	h.wakeAttention()
 	h.mu.Unlock()
 	eventually(t, "the agent to read rec's news", func() bool {
-		return len(attn.requests()) > 0 && strings.Contains(last(), "- demo · rec: idle. Recap: Cache added.\n  New: recap.")
+		return len(attn.requests()) > 0 && strings.Contains(last(), "- demo · rec: idle. Recap: Cache added.") && strings.Contains(last(), "\n  New: recap.")
 	})
 
 	_ = h.Seen("demo", "rec", time.Now())
@@ -367,7 +367,7 @@ func TestAReopenedThreadDoesNotShowItsOldFailure(t *testing.T) {
 	stateIs(t, h, "demo", "api", model.StateFailed)
 	_ = h.Resolve("demo", model.User, "api")
 	_ = h.Reopen("demo", "api")
-	if v := view(t, h, "demo", "api"); v.State != model.StateIdle || len(h.Waits()) != 0 {
+	if v := view(t, h, "demo", "api"); v.State != model.StateIdle || len(needs(h.Waits())) != 0 {
 		t.Fatalf("reopened = %s, waits %+v", v.State, h.Waits())
 	}
 }

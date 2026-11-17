@@ -345,11 +345,13 @@ func TestComingBackShowsHowTheWorkStandsAndWhatIsNext(t *testing.T) {
 	}
 	ws := demoWaits()
 	ws[1].Why = "blocks the release"
-	h.setWaits(ws[1], ws[0])
+	ws[0].Brief = "read-only · suggest: allow"
+	next := model.Wait{Workspace: "ops", Thread: model.Coordinator, Kind: model.WaitNext, ID: model.NextID, Text: "give it the next task", Brief: "give it the next task"}
+	review := model.Wait{Workspace: "ops", Thread: "deploy", Kind: model.WaitReview, ID: model.ReviewID, Text: "deployed"}
+	h.setWaits(ws[1], ws[0], next, review)
 	h.press("]q", "]q")
 	h.a.apply(model.Update{Kind: model.UpdateStatus, Status: &model.Status{Lines: []model.StatusLine{
-		{Where: "demo", Parts: []string{"auth moved", "tests pass"}},
-		{Where: "ops", Parts: []string{"deploy runs"}},
+		{Parts: []string{"auth moved · tests pass · deploy runs"}},
 	}, At: clock}})
 	h.a.draw()
 	if strings.Contains(h.screen(), "auth moved") {
@@ -357,16 +359,19 @@ func TestComingBackShowsHowTheWorkStandsAndWhatIsNext(t *testing.T) {
 	}
 
 	away()
-	// where is a column, the parts follow it joined by ·, and a workspace
-	// that waits on the person is in gold.
-	h.see("demo  auth moved · tests pass")
-	h.see("ops   deploy runs")
-	if h.fgAt("demo  auth") != fgOf(h.a.th.Wait) || h.fgAt("ops   deploy") == fgOf(h.a.th.Wait) {
-		t.Fatal("only the workspace that waits on you is gold")
+	// One line of status, then the next three things, each with what to do.
+	h.see("auth moved · tests pass · deploy runs")
+	h.see("◆ auth-refactor      blocks the release")
+	h.see("◆ api-tests          read-only · suggest: allow")
+	h.see("→ ops · coordinator  give it the next task")
+	if strings.Contains(h.screen(), "deployed") {
+		t.Fatalf("the card names three things:\n%s", h.screen())
 	}
-	h.see("next  auth-refactor · question  blocks the release")
-	if h.fgAt("◆ next") != fgOf(h.a.th.Wait) {
-		t.Fatal("the next thing's glyph is in its wait ink")
+	if h.fgAt("◆ auth-refactor") != fgOf(h.a.th.Wait) || h.fgAt("→ ops") == fgOf(h.a.th.Wait) {
+		t.Fatal("what blocks is gold, a place to go is not")
+	}
+	if !strings.Contains(h.screen(), "◆ 2 waiting") {
+		t.Fatalf("a place to go is not counted as waiting:\n%s", h.screen())
 	}
 	h.press("]q")
 	if h.a.cur.Buf.Thread != "auth-refactor" {
@@ -376,7 +381,7 @@ func TestComingBackShowsHowTheWorkStandsAndWhatIsNext(t *testing.T) {
 		t.Fatal("the card stays after the next key")
 	}
 	h.press(":waits", "<CR>")
-	if strings.Contains(h.screen(), "auth moved") || len(h.a.picker.items) != 2 {
+	if strings.Contains(h.screen(), "auth moved") || len(h.a.picker.items) != 4 {
 		t.Fatalf(":waits holds only what you can go to, not the status:\n%s", h.screen())
 	}
 	h.press("<Esc>")
@@ -386,7 +391,7 @@ func TestComingBackShowsHowTheWorkStandsAndWhatIsNext(t *testing.T) {
 
 	// Without the attention agent, the counts say how it stands.
 	h.a.apply(model.Update{Kind: model.UpdateStatus, Status: &model.Status{}})
-	h.setWaits(append(ws, model.Wait{Workspace: "ops", Thread: "deploy", Kind: model.WaitReview, ID: model.ReviewID, Text: "deployed"})...)
+	h.setWaits(append(ws, review)...)
 	away()
 	h.see("◆ 2 waiting · ✓ 1 to read")
 
@@ -394,8 +399,30 @@ func TestComingBackShowsHowTheWorkStandsAndWhatIsNext(t *testing.T) {
 	h.press("j")
 	h.setWaits()
 	away()
-	if strings.Contains(h.screen(), "next") || strings.Contains(h.screen(), "to read") {
+	if strings.Contains(h.screen(), "→") || strings.Contains(h.screen(), "to read") {
 		t.Fatalf("a card with nothing to say:\n%s", h.screen())
+	}
+}
+
+// A place to go opens its thread with what to do there above the prompt,
+// and <C-d> in the focus list drops it, as it blocks nothing.
+func TestAPlaceToGoOpensWithItsBrief(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.setThread("api-tests", func(v *model.ThreadView) { v.State = model.StateIdle })
+	h.setWaits(model.Wait{Workspace: "demo", Thread: "api-tests", Kind: model.WaitNext, ID: model.NextID, Text: "give it the docs task",
+		Brief: "give it the docs task", Why: "its build ended", Since: time.Now()})
+	h.press("]q")
+	h.a.draw()
+	if h.a.cur.Buf.Thread != "api-tests" || !strings.Contains(h.a.notice, "(1 of 1) next · its build ended") {
+		t.Fatalf("thread %q, notice %q", h.a.cur.Buf.Thread, h.a.notice)
+	}
+	h.see("┃ give it the docs task")
+	h.press("<Esc>", ":waits", "<CR>")
+	h.see("→ api-tests  give it the docs task")
+	h.press("<C-d>")
+	if len(h.hub.dismissed) != 1 || h.hub.dismissed[0] != "demo/api-tests/next" {
+		t.Fatalf("<C-d> on a place to go: dismissed %v", h.hub.dismissed)
 	}
 }
 

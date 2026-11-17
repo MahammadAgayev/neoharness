@@ -121,13 +121,12 @@ yourself:
   answer goes first, with them, and `<CR>` on one sends them without an
   answer, and the question closes.
 - When you come back after 2 minutes or more away, a card at the top
-  right says how all the work stands, in every workspace, in the attention
-  agent's few lines (or as counts without it, `◆ 2 waiting · ✓ 3 to
-  read`), and what is next. Each line names a workspace or a goal in a
-  column, gold when something in that workspace waits for you, then what
-  moved, what is stuck and what runs. Next is the top of the waits list,
-  with why it is there. `]q` goes to it, as a come-back starts the walk at
-  the top again. The card closes at your next key; `:messages` keeps it.
+  right says how all the work stands, in every workspace, in one line by
+  the attention agent (or as counts without it, `◆ 2 waiting · ✓ 3 to
+  read`), and then the next three things to do, the top of the waits list,
+  each with its brief: `◆ api-tests  read-only · suggest: allow`. `]q`
+  goes to the first, as a come-back starts the walk at the top again. The
+  card closes at your next key; `:messages` keeps the status.
 - When you come back after 2 minutes or more away, a chat shows its recap
   as dim text just above the todo line and the prompt, `※ recap: …`: where
   the session's work stands, in its own words, as in Claude Code. Away is
@@ -199,8 +198,13 @@ What needs you, in every workspace, is also in one list, as Vim's
 quickfix list, in the order to go through it: permission requests and
 questions, which block a turn, then failed turns and notices that need
 you, then reviews, each oldest first. A review (`✓`) is a thread whose
-news you have not read: a turn that ended or a notice. The command line
-counts what blocks on you as `◆ N waiting`; reviews are not counted. `]q`
+news you have not read: a turn that ended or a notice. A place to go
+(`→`) is a thread or a coordinator where the work goes on only when you
+move, with what to do there, such as "build ended · give it the docs
+task": the attention agent adds them, and with nothing else in the list
+the coordinator of the workspace that moved last is there, so a next
+thing is always ready. The command line counts what blocks on you as
+`◆ N waiting`; reviews and places to go are not counted. `]q`
 and `[q`, or `:cn` and `:cp`, go to the next or previous one and open its
 thread at its card, in any workspace. `<C-o>` goes back to the workspace
 the jump left, as it was, until you move in the window it landed in; the
@@ -210,13 +214,15 @@ can go to, each wait with how long it has waited and its brief. It
 follows the hub while it is open: a row moves only when something comes,
 goes or changes there, never because you move,
 and one that goes stays, muted, until the list closes. `<CR>` goes to a
-wait, `<C-d>` dismisses a notice or a failure, or reads a review; typing
+wait, `<C-d>` dismisses a notice, a failure or a place to go, or reads a
+review; typing
 filters. `:waits!` shows it oldest first.
 The attention agent (see [configuration](configuration.md)) orders the list
 by your focus: what is under Now first, what is under Leave alone last.
 After a jump the command line says why the stop is there, and a
 permission or question card ends with its brief, muted: what is at stake
-and what the agent suggests. A review, a failure or a notice has no card,
+and what the agent suggests. A review, a failure, a notice or a place to
+go has no card,
 so its brief shows alone above the prompt, until the thread runs again. An item leaves the list only when
 it is done: answered, skipped, stopped, or the thread runs again; a review
 when you read the thread. A thread on screen for 2 seconds tells the hub

@@ -172,6 +172,9 @@ type BoardThread struct {
 	Now         string
 	Failed      string
 	News        News
+	// Reply is the thread's last reply, for the attention agent to name the
+	// next step from; the coordinator reads the news instead.
+	Reply string
 }
 
 // boardDone is how many done items the board names; it counts the rest.
@@ -198,6 +201,7 @@ func BoardLine(t BoardThread) string {
 	}
 	part("Last turn failed", t.Failed)
 	part("Recap", t.Recap)
+	part("Last reply", t.Reply)
 	if t.Total > 0 {
 		tasks := fmt.Sprintf("%d/%d done", t.Done, t.Total)
 		if t.Now != "" {

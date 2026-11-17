@@ -220,13 +220,21 @@ const (
 	// in model.HubScope, its thread is model.FocusDoc, it blocks nothing, and goes when the
 	// person saves the focus or dismisses it.
 	WaitFocus WaitKind = "focus"
+	// WaitNext is a place the attention agent says to go next: a thread, or
+	// a workspace's coordinator, with what to do there. Nothing blocks on
+	// it, so it is not counted as waiting. It goes at the agent's next order,
+	// or when the person dismisses it. With nothing else in the list, the
+	// hub puts the coordinator of the workspace that moved last.
+	WaitNext WaitKind = "next"
 )
 
 // ReviewID names a thread's review in the waits list; a thread has at most
 // one. SuggestionID names the focus's suggested edit; there is at most one.
+// NextID names a place to go next; a thread has at most one.
 const (
 	ReviewID     = "review"
 	SuggestionID = "suggestion"
+	NextID       = "next"
 )
 
 // Wait is one item of the waits list: something that needs the person, in

@@ -94,7 +94,8 @@ The attention agent orders the waits list, which `]q` walks, by your focus
 (`:focus`), and writes for each stop why it is there and a brief of what
 is at stake and what it suggests. Each of its turns is new, with no tools: a few seconds after what
 waits or a thread changes, it reads the waits, every open thread as the
-coordinator sees it, and the focus, and replies with the order and a few lines on how all the work
+coordinator sees it, and the focus, and replies with the order, the
+places to go next with what to do there, and one line on how all the work
 stands, which you see when you come back.
 `attention = false` turns it off; the hub's own order stands then, as it
 does while the agent has not answered. It may also suggest an edit of your

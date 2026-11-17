@@ -30,6 +30,10 @@ type attention struct {
 	// briefs are by wait key and text: a brief stays while its wait is the
 	// same, so the agent writes it once.
 	briefs map[string]string
+	// goes are the places the agent says to go, by wait key, and dropped
+	// those the person dismissed since its last order.
+	goes    map[string]model.Wait
+	dropped map[string]bool
 	// status is how all the work stands, in the agent's words.
 	status model.Status
 	// seen is what the agent last woke for: the waits, the threads and the
@@ -47,10 +51,26 @@ func hubWaitKey(w model.Wait) string { return w.Workspace + "\x00" + w.Thread + 
 func briefKey(w model.Wait) string { return hubWaitKey(w) + "\x00" + w.Text }
 
 // waits is the waits list in the order to go through it: the attention
-// agent's for what it ordered, then the rest in the hub's order. Callers
-// hold h.mu.
+// agent's for what it ordered, then the rest in the hub's order. The places
+// it says to go are in it too, so the list always holds a next thing.
+// Callers hold h.mu.
 func (h *Hub) waits() []model.Wait {
 	out := h.hubWaits()
+	waiting := map[string]bool{}
+	for _, w := range out {
+		waiting[w.Workspace+"\x00"+w.Thread] = true
+	}
+	for k, g := range h.attn.goes {
+		// A thread's own wait says more than a place to go.
+		if !h.attn.dropped[k] && !waiting[g.Workspace+"\x00"+g.Thread] && h.open(g.Workspace, g.Thread) {
+			out = append(out, g)
+		}
+	}
+	if len(out) == 0 {
+		if g, ok := h.movedLast(); ok {
+			out = append(out, g)
+		}
+	}
 	if len(h.attn.next) == 0 {
 		return out
 	}
@@ -70,6 +90,35 @@ func (h *Hub) waits() []model.Wait {
 	}
 	slices.SortStableFunc(ranked, func(a, b model.Wait) int { return at[hubWaitKey(a)] - at[hubWaitKey(b)] })
 	return append(ranked, rest...)
+}
+
+// open says a thread is there to go to.
+func (h *Hub) open(workspaceName, name string) bool {
+	ws, ok := h.workspaces[workspaceName]
+	if !ok {
+		return false
+	}
+	th, ok := ws.threads[name]
+	return ok && !th.deleted && !th.t.Resolved
+}
+
+// movedLast is the coordinator of the workspace whose journal moved last,
+// as the place to go when nothing else is. Callers hold h.mu.
+func (h *Hub) movedLast() (model.Wait, bool) {
+	var out model.Wait
+	for name, ws := range h.workspaces {
+		w := model.Wait{Workspace: name, Thread: model.Coordinator, Kind: model.WaitNext, ID: model.NextID, Text: "the work moved here last"}
+		if n := len(ws.journal); n > 0 {
+			w.Since = ws.journal[n-1].At
+		}
+		if !h.open(name, model.Coordinator) || h.attn.dropped[hubWaitKey(w)] {
+			continue
+		}
+		if out.Workspace == "" || w.Since.After(out.Since) || w.Since.Equal(out.Since) && name < out.Workspace {
+			out = w
+		}
+	}
+	return out, out.Workspace != ""
 }
 
 // attentionSees wakes the agent when what it reads changed: a wait came or
@@ -136,24 +185,24 @@ func (h *Hub) runAttention() {
 	defer h.wg.Done()
 	h.attn.running = false
 	if err == nil && res.ExitCode == 0 {
-		if next, briefs, edit, status, ok := parseNext(res.Text, ws); ok {
-			if status != nil && !slices.EqualFunc(status, h.attn.status.Lines, sameLine) {
-				h.attn.status = model.Status{Lines: status, At: time.Now().UTC()}
+		if r, ok := parseNext(res.Text, ws); ok {
+			if r.status != nil && !slices.EqualFunc(r.status, h.attn.status.Lines, sameLine) {
+				h.attn.status = model.Status{Lines: r.status, At: time.Now().UTC()}
 				s := h.attn.status
 				h.publish(model.Update{Kind: model.UpdateStatus, Status: &s})
 			}
-			if edit != nil && h.cfg.FocusEdit != FocusEditOff {
-				h.suggest(*edit)
+			if r.edit != nil && h.cfg.FocusEdit != FocusEditOff {
+				h.suggest(*r.edit)
 			}
-			h.attn.next = next
+			h.attn.next, h.attn.goes, h.attn.dropped = r.next, r.goes, nil
 			if h.attn.briefs == nil {
 				h.attn.briefs = map[string]string{}
 			}
 			// Briefs of waits that are gone go too.
 			keep := map[string]string{}
-			for _, w := range ws {
+			for _, w := range append(ws, slices.Collect(maps.Values(r.goes))...) {
 				k := briefKey(w)
-				if b, ok := briefs[k]; ok {
+				if b, ok := r.briefs[k]; ok {
 					keep[k] = b
 				} else if b, ok := h.attn.briefs[k]; ok {
 					keep[k] = b
@@ -217,6 +266,9 @@ func (h *Hub) attentionBoard() []prompts.BoardThread {
 			b := boardThread(th)
 			b.Name = name + " · " + n
 			b.News, _ = newsOf(ws, n, func(e model.JournalEntry) bool { return e.At.After(th.f.seen.At) })
+			if b.News.Reply == "" {
+				b.Reply = th.t.Reply
+			}
 			out = append(out, b)
 		}
 	}
@@ -252,18 +304,31 @@ func ageOf(d time.Duration) string {
 	return fmt.Sprintf("waited %dd", int(d.Hours()/24))
 }
 
+// reply is what the attention agent said in one turn.
+type reply struct {
+	next   []stop
+	briefs map[string]string
+	goes   map[string]model.Wait
+	edit   *model.Suggestion
+	status []model.StatusLine
+}
+
 // parseNext reads the agent's reply: the JSON object in it, which numbers
-// the waits ws from 1. A number it does not know, or a reply with no
-// object, is no order. The status is nil when the reply has none.
-func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, *model.Suggestion, []model.StatusLine, bool) {
+// the waits ws from 1 and names the places to go as "workspace · thread",
+// or "workspace" for its coordinator. A number it does not know, or a
+// reply with no object, is no order. The status is nil when the reply has
+// none.
+func parseNext(text string, ws []model.Wait) (reply, bool) {
+	var r reply
 	i, j := strings.Index(text, "{"), strings.LastIndex(text, "}")
 	if i < 0 || j < i {
-		return nil, nil, nil, nil, false
+		return r, false
 	}
 	var out struct {
-		Status []json.RawMessage `json:"status"`
+		Status json.RawMessage `json:"status"`
 		Next   []struct {
 			I     int    `json:"i"`
+			Go    string `json:"go"`
 			Why   string `json:"why"`
 			Brief string `json:"brief"`
 		} `json:"next"`
@@ -273,40 +338,67 @@ func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, *model.
 		} `json:"edit"`
 	}
 	if json.Unmarshal([]byte(text[i:j+1]), &out) != nil {
-		return nil, nil, nil, nil, false
+		return r, false
 	}
-	var status []model.StatusLine
-	if out.Status != nil {
-		status = []model.StatusLine{}
-		for _, raw := range out.Status {
-			if l, ok := statusLine(raw); ok && len(status) < statusLines {
-				status = append(status, l)
-			}
-		}
-	}
-	var edit *model.Suggestion
+	r.status = parseStatus(out.Status)
 	if e := out.Edit; e != nil && strings.TrimSpace(e.Text) != "" {
-		edit = &model.Suggestion{Text: e.Text, Why: oneLine(e.Why, replyLimit)}
+		r.edit = &model.Suggestion{Text: e.Text, Why: oneLine(e.Why, replyLimit)}
 	}
-	var next []stop
-	briefs := map[string]string{}
-	seen := map[int]bool{}
+	r.briefs, r.goes = map[string]string{}, map[string]model.Wait{}
+	now := time.Now().UTC()
+	seen := map[string]bool{}
 	for _, n := range out.Next {
-		if n.I < 1 || n.I > len(ws) || seen[n.I] {
+		var w model.Wait
+		switch brief := oneLine(n.Brief, replyLimit); {
+		case n.I >= 1 && n.I <= len(ws):
+			w = ws[n.I-1]
+		case strings.TrimSpace(n.Go) != "" && brief != "":
+			name, thread, _ := strings.Cut(n.Go, "·")
+			if thread = strings.TrimSpace(thread); thread == "" {
+				thread = model.Coordinator
+			}
+			w = model.Wait{Workspace: strings.TrimSpace(name), Thread: thread, Kind: model.WaitNext, ID: model.NextID, Text: brief, Since: now}
+		default:
 			continue
 		}
-		seen[n.I] = true
-		w := ws[n.I-1]
-		next = append(next, stop{key: hubWaitKey(w), why: oneLine(n.Why, replyLimit)})
-		if b := strings.TrimSpace(n.Brief); b != "" {
-			briefs[briefKey(w)] = oneLine(b, replyLimit)
+		k := hubWaitKey(w)
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		if w.Kind == model.WaitNext {
+			r.goes[k] = w
+		}
+		r.next = append(r.next, stop{key: k, why: oneLine(n.Why, replyLimit)})
+		if b := oneLine(n.Brief, replyLimit); b != "" {
+			r.briefs[briefKey(w)] = b
 		}
 	}
-	return next, briefs, edit, status, true
+	return r, true
 }
 
-// statusLines is the most lines of status the person reads.
-const statusLines = 4
+// parseStatus reads the agent's status: one line, as a string or as the
+// first of a list of lines. It is nil when the reply has none.
+func parseStatus(raw json.RawMessage) []model.StatusLine {
+	if raw == nil {
+		return nil
+	}
+	var lines []json.RawMessage
+	if json.Unmarshal(raw, &lines) != nil {
+		lines = []json.RawMessage{raw}
+	}
+	out := []model.StatusLine{}
+	for _, l := range lines {
+		if l, ok := statusLine(l); ok && len(out) < statusLines {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// statusLines is the most lines of status the person reads: one, above
+// the next things to do.
+const statusLines = 1
 
 // statusLine reads one line of the agent's status. A plain string, as a
 // model may still write, is one part with no where.
@@ -374,6 +466,21 @@ func (h *Hub) dismissSuggestion(id string) error {
 	if err := h.focusChanged(); err != nil {
 		return err
 	}
+	h.publishWaits()
+	return nil
+}
+
+// dismissNext is x on a place to go: it goes until the agent's next order.
+// Callers hold h.mu.
+func (h *Hub) dismissNext(workspaceName, name string) error {
+	k := hubWaitKey(model.Wait{Workspace: workspaceName, Thread: name, ID: model.NextID})
+	if !slices.ContainsFunc(h.waits(), func(w model.Wait) bool { return hubWaitKey(w) == k }) {
+		return fmt.Errorf("nothing waits as %q on %s", model.NextID, name)
+	}
+	if h.attn.dropped == nil {
+		h.attn.dropped = map[string]bool{}
+	}
+	h.attn.dropped[k] = true
 	h.publishWaits()
 	return nil
 }
