@@ -177,12 +177,12 @@ func newServer(h *hub.Hub, id hub.Identity) *mcp.Server {
 			return text(fmt.Sprintf("You will be woken in %d minutes.", in.Minutes)), nil, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "ask", Description: "Ask the person a question you cannot go on without. It does not wait: end your turn after it, and their answer comes as their next message, maybe much later. The question is the one place the person reads it: put in it the context and the choices they need, in a few short lines."},
+	mcp.AddTool(s, &mcp.Tool{Name: "ask", Description: "Ask the person a question you cannot go on without. It does not wait: end your turn after it, and their answer comes as their next message, maybe much later. The question shows as a card under your chat, and the person reads only that: put in it the context and the choices they need, in a few short lines, and do not say it again in your reply."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in askIn) (*mcp.CallToolResult, any, error) {
 			if err := h.Ask(p, me, in.Question); err != nil {
 				return nil, nil, err
 			}
-			return text("Asked. End your turn now; the person's answer comes as their next message."), nil, nil
+			return text("Asked. The person sees the question in its card, so end your turn now without saying it again; their answer comes as their next message."), nil, nil
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "recap", Description: "Say where your work stands, so the person gets back on track when they come back. It shows at the top of your chat when they come back; it replaces your last one. Call it last in a turn in which your work moved. Plain words, short: outcomes, not steps."},

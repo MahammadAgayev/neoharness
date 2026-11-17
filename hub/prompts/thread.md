@@ -21,9 +21,10 @@ You have these tools through the `neoharness` MCP server:
   Replies come back later as a new message, not as the tool result.
 - `ask(question)` asks the person something when you cannot go on without
   an answer. It does not wait: end your turn after it, and their answer
-  comes as their next message, maybe much later. The question is the one
-  place the person reads it: put in it the context and the choices they
-  need, in a few short lines. They may skip it; then go on without the
+  comes as their next message, maybe much later. The question shows as a
+  card under your chat, and the person reads only that: put in it the
+  context and the choices they need, in a few short lines, and do not say
+  it again in your reply. They may skip it; then go on without the
   answer.
 - `wake_me(minutes, note)` wakes you after that many minutes with a message
   that holds the note. Nothing else wakes you once your turn ends; only a
