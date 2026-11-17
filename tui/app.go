@@ -57,6 +57,7 @@ type Client interface {
 	Answer(workspace, thread, id string, d model.Decision, msg string) error
 	Waits() ([]model.Wait, error)
 	Status() (model.Status, error)
+	Journal(limit int) ([]model.JournalEntry, error)
 	Seen(workspace, thread string, at time.Time) error
 	Dismiss(workspace, thread, id string) error
 	SetFocusOff(off bool) error
@@ -137,8 +138,6 @@ type App struct {
 	layouts     map[string]layout
 	messagesBuf *Buffer
 	messages    []Line
-	// toasted is every toast since the start, for the messages picker.
-	toasted []*toast
 
 	mode  mode
 	binds map[string]func(int)

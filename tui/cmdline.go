@@ -742,7 +742,7 @@ func (a *App) helpBuf() *Buffer {
 		row(":focus off  :focus on", "set the focus aside and bring it back; the text stays"),
 		row(":diffsplit", "in the focus: the edit the attention agent suggests, beside it; do takes a change, :w saves"),
 		row("<leader>ps", "search every transcript"),
-		row("<leader>pm", "pick a notification; it opens its thread, in any workspace"),
+		row("<leader>pm", "what happened in every workspace, newest first, also while the TUI was closed; it opens the thread"),
 		row("<leader>pv", "workspaces screen"),
 		row("<leader>t", "threads list: goes to it, or opens it in a new column on the right; <CR> opens a thread in its place, and <C-o> brings the list back"),
 		row("<leader>c", "coordinator"),

@@ -415,27 +415,10 @@ func AppendEvent(workspace, thread string, e model.Event) error {
 	return err
 }
 
-// Entry is one fact of a workspace's journal: what happened to a session
-// that matters outside its chat. Kind says what; ID names the permission,
-// question or notice it is about; Tools counts a turn's tool calls; Level
-// is the attention it asks for, as the hub set it once. Seq rises across
-// the hub, so readers keep their place by it.
-type Entry struct {
-	Seq      int64       `json:"seq"`
-	At       time.Time   `json:"at"`
-	Thread   string      `json:"thread"`
-	Kind     string      `json:"kind"`
-	ID       string      `json:"id,omitempty"`
-	Text     string      `json:"text,omitempty"`
-	Tools    int         `json:"tools,omitempty"`
-	NeedsYou bool        `json:"needsYou,omitempty"`
-	Level    model.Level `json:"level,omitempty"`
-}
-
 func journalFile(workspace string) string { return filepath.Join(Dir(workspace), "journal.jsonl") }
 
 // AppendJournal adds one entry to the workspace's journal.
-func AppendJournal(workspace string, e Entry) error {
+func AppendJournal(workspace string, e model.JournalEntry) error {
 	data, err := json.Marshal(e)
 	if err != nil {
 		return err
@@ -451,11 +434,11 @@ func AppendJournal(workspace string, e Entry) error {
 
 // Journal reads the workspace's journal, oldest first. A truncated last
 // line, left by a crash mid-write, is skipped.
-func Journal(workspace string) ([]Entry, error) {
+func Journal(workspace string) ([]model.JournalEntry, error) {
 	return readEntries(journalFile(workspace))
 }
 
-func readEntries(path string) ([]Entry, error) {
+func readEntries(path string) ([]model.JournalEntry, error) {
 	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -464,10 +447,10 @@ func readEntries(path string) ([]Entry, error) {
 		return nil, err
 	}
 	defer f.Close()
-	var out []Entry
+	var out []model.JournalEntry
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		var e Entry
+		var e model.JournalEntry
 		if json.Unmarshal(sc.Bytes(), &e) == nil {
 			out = append(out, e)
 		}
@@ -476,7 +459,7 @@ func readEntries(path string) ([]Entry, error) {
 }
 
 // SaveJournal writes the whole journal, as rotation leaves it.
-func SaveJournal(workspace string, entries []Entry) error {
+func SaveJournal(workspace string, entries []model.JournalEntry) error {
 	var b []byte
 	for _, e := range entries {
 		data, err := json.Marshal(e)
@@ -490,7 +473,7 @@ func SaveJournal(workspace string, entries []Entry) error {
 
 // OldNews reads the news log the journal replaced, and removes it. Its
 // entries are journal entries; a "reply" was a turn that ran tools.
-func OldNews(workspace string) ([]Entry, error) {
+func OldNews(workspace string) ([]model.JournalEntry, error) {
 	path := filepath.Join(Dir(workspace), "news.jsonl")
 	es, err := readEntries(path)
 	if err != nil || es == nil {

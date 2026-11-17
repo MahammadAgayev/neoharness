@@ -390,3 +390,32 @@ func TestComingBackShowsHowTheWorkStandsAndWhatIsNext(t *testing.T) {
 		t.Fatalf("a card with nothing to say:\n%s", h.screen())
 	}
 }
+
+// <leader>pm lists what happened, newest first, from the hub's journals, so
+// it survives a restart of the TUI; a row opens its thread.
+func TestNotificationsComeFromTheJournal(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	at := time.Now()
+	h.hub.journal = []model.JournalEntry{
+		{Seq: 4, At: at, Workspace: "demo", Thread: "api-tests", Kind: model.JournalPermission, Text: "Bash: go test ./..."},
+		{Seq: 3, At: at, Workspace: "demo", Thread: "auth-refactor", Kind: model.JournalTurn, Text: "Moved the store.", Level: model.LevelNotice},
+		{Seq: 2, At: at, Workspace: "demo", Thread: "auth-refactor", Kind: model.JournalSeen},
+		{Seq: 1, At: at, Workspace: "ops", Thread: "deploy", Kind: model.JournalFailed, Text: "exit 1"},
+	}
+	h.press(" pm")
+	if h.a.picker == nil || len(h.a.picker.items) != 3 {
+		t.Fatalf("picker = %+v", h.a.picker)
+	}
+	h.see("demo · api-tests")
+	h.see("needs permission · Bash: go test ./...")
+	h.see("Moved the store.")
+	h.see("ops · deploy")
+	if h.fgAt("✗ ops · deploy") != fgOf(h.a.th.Alert) {
+		t.Fatal("a failure is in alert")
+	}
+	h.press("<Tab>", "<CR>")
+	if h.a.cur.Buf.Thread != "auth-refactor" {
+		t.Fatalf("<CR> opens the row's thread, got %q", h.a.cur.Buf.Thread)
+	}
+}

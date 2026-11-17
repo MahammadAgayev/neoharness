@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -306,20 +305,63 @@ func (a *App) pickLocalThreads() {
 	a.openPicker("threads in "+a.workspace, func(q string) []pickItem { return fuzzy(items, q) })
 }
 
-// pickMessages lists the toasts, newest first; a row opens its thread, in
-// its workspace.
+// notificationsShown is how many journal entries the notifications list
+// reads.
+const notificationsShown = 300
+
+// pickMessages lists what happened in every workspace, newest first, from
+// the hub's journals, so it outlives the TUI: turns that ended, questions,
+// permission requests, failures, notices, threads opened and resolved. A
+// row opens its thread, in its workspace.
 func (a *App) pickMessages() {
+	es, err := a.c.Journal(notificationsShown)
+	if err != nil {
+		a.notify(err.Error(), a.th.Alert)
+		return
+	}
+	th := a.th
 	var items []pickItem
-	for _, t := range slices.Backward(a.toasted) {
+	for _, e := range es {
+		var glyph Span
+		text := e.Text
+		switch e.Kind {
+		case model.JournalTurn:
+			if e.Level < model.LevelNotice {
+				continue
+			}
+			glyph = Span{"✓", th.Done}
+			if text == "" {
+				text = "finished a turn"
+			}
+		case model.JournalFailed:
+			glyph = Span{"✗", th.Alert}
+		case model.JournalAsked:
+			glyph, text = Span{"◆", th.Wait}, "asks: "+text
+		case model.JournalPermission:
+			glyph, text = Span{"◆", th.Wait}, "needs permission · "+text
+		case model.JournalNotice:
+			glyph = Span{"↗", th.Run}
+			if e.NeedsYou {
+				glyph = Span{"↗", th.Wait}
+			}
+		case model.JournalOpened:
+			glyph, text = Span{"+", th.Accent}, "opened"
+		case model.JournalResolved:
+			glyph, text = Span{"✓", th.Fg3}, "resolved"
+		case model.JournalReopened:
+			glyph, text = Span{"↺", th.Run}, "reopened"
+		default:
+			continue
+		}
 		items = append(items, pickItem{
-			glyph:  t.glyph,
-			label:  t.workspace + " · " + t.thread,
-			detail: t.at.Format("15:04") + "  " + t.body,
-			run:    func() { a.goThread(t.workspace, t.thread) },
+			glyph:  glyph,
+			label:  e.Workspace + " · " + e.Thread,
+			detail: e.At.Local().Format("15:04") + "  " + text,
+			run:    func() { a.goThread(e.Workspace, e.Thread) },
 		})
 	}
 	if len(items) == 0 {
-		a.notify("no messages yet", a.th.Fg3)
+		a.notify("no messages yet", th.Fg3)
 		return
 	}
 	a.openPicker("messages", func(q string) []pickItem { return fuzzy(items, q) })

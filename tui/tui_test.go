@@ -18,6 +18,7 @@ import (
 
 // fakeClient is a hub that records what the UI asked of it.
 type fakeClient struct {
+	journal []model.JournalEntry
 	// version is the commit the hub says it runs.
 	version    string
 	workspaces []model.WorkspaceView
@@ -169,6 +170,9 @@ func (f *fakeClient) Updates(ctx context.Context) (<-chan model.Update, error) {
 
 func (f *fakeClient) Waits() ([]model.Wait, error)  { return slices.Clone(f.waits), nil }
 func (f *fakeClient) Status() (model.Status, error) { return model.Status{}, nil }
+func (f *fakeClient) Journal(limit int) ([]model.JournalEntry, error) {
+	return f.journal[:min(limit, len(f.journal))], nil
+}
 func (f *fakeClient) Seen(p, t string, at time.Time) error {
 	f.seen = append(f.seen, p+"/"+t)
 	return nil
@@ -1335,15 +1339,17 @@ func TestMessagesPickerOpensTheThread(t *testing.T) {
 	h.hub.threads["ops"] = append(h.hub.threads["ops"], model.ThreadView{Workspace: "ops", Name: "git-init", Role: model.RoleThread, State: model.StateIdle})
 	h.a.loadWorkspaces()
 	h.openDemo()
-	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "ops", Thread: "git-init", Event: &model.Event{Kind: model.EventError, Text: "the agent failed"}})
-	h.a.notify("already at oldest change", h.a.th.Fg3)
-	h.a.apply(model.Update{Kind: model.UpdateEvent, Workspace: "demo", Thread: "api-tests", Event: &model.Event{Kind: model.EventError, Text: "tests failed"}})
+	h.hub.journal = []model.JournalEntry{
+		{Seq: 3, At: time.Now(), Workspace: "demo", Thread: "api-tests", Kind: model.JournalFailed, Text: "tests failed"},
+		{Seq: 2, At: time.Now(), Workspace: "ops", Thread: "git-init", Kind: model.JournalStarted},
+		{Seq: 1, At: time.Now(), Workspace: "ops", Thread: "git-init", Kind: model.JournalFailed, Text: "the agent failed"},
+	}
 
 	h.press("<Esc>", "<Space>pm")
 	if h.a.picker == nil || h.a.picker.title != "messages" {
 		t.Fatal("<leader>pm should open the messages picker")
 	}
-	// Newest first, and only the messages of a thread.
+	// Newest first, and only what is news.
 	if items := h.a.picker.items; len(items) != 2 || items[0].label != "demo · api-tests" || items[1].label != "ops · git-init" || !strings.HasSuffix(items[1].detail, "  the agent failed") {
 		t.Fatalf("items = %+v", items)
 	}

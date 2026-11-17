@@ -106,12 +106,12 @@ func TestRotateJournalDropsWhatBothHaveReadAndIsOld(t *testing.T) {
 	now := time.Now()
 	old := now.Add(-journalKeep - time.Hour)
 	seen := map[string]time.Time{"a": now, "b": old.Add(-time.Hour)}
-	items := []workspace.Entry{
-		{Seq: 1, At: old, Thread: "a", Kind: jRecap},    // read by both, old: goes
-		{Seq: 2, At: old, Thread: "b", Kind: jRecap},    // the person has not seen it: stays
-		{Seq: 3, At: old, Thread: "gone", Kind: jRecap}, // its thread is gone: goes
-		{Seq: 9, At: old, Thread: "a", Kind: jRecap},    // the board has not passed it: stays
-		{Seq: 4, At: now, Thread: "a", Kind: jArtifact}, // too new: stays
+	items := []model.JournalEntry{
+		{Seq: 1, At: old, Thread: "a", Kind: model.JournalRecap},    // read by both, old: goes
+		{Seq: 2, At: old, Thread: "b", Kind: model.JournalRecap},    // the person has not seen it: stays
+		{Seq: 3, At: old, Thread: "gone", Kind: model.JournalRecap}, // its thread is gone: goes
+		{Seq: 9, At: old, Thread: "a", Kind: model.JournalRecap},    // the board has not passed it: stays
+		{Seq: 4, At: now, Thread: "a", Kind: model.JournalArtifact}, // too new: stays
 	}
 	got := rotateJournal(items, 5, func(name string) (time.Time, bool) {
 		at, ok := seen[name]
@@ -228,7 +228,7 @@ func TestWhatThreadsKeptBeforeTheJournalStillWaits(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	h0.note(ws, ws.threads["done"], workspace.Entry{Kind: jPermission, ID: "p1", Text: "Bash: ls"})
+	h0.note(ws, ws.threads["done"], model.JournalEntry{Kind: model.JournalPermission, ID: "p1", Text: "Bash: ls"})
 	h0.Close()
 	at := time.Now().Add(-time.Hour).UTC()
 	edit := func(name string, f func(*workspace.Thread)) {
@@ -272,7 +272,24 @@ func TestWhatThreadsKeptBeforeTheJournalStillWaits(t *testing.T) {
 		t.Fatalf("a second start changed the journal: %v, %d entries, then %d", got, n, len(h.workspaces["demo"].journal))
 	}
 	es := h.workspaces["demo"].journal
-	if !slices.ContainsFunc(es, func(e workspace.Entry) bool { return e.Kind == jDecided && e.ID == "p1" }) {
+	if !slices.ContainsFunc(es, func(e model.JournalEntry) bool { return e.Kind == model.JournalDecided && e.ID == "p1" }) {
 		t.Fatalf("the permission is still open: %+v", es)
+	}
+}
+
+// TestJournalMergesEveryWorkspaceNewestFirst: the hub-wide view of the
+// journals, for the notifications list, names each entry's workspace.
+func TestJournalMergesEveryWorkspaceNewestFirst(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "alpha")
+	pinned(t, h, "beta")
+	_ = h.Notify("alpha", model.Coordinator, "approve the plan", true)
+	_ = h.Notify("beta", model.Coordinator, "pick a database", true)
+	es := h.Journal(10)
+	if len(es) != 2 || es[0].Workspace != "beta" || es[0].Text != "pick a database" || es[1].Workspace != "alpha" {
+		t.Fatalf("journal = %+v", es)
+	}
+	if es := h.Journal(1); len(es) != 1 || es[0].Workspace != "beta" {
+		t.Fatalf("limit 1 = %+v", es)
 	}
 }

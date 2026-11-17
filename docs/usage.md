@@ -218,8 +218,10 @@ when you read the thread. A thread on screen for 2 seconds tells the hub
 you saw it; that quiets what it said since, but never what needs you.
 
 `<leader>nc` dismisses them and `<leader>nh` shows their history.
-`<leader>pm` picks one, newest first, and opens its thread, in any
-workspace.
+`<leader>pm` lists what happened in every workspace, newest first: turns
+that ended, questions, permission requests, failures, notices, threads
+opened and resolved. It reads the hub's journal, so it holds what came
+while the TUI was closed. `<CR>` opens the row's thread, in its workspace.
 
 - By default every thread that ends a turn shows a toast with the first
   line of its reply. One from a workspace that is not open stays longer.

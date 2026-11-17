@@ -97,7 +97,6 @@ func (a *App) addToast(t *toast, life time.Duration) {
 	}
 	a.toasts = append(a.toasts, t)
 	t.at = time.Now()
-	a.toasted = append(a.toasted, t)
 	a.logMessage(t.workspace+" · "+thread+": "+t.body, t.glyph.Style)
 }
 

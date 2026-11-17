@@ -177,7 +177,7 @@ type space struct {
 	// Config.Notify is on.
 	reports *time.Timer
 	// journal is the workspace's journal, oldest first.
-	journal []workspace.Entry
+	journal []model.JournalEntry
 }
 
 type thread struct {
@@ -759,7 +759,7 @@ func (h *Hub) OpenThread(workspaceName, by, name, brief, loc string) error {
 		return err
 	}
 	h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Opened by " + by + " in " + l.String()})
-	h.note(ws, th, workspace.Entry{Kind: jOpened, Text: by})
+	h.note(ws, th, model.JournalEntry{Kind: model.JournalOpened, Text: by})
 	if strings.TrimSpace(brief) != "" {
 		h.enqueue(ws, th, by, brief)
 	}
@@ -816,7 +816,7 @@ func (h *Hub) SendNow(workspaceName, to, text string, images ...[]byte) error {
 		// Stopped with messages queued: nothing runs, so they start now.
 		if err == nil && th.t.Paused {
 			if th.t.Asking != "" {
-				h.note(ws, th, workspace.Entry{Kind: jDismissed})
+				h.note(ws, th, model.JournalEntry{Kind: model.JournalDismissed})
 			}
 			th.t.Paused, th.t.Asking = false, ""
 			h.changed(ws, th)
@@ -828,7 +828,7 @@ func (h *Hub) SendNow(workspaceName, to, text string, images ...[]byte) error {
 		if err == nil && th.t.Asking != "" {
 			th.t.Asking = ""
 			h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Question not answered; the queued messages went in."})
-			h.note(ws, th, workspace.Entry{Kind: jDismissed})
+			h.note(ws, th, model.JournalEntry{Kind: model.JournalDismissed})
 			h.changed(ws, th)
 			if !th.busy {
 				h.kick(ws, th)
@@ -1025,7 +1025,7 @@ func (h *Hub) command(ws *space, th *thread, text string) (bool, error) {
 		}
 		focus := strings.Join(f[1:], " ")
 		t.AgentTurns, t.Paused, t.Asking = 0, false, ""
-		h.note(ws, th, workspace.Entry{Kind: jWrote})
+		h.note(ws, th, model.JournalEntry{Kind: model.JournalWrote})
 		// Before what is queued: the agent has not read it yet, so it goes to
 		// the compacted session, as a held message of a reopened thread does.
 		t.Queue = append([]workspace.Message{{From: model.User, Text: focus, At: time.Now().UTC(), Compact: true, Shown: true}}, t.Queue...)
@@ -1094,7 +1094,7 @@ func (h *Hub) clear(ws *space, th *thread) error {
 	t.Context, t.Summary = 0, ""
 	t.Queue = []workspace.Message{}
 	t.Asking, t.Paused, t.AgentTurns = "", false, 0
-	h.note(ws, th, workspace.Entry{Kind: jWrote})
+	h.note(ws, th, model.JournalEntry{Kind: model.JournalWrote})
 	h.event(ws, th, model.Event{Kind: model.EventClear, Text: "Cleared. The next message starts a new conversation."})
 	h.changed(ws, th)
 	return nil
@@ -1117,7 +1117,7 @@ func (h *Hub) enqueue(ws *space, th *thread, from, text string, images ...string
 		t.Paused = false
 		t.Asking = ""
 		t.Notices = nil
-		h.note(ws, th, workspace.Entry{Kind: jWrote})
+		h.note(ws, th, model.JournalEntry{Kind: model.JournalWrote})
 	}
 	h.changed(ws, th)
 	h.kick(ws, th)
@@ -1150,7 +1150,7 @@ func (h *Hub) Resolve(workspaceName, by, name string) error {
 	}
 	h.denyAll(ws, th, "the thread was resolved")
 	h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Resolved by " + by})
-	h.note(ws, th, workspace.Entry{Kind: jResolved, Text: by})
+	h.note(ws, th, model.JournalEntry{Kind: model.JournalResolved, Text: by})
 	h.changed(ws, th)
 	return nil
 }
@@ -1212,7 +1212,7 @@ func (h *Hub) reopen(ws *space, th *thread, by string) {
 		text = "Reopened by " + by
 	}
 	h.event(ws, th, model.Event{Kind: model.EventNote, Text: text})
-	h.note(ws, th, workspace.Entry{Kind: jReopened, Text: by})
+	h.note(ws, th, model.JournalEntry{Kind: model.JournalReopened, Text: by})
 	h.changed(ws, th)
 }
 
@@ -1278,7 +1278,7 @@ func (h *Hub) compactReopened(ws *space, th *thread) {
 		th.autoTried = true
 		t.Paused = true
 		t.Asking = fmt.Sprintf("context %d%% full · /compact first, or send the message as is", pct)
-		h.note(ws, th, workspace.Entry{Kind: jAsked, Text: t.Asking})
+		h.note(ws, th, model.JournalEntry{Kind: model.JournalAsked, Text: t.Asking})
 	}
 }
 
@@ -1327,7 +1327,7 @@ func (h *Hub) WriteArtifact(workspaceName, by, name, text string) (model.Artifac
 	}
 	h.event(ws, th, model.Event{Kind: model.EventArtifact, Detail: name, Text: a.Title, Version: a.Version})
 	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: by, Artifact: &a})
-	h.note(ws, th, workspace.Entry{Kind: jArtifact, Text: name})
+	h.note(ws, th, model.JournalEntry{Kind: model.JournalArtifact, Text: name})
 	h.changed(ws, th)
 	return a, nil
 }
@@ -1622,7 +1622,7 @@ func (h *Hub) Ask(workspaceName, name, question string) error {
 	id := fmt.Sprintf("q%d", at.UnixNano())
 	th.t.Asking = q
 	h.event(ws, th, model.Event{At: at, Kind: model.EventAsk, ID: id, Text: q})
-	h.note(ws, th, workspace.Entry{At: at, Kind: jAsked, ID: id, Text: q})
+	h.note(ws, th, model.JournalEntry{At: at, Kind: model.JournalAsked, ID: id, Text: q})
 	h.changed(ws, th)
 	return nil
 }
@@ -1648,7 +1648,7 @@ func (h *Hub) Recap(workspaceName, name, text string) error {
 	}
 	th.t.Recap, th.t.RecapAt = oneLine(text, replyLimit), time.Now().UTC()
 	th.recapped = true
-	h.note(ws, th, workspace.Entry{Kind: jRecap, Text: th.t.Recap})
+	h.note(ws, th, model.JournalEntry{Kind: model.JournalRecap, Text: th.t.Recap})
 	h.changed(ws, th)
 	return nil
 }
@@ -1718,7 +1718,7 @@ func (h *Hub) Notify(workspaceName, name, text string, needsYou bool) error {
 	at := time.Now().UTC()
 	h.event(ws, th, model.Event{At: at, Kind: model.EventNotice, Text: text, NeedsYou: needsYou})
 	id := fmt.Sprintf("n%d", at.UnixNano())
-	h.note(ws, th, workspace.Entry{At: at, Kind: jNotice, ID: id, Text: text, NeedsYou: needsYou})
+	h.note(ws, th, model.JournalEntry{At: at, Kind: model.JournalNotice, ID: id, Text: text, NeedsYou: needsYou})
 	if needsYou {
 		th.t.Notices = append(th.t.Notices, workspace.Notice{ID: id, Text: text, At: at})
 	}
@@ -1776,7 +1776,7 @@ func (h *Hub) Permission(ctx context.Context, workspaceName, name string, q agen
 	}
 	th.perms = append(th.perms, p)
 	h.event(ws, th, model.Event{Kind: model.EventPermission, ID: p.ID, Tool: q.Tool, Detail: q.Detail})
-	h.note(ws, th, workspace.Entry{Kind: jPermission, ID: p.ID, Text: strings.TrimSuffix(q.Tool+": "+q.Detail, ": ")})
+	h.note(ws, th, model.JournalEntry{Kind: model.JournalPermission, ID: p.ID, Text: strings.TrimSuffix(q.Tool+": "+q.Detail, ": ")})
 	h.changed(ws, th)
 	h.mu.Unlock()
 
@@ -1845,7 +1845,7 @@ func (h *Hub) dropPerm(ws *space, th *thread, id, text string) {
 		return
 	}
 	th.perms = slices.DeleteFunc(th.perms, func(p *pending) bool { return p.ID == id })
-	h.note(ws, th, workspace.Entry{Kind: jDecided, ID: id, Text: text})
+	h.note(ws, th, model.JournalEntry{Kind: model.JournalDecided, ID: id, Text: text})
 	h.changed(ws, th)
 }
 
@@ -1853,7 +1853,7 @@ func (h *Hub) denyAll(ws *space, th *thread, why string) {
 	for _, p := range th.perms {
 		p.msg = why
 		p.done <- model.Deny
-		h.note(ws, th, workspace.Entry{Kind: jDecided, ID: p.ID, Text: "denied: " + why})
+		h.note(ws, th, model.JournalEntry{Kind: model.JournalDecided, ID: p.ID, Text: "denied: " + why})
 	}
 	th.perms = nil
 }
@@ -1920,7 +1920,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 	th.started = false
 	th.interrupted, th.dropped = false, false
 	th.cancel = cancel
-	h.note(ws, th, workspace.Entry{Kind: jStarted})
+	h.note(ws, th, model.JournalEntry{Kind: model.JournalStarted})
 	h.changed(ws, th)
 
 	prompt := compose(batch, ws.threads, t.Role == model.RoleCoordinator)
@@ -2023,7 +2023,7 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		// for them, and a question of the turn waits for no one.
 		if th.dropped {
 			if t.Asking != "" {
-				h.note(ws, th, workspace.Entry{Kind: jDismissed})
+				h.note(ws, th, model.JournalEntry{Kind: model.JournalDismissed})
 			}
 			t.Asking = ""
 			t.Paused = len(t.Queue) > 0
@@ -2072,14 +2072,14 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 	}
 	switch {
 	case failure != "":
-		h.note(ws, th, workspace.Entry{Kind: jFailed, Text: failure})
+		h.note(ws, th, model.JournalEntry{Kind: model.JournalFailed, Text: failure})
 	case ended && !compact:
 		// A quiet turn stays out of the chat, and so out of what is new.
 		lvl := model.LevelQuiet
 		if !th.quiet {
 			lvl = level(model.Event{Kind: model.EventTurnEnd, Background: res.Background}, t.Role, h.cfg.Notify)
 		}
-		h.note(ws, th, workspace.Entry{Kind: jTurn, Text: oneLine(res.Text, replyLimit), Tools: res.Tools, Level: lvl})
+		h.note(ws, th, model.JournalEntry{Kind: model.JournalTurn, Text: oneLine(res.Text, replyLimit), Tools: res.Tools, Level: lvl})
 	}
 	th.quiet = false
 	th.background = 0
@@ -2127,7 +2127,7 @@ func (h *Hub) follow(ws *space, th *thread) {
 			th.following = false
 			th.busy = true
 			th.started, th.interrupted, th.dropped, th.recapped, th.todoTurn = false, false, false, false, false
-			h.note(ws, th, workspace.Entry{Kind: jStarted})
+			h.note(ws, th, model.JournalEntry{Kind: model.JournalStarted})
 			th.clock = newTurnClock(h.cfg.TurnTimeout, func() { cancelCause(errTurnTimeout) })
 			now := time.Now().UTC()
 			t.Turns = append(slices.DeleteFunc(t.Turns, func(at time.Time) bool { return now.Sub(at) > 24*time.Hour }), now)
@@ -2182,7 +2182,7 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 		th.t.Todos = changeTodo(th.t.Todos, e, !th.todoTurn)
 		th.todoTurn = true
 		if i := slices.IndexFunc(th.t.Todos, func(t model.Todo) bool { return t.ID == e.ID }); i >= 0 && was < 0 && th.t.Todos[i].State == model.TodoDone {
-			h.note(ws, th, workspace.Entry{Kind: jDone, Text: th.t.Todos[i].Text})
+			h.note(ws, th, model.JournalEntry{Kind: model.JournalDone, Text: th.t.Todos[i].Text})
 		}
 		h.changed(ws, th)
 	case agent.KindBackground:

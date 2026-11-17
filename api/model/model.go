@@ -253,6 +253,44 @@ type Status struct {
 	At    time.Time `json:"at,omitzero"`
 }
 
+// JournalEntry is one fact of a workspace's journal: what happened to a
+// session that matters outside its chat. Kind says what; ID names the
+// permission, question or notice it is about; Tools counts a turn's tool
+// calls; Level is the attention it asks for, as the hub set it once. Seq
+// rises across the hub. Workspace is set when it leaves the hub.
+type JournalEntry struct {
+	Seq       int64     `json:"seq"`
+	At        time.Time `json:"at"`
+	Workspace string    `json:"workspace,omitempty"`
+	Thread    string    `json:"thread"`
+	Kind      string    `json:"kind"`
+	ID        string    `json:"id,omitempty"`
+	Text      string    `json:"text,omitempty"`
+	Tools     int       `json:"tools,omitempty"`
+	NeedsYou  bool      `json:"needsYou,omitempty"`
+	Level     Level     `json:"level,omitempty"`
+}
+
+// The kinds of journal entry.
+const (
+	JournalOpened     = "opened"
+	JournalStarted    = "started" // a turn starts
+	JournalTurn       = "turn"    // a turn ended well: Text is its reply, Tools its tool calls
+	JournalFailed     = "failed"
+	JournalRecap      = "recap"
+	JournalDone       = "done" // a todo item
+	JournalArtifact   = "artifact"
+	JournalAsked      = "asked"
+	JournalPermission = "permission"
+	JournalDecided    = "decided" // a permission's answer
+	JournalNotice     = "notice"
+	JournalWrote      = "wrote"     // the person wrote to the session
+	JournalDismissed  = "dismissed" // the person skipped a question, or dismissed a notice, a failure or news
+	JournalSeen       = "seen"
+	JournalResolved   = "resolved"
+	JournalReopened   = "reopened"
+)
+
 // HubScope is where a workspace name goes for a document of the hub, which
 // is in no workspace. It is no valid workspace name. FocusDoc is its one
 // document: what the person works on now, in every workspace.

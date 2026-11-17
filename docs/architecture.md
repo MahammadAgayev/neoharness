@@ -171,7 +171,9 @@ reads after `boardSeq` (in `workspace.json`), and the attention agent after
 the person last saw each session (`seen`). An entry goes once both have
 read it, or its session is gone, and it is 7 days old; a journal keeps at
 most 2000 entries. At start the hub moves what came before the journal into
-it once: the old `news.jsonl`, and the news a `thread.json` kept.
+it once: the old `news.jsonl`, and the news a `thread.json` kept. `GET
+/journal?limit=N` gives the newest N entries of every workspace, newest
+first, each with its `workspace`; the notifications list reads it.
 
 ## Attention
 

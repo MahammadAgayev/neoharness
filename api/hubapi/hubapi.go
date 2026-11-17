@@ -279,6 +279,13 @@ func (c *Client) Status() (model.Status, error) {
 	return s, c.do("GET", "/status", nil, &s)
 }
 
+// Journal is the newest limit entries of every workspace's journal, newest
+// first.
+func (c *Client) Journal(limit int) ([]model.JournalEntry, error) {
+	var es []model.JournalEntry
+	return es, c.do("GET", fmt.Sprintf("/journal?limit=%d", limit), nil, &es)
+}
+
 func (c *Client) Seen(workspace, thread string, at time.Time) error {
 	return c.do("POST", threadPath(workspace, thread)+"/seen", Seen{At: at}, nil)
 }

@@ -246,6 +246,9 @@ func TestWaitsOverTheAPI(t *testing.T) {
 	if s, err := c.Status(); err != nil || len(s.Lines) != 0 {
 		t.Fatalf("status without the attention agent = %+v, %v", s, err)
 	}
+	if es, err := c.Journal(5); err != nil || len(es) != 0 {
+		t.Fatalf("journal = %+v, %v", es, err)
+	}
 	if err := h.Notify("demo", model.Coordinator, "pick a database", true); err != nil {
 		t.Fatal(err)
 	}
