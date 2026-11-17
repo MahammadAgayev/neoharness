@@ -376,9 +376,8 @@ func TestComingBackShowsHowTheWorkStandsAndWhatIsNext(t *testing.T) {
 		t.Fatal("the card stays after the next key")
 	}
 	h.press(":waits", "<CR>")
-	h.see("demo  auth moved · tests pass")
-	if h.rowOf("demo  auth moved") > h.rowOf("question · ") || len(h.a.picker.items) != 2 {
-		t.Fatalf(":waits starts with the status, which is no row:\n%s", h.screen())
+	if strings.Contains(h.screen(), "auth moved") || len(h.a.picker.items) != 2 {
+		t.Fatalf(":waits holds only what you can go to, not the status:\n%s", h.screen())
 	}
 	h.press("<Esc>")
 	if !slices.ContainsFunc(h.a.messages, func(l Line) bool { return strings.Contains(spansText(l.Spans), "auth moved") }) {

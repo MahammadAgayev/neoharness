@@ -126,9 +126,8 @@ yourself:
   read`), and what is next. Each line names a workspace or a goal in a
   column, gold when something in that workspace waits for you, then what
   moved, what is stuck and what runs. Next is the top of the waits list,
-  with why it is there. `]q` goes to it, as a come-back starts the walk at the top again.
-  The card closes at your next key; `:messages` keeps it, and `:waits`
-  starts with the same lines.
+  with why it is there. `]q` goes to it, as a come-back starts the walk at
+  the top again. The card closes at your next key; `:messages` keeps it.
 - When you come back after 2 minutes or more away, a chat shows its recap
   as dim text just above the todo line and the prompt, `※ recap: …`: where
   the session's work stands, in its own words, as in Claude Code. Away is
@@ -206,10 +205,10 @@ and `[q`, or `:cn` and `:cp`, go to the next or previous one and open its
 thread at its card, in any workspace. `<C-o>` goes back to the workspace
 the jump left, as it was, until you move in the window it landed in; the
 pickers and `:workspace` jump the same way. `:waits`, `:copen` or
-`<leader>pq` opens the list as a picker, the focus list: the attention
-agent's lines on how all the work stands, then each wait with how long it
-has waited and its brief. It follows the hub while it is open: a row moves
-only when something comes, goes or changes there, never because you move,
+`<leader>pq` opens the list as a picker, the focus list: only what you
+can go to, each wait with how long it has waited and its brief. It
+follows the hub while it is open: a row moves only when something comes,
+goes or changes there, never because you move,
 and one that goes stays, muted, until the list closes. `<CR>` goes to a
 wait, `<C-d>` dismisses a notice or a failure, or reads a review; typing
 filters. `:waits!` shows it oldest first.

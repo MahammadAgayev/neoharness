@@ -41,9 +41,6 @@ type picker struct {
 	source func(q string) []pickItem
 	// all is how many rows the picker has before a query; its box fits them.
 	all int
-	// head is lines above the rows, which no query filters: the focus
-	// list's status.
-	head [][]Span
 	// waits says the picker is the focus list, which follows the hub.
 	waits bool
 }

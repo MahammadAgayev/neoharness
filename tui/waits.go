@@ -162,16 +162,16 @@ func waitName(open string, w model.Wait) string {
 }
 
 // openWaits opens the focus list: the waits list as a picker, in the order
-// ]q walks it, or oldest first, under how all the work stands. It follows
+// ]q walks it, or oldest first. It follows
 // the hub while it is open: a row moves only when a wait comes, goes or
 // changes there, and one that goes stays, muted, until the list closes.
 func (a *App) openWaits(byAge bool) {
-	if len(a.waits) == 0 && len(a.status.Lines) == 0 {
+	if len(a.waits) == 0 {
 		a.notify("nothing waits for you", a.th.Fg3)
 		return
 	}
 	a.openPicker("next", func(q string) []pickItem { return fuzzy(a.waitItems(byAge), q) })
-	a.picker.waits, a.picker.head = true, a.statusLines()
+	a.picker.waits = true
 }
 
 func (a *App) waitItems(byAge bool) []pickItem {
@@ -209,7 +209,7 @@ func (a *App) waitItems(byAge bool) []pickItem {
 	return items
 }
 
-// followWaits brings the open focus list up to the hub's waits and status.
+// followWaits brings the open focus list up to the hub's waits.
 // The cursor stays on its row.
 func (a *App) followWaits() {
 	p := a.picker
@@ -228,7 +228,7 @@ func (a *App) followWaits() {
 			p.items = slices.Insert(p.items, min(i, len(p.items)), it)
 		}
 	}
-	p.all, p.head = max(p.all, len(p.items)), a.statusLines()
+	p.all = max(p.all, len(p.items))
 	if i := slices.IndexFunc(p.items, func(it pickItem) bool { return it.wait == at }); i >= 0 {
 		p.sel = i
 	}
