@@ -61,9 +61,6 @@ func (a *App) draw() {
 	if a.workspacesShown() {
 		a.renderWorkspaces()
 	}
-	if a.waitsBuf != nil {
-		a.renderWaits()
-	}
 	a.bindDiff()
 	for _, w := range a.root.windows() {
 		a.drawWindow(w, w == a.cur)
@@ -637,8 +634,6 @@ func bufTitle(b *Buffer) string {
 		return b.Artifact
 	case KindTodo:
 		return b.Thread + " todo"
-	case KindWaits:
-		return "waits"
 	}
 	return b.Name
 }
@@ -770,9 +765,13 @@ func (a *App) box(x, y, w, h int, title string, st tcell.Style) {
 func (a *App) drawPicker(W, H int) {
 	p := a.picker
 	bw := min(W-8, 84)
-	bh := min(H-6, 22)
+	head := len(p.head)
+	if head > 0 {
+		head++
+	}
+	bh := min(H-6, 22+head)
 	if p.all > 0 {
-		bh = min(bh, p.all+4)
+		bh = min(bh, p.all+4+head)
 	}
 	x0, y0 := (W-bw)/2, (H-bh)/3
 	th := a.th
@@ -786,7 +785,11 @@ func (a *App) drawPicker(W, H int) {
 	for i := x0 + 1; i < x0+bw-1; i++ {
 		a.s.SetContent(i, y0+2, '─', nil, th.Separator)
 	}
-	rows := bh - 4
+	for i, l := range p.head {
+		a.put(x0+2, y0+3+i, inner, truncate(l, inner-x0-2), th.Fg2)
+	}
+	y0 += head
+	rows := bh - 4 - head
 	start := 0
 	if p.sel >= rows {
 		start = p.sel - rows + 1
@@ -815,11 +818,14 @@ func (a *App) drawPicker(W, H int) {
 		if selected {
 			a.fill(x0+1, y, x0+bw-1, th.CursorLine)
 		}
-		x := a.put(x0+2, y, inner, it.glyph.Text+" ", sel(it.glyph.Style))
-		labelSt := th.Fg2
+		glyphSt, labelSt := it.glyph.Style, th.Fg2
 		if selected {
 			labelSt = th.Fg.Bold(true)
 		}
+		if it.done {
+			glyphSt, labelSt = th.Fg3, th.Fg3
+		}
+		x := a.put(x0+2, y, inner, it.glyph.Text+" ", sel(glyphSt))
 		x = a.put(x, y, inner, pad(truncate(it.label, labelW), labelW+2), sel(labelSt))
 		a.put(x, y, inner, truncate(flatten(it.detail), inner-x), sel(th.Fg3))
 	}

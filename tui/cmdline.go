@@ -463,7 +463,6 @@ func (a *App) exec(line string) {
 			return
 		}
 		if b := a.findBuffer(arg(0)); b != nil {
-			a.leaveList()
 			a.showBuf(a.cur, b)
 		} else {
 			a.notify("no buffer "+arg(0), a.th.Alert)
@@ -475,9 +474,7 @@ func (a *App) exec(line string) {
 	case "cp", "cprevious", "cN", "cNext":
 		a.nextWait(-1)
 	case "waits", "copen", "cope", "cw", "cwindow", "waits!":
-		a.waitsByAge = cmd == "waits!"
-		a.renderWaits()
-		a.cur.show(a.waitsBuf)
+		a.openWaits(cmd == "waits!")
 		a.cur.Follow = false
 	case "focus":
 		switch arg(0) {
@@ -727,7 +724,7 @@ func (a *App) helpBuf() *Buffer {
 		row("<C-w>c  <C-w>o  <C-w>=", "close, only, equal sizes"),
 		row("]b [b  <C-^>", "next / previous thread, alternate"),
 		row("]q [q  :cn :cp", "next / previous wait, in any workspace: what blocks a turn first, then failures and notices, then reviews, then an edit of your focus; back after 2 min away, a card says how all the work stands and what is next, and ]q goes there"),
-		row(":waits  :copen", "the waits list; <CR> goes to one, x dismisses a notice or a failure, or reads a review"),
+		row(":waits  :copen  <leader>pq", "the focus list: what to do next, under how the work stands; it moves only when the hub does; <CR> goes to one, <C-d> dismisses a notice or a failure, or reads a review"),
 		row(":waits!", "the waits list, oldest first"),
 		row("<C-o>", "back to the buffer the window showed before, or to the workspace a jump left"),
 		row("<CR>", "open the workspace, or switch to the thread"),

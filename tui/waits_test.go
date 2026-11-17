@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -74,36 +75,72 @@ func TestBracketQWalksTheWaitsListOldestFirst(t *testing.T) {
 	}
 }
 
-func TestWaitsOpensTheListWhereEnterJumpsAndXDismisses(t *testing.T) {
+// :waits, :copen and <leader>pq open the focus list: a picker of the waits
+// in the order ]q walks them. <CR> jumps, <C-d> dismisses a notice, a
+// failure or a review; a permission is answered instead.
+func TestWaitsOpensTheFocusListWhereEnterJumpsAndCtrlDDismisses(t *testing.T) {
 	h := start(t)
 	h.openDemo()
 	h.setWaits(append(demoWaits(), model.Wait{Workspace: "demo", Thread: "api-tests", Kind: model.WaitFailed, ID: "failed", Text: "exit status 1", Since: time.Now()})...)
-	for _, cmd := range []string{":copen", ":waits"} {
-		h.press(cmd, "<CR>")
-		if h.a.cur.Buf.Kind != KindWaits {
-			t.Fatalf("%s should open the waits list", cmd)
+	for _, keys := range [][]string{{":copen", "<CR>"}, {":waits", "<CR>"}, {" pq"}} {
+		h.press(keys...)
+		if h.a.picker == nil || !h.a.picker.waits {
+			t.Fatalf("%v should open the focus list", keys)
 		}
+		h.press("<Esc>")
 	}
-	h.see("◆ api-tests  permission · Bash: go test ./...")
-	h.see("◆ auth-refactor  question · Which branch?")
-	h.see("✗ api-tests  failed · exit status 1")
+	h.press(":waits", "<CR>")
+	h.see("◆ api-tests")
+	h.see("permission · Bash: go test ./...")
+	h.see("question · Which branch?")
+	h.see("failed · exit status 1")
 	if h.fgAt("✗ api-tests") != fgOf(h.a.th.Alert) {
 		t.Fatal("a failure is in alert")
 	}
-	h.press("gg", "j", "<CR>")
+	h.press("<Tab>", "<CR>")
 	if h.a.cur.Buf.Thread != "auth-refactor" {
 		t.Fatalf("<CR> should jump to the wait on the row, got %q", h.a.cur.Buf.Thread)
 	}
-	h.press(":waits", "<CR>", "G", "x")
+	h.press(":waits", "<CR>", "<Tab>", "<Tab>", "<C-d>")
 	if !slices.Equal(h.hub.dismissed, []string{"demo/api-tests/failed"}) {
-		t.Fatalf("x should dismiss the failure, got %v", h.hub.dismissed)
+		t.Fatalf("<C-d> should dismiss the failure, got %v", h.hub.dismissed)
 	}
-	h.press("gg", "x")
+	h.press("<Tab>", "<C-d>")
 	if len(h.hub.dismissed) != 1 || !strings.Contains(h.a.notice, "answer") {
 		t.Fatalf("a permission is answered, not dismissed: %v %q", h.hub.dismissed, h.a.notice)
 	}
 }
 
+// The focus list follows the hub while it is open: a new wait comes in its
+// place, one that goes stays where it was, muted, until the list closes,
+// and the cursor stays on its row.
+func TestTheFocusListMovesOnlyWhenTheHubDoes(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	ws := demoWaits()
+	h.setWaits(ws...)
+	h.press(":waits", "<CR>", "<Tab>")
+	failed := model.Wait{Workspace: "ops", Thread: "deploy", Kind: model.WaitFailed, ID: "failed", Text: "exit 1", Since: time.Now()}
+	h.setWaits(failed, ws[1])
+	p := h.a.picker
+	var got []string
+	for _, it := range p.items {
+		got = append(got, fmt.Sprintf("%s %v", it.label, it.done))
+	}
+	if strings.Join(got, ", ") != "api-tests true, ops · deploy false, auth-refactor false" {
+		t.Fatalf("rows = %v", got)
+	}
+	if p.items[p.sel].label != "auth-refactor" {
+		t.Fatalf("the cursor left its row: %q", p.items[p.sel].label)
+	}
+	if h.fgAt("◆ api-tests") != fgOf(h.a.th.Fg3) {
+		t.Fatal("a wait that went is muted")
+	}
+	h.press("<Esc>", ":waits", "<CR>")
+	if len(h.a.picker.items) != 2 {
+		t.Fatal("a muted row goes when the list closes")
+	}
+}
 func TestAThreadOnScreenForTwoSecondsIsSeen(t *testing.T) {
 	c := startClocked(t)
 	h := c.h
@@ -135,25 +172,6 @@ func TestAThreadOnScreenForTwoSecondsIsSeen(t *testing.T) {
 	}
 }
 
-func TestTheWaitsListReadsAsTheBoard(t *testing.T) {
-	h := start(t)
-	h.openDemo()
-	h.setWaits(demoWaits()...)
-	h.press(":waits", "<CR>")
-	w := h.a.cur
-	if w.Buf.Kind != KindWaits {
-		t.Fatal(":waits should open the list")
-	}
-	if h.fgAt("permission · ") != fgOf(h.a.th.Wait) || h.fgAt("question · ") != fgOf(h.a.th.Wait) {
-		t.Fatal("the kind is in wait ink, as on the board")
-	}
-	row := []rune(h.line(h.rowOf("permission · ")))
-	end := w.rect.X + w.rect.W - 1
-	if got := string(row[end-2 : end]); got != "1m" {
-		t.Fatalf("the time is right-aligned one column before the edge, got %q:\n%s", got, string(row))
-	}
-}
-
 // A review is news, not a wait: it is on the ]q path after what blocks,
 // but the command line does not count it, and x reads it.
 func TestReviewsAreOnTheWaitsPathButNotCounted(t *testing.T) {
@@ -170,13 +188,13 @@ func TestReviewsAreOnTheWaitsPathButNotCounted(t *testing.T) {
 		t.Fatalf("]q should reach the review after the blockers, got %q", h.a.cur.Buf.Thread)
 	}
 	h.press(":waits", "<CR>")
-	h.see("✓ coordinator  review · setup page drafted")
+	h.see("review · setup page drafted")
 	if h.fgAt("✓ coordinator") != fgOf(h.a.th.Done) {
 		t.Fatal("a review is in done ink")
 	}
-	h.press("G", "x")
+	h.press("<Tab>", "<Tab>", "<C-d>", "<Esc>")
 	if !slices.Equal(h.hub.dismissed, []string{"demo/coordinator/review"}) {
-		t.Fatalf("x should read the review, got %v", h.hub.dismissed)
+		t.Fatalf("<C-d> should read the review, got %v", h.hub.dismissed)
 	}
 	h.setWaits(review)
 	if strings.Contains(h.line(H-1), "waiting") {
@@ -195,11 +213,11 @@ func TestWaitsBangShowsTheListOldestFirst(t *testing.T) {
 	if h.rowOf("permission · ") > h.rowOf("review · ") {
 		t.Fatal(":waits keeps the hub's order")
 	}
-	h.press(":waits!", "<CR>")
+	h.press("<Esc>", ":waits!", "<CR>")
 	if h.rowOf("review · ") > h.rowOf("permission · ") {
 		t.Fatal(":waits! is oldest first")
 	}
-	h.press("gg", "<CR>")
+	h.press("<CR>")
 	if h.a.cur.Buf.Thread != model.Coordinator {
 		t.Fatalf("<CR> goes to the row's wait, got %q", h.a.cur.Buf.Thread)
 	}
@@ -350,10 +368,10 @@ func TestComingBackShowsHowTheWorkStandsAndWhatIsNext(t *testing.T) {
 		t.Fatal("the card stays after the next key")
 	}
 	h.press(":waits", "<CR>")
-	if l := h.a.waitsBuf.blocks[0].raw[0]; !strings.Contains(spansText(l.Spans), "auth moved") || l.Item != "" {
-		t.Fatalf(":waits starts with the status, which is no stop: %+v", l)
+	if h.rowOf("demo: auth moved") > h.rowOf("question · ") || len(h.a.picker.items) != 2 {
+		t.Fatalf(":waits starts with the status, which is no row:\n%s", h.screen())
 	}
-	h.press("<C-o>")
+	h.press("<Esc>")
 	if !slices.ContainsFunc(h.a.messages, func(l Line) bool { return strings.Contains(spansText(l.Spans), "auth moved") }) {
 		t.Fatal(":messages keeps the status")
 	}

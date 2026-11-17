@@ -11,7 +11,7 @@ import (
 
 // The attention agent's edit of the focus is the last stop of ]q: it opens
 // the focus in diff mode beside the edit, where do takes a change and :w
-// saves. It is not counted as waiting, and x in :waits drops it.
+// saves. It is not counted as waiting, and <C-d> in :waits drops it.
 func TestASuggestedEditOfTheFocusOpensInDiffMode(t *testing.T) {
 	h := start(t)
 	doc := "# Focus\n\n## Now\n\n- hub tests green\n"
@@ -39,10 +39,10 @@ func TestASuggestedEditOfTheFocusOpensInDiffMode(t *testing.T) {
 	}
 
 	h.press(":waits", "<CR>")
-	h.see("◇ focus  focus · tests pass in api-tests")
-	h.press("gg", "x")
+	h.see("focus · tests pass in api-tests")
+	h.press("<C-d>")
 	if !slices.Equal(h.hub.dismissed, []string{model.HubScope + "/" + model.FocusDoc + "/" + model.SuggestionID}) {
-		t.Fatalf("x should drop the edit, got %v", h.hub.dismissed)
+		t.Fatalf("<C-d> should drop the edit, got %v", h.hub.dismissed)
 	}
 }
 

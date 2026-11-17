@@ -201,9 +201,14 @@ counts what blocks on you as `◆ N waiting`; reviews are not counted. `]q`
 and `[q`, or `:cn` and `:cp`, go to the next or previous one and open its
 thread at its card, in any workspace. `<C-o>` goes back to the workspace
 the jump left, as it was, until you move in the window it landed in; the
-pickers and `:workspace` jump the same way. `:waits` or `:copen` shows the list:
-`<CR>` goes to a wait, `x` dismisses a notice or a failure, or reads a
-review. `:waits!` shows it oldest first.
+pickers and `:workspace` jump the same way. `:waits`, `:copen` or
+`<leader>pq` opens the list as a picker, the focus list: the attention
+agent's lines on how all the work stands, then each wait with how long it
+has waited and its brief. It follows the hub while it is open: a row moves
+only when something comes, goes or changes there, never because you move,
+and one that goes stays, muted, until the list closes. `<CR>` goes to a
+wait, `<C-d>` dismisses a notice or a failure, or reads a review; typing
+filters. `:waits!` shows it oldest first.
 The attention agent (see [configuration](configuration.md)) orders the list
 by your focus: what is under Now first, what is under Leave alone last.
 After a jump the command line says why the stop is there, and a
@@ -268,7 +273,7 @@ belongs to the hub, not to a workspace, and only you write it.
   is the last stop of `]q` (`◇ focus`), and the focus's top line says
   `an edit waits · :diffsplit`. Either opens the focus beside the edit, in
   diff mode: `do` takes a change, `]c` `[c` move, and `:w` saves your focus
-  as it is then. `x` on its row in `:waits` drops it, and the agent does
+  as it is then. `<C-d>` on its row in `:waits` drops it, and the agent does
   not suggest the same edit again. `focus_edit = "allow"` saves its edits
   at once instead, and `"off"` stops them.
 
@@ -286,6 +291,7 @@ belongs to the hub, not to a workspace, and only you write it.
 | `<leader>f` | your focus |
 | `<leader>ps` | search every transcript |
 | `<leader>pm` | pick a notification and open its thread |
+| `<leader>pq` | the focus list: what to do next |
 | `<leader>w` | pick a workspace |
 | `<leader>pv` | workspaces screen |
 | `<leader>t` | threads pane |

@@ -53,6 +53,7 @@ map("n", "<leader>pl", "<Plug>(neoharness-local-threads)") -- this workspace's, 
 map("n", "<leader>pa", ":artifacts<CR>")
 map("n", "<leader>f", ":focus<CR>")                    -- what you work on now, in every workspace
 map("n", "<leader>pm", "<Plug>(neoharness-messages)")   -- notifications; a row opens its thread
+map("n", "<leader>pq", "<Plug>(neoharness-waits)")      -- the focus list: what to do next, in the attention agent's order
 map("n", "<leader>ps", "<Plug>(neoharness-grep)")      -- search every transcript
 map("n", "<leader>w", ":workspace<CR>")
 

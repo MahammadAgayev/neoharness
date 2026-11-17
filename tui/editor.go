@@ -1224,10 +1224,6 @@ func (a *App) editNormal(k string, n int) {
 			a.stopTurn(w.Buf.Thread)
 			return
 		}
-		if k == "x" && w.Buf.Kind == KindWaits {
-			a.dismissWait(a.line(w).Item)
-			return
-		}
 		if k == "x" && w.Buf.Kind == KindWorkspaces {
 			if item := a.line(w).Item; item != "" {
 				a.askDeleteWorkspace(item)

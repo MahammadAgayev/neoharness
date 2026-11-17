@@ -311,6 +311,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		"<Plug>(neoharness-threads)":       func(int) { a.pickThreads() },
 		"<Plug>(neoharness-local-threads)": func(int) { a.pickLocalThreads() },
 		"<Plug>(neoharness-messages)":      func(int) { a.pickMessages() },
+		"<Plug>(neoharness-waits)":         func(int) { a.openWaits(false) },
 		"<Plug>(neoharness-yank)":          func(int) { a.yank() },
 		"<Plug>(neoharness-dismiss)":       func(int) { a.toasts = nil },
 		"<Plug>(neoharness-coordinator)":   func(int) { a.goCoordinator() },
@@ -1097,10 +1098,6 @@ func (a *App) enter() {
 	case KindWorkspaces:
 		if l.Item != "" {
 			a.openWorkspace(l.Item)
-		}
-	case KindWaits:
-		if i := a.waitIndex(l.Item); i >= 0 {
-			a.jumpWait(i)
 		}
 	case KindCost:
 		if strings.HasPrefix(l.Item, costRow) {

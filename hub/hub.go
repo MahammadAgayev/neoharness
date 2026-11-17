@@ -288,6 +288,8 @@ func New(cfg Config) (*Hub, error) {
 			h.report(ws)
 		}
 	}
+	// The status of all the work is ready when the person comes back.
+	h.attentionSees()
 	return h, nil
 }
 

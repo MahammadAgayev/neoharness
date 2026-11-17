@@ -195,14 +195,11 @@ type App struct {
 	boardAt     map[string]model.State
 	settleUntil map[string]time.Time
 	// waits is the hub's waits list, every workspace, in the order ]q walks
-	// it (waits.go); waitsByAge shows it oldest first, for :waits!. waitAt
-	// is the key of the wait ]q went to last. seenFrom is when each chat on
+	// it (waits.go). waitAt is the key of the wait ]q went to last. seenFrom is when each chat on
 	// screen began to show, for the seen dwell; seenSent the chats said seen
 	// since.
-	waits      []model.Wait
-	waitsByAge bool
-	waitAt     string
-	waitsBuf   *Buffer
+	waits  []model.Wait
+	waitAt string
 	// landed is the thread ]q went to and the brief of its wait when that
 	// wait has no card, as a review: it shows until the thread runs again,
 	// though the hub drops the review once the person sees the thread.
@@ -353,8 +350,6 @@ func newApp(s tcell.Screen, c Client) *App {
 	a.messagesBuf.SetLines([]Line{{Prefix: []Span{{" ", a.th.Fg}}, Spans: []Span{{"no messages yet", a.th.Fg3}}}})
 	a.bufs[a.workspacesBuf.Name] = a.workspacesBuf
 	a.bufs[a.messagesBuf.Name] = a.messagesBuf
-	a.waitsBuf = newBuffer("neoharness://waits", KindWaits)
-	a.bufs[a.waitsBuf.Name] = a.waitsBuf
 	a.cmd = &cmdline{}
 	a.builtin = a.normalBindings()
 	a.runConfig(defaultsLua, "defaults.lua", true)
@@ -563,7 +558,7 @@ func (a *App) apply(u model.Update) {
 	case model.UpdateStatus:
 		if u.Status != nil {
 			a.status = *u.Status
-			a.renderWaits()
+			a.followWaits()
 		}
 	case model.UpdateDelta:
 		// The text lands in the buffer now and shows on the next frame, so a
@@ -1038,34 +1033,14 @@ func (a *App) showThread(name string) {
 		a.cur = w
 		return
 	}
-	a.leaveList()
 	a.cur.show(a.chat(name))
 }
 
-// leaveList moves the focus from the waits list to the chat window that had
-// it last, so the list stays. From the board it stays: the thread takes the
-// list's place, beside the coordinator, and <C-o> brings the list back. It
-// reports whether the thread opens in a.cur.
+// leaveList says the thread opens in a.cur: from the board it does, the
+// thread takes the list's place, beside the coordinator, and <C-o> brings
+// the list back.
 func (a *App) leaveList() bool {
-	switch a.cur.Buf.Kind {
-	case KindThreads:
-		return true
-	case KindWaits:
-	default:
-		return false
-	}
-	wins := a.root.windows()
-	if slices.Contains(wins, a.lastChat) {
-		a.cur = a.lastChat
-		return true
-	}
-	for _, w := range wins {
-		if k := w.Buf.Kind; k != KindThreads && k != KindWaits {
-			a.cur = w
-			return true
-		}
-	}
-	return false
+	return a.cur.Buf.Kind == KindThreads
 }
 
 // openArtifact shows an artifact in the current window, as gf opens a file;

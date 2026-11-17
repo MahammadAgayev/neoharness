@@ -27,6 +27,10 @@ type pickItem struct {
 	thread string
 	// workspace is set on a row that is a workspace, so <C-d> can delete it.
 	workspace string
+	// wait is set on a row of the focus list, so <C-d> can dismiss it, and
+	// done on one that left the list while the picker is open.
+	wait string
+	done bool
 }
 
 // picker is a floating fuzzy finder.
@@ -38,6 +42,11 @@ type picker struct {
 	source func(q string) []pickItem
 	// all is how many rows the picker has before a query; its box fits them.
 	all int
+	// head is lines above the rows, which no query filters: the focus
+	// list's status.
+	head []string
+	// waits says the picker is the focus list, which follows the hub.
+	waits bool
 }
 
 func (a *App) openPicker(title string, source func(q string) []pickItem) {
@@ -112,6 +121,8 @@ func (a *App) pickerKey(k string, ev *tcell.EventKey) {
 			break
 		}
 		switch it := p.items[p.sel]; {
+		case it.wait != "" && !it.done:
+			a.dismissWait(it.wait)
 		case it.thread != "":
 			a.closePicker()
 			a.askDelete(it.thread)

@@ -269,3 +269,29 @@ func TestTheAttentionAgentWritesHowTheWorkStands(t *testing.T) {
 		}
 	}
 }
+
+// TestTheAttentionAgentRunsWhenTheHubStarts: the status is ready when the
+// person comes back after a restart, though nothing changed since.
+func TestTheAttentionAgentRunsWhenTheHubStarts(t *testing.T) {
+	h0 := newHub(t, &fake{})
+	pinned(t, h0, "alpha")
+	h0.Close()
+	attn := &fake{script: func(context.Context, agent.Request) agent.Result {
+		return agent.Result{Text: `{"status":["alpha: nothing moves"],"next":[]}`}
+	}}
+	h, err := New(Config{
+		Factory: func(name string, _ workspace.Workspace, _ workspace.Thread) agent.Agent {
+			if name == "attention" {
+				return attn
+			}
+			return &fake{}
+		},
+		Attention:      "attention",
+		AttentionDelay: 10 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close()
+	eventually(t, "the status after a start", func() bool { return len(h.Status().Lines) == 1 })
+}

@@ -32,8 +32,6 @@ const (
 	KindCost
 	// KindTodo is a thread's todo list.
 	KindTodo
-	// KindWaits is the waits list: what needs the person, every workspace.
-	KindWaits
 )
 
 type blockKind int
