@@ -88,9 +88,11 @@ type Thread struct {
 	// Token identifies this thread to the MCP server.
 	Token string `json:"token"`
 
-	Resolved bool   `json:"resolved,omitempty"`
-	Asking   string `json:"asking,omitempty"`
-	// AskedAt is when the question in Asking came.
+	Resolved bool `json:"resolved,omitempty"`
+	// Asking, AskedAt, Paused, Failed, FailedAt, Notices, SeenAt, Unseen
+	// and UnseenAt are what a thread kept before the journal held it; the
+	// hub only reads them, to move them to the journal.
+	Asking  string    `json:"asking,omitempty"`
 	AskedAt time.Time `json:"askedAt,omitzero"`
 	Paused  bool      `json:"paused,omitempty"`
 
@@ -127,18 +129,12 @@ type Thread struct {
 	// Edits holds, per artifact the thread wrote, the version it last saw
 	// before the person edited it. The next turn's prompt gets the diff.
 	Edits map[string]Edit `json:"edits,omitempty"`
-	// Reply is the start of the last turn's reply, and Failed why the last
-	// turn failed, for the coordinator's board and the threads pane.
-	Reply  string `json:"reply,omitempty"`
-	Failed string `json:"failed,omitempty"`
-	// FailedAt is when the turn failed; zero once the person dismissed it.
-	FailedAt time.Time `json:"failedAt,omitzero"`
-	// Notices are the coordinator's notices that need the person, until
-	// the person writes to it or dismisses them.
-	Notices []Notice `json:"notices,omitempty"`
-	// SeenAt is when the person last saw the thread. Unseen and UnseenAt
-	// are what it kept of its news before the journal; the hub only reads
-	// them, to move them to the journal.
+	// Reply is the start of the last turn's reply, for the coordinator's
+	// board and the threads pane.
+	Reply    string      `json:"reply,omitempty"`
+	Failed   string      `json:"failed,omitempty"`
+	FailedAt time.Time   `json:"failedAt,omitzero"`
+	Notices  []Notice    `json:"notices,omitempty"`
 	SeenAt   time.Time   `json:"seenAt,omitzero"`
 	Unseen   model.Level `json:"unseen,omitempty"`
 	UnseenAt time.Time   `json:"unseenAt,omitzero"`
@@ -156,7 +152,8 @@ type Thread struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// Notice is a notice that waits for the person.
+// Notice is a notice that waited for the person, as a thread kept it
+// before the journal.
 type Notice struct {
 	ID   string    `json:"id"`
 	Text string    `json:"text"`

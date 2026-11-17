@@ -162,16 +162,27 @@ thread, kind, id, text, tools, needsYou, level}`, and `seq` rises across
 the hub; `level` is the attention level, set once, as for events.
 The kinds: `opened`, `started` (a turn), `turn` (it ended well: the reply's
 first line and how many tools it ran), `failed`, `recap`, `done` (a todo
-item), `artifact`, `asked`, `permission`, `decided`, `notice`, `wrote` (the
-person wrote to the session), `dismissed` (a skip, or `x` on a wait),
-`seen`, `resolved`, `reopened`.
+item), `artifact`, `asked`, `permission`, `decided`, `notice`, `paused`
+(the queue waits for the person: after too many agent turns, a stop, or a
+full context), `resumed` (it goes on, or is empty), `wrote` (the person
+wrote to the session), `dismissed` (a skip, or `x` on a wait), `seen`,
+`resolved`, `reopened`.
+
+The journal is the only record of what waits on a session, why its queue
+holds, and when the person last saw it. The hub keeps a cache of it per
+session, built from the journal at start and changed by each new entry
+through the same function, so the thread's state, its view, the board and
+the waits list cannot disagree with it. `thread.json` keeps none of it.
 
 Nobody empties it; each reader keeps its place. The coordinator's board
 reads after `boardSeq` (in `workspace.json`), and the attention agent after
 the person last saw each session (`seen`). An entry goes once both have
 read it, or its session is gone, and it is 7 days old; a journal keeps at
-most 2000 entries. At start the hub moves what came before the journal into
-it once: the old `news.jsonl`, and the news a `thread.json` kept. `GET
+most 2000 entries. An entry that something open rests on, such as a
+question not answered yet or the last `seen`, stays however old. At start
+the hub moves what came before the journal into it once: the old
+`news.jsonl`, and the news, question, pause, notices, failure and seen time
+a `thread.json` kept. `GET
 /journal?limit=N` gives the newest N entries of every workspace, newest
 first, each with its `workspace`; the notifications list reads it.
 
@@ -200,7 +211,8 @@ draw a level, never which level an event has.
   closes it. A permission closes when it is `decided`, answered or not. A
   question closes when the person writes or skips it. A failure closes
   when a turn starts, and a notice when the person writes to the
-  coordinator or dismisses it; `resolved` closes everything. `seen` marks
+  coordinator or dismisses it. A pause closes when the person writes or
+  sends now, or the queue is empty; `resolved` closes everything. `seen` marks
   what came before it as read. At start the hub makes the journal agree
   with the threads: a permission is `decided` as lost, since its turn died
   with the hub.
@@ -242,9 +254,9 @@ draw a level, never which level an event has.
   the notice. `DELETE /workspaces/{w}/threads/{t}/waits/{id}` dismisses a
   notice or a failure, or reads a review; a permission or a question is
   answered instead.
-- Failures, notices, questions and seen times are kept in `thread.json`, so
-  the list survives a restart. A pending permission does not: its turn
-  ends with the hub.
+- Failures, notices, questions and seen times are in the journal, so the
+  list survives a restart. A pending permission does not: its turn ends
+  with the hub.
 
 ## Permissions
 

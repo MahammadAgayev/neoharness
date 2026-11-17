@@ -281,6 +281,8 @@ const (
 	JournalDone       = "done" // a todo item
 	JournalArtifact   = "artifact"
 	JournalAsked      = "asked"
+	JournalPaused     = "paused"  // the queue waits for the person: Text says why
+	JournalResumed    = "resumed" // the queue goes on, or is empty
 	JournalPermission = "permission"
 	JournalDecided    = "decided" // a permission's answer
 	JournalNotice     = "notice"

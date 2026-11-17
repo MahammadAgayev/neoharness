@@ -213,6 +213,8 @@ type thread struct {
 	// clock stops a turn that runs past Config.TurnTimeout, not counting
 	// the time it waits for the person.
 	clock *turnClock
+	// f is what the journal says of the thread now.
+	f facts
 	// stream is the reply so far, which streamTimer sends; streamed says
 	// clients show some of it.
 	stream      string
@@ -303,10 +305,12 @@ func (h *Hub) load(p workspace.Workspace) (*space, error) {
 			h.event(ws, th, model.Event{Kind: model.EventError,
 				Text: "The hub stopped during this turn, so it was lost. Send the message again to retry."})
 		}
-		th.state = th.derive()
 		_ = workspace.SaveThread(p.Name, t)
 	}
 	h.loadJournal(ws)
+	for _, th := range ws.threads {
+		th.state = th.derive()
+	}
 	return ws, nil
 }
 
@@ -814,19 +818,18 @@ func (h *Hub) SendNow(workspaceName, to, text string, images ...[]byte) error {
 			err = errors.New("nothing is queued")
 		}
 		// Stopped with messages queued: nothing runs, so they start now.
-		if err == nil && th.t.Paused {
-			if th.t.Asking != "" {
+		if err == nil && th.f.hold != nil {
+			if th.f.ask != nil {
 				h.note(ws, th, model.JournalEntry{Kind: model.JournalDismissed})
 			}
-			th.t.Paused, th.t.Asking = false, ""
+			h.note(ws, th, model.JournalEntry{Kind: model.JournalResumed})
 			h.changed(ws, th)
 			h.kick(ws, th)
 			return nil
 		}
 		// The queue waited behind the question; it goes without an answer. A
 		// turn that still runs after its question is stopped below.
-		if err == nil && th.t.Asking != "" {
-			th.t.Asking = ""
+		if err == nil && th.f.ask != nil {
 			h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Question not answered; the queued messages went in."})
 			h.note(ws, th, model.JournalEntry{Kind: model.JournalDismissed})
 			h.changed(ws, th)
@@ -907,8 +910,8 @@ func (h *Hub) Unqueue(workspaceName, name string, at time.Time) error {
 		return errors.New("that message is no longer queued")
 	}
 	th.t.Queue = slices.Delete(th.t.Queue, i, i+1)
-	if len(th.t.Queue) == 0 {
-		th.t.Paused = false
+	if len(th.t.Queue) == 0 && th.f.hold != nil {
+		h.note(ws, th, model.JournalEntry{Kind: model.JournalResumed})
 	}
 	h.changed(ws, th)
 	return nil
@@ -950,7 +953,7 @@ func (h *Hub) send(workspaceName, from, to, text string, images [][]byte) (*thre
 	// The thread asked and ended its reply; what still runs (background
 	// tasks) must not hold the answer back. Checked before enqueue, which may
 	// start the answer's own turn.
-	if from == model.User && th.t.Asking != "" && th.busy && th.cancel != nil {
+	if from == model.User && th.f.ask != nil && th.busy && th.cancel != nil {
 		th.interrupted = true
 		th.cancel()
 	}
@@ -1024,7 +1027,7 @@ func (h *Hub) command(ws *space, th *thread, text string) (bool, error) {
 			return true, errors.New("nothing to compact yet")
 		}
 		focus := strings.Join(f[1:], " ")
-		t.AgentTurns, t.Paused, t.Asking = 0, false, ""
+		t.AgentTurns = 0
 		h.note(ws, th, model.JournalEntry{Kind: model.JournalWrote})
 		// Before what is queued: the agent has not read it yet, so it goes to
 		// the compacted session, as a held message of a reopened thread does.
@@ -1093,7 +1096,7 @@ func (h *Hub) clear(ws *space, th *thread) error {
 	t.SessionID, t.Started, t.Todos = workspace.NewID(), false, nil
 	t.Context, t.Summary = 0, ""
 	t.Queue = []workspace.Message{}
-	t.Asking, t.Paused, t.AgentTurns = "", false, 0
+	t.AgentTurns = 0
 	h.note(ws, th, model.JournalEntry{Kind: model.JournalWrote})
 	h.event(ws, th, model.Event{Kind: model.EventClear, Text: "Cleared. The next message starts a new conversation."})
 	h.changed(ws, th)
@@ -1107,16 +1110,13 @@ func (h *Hub) enqueue(ws *space, th *thread, from, text string, images ...string
 	// The message goes into the transcript when its turn starts (kick), so
 	// the transcript shows what the agent read in the order it read it. An
 	// answer goes before the messages its question held.
-	if from == model.User && t.Asking != "" && !t.Paused {
+	if from == model.User && th.f.ask != nil && th.f.hold == nil {
 		t.Queue = append([]workspace.Message{m}, t.Queue...)
 	} else {
 		t.Queue = append(t.Queue, m)
 	}
 	if from == model.User {
 		t.AgentTurns = 0
-		t.Paused = false
-		t.Asking = ""
-		t.Notices = nil
 		h.note(ws, th, model.JournalEntry{Kind: model.JournalWrote})
 	}
 	h.changed(ws, th)
@@ -1141,8 +1141,6 @@ func (h *Hub) Resolve(workspaceName, by, name string) error {
 	t := th.t
 	t.Resolved = true
 	t.Queue = []workspace.Message{}
-	t.Asking = ""
-	t.Paused = false
 	t.WakeAt, t.WakeNote = time.Time{}, ""
 	h.armWake(ws, th)
 	if th.cancel != nil {
@@ -1276,9 +1274,9 @@ func (h *Hub) compactReopened(ws *space, th *thread) {
 	default:
 		// The person chooses here; auto compact does not choose for them.
 		th.autoTried = true
-		t.Paused = true
-		t.Asking = fmt.Sprintf("context %d%% full · /compact first, or send the message as is", pct)
-		h.note(ws, th, model.JournalEntry{Kind: model.JournalAsked, Text: t.Asking})
+		q := fmt.Sprintf("context %d%% full · /compact first, or send the message as is", pct)
+		h.note(ws, th, model.JournalEntry{Kind: model.JournalPaused, Text: q})
+		h.note(ws, th, model.JournalEntry{Kind: model.JournalAsked, Text: q})
 	}
 }
 
@@ -1620,7 +1618,6 @@ func (h *Hub) Ask(workspaceName, name, question string) error {
 	}
 	at := time.Now().UTC()
 	id := fmt.Sprintf("q%d", at.UnixNano())
-	th.t.Asking = q
 	h.event(ws, th, model.Event{At: at, Kind: model.EventAsk, ID: id, Text: q})
 	h.note(ws, th, model.JournalEntry{At: at, Kind: model.JournalAsked, ID: id, Text: q})
 	h.changed(ws, th)
@@ -1628,13 +1625,11 @@ func (h *Hub) Ask(workspaceName, name, question string) error {
 }
 
 // questionID names a thread's open question, empty for none.
-func questionID(ws *space, th *thread) string {
-	for _, w := range waitsOf(ws, th) {
-		if w.Kind == model.WaitQuestion {
-			return w.ID
-		}
+func questionID(th *thread) string {
+	if th.f.ask == nil {
+		return ""
 	}
-	return ""
+	return th.f.ask.ID
 }
 
 // Recap keeps where a session's work stands, for the person to read when
@@ -1719,9 +1714,6 @@ func (h *Hub) Notify(workspaceName, name, text string, needsYou bool) error {
 	h.event(ws, th, model.Event{At: at, Kind: model.EventNotice, Text: text, NeedsYou: needsYou})
 	id := fmt.Sprintf("n%d", at.UnixNano())
 	h.note(ws, th, model.JournalEntry{At: at, Kind: model.JournalNotice, ID: id, Text: text, NeedsYou: needsYou})
-	if needsYou {
-		th.t.Notices = append(th.t.Notices, workspace.Notice{ID: id, Text: text, At: at})
-	}
 	h.changed(ws, th)
 	return nil
 }
@@ -1802,7 +1794,7 @@ func (h *Hub) Answer(workspaceName, name, id string, d model.Decision, msg strin
 	if err != nil {
 		return err
 	}
-	if q := questionID(ws, th); th.t.Asking != "" && (id != "" && id == q || id == "" && len(th.perms) == 0) {
+	if q := questionID(th); th.f.ask != nil && (id != "" && id == q || id == "" && len(th.perms) == 0) {
 		// Only a skip answers a question here; the answer itself is a message.
 		if d != model.Deny {
 			return errors.New("answer the question by writing to the thread")
@@ -1865,7 +1857,7 @@ func (h *Hub) kick(ws *space, th *thread) {
 	t := th.t
 	// An open question holds the others' messages: the person sees them
 	// beside it and answers first. The person's own message clears it.
-	if th.busy || t.Resolved || t.Paused || t.Asking != "" || len(t.Queue) == 0 {
+	if th.busy || t.Resolved || th.f.hold != nil || th.f.ask != nil || len(t.Queue) == 0 {
 		return
 	}
 	// The agent takes a message while its work runs. The follow ends and
@@ -1879,9 +1871,9 @@ func (h *Hub) kick(ws *space, th *thread) {
 	// messages, and those count on both sides.
 	counts := slices.ContainsFunc(t.Queue, func(m workspace.Message) bool { return m.From != reportFrom })
 	if !fromUser && counts && t.AgentTurns >= h.cfg.MaxAgentTurns {
-		t.Paused = true
-		h.event(ws, th, model.Event{Kind: model.EventNote,
-			Text: fmt.Sprintf("Paused after %d turns without your input. Write to continue.", t.AgentTurns)})
+		why := fmt.Sprintf("Paused after %d turns without your input. Write to continue.", t.AgentTurns)
+		h.event(ws, th, model.Event{Kind: model.EventNote, Text: why})
+		h.note(ws, th, model.JournalEntry{Kind: model.JournalPaused, Text: why})
 		h.changed(ws, th)
 		return
 	}
@@ -2022,11 +2014,12 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		// A stop means stop: what the person queued behind the turn waits
 		// for them, and a question of the turn waits for no one.
 		if th.dropped {
-			if t.Asking != "" {
+			if th.f.ask != nil {
 				h.note(ws, th, model.JournalEntry{Kind: model.JournalDismissed})
 			}
-			t.Asking = ""
-			t.Paused = len(t.Queue) > 0
+			if len(t.Queue) > 0 {
+				h.note(ws, th, model.JournalEntry{Kind: model.JournalPaused, Text: "stopped"})
+			}
 		}
 	case context.Cause(ctx) == errTurnTimeout:
 		failure = fmt.Sprintf("the turn ran past %s and was stopped", h.cfg.TurnTimeout)
@@ -2056,12 +2049,6 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 			h.event(ws, th, model.Event{Kind: model.EventNote, Text: "Compacted. The next message starts a new conversation from the summary above."})
 		default:
 			t.Summary = ""
-		}
-	}
-	if !compact {
-		t.Failed, t.FailedAt = failure, time.Time{}
-		if failure != "" {
-			t.FailedAt = time.Now().UTC()
 		}
 	}
 	if t.Role == model.RoleThread && !compact {
@@ -2430,7 +2417,7 @@ func (h *Hub) board(ws *space) string {
 // each reader takes from the news log.
 func boardThread(th *thread) prompts.BoardThread {
 	t := th.t
-	b := prompts.BoardThread{Name: t.Name, State: string(th.state), Wait: boardWait(th), Recap: t.Recap, Failed: t.Failed, Total: len(t.Todos)}
+	b := prompts.BoardThread{Name: t.Name, State: string(th.state), Wait: boardWait(th), Recap: t.Recap, Failed: failure(th), Total: len(t.Todos)}
 	for _, td := range t.Todos {
 		switch td.State {
 		case model.TodoDone:
@@ -2448,10 +2435,10 @@ func boardWait(th *thread) prompts.Wait {
 	case len(th.perms) > 0:
 		p := th.perms[0].Permission
 		return prompts.Wait{Permission: strings.TrimSuffix(p.Tool+": "+p.Detail, ": ")}
-	case th.t.Asking != "":
-		return prompts.Wait{Question: th.t.Asking}
+	case th.f.ask != nil:
+		return prompts.Wait{Question: th.f.ask.Text}
 	}
-	return prompts.Wait{Paused: th.t.Paused}
+	return prompts.Wait{Paused: th.f.hold != nil}
 }
 
 // --- state and updates ---
@@ -2464,11 +2451,11 @@ func (th *thread) derive() model.State {
 	case t.Resolved:
 		return model.StateResolved
 	// A question waits for the person even while its turn still runs.
-	case len(th.perms) > 0 || t.Asking != "":
+	case len(th.perms) > 0 || th.f.ask != nil:
 		return model.StateWaiting
 	case th.busy:
 		return model.StateRunning
-	case t.Paused:
+	case th.f.hold != nil:
 		return model.StateWaiting
 	case len(t.Queue) > 0:
 		return model.StateRunning
@@ -2492,12 +2479,6 @@ func (h *Hub) changed(ws *space, th *thread) {
 		th.t.Since = time.Now().UTC()
 	}
 	th.clock.hold(len(th.perms) > 0)
-	switch {
-	case th.t.Asking == "":
-		th.t.AskedAt = time.Time{}
-	case th.t.AskedAt.IsZero():
-		th.t.AskedAt = time.Now().UTC()
-	}
 	_ = workspace.SaveThread(ws.p.Name, th.t)
 	v := h.view(ws, th)
 	h.publish(model.Update{Kind: model.UpdateThread, Workspace: ws.p.Name, Thread: th.t.Name, View: &v})
@@ -2591,7 +2572,7 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		RecapAt:       t.RecapAt,
 		Todos:         t.Todos,
 		Level:         threadLevel(ws, th),
-		SeenAt:        t.SeenAt,
+		SeenAt:        th.f.seen.At,
 		WakeAt:        t.WakeAt,
 		Model:         t.Model,
 		Context:       t.Context,
@@ -2607,10 +2588,10 @@ func (h *Hub) view(ws *space, th *thread) model.ThreadView {
 		p := th.perms[0].Permission
 		v.Permission = &p
 		v.Waiting = "permission"
-	case t.Asking != "":
-		v.Waiting = t.Asking
-		v.QuestionID = questionID(ws, th)
-	case t.Paused:
+	case th.f.ask != nil:
+		v.Waiting = th.f.ask.Text
+		v.QuestionID = th.f.ask.ID
+	case th.f.hold != nil:
 		v.Waiting = "paused"
 	}
 	return v
@@ -2653,7 +2634,7 @@ func (h *Hub) summary(ws *space) model.WorkspaceView {
 			v.Counts[th.state]++
 		} else {
 			v.Coordinator = th.state
-			v.Notices = len(th.t.Notices)
+			v.Notices = len(th.f.notices)
 		}
 		if th.t.UpdatedAt.After(v.LastUsed) {
 			v.LastUsed = th.t.UpdatedAt

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/MahammadAgayev/neoharness/api/model"
-	"github.com/MahammadAgayev/neoharness/hub/workspace"
 )
 
 // level is the attention an event asks for. quiet says the coordinator
@@ -78,8 +77,15 @@ const failedID = "failed"
 
 // failed says the thread's last turn failed and nothing came after it.
 func failed(th *thread) bool {
-	t := th.t
-	return t.Failed != "" && !t.FailedAt.IsZero() && !t.Resolved && !th.busy && len(t.Queue) == 0
+	return th.f.failure != nil && !th.t.Resolved && !th.busy && len(th.t.Queue) == 0
+}
+
+// failure is why the thread's last turn failed, while that is open.
+func failure(th *thread) string {
+	if th.f.failure == nil {
+		return ""
+	}
+	return th.f.failure.Text
 }
 
 // threadLevel is the highest level still open on a thread.
@@ -157,11 +163,9 @@ func (h *Hub) Seen(workspaceName, name string, at time.Time) error {
 	if now := time.Now().UTC(); at.IsZero() || at.After(now) {
 		at = now
 	}
-	t := th.t
-	if !at.After(t.SeenAt) {
+	if !at.After(th.f.seen.At) {
 		return nil
 	}
-	t.SeenAt = at
 	h.note(ws, th, model.JournalEntry{At: at, Kind: model.JournalSeen})
 	h.changed(ws, th)
 	return nil
@@ -179,17 +183,13 @@ func (h *Hub) Dismiss(workspaceName, name, id string) error {
 	if err != nil {
 		return err
 	}
-	t := th.t
 	_, unseen, _ := needsOf(ws, th)
 	switch {
 	case id == failedID && failed(th):
-		t.FailedAt = time.Time{}
 	case id == model.ReviewID && unseen > 0:
 		// x on a review reads it.
-		t.SeenAt = time.Now().UTC()
-	case slices.ContainsFunc(t.Notices, func(n workspace.Notice) bool { return n.ID == id }):
-		t.Notices = slices.DeleteFunc(t.Notices, func(n workspace.Notice) bool { return n.ID == id })
-	case slices.ContainsFunc(th.perms, func(p *pending) bool { return p.ID == id }), id != "" && id == questionID(ws, th):
+	case slices.ContainsFunc(th.f.notices, func(n model.JournalEntry) bool { return n.ID == id }):
+	case slices.ContainsFunc(th.perms, func(p *pending) bool { return p.ID == id }), id != "" && id == questionID(th):
 		return errors.New("answer it instead: allow, deny, or skip")
 	default:
 		return fmt.Errorf("nothing waits as %q on %s", id, name)

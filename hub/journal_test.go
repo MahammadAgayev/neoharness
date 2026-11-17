@@ -100,8 +100,8 @@ func TestNewsLeftOnAThreadMovesToTheJournal(t *testing.T) {
 
 // TestRotateJournalDropsWhatBothHaveReadAndIsOld: an item goes when the
 // coordinator's board passed it, the person saw its thread or the thread is
-// gone, and it is older than journalKeep; and the journal never holds more
-// than journalMax.
+// gone, and it is older than journalKeep, unless what is open rests on it;
+// and the journal never holds more than journalMax.
 func TestRotateJournalDropsWhatBothHaveReadAndIsOld(t *testing.T) {
 	now := time.Now()
 	old := now.Add(-journalKeep - time.Hour)
@@ -112,20 +112,23 @@ func TestRotateJournalDropsWhatBothHaveReadAndIsOld(t *testing.T) {
 		{Seq: 3, At: old, Thread: "gone", Kind: model.JournalRecap}, // its thread is gone: goes
 		{Seq: 9, At: old, Thread: "a", Kind: model.JournalRecap},    // the board has not passed it: stays
 		{Seq: 4, At: now, Thread: "a", Kind: model.JournalArtifact}, // too new: stays
+		{Seq: 5, At: old, Thread: "a", Kind: model.JournalAsked},    // still open: stays
 	}
+	live := map[int64]bool{5: true}
 	got := rotateJournal(items, 5, func(name string) (time.Time, bool) {
 		at, ok := seen[name]
 		return at, ok
-	}, now, 10)
+	}, live, now, 10)
 	var seqs []int64
 	for _, it := range got {
 		seqs = append(seqs, it.Seq)
 	}
-	if len(seqs) != 3 || seqs[0] != 2 || seqs[1] != 9 || seqs[2] != 4 {
+	if !slices.Equal(seqs, []int64{2, 9, 4, 5}) {
 		t.Fatalf("kept %v", seqs)
 	}
-	if got := rotateJournal(items, 0, func(string) (time.Time, bool) { return time.Time{}, true }, now, 2); len(got) != 2 || got[0].Seq != 9 {
-		t.Fatalf("the cap keeps the newest: %+v", got)
+	got = rotateJournal(items, 0, func(string) (time.Time, bool) { return time.Time{}, true }, live, now, 2)
+	if len(got) != 2 || got[0].Seq != 4 || got[1].Seq != 5 {
+		t.Fatalf("the cap keeps the newest and the live: %+v", got)
 	}
 }
 
@@ -291,5 +294,101 @@ func TestJournalMergesEveryWorkspaceNewestFirst(t *testing.T) {
 	}
 	if es := h.Journal(1); len(es) != 1 || es[0].Workspace != "beta" {
 		t.Fatalf("limit 1 = %+v", es)
+	}
+}
+
+// TestThreadStateComesBackFromTheJournalAlone: what a thread waits for, a
+// failure and when the person saw it are in the journal only, so a restart
+// brings them back from it, and the thread's own file keeps none of them.
+func TestThreadStateComesBackFromTheJournalAlone(t *testing.T) {
+	f := &fake{}
+	f.script = func(ctx context.Context, req agent.Request) agent.Result {
+		if strings.Contains(req.Prompt, "break") {
+			return agent.Result{ExitCode: 1, Stderr: "fake: crashed"}
+		}
+		return agent.Result{Text: "ok"}
+	}
+	h := newHub(t, f)
+	h.cfg.MaxAgentTurns = 1
+	pinned(t, h, "demo")
+	for _, n := range []string{"asks", "loop", "fails"} {
+		_ = h.OpenThread("demo", model.User, n, "", "")
+	}
+	if err := h.Ask("demo", "asks", "which branch?"); err != nil {
+		t.Fatal(err)
+	}
+	_ = h.Send("demo", model.Coordinator, "loop", "ping")
+	stateIs(t, h, "demo", "loop", model.StateIdle)
+	_ = h.Send("demo", model.Coordinator, "loop", "ping")
+	stateIs(t, h, "demo", "loop", model.StateWaiting)
+	_ = h.Send("demo", model.User, "fails", "break")
+	stateIs(t, h, "demo", "fails", model.StateFailed)
+	seen := time.Now().Add(-time.Minute).UTC().Truncate(time.Millisecond)
+	_ = h.Seen("demo", "fails", seen)
+	qid := view(t, h, "demo", "asks").QuestionID
+	h.Close()
+
+	ts, _ := workspace.Threads("demo")
+	for _, th := range ts {
+		if th.Asking != "" || th.Paused || th.Failed != "" || len(th.Notices) > 0 || !th.SeenAt.IsZero() {
+			t.Fatalf("%s keeps state outside the journal: %+v", th.Name, th)
+		}
+	}
+	h2, err := New(Config{Factory: func(string, workspace.Workspace, workspace.Thread) agent.Agent { return f }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h2.Close()
+	if v := view(t, h2, "demo", "asks"); v.State != model.StateWaiting || v.Waiting != "which branch?" || v.QuestionID != qid || qid == "" {
+		t.Fatalf("asks = %s %q %q, want waiting on its question %q", v.State, v.Waiting, v.QuestionID, qid)
+	}
+	if v := view(t, h2, "demo", "loop"); v.State != model.StateWaiting || v.Waiting != "paused" || v.Queued != 1 {
+		t.Fatalf("loop = %s %q, %d queued; want paused with 1", v.State, v.Waiting, v.Queued)
+	}
+	if v := view(t, h2, "demo", "fails"); v.State != model.StateFailed || !v.SeenAt.Equal(seen) {
+		t.Fatalf("fails = %s seen %v, want failed and seen %v", v.State, v.SeenAt, seen)
+	}
+	// The pause still holds what others send, until the person writes.
+	_ = h2.Send("demo", model.Coordinator, "loop", "ping")
+	if v := view(t, h2, "demo", "loop"); v.State != model.StateWaiting || v.Queued != 2 {
+		t.Fatalf("loop after another ping = %s, %d queued", v.State, v.Queued)
+	}
+	_ = h2.Send("demo", model.User, "loop", "go on")
+	stateIs(t, h2, "demo", "loop", model.StateIdle)
+}
+
+// TestAReopenedThreadDoesNotShowItsOldFailure: resolving a thread closes
+// what it waited for, its failure too.
+func TestAReopenedThreadDoesNotShowItsOldFailure(t *testing.T) {
+	f := &fake{script: func(context.Context, agent.Request) agent.Result { return agent.Result{ExitCode: 1} }}
+	h := newHub(t, f)
+	pinned(t, h, "demo")
+	_ = h.OpenThread("demo", model.User, "api", "go", "")
+	stateIs(t, h, "demo", "api", model.StateFailed)
+	_ = h.Resolve("demo", model.User, "api")
+	_ = h.Reopen("demo", "api")
+	if v := view(t, h, "demo", "api"); v.State != model.StateIdle || len(h.Waits()) != 0 {
+		t.Fatalf("reopened = %s, waits %+v", v.State, h.Waits())
+	}
+}
+
+// TestRotationKeepsWhatStillWaits: an old question the person saw but did
+// not answer is not dropped with the read entries around it.
+func TestRotationKeepsWhatStillWaits(t *testing.T) {
+	h := newHub(t, &fake{})
+	pinned(t, h, "demo")
+	_ = h.OpenThread("demo", model.User, "asks", "", "")
+	old := time.Now().Add(-journalKeep - time.Hour).UTC()
+	h.mu.Lock()
+	ws := h.workspaces["demo"]
+	h.note(ws, ws.threads["asks"], model.JournalEntry{At: old, Kind: model.JournalAsked, ID: "q1", Text: "which branch?"})
+	h.mu.Unlock()
+	_ = h.Seen("demo", "asks", time.Now())
+	h.mu.Lock()
+	h.boardRead(ws)
+	h.rotateJournal(ws)
+	h.mu.Unlock()
+	if v := view(t, h, "demo", "asks"); v.Waiting != "which branch?" || len(h.Waits()) != 1 {
+		t.Fatalf("asks = %q, waits %+v", v.Waiting, h.Waits())
 	}
 }

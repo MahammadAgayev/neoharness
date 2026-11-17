@@ -216,7 +216,7 @@ func (h *Hub) attentionBoard() []prompts.BoardThread {
 			}
 			b := boardThread(th)
 			b.Name = name + " · " + n
-			b.News, _ = newsOf(ws, n, func(e model.JournalEntry) bool { return e.At.After(th.t.SeenAt) })
+			b.News, _ = newsOf(ws, n, func(e model.JournalEntry) bool { return e.At.After(th.f.seen.At) })
 			out = append(out, b)
 		}
 	}
