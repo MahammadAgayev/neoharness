@@ -278,3 +278,34 @@ func TestAReviewsBriefShowsAboveThePrompt(t *testing.T) {
 		t.Fatalf("a new turn makes the brief old news:\n%s", h.screen())
 	}
 }
+
+func TestCtrlOGoesBackToTheWorkspaceAJumpLeft(t *testing.T) {
+	h := start(t)
+	h.hub.CreateWorkspace("ops", "")
+	h.hub.threads["ops"] = append(h.hub.threads["ops"], model.ThreadView{Workspace: "ops", Name: "deploy", Role: model.RoleThread, State: model.StateIdle})
+	h.a.loadWorkspaces()
+	h.openDemo()
+	h.press("<Esc>", ":b api-tests", "<CR>")
+	h.setWaits(model.Wait{Workspace: "ops", Thread: "deploy", Kind: model.WaitFailed, ID: "failed", Text: "exit 1"})
+	h.press("]q")
+	if h.a.workspace != "ops" || h.a.cur.Buf.Thread != "deploy" {
+		t.Fatalf("]q should open ops · deploy, got %q · %q", h.a.workspace, h.a.cur.Buf.Thread)
+	}
+	h.press("<C-o>")
+	if h.a.workspace != "demo" || h.a.cur.Buf.Thread != "api-tests" {
+		t.Fatalf("<C-o> should go back to demo · api-tests, got %q · %q", h.a.workspace, h.a.cur.Buf.Thread)
+	}
+	h.press("<C-o>")
+	if h.a.workspace != "demo" || h.a.cur.Buf.Thread != model.Coordinator {
+		t.Fatalf("<C-o> again should go back in demo's window, got %q · %q", h.a.workspace, h.a.cur.Buf.Thread)
+	}
+
+	h.press("<Space>pt", "deploy", "<CR>", ":b coordinator", "<CR>", "<C-o>")
+	if h.a.workspace != "ops" || h.a.cur.Buf.Thread != "deploy" {
+		t.Fatalf("a jump inside ops goes back inside ops first, got %q · %q", h.a.workspace, h.a.cur.Buf.Thread)
+	}
+	h.press("<C-o>")
+	if h.a.workspace != "demo" {
+		t.Fatalf("then <C-o> leaves ops, got %q", h.a.workspace)
+	}
+}

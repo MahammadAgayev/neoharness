@@ -206,6 +206,9 @@ type App struct {
 	// wait has no card, as a review: it shows until the thread runs again,
 	// though the hub drops the review once the person sees the thread.
 	landed   struct{ workspace, thread, brief string }
+	// wsJumps are the jumps into another workspace, the newest last, for
+	// <C-o>: each window keeps its own jumps, and a workspace its windows.
+	wsJumps []wsJump
 	seenFrom map[string]time.Time
 	seenSent map[string]bool
 	// replacing is set by r: the next key replaces replaceN runes.
@@ -850,7 +853,40 @@ func (a *App) showWorkspaces() {
 	a.mode = modeNormal
 }
 
+// wsJump is where a jump into another workspace came from, and the window
+// it landed in with that window's jumps then: <C-o> goes back to from while
+// that window has not moved since.
+type wsJump struct {
+	from string
+	win  *Window
+	buf  *Buffer
+	n    int
+}
+
 func (a *App) openWorkspace(name string) {
+	from := a.workspace
+	a.enterWorkspace(name)
+	if from == "" || from == name || a.workspace != name {
+		return
+	}
+	a.wsJumps = append(a.wsJumps, wsJump{from: from})
+	if len(a.wsJumps) > maxJumps {
+		a.wsJumps = a.wsJumps[1:]
+	}
+	a.markLanding()
+}
+
+// markLanding makes the window in focus now the landing of the last jump
+// into a workspace.
+func (a *App) markLanding() {
+	if len(a.wsJumps) == 0 {
+		return
+	}
+	j := &a.wsJumps[len(a.wsJumps)-1]
+	j.win, j.buf, j.n = a.cur, a.cur.Buf, len(a.cur.jumps)
+}
+
+func (a *App) enterWorkspace(name string) {
 	if !slices.ContainsFunc(a.workspaces, func(p model.WorkspaceView) bool { return p.Name == name }) {
 		a.notify("no workspace "+name, a.th.Alert)
 		return

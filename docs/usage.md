@@ -192,7 +192,9 @@ you, then reviews, each oldest first. A review (`✓`) is a thread whose
 news you have not read: a turn that ended or a notice. The command line
 counts what blocks on you as `◆ N waiting`; reviews are not counted. `]q`
 and `[q`, or `:cn` and `:cp`, go to the next or previous one and open its
-thread at its card, in any workspace. `:waits` or `:copen` shows the list:
+thread at its card, in any workspace. `<C-o>` goes back to the workspace
+the jump left, as it was, until you move in the window it landed in; the
+pickers and `:workspace` jump the same way. `:waits` or `:copen` shows the list:
 `<CR>` goes to a wait, `x` dismisses a notice or a failure, or reads a
 review. `:waits!` shows it oldest first.
 The attention agent (see [configuration](configuration.md)) orders the list

@@ -729,7 +729,7 @@ func (a *App) helpBuf() *Buffer {
 		row("]q [q  :cn :cp", "next / previous wait, in any workspace: what blocks a turn first, then failures and notices, then reviews, then an edit of your focus"),
 		row(":waits  :copen", "the waits list; <CR> goes to one, x dismisses a notice or a failure, or reads a review"),
 		row(":waits!", "the waits list, oldest first"),
-		row("<C-o>", "back to the buffer the window showed before"),
+		row("<C-o>", "back to the buffer the window showed before, or to the workspace a jump left"),
 		row("<CR>", "open the workspace, or switch to the thread"),
 		row("K", "the last reply of the thread on the row (threads list)"),
 		row("<C-v>  <C-x>", "thread in a split on the right / above (pickers, threads list)"),

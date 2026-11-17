@@ -1039,9 +1039,17 @@ func (a *App) alternate() {
 	}
 }
 
-// jumpBack is <C-o>: the window goes back to the buffer it showed before.
+// jumpBack is <C-o>: the window goes back to the buffer it showed before,
+// or to the workspace a jump left, if the window has not moved since.
 func (a *App) jumpBack() {
 	w := a.cur
+	if n := len(a.wsJumps); n > 0 {
+		if j := a.wsJumps[n-1]; j.win == w && j.buf == w.Buf && len(w.jumps) <= j.n {
+			a.wsJumps = a.wsJumps[:n-1]
+			a.enterWorkspace(j.from)
+			return
+		}
+	}
 	if !w.back() {
 		return
 	}

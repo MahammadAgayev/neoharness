@@ -208,11 +208,15 @@ func (a *App) allThreadItems() []pickItem {
 
 // goThread shows a thread of any workspace.
 func (a *App) goThread(workspace, thread string) {
-	if workspace != a.workspace {
+	switched := workspace != a.workspace
+	if switched {
 		a.openWorkspace(workspace)
 	}
 	if workspace == a.workspace {
 		a.showThread(thread)
+		if switched {
+			a.markLanding()
+		}
 	}
 }
 
