@@ -786,7 +786,10 @@ func (a *App) drawPicker(W, H int) {
 		a.s.SetContent(i, y0+2, '─', nil, th.Separator)
 	}
 	for i, l := range p.head {
-		a.put(x0+2, y0+3+i, inner, truncate(l, inner-x0-2), th.Fg2)
+		x := x0 + 4
+		for _, sp := range l {
+			x = a.put(x, y0+3+i, inner, truncate(sp.Text, max(inner-x, 0)), sp.Style)
+		}
 	}
 	y0 += head
 	rows := bh - 4 - head

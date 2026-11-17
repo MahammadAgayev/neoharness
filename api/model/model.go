@@ -249,8 +249,15 @@ type Wait struct {
 // agent last wrote it: a few short lines, for the person to read when they
 // come back.
 type Status struct {
-	Lines []string  `json:"lines,omitempty"`
-	At    time.Time `json:"at,omitzero"`
+	Lines []StatusLine `json:"lines,omitempty"`
+	At    time.Time    `json:"at,omitzero"`
+}
+
+// StatusLine is the work of one workspace, or of one goal across them:
+// Where names it, and Parts say what moved, what is stuck and what runs.
+type StatusLine struct {
+	Where string   `json:"where,omitempty"`
+	Parts []string `json:"parts"`
 }
 
 // JournalEntry is one fact of a workspace's journal: what happened to a

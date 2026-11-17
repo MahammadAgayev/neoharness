@@ -171,7 +171,7 @@ func (a *App) openWaits(byAge bool) {
 		return
 	}
 	a.openPicker("next", func(q string) []pickItem { return fuzzy(a.waitItems(byAge), q) })
-	a.picker.waits, a.picker.head = true, a.status.Lines
+	a.picker.waits, a.picker.head = true, a.statusLines()
 }
 
 func (a *App) waitItems(byAge bool) []pickItem {
@@ -228,7 +228,7 @@ func (a *App) followWaits() {
 			p.items = slices.Insert(p.items, min(i, len(p.items)), it)
 		}
 	}
-	p.all, p.head = max(p.all, len(p.items)), a.status.Lines
+	p.all, p.head = max(p.all, len(p.items)), a.statusLines()
 	if i := slices.IndexFunc(p.items, func(it pickItem) bool { return it.wait == at }); i >= 0 {
 		p.sel = i
 	}
@@ -276,15 +276,40 @@ func (a *App) see(now time.Time) {
 	}
 }
 
+// statusWhere is the widest the where column of the status gets.
+const statusWhere = 20
+
+// statusLines is how all the work stands, as columns: where, then its parts
+// joined by ·. A workspace where something waits on the person is gold.
+func (a *App) statusLines() [][]Span {
+	th := a.th
+	w := 0
+	for _, l := range a.status.Lines {
+		w = max(w, min(width(l.Where), statusWhere))
+	}
+	var out [][]Span
+	for _, l := range a.status.Lines {
+		var line []Span
+		if w > 0 {
+			st := th.Fg3
+			if slices.ContainsFunc(a.waits, func(x model.Wait) bool {
+				return x.Workspace == l.Where && x.Kind != model.WaitReview && x.Kind != model.WaitFocus
+			}) {
+				st = th.Wait
+			}
+			line = append(line, Span{pad(truncate(l.Where, w), w+2), st})
+		}
+		out = append(out, append(line, Span{strings.Join(l.Parts, " · "), th.Fg2}))
+	}
+	return out
+}
+
 // backLines is the card the person sees when they come back: how all the
 // work stands, in the attention agent's words or else as counts, and the
 // next thing, the top of the waits list. Empty when there is nothing to say.
 func (a *App) backLines() [][]Span {
 	th := a.th
-	var lines [][]Span
-	for _, l := range a.status.Lines {
-		lines = append(lines, []Span{{l, th.Fg2}})
-	}
+	lines := a.statusLines()
 	if len(lines) == 0 {
 		var parts []string
 		count := func(n int, what string) {
@@ -342,5 +367,6 @@ func (a *App) drawBack(W int) int {
 	return h
 }
 
-// backWidth fits a status line, which the agent keeps under 70 columns.
-const backWidth = 76
+// backWidth fits a status line: its where column, at most statusWhere,
+// and parts the agent keeps under 60 columns.
+const backWidth = 86

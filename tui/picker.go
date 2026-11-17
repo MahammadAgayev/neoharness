@@ -43,7 +43,7 @@ type picker struct {
 	all int
 	// head is lines above the rows, which no query filters: the focus
 	// list's status.
-	head []string
+	head [][]Span
 	// waits says the picker is the focus list, which follows the hub.
 	waits bool
 }

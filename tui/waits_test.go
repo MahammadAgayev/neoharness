@@ -347,15 +347,23 @@ func TestComingBackShowsHowTheWorkStandsAndWhatIsNext(t *testing.T) {
 	ws[1].Why = "blocks the release"
 	h.setWaits(ws[1], ws[0])
 	h.press("]q", "]q")
-	h.a.apply(model.Update{Kind: model.UpdateStatus, Status: &model.Status{Lines: []string{"demo: auth moved, tests pass", "ops: deploy waits on you"}, At: clock}})
+	h.a.apply(model.Update{Kind: model.UpdateStatus, Status: &model.Status{Lines: []model.StatusLine{
+		{Where: "demo", Parts: []string{"auth moved", "tests pass"}},
+		{Where: "ops", Parts: []string{"deploy runs"}},
+	}, At: clock}})
 	h.a.draw()
 	if strings.Contains(h.screen(), "auth moved") {
 		t.Fatal("the status shows before the person was away")
 	}
 
 	away()
-	h.see("demo: auth moved, tests pass")
-	h.see("ops: deploy waits on you")
+	// where is a column, the parts follow it joined by ·, and a workspace
+	// that waits on the person is in gold.
+	h.see("demo  auth moved · tests pass")
+	h.see("ops   deploy runs")
+	if h.fgAt("demo  auth") != fgOf(h.a.th.Wait) || h.fgAt("ops   deploy") == fgOf(h.a.th.Wait) {
+		t.Fatal("only the workspace that waits on you is gold")
+	}
 	h.see("next  auth-refactor · question  blocks the release")
 	if h.fgAt("◆ next") != fgOf(h.a.th.Wait) {
 		t.Fatal("the next thing's glyph is in its wait ink")
@@ -368,7 +376,8 @@ func TestComingBackShowsHowTheWorkStandsAndWhatIsNext(t *testing.T) {
 		t.Fatal("the card stays after the next key")
 	}
 	h.press(":waits", "<CR>")
-	if h.rowOf("demo: auth moved") > h.rowOf("question · ") || len(h.a.picker.items) != 2 {
+	h.see("demo  auth moved · tests pass")
+	if h.rowOf("demo  auth moved") > h.rowOf("question · ") || len(h.a.picker.items) != 2 {
 		t.Fatalf(":waits starts with the status, which is no row:\n%s", h.screen())
 	}
 	h.press("<Esc>")

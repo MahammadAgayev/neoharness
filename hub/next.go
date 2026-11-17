@@ -137,7 +137,7 @@ func (h *Hub) runAttention() {
 	h.attn.running = false
 	if err == nil && res.ExitCode == 0 {
 		if next, briefs, edit, status, ok := parseNext(res.Text, ws); ok {
-			if status != nil && !slices.Equal(status, h.attn.status.Lines) {
+			if status != nil && !slices.EqualFunc(status, h.attn.status.Lines, sameLine) {
 				h.attn.status = model.Status{Lines: status, At: time.Now().UTC()}
 				s := h.attn.status
 				h.publish(model.Update{Kind: model.UpdateStatus, Status: &s})
@@ -229,7 +229,14 @@ func (h *Hub) Status() model.Status {
 	defer h.mu.Unlock()
 	s := h.attn.status
 	s.Lines = slices.Clone(s.Lines)
+	for i := range s.Lines {
+		s.Lines[i].Parts = slices.Clone(s.Lines[i].Parts)
+	}
 	return s
+}
+
+func sameLine(a, b model.StatusLine) bool {
+	return a.Where == b.Where && slices.Equal(a.Parts, b.Parts)
 }
 
 // ageOf is how long a wait has waited, as the agent reads it.
@@ -248,13 +255,13 @@ func ageOf(d time.Duration) string {
 // parseNext reads the agent's reply: the JSON object in it, which numbers
 // the waits ws from 1. A number it does not know, or a reply with no
 // object, is no order. The status is nil when the reply has none.
-func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, *model.Suggestion, []string, bool) {
+func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, *model.Suggestion, []model.StatusLine, bool) {
 	i, j := strings.Index(text, "{"), strings.LastIndex(text, "}")
 	if i < 0 || j < i {
 		return nil, nil, nil, nil, false
 	}
 	var out struct {
-		Status []string `json:"status"`
+		Status []json.RawMessage `json:"status"`
 		Next   []struct {
 			I     int    `json:"i"`
 			Why   string `json:"why"`
@@ -268,11 +275,11 @@ func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, *model.
 	if json.Unmarshal([]byte(text[i:j+1]), &out) != nil {
 		return nil, nil, nil, nil, false
 	}
-	var status []string
+	var status []model.StatusLine
 	if out.Status != nil {
-		status = []string{}
-		for _, l := range out.Status {
-			if l = oneLine(l, replyLimit); l != "" && len(status) < statusLines {
+		status = []model.StatusLine{}
+		for _, raw := range out.Status {
+			if l, ok := statusLine(raw); ok && len(status) < statusLines {
 				status = append(status, l)
 			}
 		}
@@ -300,6 +307,28 @@ func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, *model.
 
 // statusLines is the most lines of status the person reads.
 const statusLines = 4
+
+// statusLine reads one line of the agent's status. A plain string, as a
+// model may still write, is one part with no where.
+func statusLine(raw json.RawMessage) (model.StatusLine, bool) {
+	var l model.StatusLine
+	if json.Unmarshal(raw, &l) != nil {
+		var s string
+		if json.Unmarshal(raw, &s) != nil {
+			return l, false
+		}
+		l = model.StatusLine{Parts: []string{s}}
+	}
+	l.Where = oneLine(l.Where, replyLimit)
+	var parts []string
+	for _, p := range l.Parts {
+		if p = oneLine(p, replyLimit); p != "" {
+			parts = append(parts, p)
+		}
+	}
+	l.Parts = parts
+	return l, len(parts) > 0
+}
 
 // suggest takes the agent's edit of the focus: it waits for the person, or
 // with focus_edit = "allow" it is saved at once as the agent's version. An

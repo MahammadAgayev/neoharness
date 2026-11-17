@@ -119,8 +119,10 @@ yourself:
 - When you come back after 2 minutes or more away, a card at the top
   right says how all the work stands, in every workspace, in the attention
   agent's few lines (or as counts without it, `◆ 2 waiting · ✓ 3 to
-  read`), and what is next: the top of the waits list, with why it is
-  there. `]q` goes to it, as a come-back starts the walk at the top again.
+  read`), and what is next. Each line names a workspace or a goal in a
+  column, gold when something in that workspace waits for you, then what
+  moved, what is stuck and what runs. Next is the top of the waits list,
+  with why it is there. `]q` goes to it, as a come-back starts the walk at the top again.
   The card closes at your next key; `:messages` keeps it, and `:waits`
   starts with the same lines.
 - When you come back after 2 minutes or more away, a chat shows its recap

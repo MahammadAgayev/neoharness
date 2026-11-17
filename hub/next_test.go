@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -240,7 +241,7 @@ func TestTheAttentionAgentWritesHowTheWorkStands(t *testing.T) {
 		if !strings.Contains(req.Prompt, "plan drafted") {
 			return agent.Result{Text: `{"next":[]}`}
 		}
-		return agent.Result{Text: `{"status":["alpha: plan drafted, nothing waits","  "],"next":[]}`}
+		return agent.Result{Text: `{"status":[{"where":"alpha","parts":["plan drafted"," ","nothing waits"]},{"where":"beta","parts":["  "]},"gamma: a plain line"],"next":[]}`}
 	}
 	h := attentionHub(t, &fake{}, attn)
 	pinned(t, h, "alpha")
@@ -249,8 +250,9 @@ func TestTheAttentionAgentWritesHowTheWorkStands(t *testing.T) {
 	if err := h.Recap("alpha", model.Coordinator, "plan drafted"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the status", func() bool { return len(h.Status().Lines) == 1 })
-	if s := h.Status(); s.Lines[0] != "alpha: plan drafted, nothing waits" || s.At.IsZero() {
+	eventually(t, "the status", func() bool { return len(h.Status().Lines) == 2 })
+	want := []model.StatusLine{{Where: "alpha", Parts: []string{"plan drafted", "nothing waits"}}, {Parts: []string{"gamma: a plain line"}}}
+	if s := h.Status(); !slices.EqualFunc(s.Lines, want, sameLine) || s.At.IsZero() {
 		t.Fatalf("status = %+v", s)
 	}
 	req := attn.requests()[len(attn.requests())-1]
@@ -261,7 +263,7 @@ func TestTheAttentionAgentWritesHowTheWorkStands(t *testing.T) {
 	for {
 		select {
 		case u := <-ch:
-			if u.Kind == model.UpdateStatus && u.Status != nil && len(u.Status.Lines) == 1 {
+			if u.Kind == model.UpdateStatus && u.Status != nil && len(u.Status.Lines) == 2 {
 				return
 			}
 		case <-timeout:
@@ -277,7 +279,7 @@ func TestTheAttentionAgentRunsWhenTheHubStarts(t *testing.T) {
 	pinned(t, h0, "alpha")
 	h0.Close()
 	attn := &fake{script: func(context.Context, agent.Request) agent.Result {
-		return agent.Result{Text: `{"status":["alpha: nothing moves"],"next":[]}`}
+		return agent.Result{Text: `{"status":[{"where":"alpha","parts":["nothing moves"]}],"next":[]}`}
 	}}
 	h, err := New(Config{
 		Factory: func(name string, _ workspace.Workspace, _ workspace.Thread) agent.Agent {

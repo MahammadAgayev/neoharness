@@ -230,9 +230,14 @@ draw a level, never which level an event has.
   conversation with `NoTools`, the focus unless it is set aside, the
   waits numbered from 1, and every open thread as the coordinator's board
   shows it, with the news since the person last saw each one. The reply is a JSON object,
-  `{"status": [...], "next": [{"i", "why", "brief"}]}`. Ordered waits come
-  first, in its order, with `why` and `brief`; the rest follow in the hub's
-  order. `status` is up to 4 lines on how all the work stands; the hub
+  `{"status": [{"where", "parts"}], "next": [{"i", "why", "brief"}]}`.
+  Ordered waits come first, in its order, with `why` and `brief`; the rest
+  follow in the hub's order. `status` is up to 4 lines on how all the work
+  stands, each the work of one workspace or one goal: `where` names it,
+  and `parts` are short pieces that clients join with ` · `. A client
+  draws `where` as a column, in gold when that workspace has a wait that
+  is not a review; a plain string from the agent is a line with no
+  `where`. The hub
   keeps it as `model.Status`, `GET /status` returns it, and a `status`
   update carries it when it changes. Clients show it when the person comes
   back. A brief is kept while its

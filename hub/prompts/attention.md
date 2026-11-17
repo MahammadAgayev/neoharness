@@ -13,15 +13,17 @@ what it waits for, why its last turn failed, its recap and its tasks.
 
 Reply with one JSON object and nothing else:
 
-{"status": ["...", "..."], "next": [{"i": 2, "why": "...", "brief": "..."}, {"i": 1, "why": "..."}]}
+{"status": [{"where": "api", "parts": ["...", "..."]}], "next": [{"i": 2, "why": "...", "brief": "..."}, {"i": 1, "why": "..."}]}
 
 - `status` says how all the work stands, for the person when they come
-  back: at most 4 lines, each under 70 characters, the most important
-  first. Join threads by workspace or by goal, such as "api: refactor
-  done, tests pass; docs waits on your choice". Name a workspace only
-  when the work spans more than one. Say what moved, what is
-  stuck and what runs, from the threads' own words; do not repeat the
-  waits one by one, and claim nothing a thread did not say.
+  back: at most 4 lines, the most important first. A line is the work of
+  one workspace, or of one goal across workspaces. `where` is the
+  workspace's name as the threads list writes it before the `·`, or a
+  short name of the goal. `parts` are one to three short pieces, under 60
+  characters together, such as ["refactor done, tests pass", "docs waits
+  on your choice"]; they show joined by ` · `, after `where`. Say what
+  moved, what is stuck and what runs, from the threads' own words; do not
+  repeat the waits one by one, and claim nothing a thread did not say.
 - `next` holds every wait once, by its number, in the order to go through
   them.
 - What the focus puts under Now comes first, what it puts under Leave
