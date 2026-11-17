@@ -84,11 +84,16 @@ UUID.
   the question or permission it waits for, the error of a failed last turn,
   its recap, and its tasks (`3/5 done, now: …`). A turn end is not progress
   by itself: a thread can end a turn only to answer a message. So the hub
-  keeps the thread's news instead, in `thread.json`: a new recap, todo
-  items done, artifacts written, a failed turn, and, for a turn that ran
-  tools and wrote no recap, the start of its reply. The board shows the news
-  once, as a `New:` line under the thread, then clears it; a restart keeps
-  it. With `notify = "coordinator"`, news also wakes the coordinator, 15
+  keeps the threads' news instead, in the workspace's news log
+  (`news.jsonl`, `hub/news.go`): a new recap, todo items done, artifacts
+  written, a failed turn, and, for a turn that ran tools and wrote no
+  recap, the start of its reply. Each item has a `seq` that rises across
+  the hub. Nobody empties the log; each reader keeps its place. The board
+  shows what came after the workspace's `boardSeq` once, as a `New:` line
+  under the thread, then moves `boardSeq` to the end. The attention agent
+  reads what came after the person last saw each thread (`SeenAt`). An item
+  goes once both have read it (or its thread is gone) and it is 7 days
+  old; a log keeps at most 2000 items. A restart keeps it all. With `notify = "coordinator"`, news also wakes the coordinator, 15
   seconds later so that news close together makes one turn, and again when
   the hub starts if news waits. A turn with no news wakes nothing. The
   coordinator decides with `notify` what reaches the person; these turns do
@@ -187,7 +192,7 @@ draw a level, never which level an event has.
   `AttentionDelay` (4 s) for the burst to end, then runs one turn: a new
   conversation with `NoTools`, the focus unless it is set aside, the
   waits numbered from 1, and every open thread as the coordinator's board
-  shows it, without the news that board clears. The reply is a JSON object,
+  shows it, with the news since the person last saw each one. The reply is a JSON object,
   `{"status": [...], "next": [{"i", "why", "brief"}]}`. Ordered waits come
   first, in its order, with `why` and `brief`; the rest follow in the hub's
   order. `status` is up to 4 lines on how all the work stands; the hub

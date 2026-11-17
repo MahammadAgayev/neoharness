@@ -85,7 +85,7 @@ func (h *Hub) attentionSees() {
 	}
 	// Todo progress is left out: it would wake the agent at every item.
 	for _, t := range h.attentionBoard() {
-		t.Done, t.Now = 0, ""
+		t.Done, t.Now, t.News.Done = 0, "", nil
 		fmt.Fprintf(&b, "%v\x01", t)
 	}
 	fa, ftext, _ := h.readFocus()
@@ -203,8 +203,8 @@ func (h *Hub) attentionRequest(ws []model.Wait) agent.Request {
 }
 
 // attentionBoard is every open thread of every workspace, as the
-// coordinator's board shows them, without the news it clears. Callers hold
-// h.mu.
+// coordinator's board shows them, with the news the person has not seen.
+// Callers hold h.mu.
 func (h *Hub) attentionBoard() []prompts.BoardThread {
 	var out []prompts.BoardThread
 	for _, name := range slices.Sorted(maps.Keys(h.workspaces)) {
@@ -216,6 +216,7 @@ func (h *Hub) attentionBoard() []prompts.BoardThread {
 			}
 			b := boardThread(th)
 			b.Name = name + " · " + n
+			b.News = newsOf(ws, n, func(it workspace.NewsItem) bool { return it.At.After(th.t.SeenAt) })
 			out = append(out, b)
 		}
 	}
@@ -254,7 +255,7 @@ func parseNext(text string, ws []model.Wait) ([]stop, map[string]string, *model.
 	}
 	var out struct {
 		Status []string `json:"status"`
-		Next []struct {
+		Next   []struct {
 			I     int    `json:"i"`
 			Why   string `json:"why"`
 			Brief string `json:"brief"`

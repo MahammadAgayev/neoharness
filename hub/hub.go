@@ -155,6 +155,8 @@ type Hub struct {
 	subs       map[int]chan model.Update
 	nextSub    int
 	nextPerm   int
+	// newsSeq is the last Seq a news item got, in any workspace.
+	newsSeq int64
 	// lastWaits is the waits list as last published.
 	lastWaits []model.Wait
 
@@ -174,6 +176,8 @@ type space struct {
 	// reports wakes the coordinator about the threads' news, when
 	// Config.Notify is on.
 	reports *time.Timer
+	// news is the workspace's news log, oldest first.
+	news []workspace.NewsItem
 }
 
 type thread struct {
@@ -309,6 +313,7 @@ func (h *Hub) load(p workspace.Workspace) (*space, error) {
 		th.state = th.derive()
 		_ = workspace.SaveThread(p.Name, t)
 	}
+	h.loadNews(ws)
 	return ws, nil
 }
 
@@ -1335,11 +1340,7 @@ func (h *Hub) WriteArtifact(workspaceName, by, name, text string) (model.Artifac
 	}
 	h.event(ws, th, model.Event{Kind: model.EventArtifact, Detail: name, Text: a.Title, Version: a.Version})
 	h.publish(model.Update{Kind: model.UpdateArtifact, Workspace: workspaceName, Thread: by, Artifact: &a})
-	h.news(ws, th, func(n *workspace.News) {
-		if !slices.Contains(n.Artifacts, name) {
-			n.Artifacts = append(n.Artifacts, name)
-		}
-	})
+	h.addNews(ws, th, newsArtifact, name)
 	h.changed(ws, th)
 	return a, nil
 }
@@ -1674,7 +1675,7 @@ func (h *Hub) Recap(workspaceName, name, text string) error {
 	}
 	th.t.Recap, th.t.RecapAt = oneLine(text, replyLimit), time.Now().UTC()
 	th.recapped = true
-	h.news(ws, th, func(n *workspace.News) { n.Recap = true })
+	h.addNews(ws, th, newsRecap, th.t.Recap)
 	h.changed(ws, th)
 	return nil
 }
@@ -1711,24 +1712,15 @@ func (h *Hub) report(ws *space) {
 	})
 }
 
-// news adds to what a thread brings the coordinator's next board, and wakes
-// the coordinator for it. Callers hold h.mu and save the thread.
-func (h *Hub) news(ws *space, th *thread, add func(*workspace.News)) {
-	if th.t.Role != model.RoleThread {
-		return
-	}
-	if th.t.News == nil {
-		th.t.News = &workspace.News{}
-	}
-	add(th.t.News)
-	h.report(ws)
-}
-
 // withNews are the open threads with news for the coordinator, by name.
 func withNews(ws *space) []string {
 	var out []string
 	for _, n := range slices.Sorted(maps.Keys(ws.threads)) {
-		if th := ws.threads[n]; th.t.News != nil && !th.deleted && !th.t.Resolved {
+		th := ws.threads[n]
+		if th.deleted || th.t.Resolved {
+			continue
+		}
+		if slices.ContainsFunc(ws.news, func(it workspace.NewsItem) bool { return it.Thread == n && ws.forBoard(it) }) {
 			out = append(out, n)
 		}
 	}
@@ -2093,9 +2085,9 @@ func (h *Hub) endTurn(ws *space, th *thread, ctx context.Context, res agent.Resu
 		}
 		switch {
 		case failure != "":
-			h.news(ws, th, func(n *workspace.News) { n.Failed = true })
+			h.addNews(ws, th, newsFailed, failure)
 		case ended && res.Tools > 0 && !th.recapped && t.Reply != "":
-			h.news(ws, th, func(n *workspace.News) { n.Reply = t.Reply })
+			h.addNews(ws, th, newsReply, t.Reply)
 		}
 	}
 	th.quiet = false
@@ -2198,7 +2190,7 @@ func (h *Hub) onAgentEvent(ws *space, th *thread, e agent.Event) {
 		th.t.Todos = changeTodo(th.t.Todos, e, !th.todoTurn)
 		th.todoTurn = true
 		if i := slices.IndexFunc(th.t.Todos, func(t model.Todo) bool { return t.ID == e.ID }); i >= 0 && was < 0 && th.t.Todos[i].State == model.TodoDone {
-			h.news(ws, th, func(n *workspace.News) { n.Done = append(n.Done, th.t.Todos[i].Text) })
+			h.addNews(ws, th, newsDone, th.t.Todos[i].Text)
 		}
 		h.changed(ws, th)
 	case agent.KindBackground:
@@ -2421,8 +2413,9 @@ func (h *Hub) images(ws *space, th *thread, batch []workspace.Message) []agent.I
 }
 
 // board is every open thread, for the start of a coordinator turn, so the
-// coordinator manages without asking for the status. Each thread's news
-// shows on one board, then it is cleared. Callers hold h.mu.
+// coordinator manages without asking for the status. Each piece of news
+// shows on one board: the board moves the coordinator's place in the news
+// log past it. Callers hold h.mu.
 func (h *Hub) board(ws *space) string {
 	var lines []string
 	for _, n := range slices.Sorted(maps.Keys(ws.threads)) {
@@ -2430,24 +2423,19 @@ func (h *Hub) board(ws *space) string {
 		if n == model.Coordinator || th.deleted || th.t.Resolved {
 			continue
 		}
-		t := th.t
 		b := boardThread(th)
-		if nw := t.News; nw != nil {
-			b.News = prompts.News{Recap: nw.Recap, Done: nw.Done, Artifacts: nw.Artifacts, Reply: nw.Reply}
-			t.News = nil
-			_ = workspace.SaveThread(ws.p.Name, t)
-		}
+		b.News = newsOf(ws, n, ws.forBoard)
 		lines = append(lines, prompts.BoardLine(b))
 	}
+	h.boardRead(ws)
 	if len(lines) == 0 {
 		return ""
 	}
 	return prompts.Board(lines)
 }
 
-// boardWait is what a thread waits for, in the order derive ranks it.
 // boardThread is a thread as the board shows it, without its news, which
-// only the coordinator's board reads and clears.
+// each reader takes from the news log.
 func boardThread(th *thread) prompts.BoardThread {
 	t := th.t
 	b := prompts.BoardThread{Name: t.Name, State: string(th.state), Wait: boardWait(th), Recap: t.Recap, Failed: t.Failed, Total: len(t.Todos)}
@@ -2462,6 +2450,7 @@ func boardThread(th *thread) prompts.BoardThread {
 	return b
 }
 
+// boardWait is what a thread waits for, in the order derive ranks it.
 func boardWait(th *thread) prompts.Wait {
 	switch {
 	case len(th.perms) > 0:

@@ -43,6 +43,8 @@ type Workspace struct {
 	AutoCompact string `json:"autoCompact,omitempty"`
 	// TextWidth is the :setlocal textwidth here; empty is the config's.
 	TextWidth string `json:"textWidth,omitempty"`
+	// BoardSeq is the last news item the coordinator's board showed.
+	BoardSeq int64 `json:"boardSeq,omitempty"`
 }
 
 // Message is one queued input for a thread.
@@ -161,10 +163,8 @@ type Notice struct {
 	At   time.Time `json:"at"`
 }
 
-// News is what a thread brings the coordinator's next board: a new recap,
-// todo items done, artifacts written, the start of the reply of a turn that
-// ran tools and wrote no recap, or a failed turn, which the board shows as
-// the thread's state.
+// News is what a thread kept for the coordinator's next board before the
+// news log. The hub only reads it, to move it to the log.
 type News struct {
 	Recap     bool     `json:"recap,omitempty"`
 	Done      []string `json:"done,omitempty"`
@@ -413,6 +413,70 @@ func AppendEvent(workspace, thread string, e model.Event) error {
 	defer f.Close()
 	_, err = f.Write(append(data, '\n'))
 	return err
+}
+
+// NewsItem is one piece of news of a workspace's threads: a recap, a todo
+// item done, an artifact written, the reply of a turn that ran tools and
+// wrote no recap, or a failed turn. Seq rises across the hub, so readers
+// keep where they are by it.
+type NewsItem struct {
+	Seq    int64     `json:"seq"`
+	At     time.Time `json:"at"`
+	Thread string    `json:"thread"`
+	Kind   string    `json:"kind"`
+	Text   string    `json:"text,omitempty"`
+}
+
+func newsFile(workspace string) string { return filepath.Join(Dir(workspace), "news.jsonl") }
+
+// AppendNews adds one item to the workspace's news log.
+func AppendNews(workspace string, n NewsItem) error {
+	data, err := json.Marshal(n)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(newsFile(workspace), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(append(data, '\n'))
+	return err
+}
+
+// ReadNews reads the workspace's news log, oldest first. A truncated last line,
+// left by a crash mid-write, is skipped.
+func ReadNews(workspace string) ([]NewsItem, error) {
+	f, err := os.Open(newsFile(workspace))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var out []NewsItem
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		var n NewsItem
+		if json.Unmarshal(sc.Bytes(), &n) == nil {
+			out = append(out, n)
+		}
+	}
+	return out, sc.Err()
+}
+
+// SaveNews writes the whole news log, as rotation leaves it.
+func SaveNews(workspace string, items []NewsItem) error {
+	var b []byte
+	for _, n := range items {
+		data, err := json.Marshal(n)
+		if err != nil {
+			return err
+		}
+		b = append(append(b, data...), '\n')
+	}
+	return writeFile(newsFile(workspace), b, 0o644)
 }
 
 func costFile(workspace string) string { return filepath.Join(Dir(workspace), "costs.jsonl") }

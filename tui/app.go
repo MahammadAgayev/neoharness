@@ -206,7 +206,7 @@ type App struct {
 	// landed is the thread ]q went to and the brief of its wait when that
 	// wait has no card, as a review: it shows until the thread runs again,
 	// though the hub drops the review once the person sees the thread.
-	landed   struct{ workspace, thread, brief string }
+	landed struct{ workspace, thread, brief string }
 	// status is how all the work stands, from the attention agent, and
 	// backShown keeps the card that says it and what is next, from when the
 	// person comes back to their next key.
@@ -214,7 +214,7 @@ type App struct {
 	backShown bool
 	// wsJumps are the jumps into another workspace, the newest last, for
 	// <C-o>: each window keeps its own jumps, and a workspace its windows.
-	wsJumps []wsJump
+	wsJumps  []wsJump
 	seenFrom map[string]time.Time
 	seenSent map[string]bool
 	// replacing is set by r: the next key replaces replaceN runes.
