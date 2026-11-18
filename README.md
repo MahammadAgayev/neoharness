@@ -1,33 +1,8 @@
 # neoharness
 
-neoharness is an engineering tool for working with coding agents. It is
-built around a few concepts: a **workspace** for each piece of work, a
-**coordinator** you talk to, **threads** that do the work in parallel, here
-or over ssh, and **artifacts**, the plans and reports you and the agents
-share.
+neoharness is an engineering tool for working with coding agents, inspired from noevim. It's simply an agent multiplexer with cherries on top.
 
-Use it from a macOS app, or from a terminal UI with Vim keys.
-
-## Desktop app
-
-The macOS app in `desktop/` shares the same hub, so the TUI and the app show
-the same workspaces and threads at the same time.
-
-![the app: a coordinator opens three threads, you allow one to run a migration, and its plan opens](docs/demo/desktop.gif)
-
-It has:
-
-- the same Vim keys and `:` commands, or keys as in Claude Code if you turn
-  Vim off;
-- one search over threads, artifacts, transcripts and commands (`⌘K`);
-- a sidebar of workspaces that shows what waits for you; `⌘B` folds it to a
-  rail that opens on hover;
-- back and forward arrows, as in Slack (`⌘[` `⌘]`, `<C-o>` `<C-i>`);
-- the `/model` and `/effort` pickers, with Claude Code's own models and
-  versions;
-- docs you write in, rendered as you type, that the coordinator works from.
-
-See [docs/desktop.md](docs/desktop.md).
+The idea is to keep "human attention" on the most important next thing so our minds are easier.
 
 ## Terminal UI
 
@@ -58,6 +33,22 @@ process, as the tmux server is: the first `neoharness` starts it, and turns
 run on when you close the TUI. `neoharness hub stop` stops it. Agents talk to
 it through an MCP server that it adds to each session, so you change nothing
 in your Claude setup.
+
+## Focus mode
+
+neoharness always keeps your next thing ready, in every workspace:
+
+- **The next list** holds what needs you: permissions and questions, failed
+  turns, threads with news to read, and places where the work waits for your
+  move, each with a short brief of what to do. When nothing waits, it still
+  names a place to go, such as a coordinator that needs the next task.
+- **`]q`** goes to the next item and `[q` to the previous one. `:waits`
+  shows the whole list.
+- **When you come back** after a break, a card says in one line how the work
+  stands and shows the next three things. One `]q` takes you to the first.
+- **Your focus** (`:focus`) is a short document of what you work on now. A
+  small agent orders the list by it, so what you put under Now comes first.
+  `attention = false` in `init.lua` turns that agent off.
 
 ## Download
 
@@ -156,3 +147,27 @@ require("neoharness.agents").setup({ claude = { model = "sonnet" } })
 The GIF is recorded with [VHS](https://github.com/charmbracelet/vhs) from
 [docs/demo/demo.tape](docs/demo/demo.tape), with real agents on a toy
 repository in `/tmp`.
+
+## Desktop app (NOT MAINTAINED)
+
+Note: I'm bad at doing good feature for desktop app, open to ideas and implementation.
+
+The macOS app in `desktop/` shares the same hub, so the TUI and the app show
+the same workspaces and threads at the same time.
+
+![the app: a coordinator opens three threads, you allow one to run a migration, and its plan opens](docs/demo/desktop.gif)
+
+It has:
+
+- the same Vim keys and `:` commands, or keys as in Claude Code if you turn
+  Vim off;
+- one search over threads, artifacts, transcripts and commands (`⌘K`);
+- a sidebar of workspaces that shows what waits for you; `⌘B` folds it to a
+  rail that opens on hover;
+- back and forward arrows, as in Slack (`⌘[` `⌘]`, `<C-o>` `<C-i>`);
+- the `/model` and `/effort` pickers, with Claude Code's own models and
+  versions;
+- docs you write in, rendered as you type, that the coordinator works from.
+
+See [docs/desktop.md](docs/desktop.md).
+
