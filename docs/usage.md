@@ -210,7 +210,8 @@ thread at its card, in any workspace. `<C-o>` goes back to the workspace
 the jump left, as it was, until you move in the window it landed in; the
 pickers and `:workspace` jump the same way. `:waits`, `:copen` or
 `<leader>pq` opens the list as a picker, the focus list: only what you
-can go to, each wait with how long it has waited and its brief. It
+can go to, each wait with how long it has waited and its brief, wrapped
+whole beside its name, or under it when the terminal is narrow. It
 follows the hub while it is open: a row moves only when something comes,
 goes or changes there, never because you move,
 and one that goes stays, muted, until the list closes. `<CR>` goes to a

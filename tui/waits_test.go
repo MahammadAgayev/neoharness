@@ -454,3 +454,34 @@ func TestNotificationsComeFromTheJournal(t *testing.T) {
 		t.Fatalf("<CR> opens the row's thread, got %q", h.a.cur.Buf.Thread)
 	}
 }
+
+// The focus list is wide and wraps each brief under its row, so the person
+// reads every brief whole and every name uncut, wide or narrow.
+func TestTheFocusListShowsWholeBriefsAndNames(t *testing.T) {
+	brief := "answer the database question: SQLite is one file and no server, Postgres needs docker · suggest SQLite for a small notes app, it can move later"
+	for _, size := range [][2]int{{200, 40}, {80, 30}} {
+		h := start(t)
+		h.s.SetSize(size[0], size[1])
+		h.openDemo()
+		h.setWaits(
+			model.Wait{Workspace: "notes-app-backend", Thread: "storage-layer", Kind: model.WaitNext, ID: model.NextID, Text: brief, Brief: brief},
+			model.Wait{Workspace: "demo", Thread: "api-tests", Kind: model.WaitReview, ID: model.ReviewID, Text: "done", Brief: "tests pass, 3 files · suggest: merge", Since: time.Now()},
+		)
+		h.press("<Esc>", ":waits", "<CR>")
+		h.a.draw()
+		h.see("notes-app-backend · storage-layer")
+		var got []string
+		for _, l := range strings.Split(h.screen(), "\n") {
+			if i, j := strings.Index(l, "│"), strings.LastIndex(l, "│"); i >= 0 && j > i {
+				got = append(got, strings.TrimSpace(l[i+len("│"):j]))
+			}
+		}
+		if text := strings.Join(got, " "); !strings.Contains(text, "suggest SQLite for a small notes app, it can move later") || strings.Contains(text, "…") {
+			t.Fatalf("%dx%d: the brief is cut:\n%s", size[0], size[1], h.screen())
+		}
+		h.see("tests pass, 3 files · suggest: merge")
+		if size[0] == 200 && !strings.Contains(h.screen(), strings.Repeat("─", 150)) {
+			t.Fatalf("the focus list takes most of a wide screen:\n%s", h.screen())
+		}
+	}
+}

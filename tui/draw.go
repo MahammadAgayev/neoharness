@@ -770,7 +770,59 @@ func (a *App) box(x, y, w, h int, title string, st tcell.Style) {
 func (a *App) drawPicker(W, H int) {
 	p := a.picker
 	bw := min(W-8, 84)
-	bh := min(H-6, 22)
+	if p.waits {
+		// The focus list is read, not only picked from: briefs need room.
+		bw = max(bw, min(W*4/5, focusWidth))
+	}
+	labelW, details := 0, false
+	for _, it := range p.items {
+		labelW = max(labelW, width(it.label))
+		details = details || it.detail != ""
+	}
+	// Without details, as in an outline, the label has the whole row.
+	switch {
+	case p.waits:
+		labelW = min(labelW, bw/2)
+	case details:
+		labelW = min(labelW, bw/3)
+	default:
+		labelW = min(labelW, bw-6)
+	}
+	// Each item's detail rows: one, or in the focus list its whole brief
+	// wrapped beside the name, up to focusRows. When that column would be
+	// narrow, the brief goes under the name, at the name's indent.
+	detailX := 2 + 2 + labelW + 2
+	stacked := p.waits && bw-detailX-2 < focusBrief
+	if stacked {
+		labelW, detailX = bw-6, 4
+	}
+	itemRows := make([][]string, len(p.items))
+	total := 0
+	for i, it := range p.items {
+		d := flatten(it.detail)
+		if !p.waits {
+			itemRows[i] = []string{d}
+		} else {
+			for _, r := range wrap([]Span{{d, a.th.Fg3}}, bw-detailX-2, nil, nil) {
+				itemRows[i] = append(itemRows[i], spansText(r.Spans))
+			}
+			if n := len(itemRows[i]); n > focusRows {
+				itemRows[i] = itemRows[i][:focusRows]
+				itemRows[i][focusRows-1] += " …"
+			}
+			if stacked || len(itemRows[i]) == 0 {
+				itemRows[i] = append([]string{""}, itemRows[i]...)
+			}
+		}
+		total += len(itemRows[i])
+	}
+	maxH := 22
+	if p.waits {
+		maxH = H
+		// The box keeps its height while the list follows the hub.
+		p.all = max(p.all, total)
+	}
+	bh := min(H-6, maxH)
 	if p.all > 0 {
 		bh = min(bh, p.all+4)
 	}
@@ -787,33 +839,29 @@ func (a *App) drawPicker(W, H int) {
 		a.s.SetContent(i, y0+2, '─', nil, th.Separator)
 	}
 	rows := bh - 4
-	start := 0
-	if p.sel >= rows {
-		start = p.sel - rows + 1
+	start, used := 0, 0
+	for i := 0; i <= p.sel && i < len(p.items); i++ {
+		used += len(itemRows[i])
 	}
-	labelW, details := 0, false
-	for _, it := range p.items {
-		labelW = max(labelW, width(it.label))
-		details = details || it.detail != ""
+	for used > rows && start < p.sel {
+		used -= len(itemRows[start])
+		start++
 	}
-	// Without details, as in an outline, the label has the whole row.
-	if details {
-		labelW = min(labelW, bw/3)
-	} else {
-		labelW = min(labelW, bw-6)
-	}
-	for i := 0; i < rows && start+i < len(p.items); i++ {
-		it := p.items[start+i]
-		y := y0 + 3 + i
-		selected := start+i == p.sel
+	y := y0 + 3
+	for i := start; i < len(p.items) && y < y0+3+rows; i++ {
+		it := p.items[i]
+		selected := i == p.sel
 		sel := func(st tcell.Style) tcell.Style {
 			if selected {
 				return overlay(st, th.CursorLine)
 			}
 			return st
 		}
+		n := min(len(itemRows[i]), y0+3+rows-y)
 		if selected {
-			a.fill(x0+1, y, x0+bw-1, th.CursorLine)
+			for r := range n {
+				a.fill(x0+1, y+r, x0+bw-1, th.CursorLine)
+			}
 		}
 		glyphSt, labelSt := it.glyph.Style, th.Fg2
 		if selected {
@@ -823,13 +871,28 @@ func (a *App) drawPicker(W, H int) {
 			glyphSt, labelSt = th.Fg3, th.Fg3
 		}
 		x := a.put(x0+2, y, inner, it.glyph.Text+" ", sel(glyphSt))
-		x = a.put(x, y, inner, pad(truncate(it.label, labelW), labelW+2), sel(labelSt))
-		a.put(x, y, inner, truncate(flatten(it.detail), inner-x), sel(th.Fg3))
+		dx := a.put(x, y, inner, pad(truncate(it.label, labelW), labelW+2), sel(labelSt))
+		if stacked {
+			dx = x0 + detailX
+		}
+		for r := range n {
+			a.put(dx, y+r, inner, truncate(itemRows[i][r], inner-dx), sel(th.Fg3))
+		}
+		y += n
 	}
 	if len(p.items) == 0 {
 		a.put(x0+2, y0+3, inner, "no matches", th.Fg3)
 	}
 }
+
+// focusWidth is the widest the focus list gets, focusRows the most rows a
+// brief wraps to in it, and focusBrief the narrowest its column beside the
+// name.
+const (
+	focusWidth = 160
+	focusRows  = 4
+	focusBrief = 48
+)
 
 func (a *App) drawGlobal(W, H int) {
 	y := H - 1
