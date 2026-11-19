@@ -221,6 +221,9 @@ type App struct {
 	findN             int
 	// selecting is i or a typed in Visual: the next key is a text object.
 	selecting string
+	// block is the block that c in block Visual took out: Insert types on
+	// its first line, and <Esc> writes the same text on the others.
+	block *blockChange
 	// marking is m, ' or `: the next key names the mark.
 	marking  string
 	replaceN int

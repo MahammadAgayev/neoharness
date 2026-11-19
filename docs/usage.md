@@ -312,6 +312,7 @@ belongs to the hub, not to a workspace, and only you write it.
 | `gO` | outline: messages, or headings in an artifact |
 | `za` `<leader>e` | open or close a turn's tool calls, or a brief from the coordinator |
 | `v V y yy` `<leader>y` | select and yank; every yank also goes to the system clipboard |
+| `<C-v>` | select a block of columns; `c` types the same text on each line. In the threads list it opens a split |
 | `<C-h/j/k/l>` `<Tab>` | move between windows |
 | `<leader>nc` / `<leader>nh` | dismiss notifications / their history |
 | in pickers: `<CR>` `<C-v>` `<C-x>` `<C-d>` | open, split right, split above, delete (after `y`) |

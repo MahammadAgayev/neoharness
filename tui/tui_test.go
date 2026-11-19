@@ -2726,6 +2726,43 @@ func TestVisualModeInThePrompt(t *testing.T) {
 	}
 }
 
+func TestBlockVisual(t *testing.T) {
+	h := editDemo(t, "# D\n\nabcd\n\nefgh\n\nijkl\n")
+	h.press("/abcd", "<CR>", "l", "<C-v>", "4j", "l")
+	if h.a.mode != modeVisual || h.a.cur.vmode != vBlock {
+		t.Fatalf("<C-v> should start block visual; mode %v vmode %q", h.a.mode, h.a.cur.vmode)
+	}
+	h.a.draw()
+	h.see("v-block")
+	h.press("y")
+	if got := h.a.reg.text; got != "bc\n\nfg\n\njk" {
+		t.Fatalf("<C-v> 4j l y in the document yanked %q", got)
+	}
+
+	h.press(":e", "<CR>", "/abcd", "<CR>", "l", "<C-v>", "4j", "l", "d")
+	ed := h.a.cur.Buf.Edit
+	if got := ed.Text(); got != "# D\n\nad\n\neh\n\nil\n" {
+		t.Fatalf("<C-v> 4j l d = %q", got)
+	}
+	h.press("<C-v>", "4j", "c", "X", "<Esc>")
+	if got := ed.Text(); got != "# D\n\naX\n\neX\n\niX\n" {
+		t.Fatalf("<C-v> 4j c X = %q", got)
+	}
+}
+
+func TestBlockVisualInThePrompt(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press("i", "abcd", "<Esc>", "o", "efgh", "<Esc>", "0", "l", "<C-v>", "k", "l", "d")
+	if h.prompt() != "ad\neh" || h.a.reg.text != "bc\nfg" {
+		t.Fatalf("<C-v> k l d: prompt %q, register %q", h.prompt(), h.a.reg.text)
+	}
+	h.press("<C-v>", "j", "c", "--", "<Esc>")
+	if h.prompt() != "a--\ne--" {
+		t.Fatalf("<C-v> j c --: prompt %q", h.prompt())
+	}
+}
+
 func TestVisualSelectionStaysAsNewLinesArrive(t *testing.T) {
 	h := start(t)
 	h.openDemo()

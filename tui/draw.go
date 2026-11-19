@@ -393,6 +393,9 @@ func (a *App) selected(w *Window, li, col int, l Line) bool {
 	if w.vmode == 'V' {
 		return true
 	}
+	if w.vmode == vBlock {
+		return col >= min(w.vCol, w.Col) && col <= max(w.vCol, w.Col)
+	}
 	l1, c1, l2, c2 := w.vLine, w.vCol, w.Cur, w.Col
 	if l2 < l1 || l2 == l1 && c2 < c1 {
 		l1, c1, l2, c2 = l2, c2, l1, c1
@@ -949,11 +952,14 @@ func (a *App) drawGlobal(W, H int) {
 		x = a.put(x, y, W, "● offline  ", th.Alert)
 	}
 	// Other modes show themselves: the colored caret in Insert, the
-	// command line, the picker box. Visual needs a word to tell v from V.
+	// command line, the picker box. Visual needs a word to tell v, V and <C-v> apart.
 	if a.mode == modeVisual {
 		label := "visual"
-		if a.cur.vmode == 'V' {
+		switch a.cur.vmode {
+		case 'V':
 			label = "v-line"
+		case vBlock:
+			label = "v-block"
 		}
 		x = a.put(x, y, W, label, th.Fg3) + 2
 	}

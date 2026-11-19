@@ -1381,21 +1381,21 @@ func (e *Editor) replaceRunes(c rune, n int) bool {
 // editVisual runs d, x, c or y on the Visual selection in the source.
 func (a *App) editVisual(k string) {
 	w := a.cur
-	linewise := w.vmode == 'V'
+	vmode := w.vmode
 	if w.inPrompt {
 		rows := a.promptRows(w)
 		l1, o1 := promptPos(rows, w.vLine, w.vCol)
 		l2, o2 := promptPos(rows, w.Cur, w.Col)
 		w.vmode = 0
 		a.mode = modeNormal
-		a.onPrompt(func(e *Editor) (bool, bool) { return a.visualOp(e, pos{l1, o1}, pos{l2, o2}, linewise, k), true })
+		a.onPrompt(func(e *Editor) (bool, bool) { return a.visualOp(e, pos{l1, o1}, pos{l2, o2}, vmode, k), true })
 		return
 	}
 	e := w.Buf.Edit
 	p1, p2 := a.posAt(w, w.vLine, w.vCol), a.posAt(w, w.Cur, w.Col)
 	w.vmode = 0
 	a.mode = modeNormal
-	if a.visualOp(e, p1, p2, linewise, k) {
+	if a.visualOp(e, p1, p2, vmode, k) {
 		a.toInsert(w)
 		return
 	}
@@ -1405,14 +1405,17 @@ func (a *App) editVisual(k string) {
 	a.toWindow(w)
 }
 
-// visualOp runs d, x, c or y on the text from p1 to p2, whole lines when
-// linewise, in an artifact's source or a prompt. It reports whether Insert
-// follows.
-func (a *App) visualOp(e *Editor, p1, p2 pos, linewise bool, k string) bool {
+// visualOp runs d, x, c or y on the text from p1 to p2 in an artifact's
+// source or a prompt: whole lines in V, the columns between them in block
+// Visual. It reports whether Insert follows.
+func (a *App) visualOp(e *Editor, p1, p2 pos, vmode rune, k string) bool {
 	if p2.before(p1) {
 		p1, p2 = p2, p1
 	}
-	if linewise {
+	if vmode == vBlock {
+		return a.blockOp(e, p1.line, p2.line, min(p1.off, p2.off), max(p1.off, p2.off)+1, k)
+	}
+	if vmode == 'V' {
 		e.Line, e.Off = p1.line, 0
 		switch k {
 		case "y":
@@ -1448,12 +1451,60 @@ func (a *App) visualOp(e *Editor, p1, p2 pos, linewise bool, k string) bool {
 	return k == "c"
 }
 
+type blockChange struct{ line, to, off int }
+
+// blockOp runs d, x, c or y on the runes from off up to end of the lines
+// from line to to. Short lines give what they have.
+func (a *App) blockOp(e *Editor, line, to, off, end int, k string) bool {
+	parts := make([]string, 0, to-line+1)
+	for l := line; l <= to; l++ {
+		src := e.Src[l]
+		parts = append(parts, string(src[min(off, len(src)):min(end, len(src))]))
+	}
+	e.reg.text, e.reg.lines = strings.Join(parts, "\n"), false
+	if k == "y" {
+		e.Line, e.Off = line, min(off, len(e.Src[line]))
+		a.clip(e.reg.text, to-line+1)
+		return false
+	}
+	e.save()
+	for l := line; l <= to; l++ {
+		src := e.Src[l]
+		e.Src[l] = slices.Delete(slices.Clone(src), min(off, len(src)), min(end, len(src)))
+	}
+	e.changed()
+	e.Line, e.Off = line, min(off, len(e.Src[line]))
+	if k == "c" {
+		a.block = &blockChange{line, to, off}
+		return true
+	}
+	return false
+}
+
+// endBlock is <Esc> after c in block Visual: what Insert typed on the
+// block's first line goes on its other lines too, at the same column.
+func (a *App) endBlock(e *Editor) {
+	b := a.block
+	a.block = nil
+	if b == nil || e.Line != b.line || e.Off < b.off || b.to >= len(e.Src) {
+		return
+	}
+	typed := e.Src[b.line][b.off:e.Off]
+	for l := b.line + 1; l <= b.to; l++ {
+		if len(e.Src[l]) >= b.off {
+			e.Src[l] = slices.Insert(slices.Clone(e.Src[l]), b.off, typed...)
+		}
+	}
+	e.changed()
+}
+
 // editInsert is a key in Insert mode in the source.
 func (a *App) editInsert(k string, r rune, isRune bool) {
 	w := a.cur
 	e := w.Buf.Edit
 	switch k {
 	case "<Esc>":
+		a.endBlock(e)
 		a.mode = modeNormal
 		e.Off = max(e.Off-1, 0)
 	case "<CR>", "<S-CR>", "<C-j>", "<M-\r>":

@@ -287,7 +287,7 @@ func (a *App) normalBindings() map[string]func(n int) {
 		",":          func(n int) { a.findAgain(true, n) },
 		"<CR>":       func(int) { a.enter() },
 		"K":          func(int) { a.hover() },
-		"<C-v>":      func(int) { a.splitFromList(true) },
+		"<C-v>":      func(int) { a.ctrlV() },
 		"<C-x>":      func(int) { a.splitFromList(false) },
 		"<C-w>w":     func(int) { a.cycleWindow(1) },
 		"<C-w><C-w>": func(int) { a.cycleWindow(1) },
@@ -1211,6 +1211,12 @@ func (a *App) insertKey(k string, ev *tcell.EventKey) {
 	defer a.updateMenu()
 	switch k {
 	case "<Esc>":
+		if a.block != nil {
+			e := a.promptEditor(p)
+			e.Line, e.Off = lineOff(p.Text, p.Cur)
+			a.endBlock(e)
+			p.Text = []rune(e.Text())
+		}
 		a.mode = modeNormal
 		// As in Vim, the cursor stays where you typed, one rune back.
 		if _, off := lineOff(p.Text, p.Cur); off > 0 {
@@ -1334,6 +1340,19 @@ func (a *App) answer(d model.Decision, msg string) {
 
 // --- visual and yank ---
 
+// vBlock is the vmode of block Visual, the rune <C-v> types, as Vim names it.
+const vBlock = '\x16'
+
+// ctrlV opens a split from the threads list, as in a picker; elsewhere it is
+// block Visual.
+func (a *App) ctrlV() {
+	if a.cur.Buf.Kind == KindThreads {
+		a.splitFromList(true)
+		return
+	}
+	a.visual(vBlock)
+}
+
 func (a *App) visual(m rune) {
 	w := a.cur
 	if a.mode == modeVisual && w.vmode == m {
@@ -1378,6 +1397,9 @@ func (a *App) yankVisual() {
 			}
 			if i == l2 {
 				to = max(c2-pw+1, 0)
+			}
+			if w.vmode == vBlock {
+				from, to = max(min(c1, c2)-pw, 0), max(max(c1, c2)-pw+1, 0)
 			}
 			parts = append(parts, cellSlice(lines[i].Text(), from, to))
 		}
