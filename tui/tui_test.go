@@ -27,6 +27,7 @@ type fakeClient struct {
 	sent       []string
 	answers    []string
 	opened     []string
+	briefs     []string
 	resolved   []string
 	deleted    []string
 	folders    []string
@@ -111,6 +112,7 @@ func (f *fakeClient) EditArtifact(p, name, text, baseText string, base int, forc
 }
 func (f *fakeClient) OpenThread(p, name, brief, loc string) error {
 	f.opened = append(f.opened, name+"@"+loc)
+	f.briefs = append(f.briefs, brief)
 	return nil
 }
 func (f *fakeClient) Events(p, t string, tail int) ([]model.Event, error) { return f.events[t], nil }
@@ -648,6 +650,43 @@ func TestCommandsAndCompletion(t *testing.T) {
 	}
 	h.press("<Esc>", ":nonsense", "<CR>")
 	h.see("not a command: nonsense")
+}
+
+func TestOpenTakesABriefAfterTheFolder(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	h.press(":open web ~/src/web fix the login bug", "<CR>", "<Esc>")
+	h.press(":open docs write the guide", "<CR>", "<Esc>")
+	h.press(":open old proj", "<CR>", "<Esc>")
+	want := []string{"web@~/src/web", "docs@", "old@proj"}
+	briefs := []string{"fix the login bug", "write the guide", ""}
+	if !slices.Equal(h.hub.opened, want) || !slices.Equal(h.hub.briefs, briefs) {
+		t.Fatalf("opened %q with %q; want %q with %q", h.hub.opened, h.hub.briefs, want, briefs)
+	}
+	h.press("<Esc>", ":open fresh check the logs", "<CR>")
+	if h.a.cur.Buf.Thread != "fresh" || h.a.mode != modeNormal {
+		t.Fatalf("a thread opened on a brief is busy, so it shows in Normal; buf %q mode %v", h.a.cur.Buf.Name, h.a.mode)
+	}
+}
+
+func TestThreadCommandsCompleteTheThreadsTheyFit(t *testing.T) {
+	h := start(t)
+	h.openDemo()
+	v := h.a.threads["api-tests"]
+	v.State = model.StateResolved
+	h.a.apply(model.Update{Kind: model.UpdateThread, Workspace: "demo", Thread: "api-tests", View: &v})
+	h.press(":reopen ", "<Tab>")
+	if got := string(h.a.cmd.text); got != "reopen api-tests" {
+		t.Fatalf(":reopen should complete only a resolved thread; got %q", got)
+	}
+	h.press("<Esc>", ":resolve ", "<Tab>")
+	if got := string(h.a.cmd.text); got != "resolve auth-refactor" {
+		t.Fatalf(":resolve should complete only an open thread; got %q", got)
+	}
+	h.press("<Esc>", ":sto", "<Tab>")
+	if got := string(h.a.cmd.text); got != "stop" {
+		t.Fatalf(":stop should complete as a command; got %q", got)
+	}
 }
 
 func TestSplitsAndWindowMotion(t *testing.T) {

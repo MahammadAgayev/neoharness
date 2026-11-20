@@ -54,14 +54,25 @@
 The coordinator usually opens threads. It has no tools to read files, run
 commands or change code: it manages, and threads do the work. Threads cannot
 message it, so its chat holds only your talk with it; the turns in which the
-hub wakes it about threads stay out of the chat. You can open a thread
-yourself:
+hub wakes it about threads stay out of the chat. You can open and close
+threads yourself, as the coordinator does; its board and the journal show
+the same events:
 
 ```
-:open <name> [folder|host:dir]    open a thread, locally or on an ssh host
-:resolve  :reopen                 close a thread, or bring it back with its session
+:open <name> [where]              open a thread, locally or on an ssh host; write its brief in its prompt
+:open <name> [where] <brief>      open a thread that starts on the brief at once
+:resolve [name]                   close a thread
+:reopen [name]                    bring it back with its session
 :stop [name]                      stop the running turn of a thread
 ```
+
+`where` is a folder or `host:dir`; with no `where`, the thread runs in the
+workspace folder. When a brief follows, `where` must look like a path: it
+has a `/` or starts with `~` or `.`. A long brief is easier to write in the
+prompt, where `<C-j>` starts a new line. To send a thread a message, write
+in its chat. With no name, a command acts on the thread in the window or on
+the threads list's row. `<Tab>` completes the names: `:reopen` offers the
+resolved threads, `:resolve` the open ones.
 
 | State | Meaning |
 |---|---|

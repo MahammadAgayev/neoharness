@@ -31,7 +31,7 @@ type cmdline struct {
 
 var commands = []string{
 	"allow", "always", "artifacts", "b", "buffer", "cn", "copen", "cp", "deny", "diffoff", "diffsplit", "edit", "focus", "folder", "help", "hub", "image", "ls", "messages", "new",
-	"only", "open", "page", "q", "qa", "quit", "recap", "reopen", "resolve", "restore", "cost", "setlocal", "split", "threads",
+	"only", "open", "page", "q", "qa", "quit", "recap", "reopen", "resolve", "restore", "cost", "setlocal", "split", "stop", "threads",
 	"vsplit", "waits", "workspace", "workspaces", "wq",
 }
 
@@ -238,6 +238,12 @@ func (a *App) complete(forward bool) {
 				for _, p := range a.workspaces {
 					pool = append(pool, p.Name)
 				}
+			case "resolve", "reopen":
+				for _, n := range a.listOrder() {
+					if (a.threads[n].State == model.StateResolved) == (fields[0] == "reopen") {
+						pool = append(pool, n)
+					}
+				}
 			default:
 				pool = append([]string{model.Coordinator}, a.listOrder()...)
 			}
@@ -422,7 +428,8 @@ func (a *App) exec(line string) {
 			a.notify("usage: :open <name> [folder|host:dir]", a.th.Fg3)
 			return
 		}
-		if err := a.c.OpenThread(a.workspace, arg(0), "", arg(1)); err != nil {
+		where, brief := openArgs(args[1:])
+		if err := a.c.OpenThread(a.workspace, arg(0), brief, where); err != nil {
 			a.notify(err.Error(), a.th.Alert)
 			return
 		}
@@ -438,7 +445,9 @@ func (a *App) exec(line string) {
 		} else {
 			a.paneThread(arg(0))
 		}
-		a.insert('i')
+		if brief == "" {
+			a.insert('i')
+		}
 	case "resolve":
 		if !needWorkspace() {
 			return
@@ -528,6 +537,19 @@ func (a *App) exec(line string) {
 	default:
 		a.notify("not a command: "+cmd, a.th.Alert)
 	}
+}
+
+// openArgs splits what follows the name of :open into the place and the
+// brief. One word is the place; with more, the first is the place only when
+// it looks like a path, so "~/src fix it" and "fix it" both read right.
+func openArgs(words []string) (where, brief string) {
+	if len(words) == 1 {
+		return words[0], ""
+	}
+	if len(words) > 1 && (strings.ContainsAny(words[0], `/\`) || strings.HasPrefix(words[0], "~") || strings.HasPrefix(words[0], ".")) {
+		where, words = words[0], words[1:]
+	}
+	return where, strings.Join(words, " ")
 }
 
 // findBuffer resolves a name typed after :b — a thread name, a full buffer
@@ -759,8 +781,9 @@ func (a *App) helpBuf() *Buffer {
 		row(":setlocal auto_compact=90", "past this context %, a session compacts before its next turn; 0 never"),
 		row(":setlocal textwidth=90", "the widest column of chats and artifacts, in characters; 0 the full width"),
 		row(":setlocal threads& / threads?", "back to the config / show; no argument shows all"),
-		row(":open <name> [where]", "open a thread: folder or host:dir"),
-		row(":resolve  :reopen", "close or bring back a thread; your message or the coordinator's brings it back too"),
+		row(":open <name> [where]", "open a thread in a folder or host:dir, and write its brief in its prompt"),
+		row(":open <name> [where] <brief>", "open a thread that starts on the brief at once; where is a path with / or ~"),
+		row(":resolve  :reopen [name]", "close or bring back this thread, the row's, or the one named; your message or the coordinator's brings it back too"),
 		row(":stop [name]", "stop the running turn of this thread, the row's, or the one named; it keeps its work, and the queue waits for you"),
 		row(":allow :always :deny", "answer a permission (:deny <reason>)"),
 		row(":b <name>  :ls", "switch buffer"),
